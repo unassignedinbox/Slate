@@ -31,7 +31,8 @@ const Open = async (Id) => {
 };
 const Slice = (Name) =>
   Page.frameLocator('[data-reference-slice="' + Name + '"] iframe');
-const Light = () => Page.frameLocator('iframe[title^="Reference inspector"]');
+const Light = () =>
+  Page.frameLocator('iframe[title^="Reference inspector"]').first();
 const Saved = () =>
   Page.evaluate(() =>
     JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")),
@@ -219,7 +220,11 @@ try {
   ];
   for (const Id of Lights) {
     await Open(Id);
-    await Light().locator(".lp-response").waitFor();
+    const Controls =
+      Id === "light"
+        ? Page.frameLocator('[data-reference-slice="details"] iframe')
+        : Light();
+    await Controls.locator(".lp-response").waitFor();
     const Image = Light().locator(".lp-source-icon img");
     await Image.evaluate((Image) => Image.decode());
     const Record = (await Saved()).Rows.find((Row) => Row.Id === Id);
@@ -232,35 +237,34 @@ try {
     if (["light", "reference-softbox"].includes(Id))
       assert.equal(Record.Icon, "editor-area-light");
     await Wide();
-    const Bounds = await Light()
-      .locator(".lighting-panel")
-      .evaluate((Panel) => {
-        const Source =
-            Panel.querySelector(".lp-preview").getBoundingClientRect(),
-          Controls = Panel.querySelector(".lp-output").getBoundingClientRect(),
-          Rail = Panel.querySelector(".lp-readings").getBoundingClientRect(),
-          Response =
-            Panel.querySelector(".lp-response").getBoundingClientRect();
-        return {
-          SourceWidth: Source.width,
-          Width: Panel.clientWidth,
-          SourceTop: Source.top,
-          ControlsTop: Controls.top,
-          RailGap: Rail.top - Controls.bottom,
-          ResponseGap: Response.top - Rail.bottom,
-          Overflow: document.body.scrollWidth > innerWidth,
-        };
-      });
+    const Source = await Light().locator(".lp-preview").boundingBox();
+    const Rail = await Light().locator(".lp-readings").boundingBox();
+    const Output = await Controls.locator(".lp-output").boundingBox();
+    const Response = await Controls.locator(".lp-response").boundingBox();
+    const Shape = await Controls.locator(".lp-shape").boundingBox();
+    assert(Source.width > 650);
     assert(
-      Bounds.SourceWidth < Bounds.Width * 0.65 && Bounds.SourceWidth > 320,
+      Rail.y - Source.y - Source.height >= 0 &&
+        Rail.y - Source.y - Source.height < 30,
     );
-    assert(Math.abs(Bounds.SourceTop - Bounds.ControlsTop) < 2);
-    assert(Bounds.RailGap >= 0 && Bounds.RailGap < 30);
-    assert(Bounds.ResponseGap >= 0 && Bounds.ResponseGap < 30);
-    assert(!Bounds.Overflow);
+    assert(Output.y > Rail.y + Rail.height);
+    assert(Math.abs(Output.y - Shape.y) < 2);
+    assert(
+      Response.y > Output.y &&
+        Response.y + Response.height <= Output.y + Output.height,
+    );
+    assert.equal(
+      await Controls.locator(".lp-output > .lp-response").count(),
+      1,
+    );
+    assert(
+      await Light()
+        .locator("body")
+        .evaluate((Body) => Body.scrollWidth <= innerWidth),
+    );
     await Capture(Id + "Wide");
-    await Page.locator('iframe[title^="Reference inspector"]').evaluate(
-      (Iframe) => (Iframe.style.width = "240px"),
+    await Page.locator('iframe[title^="Reference inspector"]').evaluateAll(
+      (Iframes) => Iframes.forEach((Iframe) => (Iframe.style.width = "240px")),
     );
     await Page.waitForTimeout(100);
     assert(
@@ -270,7 +274,7 @@ try {
     );
     Checks.push(
       Id +
-        ": shipped library icon, paired expanded columns with compact gaps, visible controls/readings, no 240px overflow",
+        ": shipped library icon, ordered summary/statistics/flags above independent control columns; merged response, visible controls/readings, no 240px overflow",
     );
   }
   assert.deepEqual(Errors, []);

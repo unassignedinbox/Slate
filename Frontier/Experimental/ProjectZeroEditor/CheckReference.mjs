@@ -53,15 +53,15 @@ function Inventory() {
   if (!Root) return null;
   return {
     Panel: Root.dataset.panel,
-    Cards: [...Root.querySelectorAll("[data-card]")].map(
-      (Node) => Node.dataset.card,
-    ),
-    Headings: [...Root.querySelectorAll("h1,h2,h3")].map(
-      (Node) => Node.textContent,
-    ),
-    Controls: [...Root.querySelectorAll("input,select,textarea")].map(
-      (Node) => [Node.tagName, Node.type, Node.getAttribute("aria-label")],
-    ),
+    Cards: [...Root.querySelectorAll("[data-card]")]
+      .map((Node) => Node.dataset.card)
+      .sort(),
+    Headings: [...Root.querySelectorAll("h1,h2,h3")]
+      .map((Node) => Node.textContent)
+      .sort(),
+    Controls: [...Root.querySelectorAll("input,select,textarea")]
+      .map((Node) => [Node.tagName, Node.type, Node.getAttribute("aria-label")])
+      .sort((A, B) => JSON.stringify(A).localeCompare(JSON.stringify(B))),
   };
 }
 async function Open(Id) {
@@ -118,7 +118,7 @@ try {
     } else {
       assert.equal(
         await Page.locator(".reference-inspector-copy").count(),
-        Id === "clouds" ? 2 : 1,
+        ["clouds", "height-fog", "light"].includes(Id) ? 2 : 1,
       );
       const Placement = await Page.evaluate(() => {
         const Native = document.querySelector(
@@ -233,14 +233,47 @@ try {
     ],
   ]) {
     const Frame = await Open(Id);
+    const DetailFrame = ["light", "height-fog"].includes(Id)
+      ? Page.frames().filter((Value) => Value.url() === "about:srcdoc")[1]
+      : Frame;
     if (Selectors.includes(".lp-preview")) {
       for (const Selector of [...Selectors, ".lp-response"])
-        assert.equal(await Frame.locator(Selector).count(), 1);
-      assert.equal(await Frame.locator(".lighting-panel .lp-card").count(), 6);
+        assert.equal(
+          await (
+            Id === "light" &&
+            [
+              ".lp-output",
+              ".lp-shape",
+              ".lp-transform",
+              ".lp-response",
+            ].includes(Selector)
+              ? DetailFrame
+              : Frame
+          )
+            .locator(Selector)
+            .count(),
+          1,
+        );
       assert.equal(
-        await Frame.locator(".lp-source-column,.lp-control-column").count(),
+        await Frame.locator(".lighting-panel .lp-card").count(),
+        Id === "light" ? 2 : 5,
+      );
+      assert.equal(
+        await DetailFrame.locator(
+          ".lp-source-column,.lp-control-column",
+        ).count(),
         2,
       );
+    } else if (Id === "height-fog") {
+      for (const Selector of Selectors)
+        assert.equal(
+          await (
+            [".fg-vis", ".fg-scatter"].includes(Selector) ? DetailFrame : Frame
+          )
+            .locator(Selector)
+            .count(),
+          1,
+        );
     } else {
       assert.deepEqual(
         await Frame.locator(".mpanel > *").evaluateAll(
@@ -288,7 +321,7 @@ try {
         ).evaluateAll((Nodes) =>
           Nodes.slice(0, 3).map((Node) => Node.dataset.card || "Reference"),
         ),
-        ["Reference", "Wind field", "Wind controls"],
+        ["Reference", "Wind controls", "Wind field"],
       );
       assert.equal(
         await Frame.locator(".mpanel > :first-child").getAttribute("class"),
@@ -320,13 +353,19 @@ try {
         "Preview follows the native inspector header",
       );
       if (Id === "height-fog") {
+        const DetailFrame = Page.frames().filter(
+          (Value) => Value.url() === "about:srcdoc",
+        )[1];
         assert.deepEqual(
-          await Frame.locator(".fg-scatter > *").evaluateAll((Nodes) =>
+          await DetailFrame.locator(".fg-scatter > *").evaluateAll((Nodes) =>
             Nodes.map((Node) => Node.className),
           ),
           ["mp-meter fg-chamber"],
         );
-        assert.equal(await Frame.locator(".fg-scatter canvas").count(), 1);
+        assert.equal(
+          await DetailFrame.locator(".fg-scatter canvas").count(),
+          1,
+        );
         await Page.locator(".inspector-scroll").evaluate((Node) => {
           const Frame = Node.querySelector("iframe");
           Node.scrollTop =

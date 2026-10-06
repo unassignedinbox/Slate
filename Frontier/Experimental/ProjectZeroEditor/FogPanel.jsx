@@ -4,7 +4,7 @@ import { ResolveFogShape } from "./FogShape.js";
 import "./FogPanel.css";
 
 // These probes share the existing HTML fog model; they are not native scene raymarches.
-export default function FogPanel({ Kind, V, Values, Change }) {
+export default function FogPanel({ Kind, V, Values, Change, QuickControls }) {
   const Local = Kind === "local-fog",
     Enabled = !!V("Enabled"),
     Id = useId().replaceAll(":", "");
@@ -162,6 +162,7 @@ export default function FogPanel({ Kind, V, Values, Change }) {
           <small>{Local ? "Volume shape" : "Medium"}</small>
         </div>
       </div>
+      {QuickControls}
       <section
         className="property-card fog-instrument"
         data-card="Visibility through fog"

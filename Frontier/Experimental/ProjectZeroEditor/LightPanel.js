@@ -509,8 +509,26 @@ export function LightPanel(Subject, Context) {
         Tint,
         Flux,
       }),
-    100,
+    Point ? 180 : 100,
   );
+  if (Point) {
+    const Samples = el("table", "lp-response-samples");
+    Samples.setAttribute("aria-label", "Distance response samples");
+    Samples.innerHTML =
+      "<thead><tr><th>Distance</th><th>Estimate</th><th>Relative</th></tr></thead><tbody></tbody>";
+    Bindings.push(() => {
+      Samples.tBodies[0].innerHTML = [1, 2, 5, 10]
+        .map((Distance) => {
+          const Ratio = 1 / Distance ** Read("decay", 2);
+          return `<tr><td>${Distance} m</td><td>${(Flux() * Ratio).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} lx</td><td>${(Ratio * 100).toFixed(1)}%</td></tr>`;
+        })
+        .join("");
+    });
+    Response.append(Samples);
+  }
+  // Keep the response with the source that drives it, rather than in a separate card.
+  Response.classList.remove("pcard", "lp-card");
+  Output.append(Response);
   const Placement = el("div", "lp-card lp-transform");
   Host.append(Placement);
   const Transform = MountLightTransform(Placement, Subject, Context);
@@ -536,9 +554,18 @@ export function LightPanel(Subject, Context) {
   );
   const SourceColumn = el("div", "lp-source-column"),
     ControlColumn = el("div", "lp-control-column");
-  SourceColumn.append(Preview, Shape);
-  ControlColumn.append(Output, Rail, Response, Placement);
-  Host.replaceChildren(SourceColumn, ControlColumn, Visibility);
+  const SummaryColumn = el("div", "lp-summary-column"),
+    StatusColumn = el("div", "lp-status-column");
+  SummaryColumn.append(Preview);
+  StatusColumn.append(Rail, Visibility);
+  SourceColumn.append(Output);
+  ControlColumn.append(Shape, Placement);
+  Host.replaceChildren(
+    SummaryColumn,
+    StatusColumn,
+    SourceColumn,
+    ControlColumn,
+  );
   function Refresh() {
     Bindings.forEach((Sync) => Sync());
     Charts.forEach((Render) => Render());

@@ -48,7 +48,9 @@ const Open = async (Id) => {
   await Page.goto(Address + "?inspect=" + Id);
   await Page.locator(".inspector-scroll").waitFor();
   if (await Page.locator('iframe[title^="Reference inspector"]').count()) {
-    const Frame = Page.frameLocator('iframe[title^="Reference inspector"]');
+    const Frame = Page.frameLocator(
+      'iframe[title^="Reference inspector"]',
+    ).first();
     await Frame.locator(".sheet").waitFor();
     return Frame;
   }
@@ -116,12 +118,24 @@ try {
     const Frame = await Open(Id);
     await Frame.locator(".lp-preview").waitFor();
     await Square(Frame);
-    assert.equal(await Frame.locator(".lighting-panel .lp-card").count(), 6);
+    const Controls =
+      Id === "light"
+        ? Page.frameLocator('[data-reference-slice="details"] iframe')
+        : Frame;
+    assert.equal(
+      await Frame.locator(".lighting-panel .lp-card").count(),
+      Id === "light" ? 2 : 5,
+    );
+    if (Id === "light")
+      assert.equal(
+        await Controls.locator(".lighting-panel .lp-card").count(),
+        3,
+      );
     assert.equal(await Page.locator(".fracture-card").count(), 0);
     const Before = await Frame.locator(".lp-preview canvas").evaluate(
       (Canvas) => Canvas.toDataURL(),
     );
-    await Frame.locator(
+    await Controls.locator(
       'input[type=number][data-light-property="' + Property + '"]',
     ).fill(String(Next));
     await Page.waitForFunction(
@@ -139,8 +153,11 @@ try {
       "live emitter preview " + Id,
     );
     await Open(Id);
-    const Reopened = Page.frameLocator('iframe[title^="Reference inspector"]');
-    await Reopened.locator(".lp-preview").waitFor();
+    const Reopened =
+      Id === "light"
+        ? Page.frameLocator('[data-reference-slice="details"] iframe')
+        : Page.frameLocator('iframe[title^="Reference inspector"]').first();
+    await Reopened.locator(".lp-shape").waitFor();
     assert.equal(
       await Reopened.locator(
         'input[type=number][data-light-property="' + Property + '"]',
@@ -309,9 +326,9 @@ try {
       assert.equal(await Environment.locator(".wf-trace").count(), 1);
       assert.equal(await Environment.locator(".wf-hero").count(), 0);
     }
-    await Page.locator(".reference-inspector-copy").evaluate((Node) =>
-      Node.scrollIntoView({ block: "start" }),
-    );
+    await Page.locator(".reference-inspector-copy")
+      .first()
+      .evaluate((Node) => Node.scrollIntoView({ block: "start" }));
     await Page.waitForTimeout(300);
     await Page.screenshot({ path: path.join(Proof, Id + "-tiles.png") });
     Checks.push(

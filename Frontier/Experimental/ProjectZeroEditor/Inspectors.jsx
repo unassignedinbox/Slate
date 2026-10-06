@@ -451,6 +451,7 @@ export function Inspector({
   AllHidden = {},
   ReferenceCards = null,
   CloudCoverageCards = null,
+  ReferenceDetailCards = null,
 }) {
   const Sheet = Panels[Subject.Panel] || Panels.geometry;
   const [MoonSlot, SelectMoon] = useState(0);
@@ -595,19 +596,14 @@ export function Inspector({
   );
   const Generic = () => (
     <>
-      {Subject.Panel === "light" ? (
-        Header("Lighting")
-      ) : (
-        <div className="ident">
-          <Icon Name={Subject.Icon} Size={36} />
-          <div>
-            <input aria-label="Inspector name" value={Subject.Name} readOnly />
-            <p>{Subject.Description}</p>
-          </div>
-          <button title="Visibility" onClick={ToggleHidden}>
-            <Glyph Name="eye" />
-          </button>
-        </div>
+      {Header(
+        Subject.Panel === "light"
+          ? "Lighting"
+          : Subject.Panel === "geometry"
+            ? "Geometry"
+            : Subject.Panel === "post"
+              ? "Post processing"
+              : "Scene",
       )}
       {Subject.Panel === "light" && ReferenceCards}
       {Subject.Panel === "light" && Values.ReferenceInspector?.Locked && (
@@ -622,24 +618,19 @@ export function Inspector({
           Unlock editing
         </button>
       )}
-      {Capabilities()}
       {Subject.Panel === "geometry" && (
-        <>
-          <TransformPanel Values={Values} Change={Change} />
-          <FracturePanel
-            Subject={Subject}
-            Values={Values}
-            Change={Change}
-            Expand={OpenFracture}
-          />
-          <MaterialPanel
-            Subject={Subject}
-            Values={Values}
-            Change={Change}
-            Expand={OpenShader}
-            Compact
-          />
-        </>
+        <TransformPanel Values={Values} Change={Change} />
+      )}
+      {Capabilities()}
+      {Subject.Panel === "light" && ReferenceDetailCards}
+      {Subject.Panel === "geometry" && (
+        <MaterialPanel
+          Subject={Subject}
+          Values={Values}
+          Change={Change}
+          Expand={OpenShader}
+          Compact
+        />
       )}
       {[...new Set(Sheet.map((Field) => Field.Group))]
         .filter(
@@ -671,6 +662,14 @@ export function Inspector({
           onChange={(Event) => Change("Notes", Event.target.value)}
         />
       </details>
+      {Subject.Panel === "geometry" && (
+        <FracturePanel
+          Subject={Subject}
+          Values={Values}
+          Change={Change}
+          Expand={OpenFracture}
+        />
+      )}
     </>
   );
   if (["geometry", "light", "post", "group"].includes(Subject.Panel))
@@ -727,30 +726,20 @@ export function Inspector({
     const { Elevation, Azimuth } = Solved;
     Content = (
       <>
-        <header className="sun-heading">
-          <div className="breadcrumbs">Inspector / Environment</div>
-          <p>DIRECTIONAL LIGHT</p>
-          <h1>{Subject.Name}</h1>
-          <div>
-            <button disabled>↺ Reset</button>
-            <button onClick={ToggleHidden}>
-              <i className={Hidden ? "red" : "green"} />
-              {Hidden ? "Disabled" : "Enabled"}
-            </button>
-          </div>
-        </header>
+        {Header("Environment")}
         {ReferenceCards}
-        <div className="section-caption">
-          BAKING <small>Native target bindings pending</small>
-        </div>
-        <div className="card-grid">
-          <Bake Title="Sun lighting bake" Sun />
-          <Bake Title="Sun disk bake" Sun />
-        </div>
         <div className="section-caption">
           PROPERTIES <small>Light, direction & atmosphere</small>
         </div>
         <div className="tiles sun-tiles">
+          <Tile
+            Label="Enabled"
+            Context="sun"
+            On={!Hidden}
+            Action={ToggleHidden}
+            Large
+          />
+          <button disabled>↺ Reset</button>
           <Tile Label="Sunlight" Large Disabled IconName="sun" />
           <Tile Label="Sun disc" Large Disabled IconName="sun" />
           <Tile
@@ -893,6 +882,13 @@ export function Inspector({
           Solar position uses the native NOAA calculation, translated to
           JavaScript. No GPU lighting is running.
         </p>
+        <div className="section-caption">
+          BAKING <small>Native target bindings pending</small>
+        </div>
+        <div className="card-grid">
+          <Bake Title="Sun lighting bake" Sun />
+          <Bake Title="Sun disk bake" Sun />
+        </div>
       </>
     );
   } else if (Subject.Panel === "camera") {
@@ -995,23 +991,6 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment", "Stars")}
-        <Card Title="Stars settings" Height={165}>
-          <div className="tiles">
-            {["Star field", "Twinkle"].map((Name) => (
-              <Tile
-                key={Name}
-                Label={Name}
-                On={V(Name)}
-                Action={() => AssignProperty(Name, !V(Name))}
-              />
-            ))}
-            <Tile Label="Bake" Disabled IconName="bake" />
-            <Tile Label="Use baked" Disabled IconName="bake" />
-          </div>
-          <p>
-            Catalogue field controls · baked-star playback is not implemented.
-          </p>
-        </Card>
         <Card Title="Star field" Height={444}>
           <Metric
             Value={V("Limiting magnitude").toFixed(1)}
@@ -1046,6 +1025,19 @@ export function Inspector({
           {F("Limiting magnitude")}
           <p>Equatorial chart study · no live star catalogue connection</p>
         </Card>
+        <Card Title="Stars settings" Height={165}>
+          <div className="tiles">
+            {["Star field", "Twinkle"].map((Name) => (
+              <Tile
+                key={Name}
+                Label={Name}
+                On={V(Name)}
+                Action={() => AssignProperty(Name, !V(Name))}
+              />
+            ))}
+          </div>
+          <p>Catalogue field controls.</p>
+        </Card>
         <div className="card-grid">
           <Card Title="Twinkle" Height={547}>
             <Metric
@@ -1079,6 +1071,14 @@ export function Inspector({
             a schematic.
           </p>
         </Card>
+        <div className="section-caption">BAKING</div>
+        <Card Title="Star field bake">
+          <div className="tiles">
+            <Tile Label="Bake" Disabled IconName="bake" />
+            <Tile Label="Use baked" Disabled IconName="bake" />
+          </div>
+          <p>Baked-star playback is not implemented.</p>
+        </Card>
       </>
     );
   } else if (Subject.Panel === "moon") {
@@ -1086,6 +1086,16 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment", "Moon")}
+        <Card Title="Lunar phase" Height={443}>
+          <Metric
+            Value={(V("Phase") * 29.53).toFixed(1)}
+            Unit="days"
+            Caption={`${Math.round((1 - Math.cos(V("Phase") * Math.PI * 2)) * 0.5 * 100)}% illuminated`}
+          />
+          <p>Position in the 29.53-day synodic cycle</p>
+          <MoonImage Preset={Preset} Phase={V("Phase")} />
+          {F("Phase", V("Follow Sky"))}
+        </Card>
         <Card Title="Moon settings" Height={178}>
           <select
             className="moon-instance"
@@ -1131,16 +1141,6 @@ export function Inspector({
               ),
             )}
           </div>
-        </Card>
-        <Card Title="Lunar phase" Height={443}>
-          <Metric
-            Value={(V("Phase") * 29.53).toFixed(1)}
-            Unit="days"
-            Caption={`${Math.round((1 - Math.cos(V("Phase") * Math.PI * 2)) * 0.5 * 100)}% illuminated`}
-          />
-          <p>Position in the 29.53-day synodic cycle</p>
-          <MoonImage Preset={Preset} Phase={V("Phase")} />
-          {F("Phase", V("Follow Sky"))}
         </Card>
         <div className="card-grid">
           <Card Title="Moonlight" Height={452}>
@@ -1208,16 +1208,7 @@ export function Inspector({
       <>
         {Header("Environment", "Atmosphere")}
         <AtmosphereLab V={V} Change={AssignProperty} />
-        <div className="section-caption">BAKING</div>
-        <Bake Title="Atmosphere bake" Sun />
-        <Card Title="Baked atmosphere" Height={210}>
-          <div className="empty-image">No resident atmosphere image</div>
-          <p>
-            Load / bake requires the native engine. No completed bake is
-            simulated.
-          </p>
-          {F("Fetch Baked Dome", true)}
-        </Card>
+        <Card Title="Atmosphere settings">{Tiles(["Line at civil only"])}</Card>
         <Card Title="Atmospheric scattering" Height={485} GraphHandled>
           <Metric
             Value={V("Rayleigh").toFixed(1)}
@@ -1265,14 +1256,22 @@ export function Inspector({
             "Atmosphere",
             "Horizon Glow",
             "White Line",
-            "Line at civil only",
             "Sky Tint",
             "Sky Brightness",
             "Air Mass",
             "Tier Samples",
-            "Dome Path",
-            "Sheet",
           )}
+        </Card>
+        <div className="section-caption">BAKING</div>
+        <Bake Title="Atmosphere bake" Sun />
+        <Card Title="Baked atmosphere" Height={210}>
+          <div className="empty-image">No resident atmosphere image</div>
+          <p>
+            Load / bake requires the native engine. No completed bake is
+            simulated.
+          </p>
+          {F("Fetch Baked Dome", true)}
+          {Fields("Dome Path", "Sheet")}
         </Card>
       </>
     );
@@ -1280,8 +1279,6 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment / Optics", "Lens Flare")}
-        <div className="section-caption">BAKING</div>
-        <Bake Title="Lens flare image" />
         <Card Title="Flare composite" Height={430}>
           <Metric Value={V("Intensity").toFixed(2)} Unit="×" />
           <div
@@ -1333,15 +1330,17 @@ export function Inspector({
             Drag the source · HTML optical illustration, not the renderer
             composite.
           </p>
-          {Fields("Enabled", "Intensity", "Type")}
         </Card>
+        <Card Title="Flare settings">
+          {Tiles(["Enabled", "Anamorphic", "Streaks", "Starburst"])}
+        </Card>
+        <Card Title="Flare source">{Fields("Intensity", "Type")}</Card>
         <div className="card-grid">
           <Card Title="Flare layers" Height={565}>
             <p>
               Combine layers instead of choosing just one. Editing a layer
               selects Custom layers.
             </p>
-            {Tiles(["Anamorphic", "Streaks", "Starburst"])}
             {Fields("Spread", "Rotation", "Ray pairs", "Streak gain")}
           </Card>
           <Card Title="Lens ghosts" Height={565}>
@@ -1360,6 +1359,8 @@ export function Inspector({
         <Card Title="Legacy preset settings">
           {Fields("Aperture Blades", "Preview X", "Preview Y")}
         </Card>
+        <div className="section-caption">BAKING</div>
+        <Bake Title="Lens flare image" />
       </>
     );
   } else if (Subject.Panel === "wind") {
@@ -1367,12 +1368,6 @@ export function Inspector({
       <>
         {Header("Environment", Subject.Name)}
         {ReferenceCards}
-        <WindInspector
-          Values={Values}
-          Change={Change}
-          Open={OpenWind}
-          Hidden={Hidden}
-        />
         <Card Title="Wind controls">
           <div className="tiles">
             <Tile
@@ -1381,11 +1376,22 @@ export function Inspector({
               On={!Hidden}
               Action={ToggleHidden}
             />
+            <Tile
+              Label="Air shear"
+              Context="wind"
+              On={V("Air shear")}
+              Action={() => AssignProperty("Air shear", !V("Air shear"))}
+            />
           </div>
         </Card>
+        <WindInspector
+          Values={Values}
+          Change={Change}
+          Open={OpenWind}
+          Hidden={Hidden}
+        />
         <Card Title="Atmospheric modifiers · native draft">
           {Fields("Shear", "Veer", "Turbulence", "Steadiness")}
-          {Tiles(["Air shear"])}
           {F("Force")}
           <p>
             Stored atmospheric descriptors for the native mirror. Altitude
@@ -1399,14 +1405,6 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment", "Precipitation")}
-        <Card Title="Emission + collision" Height={224}>
-          {Tiles([
-            "Enabled",
-            "Follow Wind",
-            "Spawn from Clouds",
-            "Ground Collision",
-          ])}
-        </Card>
         <Card Title="Precipitation type" Height={270}>
           <div className="precip-types">
             {["Rain", "Drizzle", "Hail", "Snow", "Sleet"].map((Name, Index) => (
@@ -1429,6 +1427,14 @@ export function Inspector({
               </button>
             ))}
           </div>
+        </Card>
+        <Card Title="Emission + collision" Height={224}>
+          {Tiles([
+            "Enabled",
+            "Follow Wind",
+            "Spawn from Clouds",
+            "Ground Collision",
+          ])}
         </Card>
         <div className="card-grid">
           <Card Title="Fall + density" Height={446}>
@@ -1461,10 +1467,6 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment", "Rainbow")}
-        <Bake Title="Bake / image" />
-        <Card Title="Visibility" Height={154}>
-          {Tiles(["Enabled", "Alexander's Band"])}
-        </Card>
         <Card Title="Optical preview">
           <div
             className="rainbow-preview"
@@ -1477,9 +1479,13 @@ export function Inspector({
             kernel.
           </p>
         </Card>
+        <Card Title="Visibility" Height={154}>
+          {Tiles(["Enabled", "Alexander's Band"])}
+        </Card>
         <Card Title="Bow response" Height={458}>
           {Fields("Intensity", "Width", "Secondary", "Minimum Path")}
         </Card>
+        <Bake Title="Bake / image" />
       </>
     );
   } else if (["clouds", "local-cloud"].includes(Subject.Panel)) {
@@ -1500,6 +1506,9 @@ export function Inspector({
           </button>
         )}
         {ReferenceCards}
+        <Card Title="Cloud settings" Height={165}>
+          {Tiles(["Enabled", "Follow Wind"])}
+        </Card>
         <section
           className="cloud-coverage-replacement"
           data-card="Cloud coverage"
@@ -1535,9 +1544,6 @@ export function Inspector({
             {!Local && F("Thickness")}
           </Card>
         </div>
-        <Card Title="Cloud settings" Height={165}>
-          {Tiles(["Enabled", "Follow Wind"])}
-        </Card>
         {Local && (
           <Card Title="Local bounds" Height={452}>
             <TransformPanel
@@ -1616,11 +1622,19 @@ export function Inspector({
             V={V}
             Values={Values}
             Change={AssignProperty}
+            QuickControls={
+              <Card Title="Fog settings" Height={142}>
+                {Tiles(Local ? ["Enabled", "Follow Wind"] : ["Enabled"])}
+              </Card>
+            }
           />
         )}
-        <Card Title="Fog settings" Height={142}>
-          {Tiles(Local ? ["Enabled", "Follow Wind"] : ["Enabled"])}
-        </Card>
+        {!Local && !Aerial && (
+          <Card Title="Fog settings" Height={142}>
+            {Tiles(["Enabled"])}
+          </Card>
+        )}
+        {ReferenceDetailCards}
         {!Local && !Aerial && (
           <Card Title="Visibility through fog" GraphHandled>
             <FogGraph Kind={Subject.Panel} V={V} Change={AssignProperty} />

@@ -134,7 +134,8 @@ try {
     "reference-studio-tube",
   ]) {
     await Open(Id);
-    const Light = Frame("all");
+    const Light = Frame(Id === "light" ? "summary" : "all");
+    const Controls = Frame(Id === "light" ? "details" : "all");
     await Light.locator(".lp-preview").waitFor();
     assert.equal(await Light.locator(".ident").count(), 0);
     assert.equal(await Page.locator(".inspector-scroll .ident").count(), 0);
@@ -145,7 +146,7 @@ try {
       1,
     );
     assert.equal(
-      await Light.locator(".lp-transform .transform-card").count(),
+      await Controls.locator(".lp-transform .transform-card").count(),
       1,
     );
     if (Id === "light") {
@@ -234,7 +235,9 @@ try {
   assert.equal(await Page.locator("iframe").count(), 2);
   assert.equal(await Page.locator('[data-card="Cloud coverage"]').count(), 1);
   assert.equal(await Page.locator('[data-card="Local bounds"]').count(), 1);
-  Checks.push("Local Cloud now shares both reference slices and retains its native coverage and bounds controls");
+  Checks.push(
+    "Local Cloud now shares both reference slices and retains its native coverage and bounds controls",
+  );
   await Page.setViewportSize({ width: 1024, height: 768 });
   await Open("clouds");
   assert(

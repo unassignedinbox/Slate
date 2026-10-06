@@ -464,30 +464,38 @@
   background: #181b19;
 }
 
-#ReferenceMount .lighting-panel .lp-source-column,
-#ReferenceMount .lighting-panel .lp-control-column {
+#ReferenceMount
+  .lighting-panel
+  :is(
+    .lp-summary-column,
+    .lp-status-column,
+    .lp-source-column,
+    .lp-control-column
+  ) {
   display: contents;
 }
-#ReferenceMount .lighting-panel .lp-preview {
-  order: 0;
-}
-#ReferenceMount .lighting-panel .lp-readings {
-  order: 1;
-}
-#ReferenceMount .lighting-panel .lp-output {
-  order: 2;
-}
-#ReferenceMount .lighting-panel .lp-shape {
-  order: 3;
-}
 #ReferenceMount .lighting-panel .lp-response {
-  order: 4;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #ffffff12;
 }
-#ReferenceMount .lighting-panel .lp-transform {
-  order: 5;
+.lp-response-samples {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
-#ReferenceMount .lighting-panel .lp-participation {
-  order: 6;
+.lp-response-samples th {
+  color: #929b8f;
+  font-weight: 400;
+}
+.lp-response-samples :is(th, td) {
+  padding: 7px 0;
+  text-align: right;
+  border-bottom: 1px solid #ffffff0b;
+}
+.lp-response-samples :is(th, td):first-child {
+  text-align: left;
 }
 @media (min-width: 650px) {
   #ReferenceMount .lighting-panel {
@@ -497,36 +505,41 @@
     margin: 0 auto;
     align-items: start;
   }
-  #ReferenceMount .lighting-panel .lp-source-column,
-  #ReferenceMount .lighting-panel .lp-control-column {
+  #ReferenceMount
+    .lighting-panel
+    :is(
+      .lp-summary-column,
+      .lp-status-column,
+      .lp-source-column,
+      .lp-control-column
+    ) {
     display: flex;
     flex-direction: column;
     gap: 14px;
     min-width: 0;
   }
-  #ReferenceMount .lighting-panel .lp-control-column .lp-output {
-    order: 0;
+  #ReferenceMount .lighting-panel :is(.lp-summary-column, .lp-status-column) {
+    grid-column: 1 / -1;
+  }
+  #ReferenceMount .lighting-panel .lp-participation {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 28px;
+    align-items: center;
+  }
+  #ReferenceMount .lighting-panel .lp-participation header {
+    flex: 1;
+    margin: 0;
+  }
+  #ReferenceMount .lighting-panel .lp-participation .lp-toggle-row {
+    gap: 18px;
+    margin: 0;
   }
   #ReferenceMount .lighting-panel .lp-preview {
     padding: 20px 22px 12px;
   }
   #ReferenceMount .lighting-panel .lp-output {
     padding: 20px 22px;
-  }
-  #ReferenceMount .lighting-panel .lp-participation {
-    grid-column: 1 / -1;
-    display: flex;
-    gap: 30px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  #ReferenceMount .lighting-panel .lp-participation header {
-    margin: 0;
-    flex: 1;
-  }
-  #ReferenceMount .lighting-panel .lp-participation .lp-toggle-row {
-    gap: 18px;
-    margin: 0;
   }
   #ReferenceMount .lighting-panel .lp-profiles {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -570,4 +583,18 @@
   border: 0;
   margin: 0;
   padding: 0;
+}
+
+#ReferenceMount .lighting-panel .lp-response > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-bottom: 14px;
+}
+#ReferenceMount .lighting-panel .lp-response > header span {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: #84917e;
 }

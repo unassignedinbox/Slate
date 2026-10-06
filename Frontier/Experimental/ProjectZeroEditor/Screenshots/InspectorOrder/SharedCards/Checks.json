@@ -1,0 +1,19 @@
+{
+  "Checks": [
+    "clouds: same summary/coverage/deck/thickness cards, header-first, bidirectional coverage and persistence, docked and expanded views",
+    "local-cloud: same summary/coverage/deck/thickness cards, header-first, bidirectional coverage and persistence, docked and expanded views",
+    "Local base = centre Z − half height; thickness = twice half height; keyboard deck edits translate bounds without changing size and persist",
+    "Local deck represents negative elevations without global-cloud clamping",
+    "Local bounds/body controls remain and do not mutate the global-cloud record",
+    "light: shipped library icon, ordered summary/statistics/flags above independent control columns; merged response, visible controls/readings, no 240px overflow",
+    "reference-softbox: shipped library icon, ordered summary/statistics/flags above independent control columns; merged response, visible controls/readings, no 240px overflow",
+    "reference-ece-low-beam: shipped library icon, ordered summary/statistics/flags above independent control columns; merged response, visible controls/readings, no 240px overflow",
+    "reference-ies-downlight: shipped library icon, ordered summary/statistics/flags above independent control columns; merged response, visible controls/readings, no 240px overflow",
+    "reference-led: shipped library icon, ordered summary/statistics/flags above independent control columns; merged response, visible controls/readings, no 240px overflow",
+    "reference-led-strip: shipped library icon, ordered summary/statistics/flags above independent control columns; merged response, visible controls/readings, no 240px overflow",
+    "reference-rim-point: shipped library icon, ordered summary/statistics/flags above independent control columns; merged response, visible controls/readings, no 240px overflow",
+    "reference-key-spot: shipped library icon, ordered summary/statistics/flags above independent control columns; merged response, visible controls/readings, no 240px overflow",
+    "reference-studio-tube: shipped library icon, ordered summary/statistics/flags above independent control columns; merged response, visible controls/readings, no 240px overflow"
+  ],
+  "Errors": []
+}

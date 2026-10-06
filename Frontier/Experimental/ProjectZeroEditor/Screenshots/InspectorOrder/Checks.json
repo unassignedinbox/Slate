@@ -1,0 +1,938 @@
+{
+  "Checks": [
+    "showcase docked: heading, available section order, baking last, no overflow",
+    "cube docked: heading, available section order, baking last, no overflow",
+    "sphere docked: heading, available section order, baking last, no overflow",
+    "cylinder docked: heading, available section order, baking last, no overflow",
+    "torus docked: heading, available section order, baking last, no overflow",
+    "cone docked: heading, available section order, baking last, no overflow",
+    "cameras docked: heading, available section order, baking last, no overflow",
+    "camera docked: heading, available section order, baking last, no overflow",
+    "cine docked: heading, available section order, baking last, no overflow",
+    "post docked: heading, available section order, baking last, no overflow",
+    "world docked: heading, available section order, baking last, no overflow",
+    "atmosphere docked: heading, available section order, baking last, no overflow",
+    "sun docked: heading, available section order, baking last, no overflow",
+    "flare docked: heading, available section order, baking last, no overflow",
+    "moon docked: heading, available section order, baking last, no overflow",
+    "stars docked: heading, available section order, baking last, no overflow",
+    "wind docked: heading, available section order, baking last, no overflow",
+    "height-fog docked: heading, available section order, baking last, no overflow",
+    "aerial-fog docked: heading, available section order, baking last, no overflow",
+    "local-fog docked: heading, available section order, baking last, no overflow",
+    "clouds docked: heading, available section order, baking last, no overflow",
+    "precipitation docked: heading, available section order, baking last, no overflow",
+    "local-cloud docked: heading, available section order, baking last, no overflow",
+    "rainbow docked: heading, available section order, baking last, no overflow",
+    "lighting docked: heading, available section order, baking last, no overflow",
+    "light docked: heading, available section order, baking last, no overflow",
+    "reference-key-spot docked: heading, available section order, baking last, no overflow",
+    "reference-rim-point docked: heading, available section order, baking last, no overflow",
+    "reference-fill-point docked: heading, available section order, baking last, no overflow",
+    "reference-ece-low-beam docked: heading, available section order, baking last, no overflow",
+    "reference-softbox docked: heading, available section order, baking last, no overflow",
+    "reference-studio-tube docked: heading, available section order, baking last, no overflow",
+    "reference-led docked: heading, available section order, baking last, no overflow",
+    "reference-led-strip docked: heading, available section order, baking last, no overflow",
+    "reference-ies-downlight docked: heading, available section order, baking last, no overflow",
+    "showcase expanded: heading, available section order, baking last, no overflow",
+    "cube expanded: heading, available section order, baking last, no overflow",
+    "sphere expanded: heading, available section order, baking last, no overflow",
+    "cylinder expanded: heading, available section order, baking last, no overflow",
+    "torus expanded: heading, available section order, baking last, no overflow",
+    "cone expanded: heading, available section order, baking last, no overflow",
+    "cameras expanded: heading, available section order, baking last, no overflow",
+    "camera expanded: heading, available section order, baking last, no overflow",
+    "cine expanded: heading, available section order, baking last, no overflow",
+    "post expanded: heading, available section order, baking last, no overflow",
+    "world expanded: heading, available section order, baking last, no overflow",
+    "atmosphere expanded: heading, available section order, baking last, no overflow",
+    "sun expanded: heading, available section order, baking last, no overflow",
+    "flare expanded: heading, available section order, baking last, no overflow",
+    "moon expanded: heading, available section order, baking last, no overflow",
+    "stars expanded: heading, available section order, baking last, no overflow",
+    "wind expanded: heading, available section order, baking last, no overflow",
+    "height-fog expanded: heading, available section order, baking last, no overflow",
+    "aerial-fog expanded: heading, available section order, baking last, no overflow",
+    "local-fog expanded: heading, available section order, baking last, no overflow",
+    "clouds expanded: heading, available section order, baking last, no overflow",
+    "precipitation expanded: heading, available section order, baking last, no overflow",
+    "local-cloud expanded: heading, available section order, baking last, no overflow",
+    "rainbow expanded: heading, available section order, baking last, no overflow",
+    "lighting expanded: heading, available section order, baking last, no overflow",
+    "light expanded: heading, available section order, baking last, no overflow",
+    "reference-key-spot expanded: heading, available section order, baking last, no overflow",
+    "reference-rim-point expanded: heading, available section order, baking last, no overflow",
+    "reference-fill-point expanded: heading, available section order, baking last, no overflow",
+    "reference-ece-low-beam expanded: heading, available section order, baking last, no overflow",
+    "reference-softbox expanded: heading, available section order, baking last, no overflow",
+    "reference-studio-tube expanded: heading, available section order, baking last, no overflow",
+    "reference-led expanded: heading, available section order, baking last, no overflow",
+    "reference-led-strip expanded: heading, available section order, baking last, no overflow",
+    "reference-ies-downlight expanded: heading, available section order, baking last, no overflow",
+    "group: native editable input inventory matches C052, ignoring order",
+    "geometry: native editable input inventory matches C052, ignoring order",
+    "camera: native editable input inventory matches C052, ignoring order",
+    "post: native editable input inventory matches C052, ignoring order",
+    "atmosphere: native editable input inventory matches C052, ignoring order",
+    "sun: native editable input inventory matches C052, ignoring order",
+    "flare: native editable input inventory matches C052, ignoring order",
+    "moon: native editable input inventory matches C052, ignoring order",
+    "stars: native editable input inventory matches C052, ignoring order",
+    "wind: native editable input inventory matches C052, ignoring order",
+    "height-fog: native editable input inventory matches C052, ignoring order",
+    "aerial-fog: native editable input inventory matches C052, ignoring order",
+    "local-fog: native editable input inventory matches C052, ignoring order",
+    "clouds: native editable input inventory matches C052, ignoring order",
+    "precipitation: native editable input inventory matches C052, ignoring order",
+    "local-cloud: native editable input inventory matches C052, ignoring order",
+    "rainbow: native editable input inventory matches C052, ignoring order",
+    "light: native editable input inventory matches C052, ignoring order",
+    "Point response: exact numeric samples, intensity/decay update chart and table, reload persistence, 240px fit"
+  ],
+  "Inventory": [
+    {
+      "Id": "showcase",
+      "Panel": "group",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "cube",
+      "Panel": "geometry",
+      "Wide": false,
+      "Cards": [
+        "Quick controls",
+        "Fracture"
+      ]
+    },
+    {
+      "Id": "sphere",
+      "Panel": "geometry",
+      "Wide": false,
+      "Cards": [
+        "Quick controls",
+        "Fracture"
+      ]
+    },
+    {
+      "Id": "cylinder",
+      "Panel": "geometry",
+      "Wide": false,
+      "Cards": [
+        "Quick controls",
+        "Fracture"
+      ]
+    },
+    {
+      "Id": "torus",
+      "Panel": "geometry",
+      "Wide": false,
+      "Cards": [
+        "Quick controls",
+        "Fracture"
+      ]
+    },
+    {
+      "Id": "cone",
+      "Panel": "geometry",
+      "Wide": false,
+      "Cards": [
+        "Quick controls",
+        "Fracture"
+      ]
+    },
+    {
+      "Id": "cameras",
+      "Panel": "group",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "camera",
+      "Panel": "camera",
+      "Wide": false,
+      "Cards": [
+        "Lens + field of view",
+        "Aperture study",
+        "Subject plane + sharpness",
+        "Sensor / support"
+      ]
+    },
+    {
+      "Id": "cine",
+      "Panel": "camera",
+      "Wide": false,
+      "Cards": [
+        "Lens + field of view",
+        "Aperture study",
+        "Subject plane + sharpness",
+        "Sensor / support"
+      ]
+    },
+    {
+      "Id": "post",
+      "Panel": "post",
+      "Wide": false,
+      "Cards": [
+        "Quick controls"
+      ]
+    },
+    {
+      "Id": "world",
+      "Panel": "group",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "atmosphere",
+      "Panel": "atmosphere",
+      "Wide": false,
+      "Cards": [
+        "Atmosphere atlas",
+        "Atmosphere from space",
+        "Atmosphere settings",
+        "Atmospheric scattering",
+        "Aerosol haze",
+        "Ozone absorption",
+        "Density falloff",
+        "Ground reflectance",
+        "Native atmosphere controls",
+        "Atmosphere bake",
+        "Baked atmosphere"
+      ]
+    },
+    {
+      "Id": "sun",
+      "Panel": "sun",
+      "Wide": false,
+      "Cards": [
+        "Sun direction",
+        "Sunlight intensity",
+        "Temperature",
+        "Daylight cycle",
+        "Sun disc",
+        "Dynamic settings",
+        "Sun lighting bake",
+        "Sun disk bake"
+      ]
+    },
+    {
+      "Id": "flare",
+      "Panel": "flare",
+      "Wide": false,
+      "Cards": [
+        "Flare composite",
+        "Flare settings",
+        "Flare source",
+        "Flare layers",
+        "Lens ghosts",
+        "Halo & optical response",
+        "Legacy preset settings",
+        "Lens flare image"
+      ]
+    },
+    {
+      "Id": "moon",
+      "Panel": "moon",
+      "Wide": false,
+      "Cards": [
+        "Lunar phase",
+        "Moon settings",
+        "Moon catalogue",
+        "Moonlight",
+        "Moon size",
+        "Lunar position",
+        "Moon rotation"
+      ]
+    },
+    {
+      "Id": "stars",
+      "Panel": "stars",
+      "Wide": false,
+      "Cards": [
+        "Star field",
+        "Stars settings",
+        "Twinkle",
+        "Celestial rotation",
+        "Renderer scale",
+        "Star field bake"
+      ]
+    },
+    {
+      "Id": "wind",
+      "Panel": "wind",
+      "Wide": false,
+      "Cards": [
+        "Wind controls",
+        "Wind field",
+        "Atmospheric modifiers · native draft"
+      ]
+    },
+    {
+      "Id": "height-fog",
+      "Panel": "height-fog",
+      "Wide": false,
+      "Cards": [
+        "Fog settings",
+        "Visibility through fog",
+        "Medium",
+        "Density with altitude",
+        "Wind binding"
+      ]
+    },
+    {
+      "Id": "aerial-fog",
+      "Panel": "aerial-fog",
+      "Wide": false,
+      "Cards": [
+        "Fog settings",
+        "Visibility through fog",
+        "Medium",
+        "Spectral transmission",
+        "Wind binding"
+      ]
+    },
+    {
+      "Id": "local-fog",
+      "Panel": "local-fog",
+      "Wide": false,
+      "Cards": [
+        "Fog settings",
+        "Visibility through fog",
+        "Medium",
+        "Fog volume shape",
+        "Wind binding"
+      ]
+    },
+    {
+      "Id": "clouds",
+      "Panel": "clouds",
+      "Wide": false,
+      "Cards": [
+        "Cloud settings",
+        "Cloud coverage",
+        "Cloud base",
+        "Layer thickness",
+        "Cloud body",
+        "Wind binding"
+      ]
+    },
+    {
+      "Id": "precipitation",
+      "Panel": "precipitation",
+      "Wide": false,
+      "Cards": [
+        "Precipitation type",
+        "Emission + collision",
+        "Fall + density",
+        "Particle scale",
+        "Simulation + settling"
+      ]
+    },
+    {
+      "Id": "local-cloud",
+      "Panel": "local-cloud",
+      "Wide": false,
+      "Cards": [
+        "Cloud settings",
+        "Cloud coverage",
+        "Cloud base",
+        "Layer thickness",
+        "Local bounds",
+        "Cloud body",
+        "Wind binding"
+      ]
+    },
+    {
+      "Id": "rainbow",
+      "Panel": "rainbow",
+      "Wide": false,
+      "Cards": [
+        "Optical preview",
+        "Visibility",
+        "Bow response",
+        "Bake / image"
+      ]
+    },
+    {
+      "Id": "lighting",
+      "Panel": "group",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "light",
+      "Panel": "light",
+      "Wide": false,
+      "Cards": [
+        "Quick controls"
+      ]
+    },
+    {
+      "Id": "reference-key-spot",
+      "Panel": "light",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "reference-rim-point",
+      "Panel": "light",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "reference-fill-point",
+      "Panel": "light",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "reference-ece-low-beam",
+      "Panel": "light",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "reference-softbox",
+      "Panel": "light",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "reference-studio-tube",
+      "Panel": "light",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "reference-led",
+      "Panel": "light",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "reference-led-strip",
+      "Panel": "light",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "reference-ies-downlight",
+      "Panel": "light",
+      "Wide": false,
+      "Cards": []
+    },
+    {
+      "Id": "showcase",
+      "Panel": "group",
+      "Wide": true,
+      "Cards": []
+    },
+    {
+      "Id": "cube",
+      "Panel": "geometry",
+      "Wide": true,
+      "Cards": [
+        "Quick controls",
+        "Fracture"
+      ]
+    },
+    {
+      "Id": "sphere",
+      "Panel": "geometry",
+      "Wide": true,
+      "Cards": [
+        "Quick controls",
+        "Fracture"
+      ]
+    },
+    {
+      "Id": "cylinder",
+      "Panel": "geometry",
+      "Wide": true,
+      "Cards": [
+        "Quick controls",
+        "Fracture"
+      ]
+    },
+    {
+      "Id": "torus",
+      "Panel": "geometry",
+      "Wide": true,
+      "Cards": [
+        "Quick controls",
+        "Fracture"
+      ]
+    },
+    {
+      "Id": "cone",
+      "Panel": "geometry",
+      "Wide": true,
+      "Cards": [
+        "Quick controls",
+        "Fracture"
+      ]
+    },
+    {
+      "Id": "cameras",
+      "Panel": "group",
+      "Wide": true,
+      "Cards": []
+    },
+    {
+      "Id": "camera",
+      "Panel": "camera",
+      "Wide": true,
+      "Cards": [
+        "Lens + field of view",
+        "Aperture study",
+        "Subject plane + sharpness",
+        "Sensor / support"
+      ]
+    },
+    {
+      "Id": "cine",
+      "Panel": "camera",
+      "Wide": true,
+      "Cards": [
+        "Lens + field of view",
+        "Aperture study",
+        "Subject plane + sharpness",
+        "Sensor / support"
+      ]
+    },
+    {
+      "Id": "post",
+      "Panel": "post",
+      "Wide": true,
+      "Cards": [
+        "Quick controls"
+      ]
+    },
+    {
+      "Id": "world",
+      "Panel": "group",
+      "Wide": true,
+      "Cards": []
+    },
+    {
+      "Id": "atmosphere",
+      "Panel": "atmosphere",
+      "Wide": true,
+      "Cards": [
+        "Atmosphere atlas",
+        "Atmosphere from space",
+        "Atmosphere settings",
+        "Atmospheric scattering",
+        "Aerosol haze",
+        "Ozone absorption",
+        "Density falloff",
+        "Ground reflectance",
+        "Native atmosphere controls",
+        "Atmosphere bake",
+        "Baked atmosphere"
+      ]
+    },
+    {
+      "Id": "sun",
+      "Panel": "sun",
+      "Wide": true,
+      "Cards": [
+        "Sun direction",
+        "Sunlight intensity",
+        "Temperature",
+        "Daylight cycle",
+        "Sun disc",
+        "Dynamic settings",
+        "Sun lighting bake",
+        "Sun disk bake"
+      ]
+    },
+    {
+      "Id": "flare",
+      "Panel": "flare",
+      "Wide": true,
+      "Cards": [
+        "Flare composite",
+        "Flare settings",
+        "Flare source",
+        "Flare layers",
+        "Lens ghosts",
+        "Halo & optical response",
+        "Legacy preset settings",
+        "Lens flare image"
+      ]
+    },
+    {
+      "Id": "moon",
+      "Panel": "moon",
+      "Wide": true,
+      "Cards": [
+        "Lunar phase",
+        "Moon settings",
+        "Moon catalogue",
+        "Moonlight",
+        "Moon size",
+        "Lunar position",
+        "Moon rotation"
+      ]
+    },
+    {
+      "Id": "stars",
+      "Panel": "stars",
+      "Wide": true,
+      "Cards": [
+        "Star field",
+        "Stars settings",
+        "Twinkle",
+        "Celestial rotation",
+        "Renderer scale",
+        "Star field bake"
+      ]
+    },
+    {
+      "Id": "wind",
+      "Panel": "wind",
+      "Wide": true,
+      "Cards": [
+        "Wind controls",
+        "Wind field",
+        "Atmospheric modifiers · native draft"
+      ]
+    },
+    {
+      "Id": "height-fog",
+      "Panel": "height-fog",
+      "Wide": true,
+      "Cards": [
+        "Fog settings",
+        "Visibility through fog",
+        "Medium",
+        "Density with altitude",
+        "Wind binding"
+      ]
+    },
+    {
+      "Id": "aerial-fog",
+      "Panel": "aerial-fog",
+      "Wide": true,
+      "Cards": [
+        "Fog settings",
+        "Visibility through fog",
+        "Medium",
+        "Spectral transmission",
+        "Wind binding"
+      ]
+    },
+    {
+      "Id": "local-fog",
+      "Panel": "local-fog",
+      "Wide": true,
+      "Cards": [
+        "Fog settings",
+        "Visibility through fog",
+        "Medium",
+        "Fog volume shape",
+        "Wind binding"
+      ]
+    },
+    {
+      "Id": "clouds",
+      "Panel": "clouds",
+      "Wide": true,
+      "Cards": [
+        "Cloud settings",
+        "Cloud coverage",
+        "Cloud base",
+        "Layer thickness",
+        "Cloud body",
+        "Wind binding"
+      ]
+    },
+    {
+      "Id": "precipitation",
+      "Panel": "precipitation",
+      "Wide": true,
+      "Cards": [
+        "Precipitation type",
+        "Emission + collision",
+        "Fall + density",
+        "Particle scale",
+        "Simulation + settling"
+      ]
+    },
+    {
+      "Id": "local-cloud",
+      "Panel": "local-cloud",
+      "Wide": true,
+      "Cards": [
+        "Cloud settings",
+        "Cloud coverage",
+        "Cloud base",
+        "Layer thickness",
+        "Local bounds",
+        "Cloud body",
+        "Wind binding"
+      ]
+    },
+    {
+      "Id": "rainbow",
+      "Panel": "rainbow",
+      "Wide": true,
+      "Cards": [
+        "Optical preview",
+        "Visibility",
+        "Bow response",
+        "Bake / image"
+      ]
+    },
+    {
+      "Id": "lighting",
+      "Panel": "group",
+      "Wide": true,
+      "Cards": []
+    },
+    {
+      "Id": "light",
+      "Panel": "light",
+      "Wide": true,
+      "Cards": [
+        "Quick controls"
+      ]
+    },
+    {
+      "Id": "reference-key-spot",
+      "Panel": "light",
+      "Wide": true,
+      "Cards": []
+    },
+    {
+      "Id": "reference-rim-point",
+      "Panel": "light",
+      "Wide": true,
+      "Cards": []
+    },
+    {
+      "Id": "reference-fill-point",
+      "Panel": "light",
+      "Wide": true,
+      "Cards": []
+    },
+    {
+      "Id": "reference-ece-low-beam",
+      "Panel": "light",
+      "Wide": true,
+      "Cards": []
+    },
+    {
+      "Id": "reference-softbox",
+      "Panel": "light",
+      "Wide": true,
+      "Cards": []
+    },
+    {
+      "Id": "reference-studio-tube",
+      "Panel": "light",
+      "Wide": true,
+      "Cards": []
+    },
+    {
+      "Id": "reference-led",
+      "Panel": "light",
+      "Wide": true,
+      "Cards": []
+    },
+    {
+      "Id": "reference-led-strip",
+      "Panel": "light",
+      "Wide": true,
+      "Cards": []
+    },
+    {
+      "Id": "reference-ies-downlight",
+      "Panel": "light",
+      "Wide": true,
+      "Cards": []
+    }
+  ],
+  "Errors": [],
+  "FontFailures": [
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2"
+  ]
+}

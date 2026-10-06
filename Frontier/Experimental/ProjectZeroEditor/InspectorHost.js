@@ -67,17 +67,24 @@ function Measure() {
 function Trim() {
   const Custom = Sheet.querySelector(".mpanel");
   // Filter only the imported additions; the host's existing card list is independent.
-  const LightCards = [
-    ".lp-source-column",
-    ".lp-control-column",
-    ".lp-preview",
-    ".mp-rail",
-    ".lp-output",
-    ".lp-shape",
-    ".lp-transform",
-    ".lp-participation",
-    ".lp-response",
-  ];
+  const LightCards =
+    Slice === "summary"
+      ? [".lp-summary-column", ".lp-status-column"]
+      : Slice === "details"
+        ? [".lp-source-column", ".lp-control-column"]
+        : [
+            ".lp-summary-column",
+            ".lp-status-column",
+            ".lp-source-column",
+            ".lp-control-column",
+            ".lp-preview",
+            ".mp-rail",
+            ".lp-output",
+            ".lp-shape",
+            ".lp-transform",
+            ".lp-participation",
+            ".lp-response",
+          ];
   const Allowed = {
     ledlight: LightCards,
     ledstrip: LightCards,
@@ -87,7 +94,12 @@ function Trim() {
       Slice === "coverage"
         ? [".cl-cover"]
         : [".cl-hero", ".mp-rail", ".mp-duo"],
-    fog: [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
+    fog:
+      Slice === "summary"
+        ? [".fg-hero", ".mp-rail", ".mp-duo"]
+        : Slice === "details"
+          ? [".fg-vis", ".fg-scatter"]
+          : [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
     pointlight: LightCards,
     spotlight: LightCards,
     ieslight: LightCards,
@@ -135,7 +147,8 @@ function Trim() {
   }
   if (Kind === "fog") {
     const Transport = Custom.querySelector(".fg-scatter");
-    Transport.replaceChildren(Transport.querySelector(".fg-chamber"));
+    if (Transport)
+      Transport.replaceChildren(Transport.querySelector(".fg-chamber"));
   }
 }
 function Record(Node) {

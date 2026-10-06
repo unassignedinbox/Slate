@@ -2745,3 +2745,54 @@ retained borderless cards and unchanged 6px light tiles. Native control comparis
 Actual browser screenshots and receipts are in `ProjectZeroEditor/Screenshots/InstrumentStyle/`, including
 `windWide.png`, `WindTraceTall.png` and `HeightFogChamber.png`. External Fontshare failures are recorded separately;
 fallback fonts were exercised. No native rendering, fog-model, wind-simulation or saved-property changes are included.
+
+## C053 — Light drawing, source response and inspector order
+
+2026-10-06. HTML-only follow-up: replace the Area Light drawing, combine source and response, and audit every inspector.
+
+- Replaced the Area Light perspective plane/frustum with an orthographic front-elevation aperture drawing: authored
+  width/height dimensions, centre guides and a restrained dotted surface. Rectangle/Disk, dimensions, tint, flux and sidedness
+  continue to update the illustration. The surrounding Luminous surface card, shipped icon and authoring controls remain.
+- Moved each light's analytical response inside its source/output card. Point lights now have a labeled illuminance
+  axis, distance guides, exact 1/2/5/10 m sample markers, a highlighted 5 m sample and an accessible numeric table.
+  Table values and chart scale follow authored intensity and decay; percentages are relative to the 1 m sample.
+  This remains an authored free-space estimate, not measured photometry or a native scene-lighting calculation.
+- Light layout now reads heading, main card, statistics, participation switches, then source/optics/Transform controls.
+  Expanded views keep the summary stages full-width and the lower source/control columns independent; docked views
+  use one column. The response is no longer a separate card. Native Area Light uses summary/detail reference slices
+  so its original quick-control grid also precedes the detailed imported controls. Native fields and notes remain.
+- Sun, Atmosphere, Lens Flare, Stars and Rainbow baking cards now finish their inspectors. Stars' unavailable Bake /
+  Use baked buttons are no longer mixed into its quick-control row. Atmosphere's Dome Path and Sheet controls move
+  with Fetch Baked Dome into the final Baked atmosphere card. Geometry's fracture execution/per-piece SDF authoring
+  is the final section, after material controls and notes. Availability and pending-native messages are unchanged.
+- Reordered Cloud/Local Cloud settings before coverage/deck/body controls; Wind quick controls before Wind field;
+  Moon phase before settings/catalogue; Stars' field before quick controls; precipitation type before emission flags;
+  and Rainbow's optical preview before visibility controls. Flare switches are together below the composite.
+- Height Fog uses summary/detail slices to place quick controls after both statistic rows, before visibility and beam
+  diagrams. Atmospheric/Local Fog insert their existing quick controls at the same boundary. Distinct fog models remain.
+- Sun, Geometry and Post Process use the normal breadcrumb/title/subtitle heading; Folder gains the breadcrumb while
+  retaining its original collection inspector. Sun's Enabled action moves into its quick row. Geometry's existing
+  Transform is its primary data card. Control-only Post Process starts with quick controls; absent statistics/previews
+  are not fabricated. Camera, Folder and the remaining existing sections were checked rather than redesigned.
+
+### Inspector audit
+
+The new order suite checks **all 35 default scene entries**, in **both docked and expanded layouts**, across these
+18 panel families: Folder, Geometry, Camera, Post Process, Atmosphere, Sun, Lens Flare, Moon, Stars, Wind, Height Fog,
+Atmospheric Fog, Local Fog, Clouds, Local Cloud, Precipitation, Rainbow and Light. Light entries exercise all seven
+source families. Assertions cover rendered vertical order, main-frame and iframe overflow, merged-response ownership,
+independent expanded control columns, terminal baking sections and the absence of controls after the final bake card.
+
+Verification: standalone build succeeds (**4.64 MiB**, 161 shipped icons, 57 native glyphs). **212 checks pass** with
+no application errors: 89 inspector-order/data checks, 21 light-design checks, 25 lighting/authoring checks,
+11 instrument-style checks, 10 inspector-layout checks, 28 reference checks, 14 shared-card checks and 14 Cloud/Light
+placement checks. Native editable input inventories for all 18 panel families match C052 (`dd92a6e`) after ignoring
+order. Existing suites verify Construct, scene export/import, locking, persistence, local Cloud bounds and negative
+altitudes, C052 palettes/corners and unchanged pinned InspectorDepot files. Layout expectations were updated explicitly
+for the authorized merged response, summary/detail slices and revised section order.
+
+Actual browser screenshots and receipts are in `ProjectZeroEditor/Screenshots/InspectorOrder/`, including
+`AreaDocked.png`, `AreaExpanded.png`, `PointResponseExpanded.png`, `SunBakingLast.png`, `AtmosphereBakingLast.png` and
+`StarsBakingLast.png`. The response screenshot demonstrates an edited 50 cd / decay 1 source; default Fill Point remains
+10 cd / decay 2. External Fontshare failures are recorded separately; fallback fonts were exercised. No native renderer,
+fracture algorithm, SDF computation, source-property schema or Construct behavior was changed.

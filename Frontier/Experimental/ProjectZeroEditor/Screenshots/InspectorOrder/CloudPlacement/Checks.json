@@ -1,0 +1,19 @@
+{
+  "Checks": [
+    "Cloud summary is header-first; ported Coverage replaces old card; Cloud base contains the adapted ported deck; no copied identity or duplicate deck",
+    "Coverage graph and retained slider synchronize in both directions and survive reload",
+    "Cloud deck responds to native base/thickness, supports keyboard adjustment and handles full native altitude range",
+    "light: new cards at top, no duplicate identity strip, Transform retained",
+    "reference-key-spot: new cards at top, no duplicate identity strip, Transform retained",
+    "reference-rim-point: new cards at top, no duplicate identity strip, Transform retained",
+    "reference-fill-point: new cards at top, no duplicate identity strip, Transform retained",
+    "reference-ece-low-beam: new cards at top, no duplicate identity strip, Transform retained",
+    "reference-softbox: new cards at top, no duplicate identity strip, Transform retained",
+    "reference-studio-tube: new cards at top, no duplicate identity strip, Transform retained",
+    "Previously locked lights can be unlocked without restoring the removed identity strip",
+    "Legacy imported cloud values are preserved until overridden; previously locked Clouds can be unlocked",
+    "Local Cloud now shares both reference slices and retains its native coverage and bounds controls",
+    "Cloud slices fit the narrow inspector without horizontal overflow"
+  ],
+  "Errors": []
+}

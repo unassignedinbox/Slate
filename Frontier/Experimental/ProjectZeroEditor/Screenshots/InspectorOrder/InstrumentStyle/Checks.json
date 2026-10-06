@@ -1,0 +1,16 @@
+{
+  "Checks": [
+    "Build-time colour adaptation rejects changed anchors; pinned source files are not edited",
+    "wind: both statistic rows have 12px borderless corners and no clipped readings",
+    "sun: both statistic rows have 12px borderless corners and no clipped readings",
+    "height-fog: both statistic rows have 12px borderless corners and no clipped readings",
+    "clouds: both statistic rows have 12px borderless corners and no clipped readings",
+    "local-cloud: both statistic rows have 12px borderless corners and no clipped readings",
+    "Anemometer pixels have no green, retain neutral highlights/amber sample, animate, expand and resize to 240px",
+    "Height Fog beam canvas and wrapper are transparent: the normal charcoal card shows through without a black inset",
+    "aerial-fog: beam background matches its other instruments and compact fog statistics share the rounding",
+    "local-fog: beam background matches its other instruments and compact fog statistics share the rounding",
+    "Light-card rounding and layout remain outside this environment-only change"
+  ],
+  "Errors": []
+}

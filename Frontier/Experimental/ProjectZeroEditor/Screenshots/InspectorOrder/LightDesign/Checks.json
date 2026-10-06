@@ -1,0 +1,31 @@
+{
+  "Checks": [
+    "reference-rim-point: library icon and source diagram, strong numeric hierarchy, standard Transform and 240px layout",
+    "reference-key-spot: library icon and source diagram, strong numeric hierarchy, standard Transform and 240px layout",
+    "reference-ies-downlight: library icon and source diagram, strong numeric hierarchy, standard Transform and 240px layout",
+    "reference-softbox: library icon and source diagram, strong numeric hierarchy, standard Transform and 240px layout",
+    "reference-studio-tube: library icon and source diagram, strong numeric hierarchy, standard Transform and 240px layout",
+    "reference-led: library icon and source diagram, strong numeric hierarchy, standard Transform and 240px layout",
+    "reference-led-strip: library icon and source diagram, strong numeric hierarchy, standard Transform and 240px layout",
+    "Seven source families have distinct diagram pixels and outliner icons",
+    "LED wattage × efficacy × dimmer is explicitly estimated, updates live and survives reload; optic changes diagram",
+    "Strip length/output/density/load estimates, three routing shapes and diffuser respond and persist",
+    "Architectural and automotive IES presets have distinct synthetic lobes and clearly disclose pending file import",
+    "Area rectangle/disk aperture changes the illustration and survives reload",
+    "LED strip lock covers numeric fields, routing, diffuser and standard Transform; parent unlock restores editing",
+    "Construct offers all ten light entries; new LED strip can be edited before placement and retains its authored parameters",
+    "Scene JSON export includes the light migration revision and newly authored LED strip properties",
+    "Exported scene reimports with its LED source family, authored parameters and revision intact",
+    "C049 scene migration adds only the three new defaults once; deleted old lights and user-created sources remain respected",
+    "Deleting a new light after migration does not resurrect it on reload",
+    "Wind heading → Anemometer and statistics → Composite Flow, retaining the live trace",
+    "aerial-fog: Height Fog visual structure, 166px sightline and overlay caption, driven by existing fog controls",
+    "local-fog: Height Fog visual structure, 166px sightline and overlay caption, driven by existing fog controls"
+  ],
+  "FontFailures": [
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2"
+  ],
+  "Errors": []
+}

@@ -81,7 +81,7 @@ try {
       ).count(),
       1,
     );
-    const Frame = Page.frameLocator("iframe");
+    const Frame = Page.frameLocator("iframe").first();
     await Frame.locator(".mp-rail").waitFor();
     assert(
       await Frame.locator(".mp-pill,.mp-stat").evaluateAll((Nodes) =>

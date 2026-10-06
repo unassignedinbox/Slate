@@ -114,69 +114,85 @@ export function ProjectLight(
     );
   };
   if (Style === "arealight") {
-    const Across = Clamp(
-        115 * Math.sqrt(Read("width", 2) / Read("height", 1)),
-        65,
-        230,
-      ),
-      Depth = Clamp(
-        52 * Math.sqrt(Read("height", 1) / Read("width", 2)),
-        24,
-        75,
-      ),
-      Spread = Math.sin((Read("spread", 120) * Math.PI) / 360) * 45;
-    const Corners = [
-      [190 - Across / 2, 66],
-      [190 + Across / 2, 36],
-      [190 + Across / 2 + Depth, 84],
-      [190 - Across / 2 + Depth, 114],
-    ];
-    const Floor = Corners.map(([Horizontal, Vertical]) => [
-      190 + (Horizontal - 190) * (1 + Spread / 120),
-      Vertical + 110,
-    ]);
-    Path([...Floor, Floor[0]], "#ffffff22", Tint(0.02));
-    for (let Index = 0; Index < 4; Index++)
-      Path([Corners[Index], Floor[Index]], Tint(0.15), null, true);
+    const Across = Read("width", 2),
+      Tall = Read("height", 1),
+      Scale = Math.min(230 / Across, 140 / Tall),
+      HalfWidth = (Across * Scale) / 2,
+      HalfHeight = (Tall * Scale) / 2,
+      CenterY = 122;
+    Text("APERTURE / FRONT ELEVATION", 22, 18);
+    // Orthographic outline: no perspective plane, floor or frustum.
     Path(
-      [Corners[0], Corners[1], Floor[1], Floor[0]],
-      "transparent",
-      Tint(0.025 + Math.min(0.08, Flux() / 80000)),
+      [
+        [190, 36],
+        [190, 207],
+      ],
+      "#ffffff18",
+      null,
+      true,
     );
-    Glow(190, 95, 100, Math.min(0.1, Flux() / 60000));
-    if (Properties.aperture === "Disk") {
-      Brush.save();
-      Brush.translate(202, 76);
-      Brush.rotate(-0.16);
-      Brush.beginPath();
-      Brush.ellipse(0, 0, Across * 0.52, Depth * 0.65, 0, 0, Math.PI * 2);
-      Brush.fillStyle = Tint(0.2 + Math.min(0.55, Flux() / 12000));
-      Brush.fill();
-      Brush.strokeStyle = Tint(0.9);
-      Brush.stroke();
-      Brush.restore();
-    } else {
-      Path(Corners, Tint(0.85), Tint(0.2 + Math.min(0.55, Flux() / 12000)));
-      for (let Index = 1; Index < 5; Index++) {
-        const Fraction = Index / 5;
-        Path(
-          [
-            [Corners[0][0] + Across * Fraction, 66 - 30 * Fraction],
-            [Corners[3][0] + Across * Fraction, 114 - 30 * Fraction],
-          ],
-          Tint(0.15),
-        );
+    Path(
+      [
+        [40, CenterY],
+        [340, CenterY],
+      ],
+      "#ffffff18",
+      null,
+      true,
+    );
+    Brush.save();
+    Brush.beginPath();
+    if (Properties.aperture === "Disk")
+      Brush.ellipse(190, CenterY, HalfWidth, HalfHeight, 0, 0, Math.PI * 2);
+    else
+      Brush.rect(
+        190 - HalfWidth,
+        CenterY - HalfHeight,
+        HalfWidth * 2,
+        HalfHeight * 2,
+      );
+    Brush.fillStyle = Tint(0.07 + Math.min(0.12, Flux() / 80000));
+    Brush.fill();
+    Brush.strokeStyle = Tint(0.9);
+    Brush.lineWidth = 1.5;
+    Brush.stroke();
+    Brush.clip();
+    for (let X = 50; X <= 330; X += 12)
+      for (let Y = 44; Y <= 206; Y += 12) {
+        Brush.fillStyle = Tint(0.35);
+        Brush.fillRect(X, Y, 1.5, 1.5);
       }
-    }
-    Dimension(
-      Corners[0][0],
-      Corners[1][0],
-      24,
-      Read("width", 2).toFixed(1) + " m",
+    Brush.restore();
+    Dimension(190 - HalfWidth, 190 + HalfWidth, 218, Across.toFixed(1) + " m");
+    const Edge = 190 + HalfWidth + 15;
+    Path(
+      [
+        [Edge - 4, CenterY - HalfHeight],
+        [Edge + 4, CenterY - HalfHeight],
+      ],
+      "#ffffff66",
     );
-    Text(Read("height", 1).toFixed(1) + " m", Corners[2][0] + 8, 89);
-    Text(Properties.twoSided ? "BOTH FACES" : "FRONT FACE", 22, 246);
-    Text(Read("spread", 120) + "° SPREAD", 358, 246, "right");
+    Path(
+      [
+        [Edge, CenterY - HalfHeight],
+        [Edge, CenterY + HalfHeight],
+      ],
+      "#ffffff44",
+    );
+    Path(
+      [
+        [Edge - 4, CenterY + HalfHeight],
+        [Edge + 4, CenterY + HalfHeight],
+      ],
+      "#ffffff66",
+    );
+    Brush.save();
+    Brush.translate(Edge + 13, CenterY);
+    Brush.rotate(-Math.PI / 2);
+    Text(Tall.toFixed(1) + " m", 0, 0, "center");
+    Brush.restore();
+    Text(Properties.twoSided ? "BOTH FACES" : "FRONT FACE", 22, 252);
+    Text(Read("spread", 120) + "° SPREAD", 358, 252, "right");
   } else if (Style === "ieslight") {
     if (Properties.profile === "Custom .IES")
       Text("No measured IES samples loaded", 190, 130, "center");
@@ -480,6 +496,66 @@ export function ProjectResponse(
   if (Style === "ieslight" && Properties.profile === "Custom .IES") {
     Brush.fillStyle = "#929b8f";
     Brush.fillText("No measured samples loaded", 8, Height / 2);
+    return;
+  }
+  if (Style === "pointlight") {
+    const Left = 43,
+      Right = Width - 15,
+      Top = 28,
+      Bottom = Height - 30,
+      Maximum = Math.max(0.01, Flux()),
+      ValueAt = (Distance) => Flux() / Distance ** Read("decay", 2),
+      X = (Distance) => Left + ((Distance - 1) / 9) * (Right - Left),
+      Y = (Value) => Bottom - (Value / Maximum) * (Bottom - Top),
+      Label = (Value) =>
+        Value >= 1000
+          ? (Value / 1000).toFixed(1) + "k"
+          : Value.toLocaleString("en-US", { maximumSignificantDigits: 3 });
+    Brush.fillStyle = "#929b8f";
+    Brush.textAlign = "left";
+    Brush.fillText("ILLUMINANCE · lx", Left, 12);
+    for (const Fraction of [0, 0.25, 0.5, 0.75, 1]) {
+      const Vertical = Y(Maximum * Fraction);
+      Brush.beginPath();
+      Brush.moveTo(Left, Vertical);
+      Brush.lineTo(Right, Vertical);
+      Brush.strokeStyle = "#ffffff14";
+      Brush.stroke();
+      Brush.fillStyle = "#929b8f";
+      Brush.textAlign = "right";
+      Brush.fillText(Label(Maximum * Fraction), Left - 7, Vertical + 3);
+    }
+    Brush.beginPath();
+    for (let Index = 0; Index <= 120; Index++) {
+      const Distance = 1 + (9 * Index) / 120;
+      Index
+        ? Brush.lineTo(X(Distance), Y(ValueAt(Distance)))
+        : Brush.moveTo(X(Distance), Y(ValueAt(Distance)));
+    }
+    Brush.strokeStyle = Tint(0.9);
+    Brush.lineWidth = 1.5;
+    Brush.stroke();
+    Brush.lineTo(Right, Bottom);
+    Brush.lineTo(Left, Bottom);
+    Brush.closePath();
+    Brush.fillStyle = Tint(0.06);
+    Brush.fill();
+    for (const Distance of [1, 2, 5, 10]) {
+      Brush.beginPath();
+      Brush.moveTo(X(Distance), Top);
+      Brush.lineTo(X(Distance), Bottom);
+      Brush.strokeStyle = Distance === 5 ? "#ffffff44" : "#ffffff14";
+      Brush.setLineDash([2, 4]);
+      Brush.stroke();
+      Brush.setLineDash([]);
+      Brush.beginPath();
+      Brush.arc(X(Distance), Y(ValueAt(Distance)), 3, 0, Math.PI * 2);
+      Brush.fillStyle = Distance === 5 ? "#eeeeea" : Tint(0.9);
+      Brush.fill();
+      Brush.fillStyle = "#a5aca1";
+      Brush.textAlign = "center";
+      Brush.fillText(Distance + " m", X(Distance), Bottom + 16);
+    }
     return;
   }
   const Left = 8,

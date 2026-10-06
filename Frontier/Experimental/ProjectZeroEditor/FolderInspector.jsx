@@ -60,6 +60,7 @@ export default function FolderInspector({
       style={{ "--collection-tint": Values.Tint || "#9bacb4" }}
     >
       <header className="collection-heading">
+        <div className="breadcrumbs">Inspector / Scene</div>
         <span className="workspace-eyebrow">COLLECTION / SCENE INVENTORY</span>
         <div>
           <Icon Name={Subject.Icon} Size={28} />

@@ -149,8 +149,12 @@ try {
     "Anemometer pixels have no green, retain neutral highlights/amber sample, animate, expand and resize to 240px",
   );
   await Open("height-fog");
-  await Frame().locator(".fg-chamber canvas").waitFor();
-  const Chamber = await Frame()
+  await Page.frameLocator('[data-reference-slice="details"] iframe')
+    .locator(".fg-chamber canvas")
+    .waitFor();
+  const Chamber = await Page.frameLocator(
+    '[data-reference-slice="details"] iframe',
+  )
     .locator(".fg-chamber")
     .evaluate((Chamber) => {
       const Canvas = Chamber.querySelector("canvas"),
@@ -166,7 +170,7 @@ try {
   assert.equal(Chamber.Border, "0px");
   assert.equal(Chamber.Pixel[3], 0);
   assert.equal(Chamber.Card, "rgb(26, 26, 26)");
-  await Frame()
+  await Page.frameLocator('[data-reference-slice="details"] iframe')
     .locator(".fg-scatter")
     .evaluate((Card) => Card.scrollIntoView({ block: "center" }));
   await Capture("HeightFogChamber");
