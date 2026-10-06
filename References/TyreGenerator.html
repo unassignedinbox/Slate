@@ -796,7 +796,7 @@ function scanlineCrossings(ring, Y) {
 function insideAtX(crossings, x) { let lo = 0, hi = crossings.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (crossings[mid] < x) lo = mid + 1; else hi = mid; } return (lo % 2) === 1; }
 function polyArea(poly) { let a = 0; for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length]; a += p[0] * q[1] - q[0] * p[1]; } return Math.abs(a) / 2; }
 function buildPolyTread(d, pmGeo, wantWire) {
-  const { pieces, levels } = treadRegions(P, d, T.treadDepth, T.wear);
+  const { pieces } = treadRegions(P, d, T.treadDepth, T.wear);
   const D = T.treadDepth, A = d.acrossHalf, circ = d.circ, CELL = Math.max(2, T.polyDetail);
   const pos = [], nrm = [], uv = [], tan = []; let quads = 0, tris = 0;
   // Exact wireframe edge list for the "show topology" view: only real edges (quad perimeters,
@@ -811,7 +811,6 @@ function buildPolyTread(d, pmGeo, wantWire) {
   const place = (x, y, hFrac) => { const pr = treadProfileAt(y, d); const off = D * Math.max(hFrac, wl(y)) * pr.w; const ax = pr.x - pr.nx * off, r = pr.r - pr.nr * off; const th = x / circ * TAU; return [ax, r * Math.cos(th), r * Math.sin(th), pr.nx, pr.nr * Math.cos(th), pr.nr * Math.sin(th)]; };
   const push = (p, n, u, v, t) => { pos.push(p[0], p[1], p[2]); nrm.push(n[0], n[1], n[2]); uv.push(u, v); tan.push(t[0], t[1], t[2], 1); };
   const tangentAt = u => { const th = u * TAU; return [0, -Math.sin(th), Math.cos(th)]; };   // +u direction (circumferential)
-  const snapLevel = h => levels.reduce((b, l) => Math.abs(l - h) < Math.abs(b - h) ? l : b, 0);
   const pushTop = (x, y, hz) => { const P3 = place(x, y, hz); push(P3, [P3[3], P3[4], P3[5]], x / circ, (y + A) / (2 * A), tangentAt(x / circ)); };
   const emitQuad = (xs, ys, xe, ye, hz) => {
     pushTop(xs, ys, hz); pushTop(xe, ys, hz); pushTop(xe, ye, hz);
@@ -933,6 +932,33 @@ function buildPolyTread(d, pmGeo, wantWire) {
     }
     return out;
   }
+  // Exact neighbour-depth lookup for wall construction. A wall's top edge must land exactly at
+  // the depth level of whatever piece is on the OTHER side of its boundary; this used to be
+  // guessed by sampling the rasterised pattern texture (sampleDepth) and rounding to the nearest
+  // known level (snapLevel) - a lossy approximation (fixed canvas resolution + anti-aliasing)
+  // that can snap to the WRONG level right next to a boundary, especially for fine features. That
+  // produced a wall whose top doesn't actually reach its neighbour's true height: a real, visible
+  // 3D gap (or overlap) at that seam - not just a thin coverage artifact. Replaced with an exact
+  // geometric point-in-polygon lookup against the same precise pieces used for the top surface,
+  // bucketed by circumferential column for speed since a query point is always very close to the
+  // current piece and only needs to be tested against nearby pieces.
+  const allPieceEx = [];
+  for (const pc2 of pieces) for (const ex2 of exPolygons(pc2.paths)) allPieceEx.push({ outer: ex2.outer, holes: ex2.holes, bbox: bboxOf(ex2.outer), depth: pc2.depth });
+  const depthColN = Math.max(1, Math.round(circ / CELL)), depthColW = circ / depthColN;
+  const depthCols = new Map();
+  for (const e of allPieceEx) {
+    let c0 = Math.floor(e.bbox[0] / depthColW) - 1, c1 = Math.floor(e.bbox[2] / depthColW) + 1;
+    for (let c = c0; c <= c1; c++) { const k = ((c % depthColN) + depthColN) % depthColN; if (!depthCols.has(k)) depthCols.set(k, []); depthCols.get(k).push(e); }
+  }
+  function depthAt(x, y) {
+    const xw = ((x % circ) + circ) % circ, c = Math.min(depthColN - 1, Math.floor(xw / depthColW));
+    const cand = depthCols.get(c);
+    if (cand) for (const e of cand) {
+      if (y < e.bbox[1] - 1e-6 || y > e.bbox[3] + 1e-6) continue;
+      if (pointInRing(xw, y, e.outer) && !e.holes.some(h => pointInRing(xw, y, h))) return e.depth;
+    }
+    return 0;   // pieces tile the whole domain, so this should only hit as a safety net
+  }
   for (const pc of pieces) for (const ex of exPolygons(pc.paths)) {
     for (const localEx of chopWide(ex)) buildTopForEx(localEx, pc.depth);
     // walls: generated from the lower side of every true (non grid-snapped) boundary edge
@@ -942,7 +968,7 @@ function buildPolyTread(d, pmGeo, wantWire) {
       const a = edgeA, b = edgeB;
       const dx = b[0] - a[0], dy = b[1] - a[1]; const l = Math.hypot(dx, dy); if (l < 1e-6) continue;
       const ox = dy / l, oy = -dx / l; const mx = (a[0] + b[0]) / 2 + ox * 0.9, my = (a[1] + b[1]) / 2 + oy * 0.9;
-      const smp = sampleDepth(pmGeo, mx / circ, (my + A) / (2 * A)); const hOut = smp > 0.02 ? snapLevel(smp + wl(my)) : 0;
+      const hOut = depthAt(mx, my);
       const hIn = pc.depth; if (hOut >= hIn - 0.005) continue;
       const u = mx / circ, v = (my + A) / (2 * A);
       const a0 = place(a[0], a[1], hOut), b0 = place(b[0], b[1], hOut), a1 = place(a[0], a[1], hIn), b1 = place(b[0], b[1], hIn);
@@ -1158,7 +1184,11 @@ controls.maxPolarAngle = Math.PI / 2 - 0.03; controls.zoomToCursor = false;
 renderer.domElement.addEventListener('wheel', e => {
   e.preventDefault(); e.stopImmediatePropagation();
   const amount = THREE.MathUtils.clamp(e.deltaY, -240, 240) / 100;      // normalise wheel "clicks" vs trackpad pixel deltas
-  const scale = Math.pow(0.96, amount);                                 // ~4% per "standard" 100-delta wheel click, same as before
+  // deltaY > 0 (scroll down / two-finger swipe down) is the browser/OrbitControls convention for
+  // "dolly OUT" (distance increases); deltaY < 0 is "dolly IN" (distance decreases). The scale
+  // must therefore be >1 for positive amount and <1 for negative amount - i.e. a base above 1,
+  // NOT below it (0.96^amount has it backwards: shrinks distance when scrolling down).
+  const scale = Math.pow(1 / 0.96, amount);                             // ~4% per "standard" 100-delta wheel click, same as before
   const offset = camera.position.clone().sub(controls.target);
   const dist = THREE.MathUtils.clamp(offset.length() * scale, controls.minDistance, controls.maxDistance);
   offset.setLength(dist); camera.position.copy(controls.target).add(offset);
