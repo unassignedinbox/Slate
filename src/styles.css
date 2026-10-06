@@ -4494,3 +4494,18 @@ button:hover {
     font-size: 6px;
   }
 }
+
+.scratch-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.scratch-switch input {
+  width: 32px;
+  height: 18px;
+  accent-color: #b3c2a7;
+  cursor: pointer;
+}

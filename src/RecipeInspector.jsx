@@ -99,6 +99,29 @@ export default function RecipeInspector({ params: p, update, setParams }) {
           </div>
         </>,
       )}
+      {recipe.supportsMetalScratches &&
+        section(
+          "scratches",
+          "Metal scratches",
+          <>
+            <label className="scratch-switch">
+              <span>Enable scratches</span>
+              <input
+                type="checkbox"
+                role="switch"
+                aria-label="Enable metal scratches"
+                checked={p.metalScratches === true}
+                onChange={(e) => update("metalScratches", e.target.checked)}
+              />
+            </label>
+            <p className="help-text">
+              Optional surface cuts. Existing metal finish stays unchanged when
+              off. Direction is independent of the brushed-metal direction.
+            </p>
+            {p.metalScratches === true && group("scratches")}
+          </>,
+          p.metalScratches ? "ON" : "OFF",
+        )}
       {recipe.iridescent &&
         section(
           "iridescence",

@@ -151,7 +151,7 @@ export function architectureCatalog() {
     metalness: 1,
     roughness: 0.23,
     scratchScale: 6,
-    scratchDensity: 2.6,
+    scratchDensity: 6,
     scratchLength: 1.15,
     scratchWidth: 0.01,
     scratchDepth: 0.0018,
@@ -159,7 +159,7 @@ export function architectureCatalog() {
     scratchBend: 0.42,
     weaveAngle: 25,
     description:
-      "Isolated scratch study: finite tapered cuts, irregular lengths, tiny raised lips and real groove normals. Not enabled on other metals.",
+      "Isolated scratch study: finite tapered cuts, irregular lengths, tiny raised lips and real groove normals. Also available as an optional layer on metals.",
   });
   return rows;
 }

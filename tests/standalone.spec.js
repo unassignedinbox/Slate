@@ -200,6 +200,39 @@ test("standalone page renders, edits and exports without external assets", async
   ).toContain("UV0");
   expect(Buffer.from(maps["normal.png"]).subarray(1, 4).toString()).toBe("PNG");
   await page.getByRole("button", { name: "Close dialog" }).click();
+  await page
+    .getByRole("button", { name: "Apply Pure Aluminium", exact: true })
+    .click();
+  await page.getByRole("switch", { name: "Enable metal scratches" }).check();
+  await page.getByLabel("Scratch density value", { exact: true }).fill("60");
+  await frame(page);
+  const scratchedSource = await downloadText(
+    page,
+    /Three.js procedural shader/,
+  );
+  const scratchedFactory = scratchedSource
+    .replace(/import \* as THREE from ['"]three['"];?/, "")
+    .replace(/export const preset/, "const preset")
+    .replace(/export function /g, "function ")
+    .replace(
+      /export default createMaterial\(preset\);/,
+      "return createMaterial(preset);",
+    );
+  const scratchedMaterial = new Function("THREE", scratchedFactory)(THREE);
+  try {
+    expect(scratchedMaterial.userData.params.metalScratches).toBe(true);
+    expect(scratchedMaterial.userData.params.scratchDensity).toBeCloseTo(7.2);
+    const shader = {
+      uniforms: {},
+      vertexShader: THREE.ShaderLib.physical.vertexShader,
+      fragmentShader: THREE.ShaderLib.physical.fragmentShader,
+    };
+    scratchedMaterial.onBeforeCompile(shader);
+    expect(shader.fragmentShader).toContain("#define uMetalScratches 1");
+    expect(shader.fragmentShader).toContain("surfaceHeight+=metalCuts.y");
+  } finally {
+    scratchedMaterial.dispose();
+  }
   if (process.env.ALLOY_CAPTURE === "1") {
     await page
       .getByRole("button", { name: "Apply Raw Selvedge Denim", exact: true })

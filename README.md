@@ -1,4 +1,4 @@
-# Alloy 06.1 — 100+ Procedural Materials
+# Alloy 06.2 — 100+ Procedural Materials
 
 A real-time procedural material editor built with React, Vite and Three.js. All surface detail is procedural: **no bitmap material maps, external HDRIs, or downloaded 3D assets**. The charcoal interface uses rounded panels and desaturated accents. Fonts are self-hosted.
 
@@ -13,9 +13,7 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-**[Launch Alloy 06.1 — Crocodile leather](https://raw.githack.com/unassignedinbox/Slate/9cb071f9f6d76abeeed7f37b78478d8d4e9e8ac6/site/index.html?material=crocodile-belly-leather)** · **[Leaf mesh surface](https://raw.githack.com/unassignedinbox/Slate/9cb071f9f6d76abeeed7f37b78478d8d4e9e8ac6/site/index.html?material=broadleaf-green)**
-
-Choose **Open the page** if GitHack shows its external-content notice. The new rendering/bake tests and targeted regression tests passed; the standalone test checked 123 unique previews, self-contained paint/leaf module exports and a real full-UV leaf bake ZIP without external assets. Publication verification matched all 1,540,084 bytes (SHA-256 `8ebe7ddca3d01c521a196d310c654305a8ee8df9dcfc518c66c219f0d81987e4`). This verifies the GitHub artifact, not a hosted-browser run.
+Run `npm run verify:published` for the current immutable GitHack URL. Select **Open the page** if GitHack shows its external-content notice. Use `?material=pure-aluminium`, `?material=crocodile-belly-leather` or `?material=broadleaf-green` for direct studies.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
@@ -109,9 +107,9 @@ All three foundational constructions—**plain, twill and satin**—plus basket,
 
 ### Scratches: dedicated study
 
-**Scratches** is a dedicated material—not a toggle applied to other metals. It searches neighboring seeded cells for finite line/arc segments, allowing cuts to cross cell boundaries. Occupancy, length, width, depth, direction and curvature vary independently. Tapered endpoints prevent endless stripes; a negative groove profile and small raised lips alter surface normals, while roughness broadens inside the cut. Derivative-aware filtering reduces subpixel sparkle. The density-zero setting is an exact bypass.
+**Scratches** remains a dedicated study, and the same field is now available as an opt-in layer on metal surfaces. It searches neighboring seeded cells for finite line/arc segments, allowing cuts to cross cell boundaries. Occupancy, length, width, depth, direction and curvature vary independently. Tapered endpoints prevent endless stripes; a negative groove profile and small raised lips alter surface normals, while roughness broadens inside the cut. Derivative-aware filtering reduces subpixel sparkle. The density-zero setting is an exact bypass.
 
-Use **Panel** for the clearest assessment, orbit the light reflection, then use **Macro**. Controls include density, length, width, depth, direction spread, preferred angle, curvature, field scale and a reproducible seed. This is a surface-normal/height study, not geometric damage to the silhouette. Existing worn-polymer detail is unchanged; the new scratch system has not been rolled out elsewhere.
+Use **Panel** for the clearest assessment, orbit the light reflection, then use **Macro**. Controls include density, length, width, depth, direction spread, preferred angle, curvature, field scale and a reproducible seed. This is a surface-normal/height study, not geometric damage to the silhouette. Existing worn-polymer detail is unchanged. Metal families expose an **Enable scratches** switch; it defaults off so older presets retain their original finish.
 
 Shader variants now compile the material-family ID as a constant, so drivers can eliminate unrelated kernels. Programs are retained through the thumbnail batch for reuse. Progress still reports real completed previews, not a fictitious GPU percentage.
 
@@ -135,7 +133,22 @@ Choose **Leaf**, **Grass blade**, **Petal**, **Stem** or **Cactus** in the previ
 
 **Realism boundary:** species-specific venation, complex UV layouts, full plant subsurface transport, cactus spines and separate fruit-seed geometry are not inferred by these shaders. Fine cellular detail is intended for close inspection; it is filtered at distance. The 8-bit height channel may not retain the tiniest relief, while the normal map preserves more of its shading effect. Use higher-resolution bakes for close-ups.
 
-**Scratch revision:** density now spans 0–4 candidate cuts per cell, with a denser default field; curvature now spans 0–0.7. Four seeded layers and a 5×5 neighbor search preserve long curved cuts across cell boundaries. Each cut has independently signed bow and mild asymmetry, not merely a rotated straight line. Density zero still bypasses all cuts. This remains a dedicated material, not a global toggle.
+**Scratch revision (v6.2):** only density was increased further—the accepted cut shape, bow, taper, widths and depth profile remain unchanged. Density now spans 0–12 expected cuts per cell; the first four layers retain exactly their former sampling and additional batches of four activate above the old maximum. A GPU regression compares the previous release's field at density 2.6 with the revised field and permits at most one 8-bit value of height difference. The default study density is now 6.
+
+### Optional scratches on metals
+
+In the inspector, open **Metal scratches → Enable scratches**. This is available on conductor/metal presets, rusty metal, the brake rotor and corrugated aluminium—not paint, plants, leather, solar cells or LED packages. It defaults **off**, with no changes to polish, grain, metalness or coat values. **Tooling scale** remains absent from the pure-metal inspector.
+
+The cut height is added to the material's existing relief, so corrugations and tooling do not disappear. Roughness and base-color response follow the same cut mask as the study. A separate **Scratch direction** avoids changing the brushed-metal direction. Settings travel with saved presets, JSON, standalone JS and the six-channel bake. Density zero is a tested exact bypass; disabling the layer restores the original appearance. This does not simulate coating removal, oxidation removal or silhouette damage.
+
+### Reference-led surface refinement
+
+- **Crocodile leather:** flatter belly plates transitioning toward smaller flank scales, thin folded joints, subdued fine grain and small scale pores. It no longer uses strongly domed, widely separated tile-like plates.
+- **Leaves:** lobed microscopic cell walls and sparse stomatal relief; **Cell wall lobing** and **Stomatal detail** controls are under Surface detail. Still a whole UV surface, with no alpha silhouette.
+- **Petals:** papillate cell relief plus filtered fine ridges, rather than reusing the leaf-cell height profile. Existing color gradients and basal spots remain.
+- **Fruit/cactus:** variable citrus gland sizes, curved berry seed centers, and slightly irregular felted areoles. No bitmap input, new texture dependency or modeled spines.
+
+See [reference notes](docs/surface-reference-notes.md) for research links and which aspects are approximated. Reference photos are never loaded by the shader or embedded in the application.
 
 ## Macro inspection
 

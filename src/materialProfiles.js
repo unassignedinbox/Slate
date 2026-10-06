@@ -754,6 +754,18 @@ Object.assign(recipes, {
       macro("shape", "Leaf width", [target("leafAspect", 0.2, 0.46)]),
       macro("veins", "Vein relief", [target("grain", 0.1, 1.2)]),
       direct("detailScale", "Vein pairs", 5, 20, "detail", "", false, false, 1),
+      macro(
+        "lobing",
+        "Cell wall lobing",
+        [target("cellLobing", 0, 1)],
+        "detail",
+      ),
+      macro(
+        "stomata",
+        "Stomatal detail",
+        [target("stomataDensity", 0, 1)],
+        "detail",
+      ),
     ],
   },
   grass: {
@@ -784,14 +796,14 @@ Object.assign(recipes, {
     ],
   },
   scratches: {
-    title: "Scratches · isolated study",
+    title: "Scratches · surface study",
     caption:
-      "Finite, tapered cuts with seeded lengths, widths, direction and depth. Tiny lips catch the light. This system is not enabled on other metals.",
+      "Finite, tapered cuts with seeded lengths, widths, direction and depth. Tiny lips catch the light. The same field is available as an optional layer on metals.",
     fixed: { metalness: 1, coat: 0, sheen: 0, anisotropy: 0 },
     colors: [{ key: "color", label: "Test metal" }],
     controls: [
       rough("Test surface Roughness", 0.12, 0.65),
-      macro("density", "Scratch density", [target("scratchDensity", 0, 4)]),
+      macro("density", "Scratch density", [target("scratchDensity", 0, 12)]),
       macro("length", "Scratch length", [target("scratchLength", 0.1, 1.65)]),
       macro("width", "Scratch width", [target("scratchWidth", 0.002, 0.035)]),
       macro("depth", "Scratch depth", [target("scratchDepth", 0, 0.006)]),
@@ -876,7 +888,7 @@ Object.assign(recipes, {
   crocodile: {
     title: "Crocodile-style leather",
     caption:
-      "Domed, irregular belly scutes; recessed soft joints and fine hide grain. A procedural study, not a scan.",
+      "Broad belly plates grade into smaller flank scales. Thin folded joints, tiny scale pores and subdued hide grain; reference-led, not scanned.",
     fixed: { metalness: 0, ior: 1.48, sheen: 0.12 },
     colors: [
       { key: "color", label: "Scale dye" },
@@ -886,7 +898,8 @@ Object.assign(recipes, {
     controls: [
       rough("Leather Roughness", 0.25, 0.8),
       macro("relief", "Scale relief", [target("grain", 0.1, 1.3)]),
-      macro("joints", "Crease width", [target("groutWidth", 0.018, 0.09)]),
+      macro("joints", "Crease width", [target("groutWidth", 0.008, 0.065)]),
+      macro("pores", "Scale pores", [target("poreDensity", 0, 1)]),
       macro("finish", "Finish gloss", [
         target("coat", 0, 0.4),
         target("coatRoughness", 0.3, 0.12),
@@ -910,6 +923,18 @@ Object.assign(recipes, {
       macro("veins", "Vein relief", [target("veinRelief", 0, 1.5)]),
       macro("age", "Pigment aging", [target("colorGradient", 0, 1)]),
       direct("detailScale", "Vein pairs", 5, 20, "detail", "", false, false, 1),
+      macro(
+        "lobing",
+        "Cell wall lobing",
+        [target("cellLobing", 0, 1)],
+        "detail",
+      ),
+      macro(
+        "stomata",
+        "Stomatal detail",
+        [target("stomataDensity", 0, 1)],
+        "detail",
+      ),
       ...cells,
       plantSeed,
     ],
@@ -1088,6 +1113,10 @@ export function materialFamily(p) {
   );
 }
 
+export function supportsMetalScratches(p) {
+  return [1, 6, 16, 21].includes(p.type);
+}
+
 export function getRecipe(p) {
   const id = materialFamily(p),
     base = recipes[id] || recipes.woven;
@@ -1130,6 +1159,25 @@ export function getRecipe(p) {
         1,
       ),
     );
+
+  if (supportsMetalScratches(p) && p.metalScratches === true) {
+    controls.push(
+      ...recipes.scratches.controls
+        .filter((c) => c.id !== "roughness")
+        .map((c) => {
+          // Independent names prevent finish/relief tuning and brush angle collisions.
+          if (c.id === "weaveAngle")
+            return {
+              ...c,
+              id: "scratchAngle",
+              key: "scratchAngle",
+              label: "Scratch direction",
+              group: "scratches",
+            };
+          return { ...c, id: "metalScratch_" + c.id, group: "scratches" };
+        }),
+    );
+  }
   const iridescent = p.type === 0 && p.paintEffect === "iridescent";
   if (iridescent)
     controls.push(
@@ -1166,6 +1214,7 @@ export function getRecipe(p) {
         : base.fixed,
     id,
     iridescent,
+    supportsMetalScratches: supportsMetalScratches(p),
     title: iridescent ? "Iridescent automotive paint" : base.title,
     controls,
   };
@@ -1200,11 +1249,17 @@ export function boundMaterial(p) {
       result[key] = Math.max(range.min, Math.min(range.max, result[key]));
       if (range.integer) result[key] = Math.round(result[key]);
     }
+  result.metalScratches =
+    supportsMetalScratches(result) && result.metalScratches === true;
   return result;
 }
 
 export function recipeControlValue(p, c) {
   if (c.direct) return p[c.key] ?? c.min;
+  // The density range expanded; old saved art-direction positions must not
+  // misreport (or remap) the preserved physical density of existing studies.
+  if ((p.type === 29 && c.id === "density") || c.id === "metalScratch_density")
+    return Math.max(0, Math.min(1, (p.scratchDensity || 0) / 12));
   if (Number.isFinite(p.tuning?.[c.id]))
     return Math.max(0, Math.min(1, p.tuning[c.id]));
   const t = c.targets[0];

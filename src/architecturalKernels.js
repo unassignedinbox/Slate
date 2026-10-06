@@ -4,6 +4,7 @@ export function architecturalGLSL() {
  uniform vec3 uTertiary;
  uniform float uRibDepth,uGroutWidth,uTileVariation,uTileStagger,uVeinWidth,uPoreDensity,uWallMode;
  uniform float uLeafAspect,uBladeWidth,uBladeLean,uSurfaceSeed;
+ uniform float uScratchAngle;
  uniform float uScratchDensity,uScratchLength,uScratchWidth,uScratchDepth,uScratchSpread,uScratchBend;
  uniform float uLensDome,uPackageDepth;
  float groutMask=0.,scratchMask=0.,surfaceCoverage=1.,ledContact=0.,ledLens=0.;
@@ -16,13 +17,15 @@ export function architecturalGLSL() {
    if(uScratchDensity<=0.)return vec3(0.);
    uv*=uScratchScale;vec2 cell=floor(uv);float coverage=0.,height=0.,rimTotal=0.;
    float aa=max(length(fwidth(uv))*.4,.00015);
-   for(int layer=0;layer<4;layer++)for(int y=-2;y<=2;y++)for(int x=-2;x<=2;x++){
+   for(int layer=0;layer<12;layer++){
+    float batch=float(layer/4)*4.;if(batch>=uScratchDensity)break;
+    for(int y=-2;y<=2;y++)for(int x=-2;x<=2;x++){
      vec2 id=cell+vec2(float(x),float(y));float layerSeed=float(layer)*113.7+uSurfaceSeed;
      float r=hash31(vec3(id,layerSeed));
-     if(r<uScratchDensity*.25){
+     if(r<clamp((uScratchDensity-batch)*.25,0.,1.)){
        float a=hash31(vec3(id+17.3,layerSeed+3.)),b=hash31(vec3(id+39.7,layerSeed+11.));
        vec2 center=id+.08+.84*vec2(a,b);
-       float angle=uWeaveAngle+(hash31(vec3(id+81.2,layerSeed))-.5)*3.14159265*uScratchSpread;
+       float angle=uScratchAngle+(hash31(vec3(id+81.2,layerSeed))-.5)*3.14159265*uScratchSpread;
        vec2 direction=vec2(cos(angle),sin(angle)),side=vec2(-direction.y,direction.x);
        vec2 delta=uv-center;
        float len=uScratchLength*mix(.18,1.,a*a);
@@ -41,6 +44,7 @@ export function architecturalGLSL() {
        height=min(height,-depth*bowl);rimTotal=max(rimTotal,lip*depth*.16);
        coverage=max(coverage,cut);
      }
+   }
    }
    float resolved=1.-smoothstep(.3,1.2,max(fwidth(uv.x),fwidth(uv.y)));
    return vec3(mix(uScratchDensity*uScratchWidth*uScratchLength*.75,coverage,resolved),(height+rimTotal)*resolved,rimTotal);

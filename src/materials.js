@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { botanicalCatalog } from "./botanicalCatalog.js";
 import { botanicalGLSL, botanicalColor } from "./botanicalKernels.js";
-import { boundMaterial } from "./materialProfiles.js";
+import { boundMaterial, supportsMetalScratches } from "./materialProfiles.js";
 import { expandedCatalog } from "./catalogExpansion.js";
 import { architectureCatalog } from "./architectureCatalog.js";
 import {
@@ -775,12 +775,16 @@ export function normalizeMaterial(input) {
     bladeWidth: 0.13,
     bladeLean: 0.4,
     surfaceSeed: 17,
-    scratchDensity: 0.6,
+    metalScratches: false,
+    scratchAngle: 25,
+    scratchDensity: supportsMetalScratches(p) ? 6 : 0.6,
     scratchLength: 1.15,
-    scratchWidth: 0.012,
+    scratchWidth: supportsMetalScratches(p) ? 0.01 : 0.012,
     scratchDepth: 0.0018,
     scratchSpread: 0.8,
-    scratchBend: 0.04,
+    scratchBend: supportsMetalScratches(p) ? 0.42 : 0.04,
+    cellLobing: 0.65,
+    stomataDensity: 0.22,
     veinRelief: 0.65,
     cellScale: 120,
     cellRelief: 0.5,
@@ -856,7 +860,7 @@ export function normalizeMaterial(input) {
     fabricMode: 0,
     grain: p.type === 9 ? 0.6 : p.type === 10 ? 0.35 : 0,
     wear: p.type === 10 ? 0.65 : 0,
-    scratchScale: 32,
+    scratchScale: supportsMetalScratches(p) ? 6 : 32,
     wearSoftness: 0.65,
     wornRoughness: 0.24,
     clothMapping: false,
@@ -937,6 +941,10 @@ export function createMaterial(input) {
   m.userData.params = p;
   m.onBeforeCompile = (shader) => {
     const values = {
+      uCellLobing: p.cellLobing,
+      uStomataDensity: p.stomataDensity,
+      uScratchAngle:
+        ((p.type === 29 ? p.weaveAngle : p.scratchAngle) * Math.PI) / 180,
       uVeinRelief: p.veinRelief,
       uCellScale: p.cellScale,
       uCellRelief: p.cellRelief,
@@ -1045,6 +1053,7 @@ export function createMaterial(input) {
       varying vec3 vProcNormal;
       varying vec2 vProcUv;
       #define uType ${Math.max(0, Math.min(36, Math.floor(Number(p.type) || 0)))}
+      #define uMetalScratches ${p.metalScratches ? 1 : 0}
       uniform int uColorCount, uColorMode, uFabricMode, uFlakeLayers, uCloth, uWeave;
       uniform float uFlakeLayerDepth,uWearSoftness,uWornRoughness;
       uniform float uFlakes,uFlakeFrequency,uFlakeRoughMin,uFlakeRoughMax,uFlakeMetalMin,uFlakeMetalMax,uFlakeTilt;
@@ -1232,6 +1241,11 @@ ${botanicalGLSL()}
       ${extendedSurfaceColor()}
       ${architecturalColor()}
 ${botanicalColor()}
+      #if uMetalScratches == 1
+      vec3 metalCuts=scratchField(surfaceUV(pp,weights));
+      scratchMask=metalCuts.x;surfaceHeight+=metalCuts.y;
+      diffuseColor.rgb*=1.-scratchMask*.11;
+      #endif
     `,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -1247,7 +1261,7 @@ ${botanicalColor()}
       if(uType==22)roughnessFactor=mix(roughnessFactor,.93,groutMask);
       if(uType==30)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.22),bioJoint);
       if(uType==34 || uType==35)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.24),bioPore);
-      if(uType==29)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.3),scratchMask);
+      if(uType==29 || uMetalScratches==1)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.3),scratchMask);
     `,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -1278,7 +1292,7 @@ ${botanicalColor()}
       `
       #include <clearcoat_normal_fragment_maps>
       #ifdef USE_CLEARCOAT
-        clearcoatNormal=reliefNormal(peelHeight+((uType==20 || uType==22 || uType==30 || uType>=31)?surfaceHeight:0.),clearcoatNormal,-vViewPosition);
+        clearcoatNormal=reliefNormal(peelHeight+((uType==20 || uType==22 || uType==30 || uType>=31 || uMetalScratches==1)?surfaceHeight:0.),clearcoatNormal,-vViewPosition);
       #endif
     `,
     );
@@ -1343,7 +1357,7 @@ ${botanicalColor()}
     m.userData.shader = shader;
   };
   m.customProgramCacheKey = () =>
-    `alloy-procedural-v6.1-${p.type}-${p.bakeMode > 0}`;
+    `alloy-procedural-v6.2-${p.type}-${p.metalScratches}-${p.bakeMode > 0}`;
   return m;
 }
 

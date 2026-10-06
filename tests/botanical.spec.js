@@ -34,7 +34,7 @@ test("botanical meshes have complete UVs and new fields have no bitmap inputs", 
   const scratch = materials.find((p) => p.id === "scratches");
   expect(
     getRecipe(scratch).controls.find((c) => c.id === "density").targets[0].max,
-  ).toBe(4);
+  ).toBe(12);
   expect(scratch.scratchBend).toBeGreaterThan(0.12);
 });
 

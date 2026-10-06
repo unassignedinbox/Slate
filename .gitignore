@@ -5,3 +5,6 @@ dist/
 !.env.example
 .playwright/
 test-results/
+
+# Visual research only: never material inputs or part of the deployed app.
+image-search/

@@ -24,7 +24,8 @@ export function botanicalCatalog() {
       detailScale: 3.8,
       roughness: 0.37,
       coat: 0.24,
-      groutWidth: 0.024,
+      groutWidth: 0.014,
+      poreDensity: 0.8,
       grain: 0.85,
       description:
         "Irregular rows of domed belly scutes, softer flank sizing, recessed creases and fine hide grain. No bitmap scales.",

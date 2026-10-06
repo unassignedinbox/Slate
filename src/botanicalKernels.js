@@ -1,6 +1,7 @@
 // Analytic fields only: shared by live rendering, PNG baking and JS export.
 export function botanicalGLSL() {
   return `
+ uniform float uCellLobing,uStomataDensity;
  uniform float uVeinRelief,uCellScale,uCellRelief,uColorGradient,uSpotDensity,uSkinMode,uPlantRibs;
  float bioJoint=0.,bioPore=0.;
  // F1/F2 and a stable site ID. Used for microscopic epidermis, not the main hide grain.
@@ -36,32 +37,40 @@ export function botanicalGLSL() {
 export function botanicalColor() {
   return `
  if(uType==30){
-   // Belly scutes grading toward smaller flank scales, with wandering row boundaries.
-   vec2 uv=surfaceUV(pp,weights)*uScale;
-   uv+=vec2(stoneFBM(vec3(uv*.7,uSurfaceSeed)),stoneFBM(vec3(uv*.7,uSurfaceSeed+11.)))*.3;
-   uv.x-=.5*sin(uv.x*.65);
-   uv.y+=.095*sin(uv.x*1.4)+.07*noise3(vec3(uv.x*1.7,0.,uSurfaceSeed));
+   // Broad, relatively flat belly plates grade into smaller rounder flank scales.
+   // Reference-led construction: thin folded joints, not separate domed tiles.
+   vec2 raw=surfaceUV(pp,weights)*uScale;
+   float flank=smoothstep(.3,.92,abs(sin(raw.x*.24)));
+   vec2 uv=raw;
+   uv.x-=1.05*sin(raw.x*.48);
+   uv.y*=mix(1.,1.32,flank);
+   uv+=vec2(stoneFBM(vec3(raw*.55,uSurfaceSeed)),stoneFBM(vec3(raw*.55,uSurfaceSeed+11.)))*.23;
+   uv.y+=.06*sin(raw.x*1.4);
    float row=floor(uv.y),stagger=hash31(vec3(row,uSurfaceSeed,1.));
-   float stretch=mix(.78,1.45,.5+.5*sin(row*.65));
-   uv.x=uv.x*stretch+stagger*.8;
+   uv.x=uv.x*(.94+.12*stagger)+(stagger-.5)*.15;
    vec2 id=floor(uv),q=fract(uv)-.5;
    float r=hash31(vec3(id,uSurfaceSeed));
-   q.x+=.065*sin(uv.x*3.7+row*2.7);
-   q+=.025*vec2(sin(q.y*13.+r*19.),sin(q.x*11.+r*27.));
-   float corner=mix(.06,.16,r);
+   q+=.018*vec2(sin(uv.y*9.+r*2.),sin(uv.x*7.+r*3.));
+   float corner=mix(.035,.145,flank)*mix(.8,1.2,r);
    vec2 d=abs(q)-vec2(.5-uGroutWidth-corner);
    float sd=length(max(d,0.))+min(max(d.x,d.y),0.)-corner;
-   float aa=max(length(fwidth(uv))*.55,.001);
+   float aa=max(length(fwidth(uv))*.4,.001);
    float scute=1.-smoothstep(-aa,aa,sd);
-   float dome=pow(clamp(-sd/.34,0.,1.),.48);
-   float fine=noise3(vec3(uv*13.,uSurfaceSeed)),wrinkle=noise3(vec3(uv*vec2(3.,19.),21.));
+   float bevel=smoothstep(0.,.105,-sd);
+   float fine=noise3(vec3(uv*24.,uSurfaceSeed));
+   float creaseFold=sin((abs(q.x)>abs(q.y)?q.y:q.x)*67.+noise3(vec3(raw*7.,7.))*3.);
+   float creaseGrain=noise3(vec3(raw*vec2(17.,26.),uSurfaceSeed));
+   vec3 plate=mix(diffuseColor.rgb,uSecondary,r*.19)*(.97+fine*.035);
+   vec3 joint=mix(uTertiary,diffuseColor.rgb,.32)*(.9+creaseGrain*.2);
+   vec2 poreCenter=vec2((r-.5)*.22,.19+(hash31(vec3(id,71.))-.5)*.12);
+   float poreRadius=mix(.01,.023,hash31(vec3(id,81.)));
+   float pore=(1.-smoothstep(max(0.,poreRadius-aa),poreRadius+aa,length(q-poreCenter)))*step(r,uPoreDensity)*min(1.,poreRadius/aa)*scute;
    bioJoint=1.-scute;
-   vec3 scaleColor=mix(diffuseColor.rgb,uSecondary,r*.3);
-   diffuseColor.rgb=mix(uTertiary,scaleColor*(.88+.14*fine+.1*dome),scute);
-   vec3 microHide=hideGrain(pp*7.);
-   diffuseColor.rgb*=1.-microHide.y*.07;
-   surfaceHeight=(scute*(.0012+dome*.003)+(microHide.x-.5)*.00035*scute+(wrinkle-.5)*.0004*(1.-scute))*uGrain;
+   diffuseColor.rgb=mix(joint,plate,scute)*(1.-pore*.15);
+   vec3 microHide=hideGrain(pp*15.);
+   surfaceHeight=(scute*.0006+bevel*.0014+(microHide.x-.5)*.00016*scute+creaseFold*.00018*(1.-scute)-pore*.00065)*uGrain;
  }
+
  if(uType==31 || uType==32 || uType==33 || uType==36){
    // One complete UV surface per existing mesh. Never discard or stamp a silhouette.
    vec2 uv=vProcUv;float y=clamp(uv.y,0.,1.),x=uv.x-.5;
@@ -69,6 +78,10 @@ export function botanicalColor() {
    vec2 cellUV=uv*vec2(uCellScale,uCellScale*1.5);
    cellUV+=vec2(noise3(vec3(uv*11.,uSurfaceSeed)),noise3(vec3(uv*13.,19.)))*.5;
    if(uType==36){cellUV=uv*vec2(floor(uCellScale+.5),uCellScale*1.5);cellUV+=vec2(noise3(bioCylinder(uv,vec2(11.),uSurfaceSeed)),noise3(bioCylinder(uv,vec2(13.),19.)))*.5;}
+   if(uType==31){
+     vec2 domain=cellUV;
+     cellUV+=uCellLobing*.24*vec2(sin(domain.y*5.5+sin(domain.x*3.7)),sin(domain.x*5.1+sin(domain.y*4.3)));
+   }
    vec4 cells=bioCellAt(cellUV,uSurfaceSeed,uType==36?floor(uCellScale+.5):0.);
    float cellAA=max(length(fwidth(cellUV)),.001);
    float cellWall=1.-smoothstep(.025,.07+cellAA,cells.y);
@@ -89,7 +102,15 @@ export function botanicalColor() {
      diffuseColor.rgb=mix(diffuseColor.rgb,uTertiary,aged*.7)*(.86+pigment*.23);
      diffuseColor.rgb=mix(diffuseColor.rgb,uSecondary,veins*.43+tertiary*.025);
      diffuseColor.rgb*=1.-cellWall*.045*cellsResolved;
-     surfaceHeight=(veins*.002+tertiary*.00012)*uVeinRelief+micro*uCellRelief*.00035;
+     // Sparse elliptical stomatal pores, kept microscopic rather than painted spots.
+     vec2 stUV=uv*vec2(uCellScale*.31,uCellScale*.42);
+     vec2 stId=floor(stUV),stLocal=fract(stUV)-.5;
+     float stRandom=hash31(vec3(stId,uSurfaceSeed));
+     float stAA=max(length(fwidth(stUV)),.001);
+     float stomata=(1.-smoothstep(.09,.15+stAA,length(stLocal*vec2(1.5,.7))))*step(stRandom,uStomataDensity)*cellsResolved;
+     float guard=exp(-pow((length(stLocal*vec2(1.5,.7))-.2)/max(.07,stAA),2.))*step(stRandom,uStomataDensity)*cellsResolved;
+     surfaceHeight=(veins*.002+tertiary*.00012)*uVeinRelief+(micro*.00035-stomata*.00032+guard*.0001)*uCellRelief;
+     diffuseColor.rgb*=1.-stomata*.025;
    }
    if(uType==32){
      float ribCoord=uv.x*uPlantRibs+.08*sin(y*8.);
@@ -108,7 +129,11 @@ export function botanicalColor() {
      diffuseColor.rgb=mix(uSecondary,diffuseColor.rgb,gradient)*(.93+pigment*.1);
      diffuseColor.rgb=mix(diffuseColor.rgb,uTertiary,flecks*.8);
      diffuseColor.rgb*=1.-veins*.055-cellWall*.025*cellsResolved;
-     surfaceHeight=veins*uVeinRelief*.00055+micro*uCellRelief*.0003;
+     // Papillate cell caps and filtered cuticular ridges; not leaf-like cell walls.
+     float cone=pow(max(0.,1.-cells.x/.58),1.3)*cellsResolved;
+     float ridgePhase=cellUV.x*27.+cellUV.y*9.;
+     float ridge=sin(ridgePhase)*(1.-smoothstep(.7,2.8,fwidth(ridgePhase)));
+     surfaceHeight=veins*uVeinRelief*.00055+(cone*.00045+ridge*cone*.000045)*uCellRelief;
    }
    if(uType==36){
      float fibers=noise3(bioCylinder(uv,vec2(uScale*4.,uScale*.3),uSurfaceSeed));
@@ -136,16 +161,19 @@ export function botanicalColor() {
      surfaceHeight=(noise3(bioCylinder(uv,vec2(160.),uSurfaceSeed))-.5)*uGrain*.00045-spots*.00025;
      bioPore=spots;
    }else if(uSkinMode<1.5){
-     float pits=(1.-smoothstep(.09,.3+aa,pore.x))*resolved;
+     float glandRadius=mix(.2,.34,pore.z);
+     float pits=(1.-smoothstep(.055,glandRadius+aa,pore.x))*resolved;
      diffuseColor.rgb*=.88+pigment*.24-pits*.065;
-     surfaceHeight=(.35-pits)*uGrain*.003;
+     float rind=noise3(bioCylinder(uv,vec2(around*2.,uScale*2.),uSurfaceSeed));
+     surfaceHeight=((.35-pits)*.003+(rind-.5)*.00055)*uGrain;
      bioPore=pits;
    }else{
      float pit=(1.-smoothstep(.11,.36+aa,pore.x))*resolved;
      float seed=(1.-smoothstep(.045,.13+aa,pore.x))*resolved;
      diffuseColor.rgb*=.83+pigment*.25;
      diffuseColor.rgb=mix(diffuseColor.rgb,uSecondary,seed*.92);
-     surfaceHeight=(-pit*.005+seed*.004)*uGrain;
+     float seedDome=exp(-pow(pore.x/.13,2.))*resolved;
+     surfaceHeight=(-pit*.005+seedDome*.004)*uGrain;
      bioPore=pit;
    }
  }
@@ -153,8 +181,12 @@ export function botanicalColor() {
  if(uType==35){
    vec2 uv=vProcUv,q=uv*vec2(uPlantRibs,uScale);
    q.y+=floor(q.x)*.5;vec2 local=fract(q)-.5;
+   vec2 areoleId=floor(q);areoleId.x=mod(areoleId.x,uPlantRibs);
+   float areoleRandom=hash31(vec3(areoleId,uSurfaceSeed));
+   local-=vec2((areoleRandom-.5)*.055,(hash31(vec3(areoleId,29.))-.5)*.12);
    float aa=max(length(fwidth(q)),.001);
-   float areole=1.-smoothstep(.07,.18+aa,length(local*vec2(1.,.75)));
+   float areoleRadius=mix(.13,.19,areoleRandom);
+   float areole=1.-smoothstep(.04,areoleRadius+aa,length(local*vec2(1.,.75)));
    float ribs=pow(.5+.5*cos((uv.x*uPlantRibs-.5)*6.2831853),.7);
    float wax=stoneFBM(bioCylinder(uv,vec2(12.),uSurfaceSeed));
    vec4 epidermis=bioCellAt(uv*vec2(floor(uCellScale+.5),uCellScale),uSurfaceSeed,floor(uCellScale+.5));
@@ -162,10 +194,14 @@ export function botanicalColor() {
    float wall=1.-smoothstep(.02,.08,epidermis.y);
    diffuseColor.rgb=mix(diffuseColor.rgb,uSecondary,wax*uColorGradient)*(.85+ribs*.15);
    float fuzz=noise3(bioCylinder(uv,vec2(240.,370.),uSurfaceSeed));
-   float cork=1.-smoothstep(.035,.07+aa,length(local*vec2(1.,.75)));
-   diffuseColor.rgb=mix(diffuseColor.rgb,uTertiary*(.72+fuzz*.45),areole*.78);
+   float angle=atan(local.y+.000001,local.x+.000001);
+   float filamentPhase=angle*19.+length(local)*75.;
+   float filaments=(.5+.5*sin(filamentPhase))*(1.-smoothstep(.7,3.,fwidth(filamentPhase)));
+   float felt=areole*(.62+.22*fuzz+.16*filaments);
+   float cork=1.-smoothstep(.025,.055+aa,length(local*vec2(1.,.75)));
+   diffuseColor.rgb=mix(diffuseColor.rgb,uTertiary*(.88+filaments*.18),felt*.9);
    diffuseColor.rgb*=1.-cork*.13;
-   surfaceHeight=(ribs*.004+areole*.001)*uVeinRelief-wall*uCellRelief*.0002*detail;
+   surfaceHeight=(ribs*.004+felt*.0014)*uVeinRelief-wall*uCellRelief*.0002*detail;
    bioPore=areole;
  }
 `;
