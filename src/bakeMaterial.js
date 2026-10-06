@@ -28,7 +28,14 @@ export async function bakeMaterial(
   check(signal);
   const params = normalizeMaterial(input),
     span = widthMM / 100;
-  const heightRange = params.type === 18 ? 0.08 : 0.03;
+  const heightRange =
+    params.type === 21
+      ? 0.12
+      : params.type === 22
+        ? 0.05
+        : params.type === 18
+          ? 0.08
+          : 0.03;
   let renderer, geometry, material;
   const files = {};
   try {
@@ -41,7 +48,7 @@ export async function bakeMaterial(
     check(signal);
     renderer = new THREE.WebGLRenderer({
       antialias: false,
-      alpha: false,
+      alpha: true,
       preserveDrawingBuffer: true,
     });
     renderer.setSize(resolution, resolution);
@@ -118,6 +125,8 @@ export async function bakeMaterial(
       resolution,
       domain: {
         projection: "flat XY patch",
+        alpha:
+          "RGBA coverage for procedural leaf and grass cutouts; no alpha input texture",
         origin: [0, 0, 0],
         widthMM,
         sceneUnitsPerMM: 0.01,

@@ -114,13 +114,30 @@ export function extendedSurfaceColor() {
       surfaceHeight=loops*uGrain*.008/max(sqrt(uScale),.1)+noise3(pp*uScale*13.)*uFuzz*.0004;
     }
     if(uType==20){
-      vec2 uv=surfaceUV(pp,weights)*uScale;
-      vec2 q=abs(fract(uv)-.5);float box=max(q.x,q.y);
-      float aa=max(max(fwidth(uv.x),fwidth(uv.y)),.003);
-      emitterMask=1.-smoothstep(uPixelFill*.5-aa,uPixelFill*.5+aa,box);
-      emitterMask=mix(uPixelFill*uPixelFill,emitterMask,1.-smoothstep(.25,1.,aa));
-      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.8,.73,.5),emitterMask*.6);
-      surfaceHeight=emitterMask*.005;
+      vec2 uv=surfaceUV(pp,weights)*uScale,q=fract(uv)-.5;
+      float aa=max(max(fwidth(uv.x),fwidth(uv.y)),.0015);
+      vec2 bevel=max(abs(q)-vec2(.31,.27),0.);
+      float housing=1.-smoothstep(.035-aa,.035+aa,length(bevel));
+      float recess=boxMask(q,vec2(.265,.235),aa);
+      float radius=uPixelFill*.33,r=length(q)/max(radius,.01);
+      ledLens=1.-smoothstep(1.-aa/radius,1.+aa/radius,r);
+      float dome=sqrt(max(0.,1.-r*r));
+      float pads=boxMask(vec2(abs(q.x)-.423,q.y),vec2(.044,.11),aa);
+      float traces=boxMask(vec2(q.x,abs(q.y)-.447),vec2(.5,.007),aa);
+      float wire=1.-smoothstep(.003,.003+aa,segmentDistance(q,vec2(-.22,.13),vec2(.04,0.)));
+      wire*=recess*(1.-ledLens*.7);
+      float die=boxMask(q,vec2(radius*.45,radius*.38),aa);
+      float subDies=1.-smoothstep(.03,.1,abs(fract(q.x/max(radius,.01)*4.)-.5));
+      float ring=(1.-smoothstep(.018,.018+aa,abs(length(q)-radius*1.13)))*(1.-ledLens);
+      ledContact=max(pads,max(traces*.65,wire));
+      vec3 board=diffuseColor.rgb*(.88+.15*noise3(pp*120.));
+      diffuseColor.rgb=mix(board,vec3(.055,.062,.07),housing);
+      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.008,.012,.017),recess);
+      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.13,.15,.17),ring*.8);
+      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.66,.47,.17),ledContact);
+      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.34,.3,.18),die);
+      emitterMask=ledLens*(.2+die*(.65+.15*subDies))*(.88+.12*hash31(vec3(floor(uv),19.)));
+      surfaceHeight=(housing*.003-recess*.001+ledLens*dome*uLensDome*.012+pads*.002)*uPackageDepth;
     }
   `;
 }

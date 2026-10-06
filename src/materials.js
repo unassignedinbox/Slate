@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import { boundMaterial } from "./materialProfiles.js";
 import { expandedCatalog } from "./catalogExpansion.js";
+import { architectureCatalog } from "./architectureCatalog.js";
+import {
+  architecturalGLSL,
+  architecturalColor,
+} from "./architecturalKernels.js";
 import { extendedSurfaceGLSL, extendedSurfaceColor } from "./surfaceKernels.js";
 
 export const materials = [
@@ -737,6 +742,7 @@ export const materials = [
     description: "A pearl finish with a delicate interference glow.",
   },
   ...expandedCatalog(),
+  ...architectureCatalog(),
 ].map(normalizeMaterial);
 
 export function normalizeMaterial(input) {
@@ -754,6 +760,26 @@ export function normalizeMaterial(input) {
     coatRoughness: 0.15,
     depth: 0.5,
     flakes: 0,
+    tertiaryColor: "#282b30",
+    ribDepth: 0.018,
+    groutWidth: 0.045,
+    tileVariation: 0.1,
+    tileStagger: 0,
+    veinWidth: 0.035,
+    poreDensity: 0.5,
+    wallMode: 0,
+    leafAspect: 0.4,
+    bladeWidth: 0.13,
+    bladeLean: 0.4,
+    surfaceSeed: 17,
+    scratchDensity: 0.6,
+    scratchLength: 1.15,
+    scratchWidth: 0.012,
+    scratchDepth: 0.0018,
+    scratchSpread: 0.8,
+    scratchBend: 0.04,
+    lensDome: 0.7,
+    packageDepth: 0.6,
     secondaryColor: "#afa38d",
     emissionColor: "#ffffff",
     emissionStrength: 0,
@@ -831,7 +857,7 @@ export function normalizeMaterial(input) {
         ? p.colorStops[i]
         : i / Math.max(1, colors.length - 1),
     ),
-    materialVersion: 5,
+    materialVersion: 6,
   });
 }
 
@@ -864,6 +890,7 @@ export function createMaterial(input) {
     emissive: p.type === 20 ? p.emissionColor : "#000000",
     emissiveIntensity: p.emissionStrength,
     toneMapped: !p.bakeMode,
+    alphaToCoverage: !p.bakeMode && (p.type === 27 || p.type === 28),
     thickness: p.depth * 2,
     attenuationColor: new THREE.Color(p.color),
     attenuationDistance: 2.8,
@@ -900,6 +927,26 @@ export function createMaterial(input) {
   m.userData.params = p;
   m.onBeforeCompile = (shader) => {
     const values = {
+      uTertiary: new THREE.Color(p.tertiaryColor),
+      uRibDepth: p.ribDepth,
+      uGroutWidth: p.groutWidth,
+      uTileVariation: p.tileVariation,
+      uTileStagger: p.tileStagger,
+      uVeinWidth: p.veinWidth,
+      uPoreDensity: p.poreDensity,
+      uWallMode: p.wallMode,
+      uLeafAspect: p.leafAspect,
+      uBladeWidth: p.bladeWidth,
+      uBladeLean: p.bladeLean,
+      uSurfaceSeed: p.surfaceSeed,
+      uScratchDensity: p.scratchDensity,
+      uScratchLength: p.scratchLength,
+      uScratchWidth: p.scratchWidth,
+      uScratchDepth: p.scratchDepth,
+      uScratchSpread: p.scratchSpread,
+      uScratchBend: p.scratchBend,
+      uLensDome: p.lensDome,
+      uPackageDepth: p.packageDepth,
       uBakeMode: p.bakeMode,
       uBakeHeightRange: p.bakeHeightRange,
       uSecondary: new THREE.Color(p.secondaryColor),
@@ -980,7 +1027,8 @@ export function createMaterial(input) {
       varying vec3 vProcPosition;
       varying vec3 vProcNormal;
       varying vec2 vProcUv;
-      uniform int uType, uColorCount, uColorMode, uFabricMode, uFlakeLayers, uCloth, uWeave;
+      #define uType ${Math.max(0, Math.min(29, Math.floor(Number(p.type) || 0)))}
+      uniform int uColorCount, uColorMode, uFabricMode, uFlakeLayers, uCloth, uWeave;
       uniform float uFlakeLayerDepth,uWearSoftness,uWornRoughness;
       uniform float uFlakes,uFlakeFrequency,uFlakeRoughMin,uFlakeRoughMax,uFlakeMetalMin,uFlakeMetalMax,uFlakeTilt;
       uniform float uScale,uDepth,uCoatIor,uPeel,uPeelScale,uWeaveAngle,uRelief,uFiberDetail,uGrain,uWear,uScratchScale,uFuzz;
@@ -1058,6 +1106,7 @@ export function createMaterial(input) {
       }
       float flakeMask=0.,flakeRandom=.5,flakeResolved=1.,surfaceHeight=0.,peelHeight=0.,wearMask=0.;
       ${extendedSurfaceGLSL()}
+      ${architecturalGLSL()}
       vec3 flakeTint=vec3(0.);
       vec2 yarnUV=vec2(0.);
       float yarnDirection=0.;
@@ -1164,6 +1213,7 @@ export function createMaterial(input) {
         surfaceHeight-=scratchWear*.001*(1.-wearMask*.85);
       }
       ${extendedSurfaceColor()}
+      ${architecturalColor()}
     `,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -1175,6 +1225,9 @@ export function createMaterial(input) {
       if(uType==12)roughnessFactor=mix(roughnessFactor,.24,uMoisture*.7);
       if(uType==16)roughnessFactor=mix(roughnessFactor,.94,oxideMask);
       if(uType==17)roughnessFactor=mix(roughnessFactor,.22,contactMask);
+      if(uType==20)roughnessFactor=mix(mix(roughnessFactor,.08,ledLens),.22,ledContact);
+      if(uType==22)roughnessFactor=mix(roughnessFactor,.93,groutMask);
+      if(uType==29)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.3),scratchMask);
     `,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -1184,6 +1237,7 @@ export function createMaterial(input) {
       if(uType==0)metalnessFactor=mix(metalnessFactor,mix(uFlakeMetalMin,uFlakeMetalMax,flakeRandom),flakeMask);
       if(uType==16)metalnessFactor*=1.-oxideMask;
       if(uType==17)metalnessFactor=mix(.25,.96,contactMask);
+      if(uType==20)metalnessFactor=ledContact*.92;
     `,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -1204,7 +1258,7 @@ export function createMaterial(input) {
       `
       #include <clearcoat_normal_fragment_maps>
       #ifdef USE_CLEARCOAT
-        clearcoatNormal=reliefNormal(peelHeight,clearcoatNormal,-vViewPosition);
+        clearcoatNormal=reliefNormal(peelHeight+((uType==20 || uType==22)?surfaceHeight:0.),clearcoatNormal,-vViewPosition);
       #endif
     `,
     );
@@ -1214,6 +1268,10 @@ export function createMaterial(input) {
       "material.clearcoatF0 = vec3( pow2( (uCoatIor - 1.0) / (uCoatIor + 1.0) ) );",
     );
     physical += `
+      #ifdef USE_CLEARCOAT
+        if(uType==20)material.clearcoat*=ledLens;
+        if(uType==22)material.clearcoat*=1.-groutMask;
+      #endif
       #ifdef USE_IRIDESCENCE
         material.iridescenceThickness=uFilmThickness+(noise3(pp*3.7)-.5)*uFilmVariation;
       #endif
@@ -1245,22 +1303,27 @@ export function createMaterial(input) {
     );
     // Same procedural field, unlit channel output. Bake colors are encoded sRGB;
     // scalar and normal channels are linear. A flat XY patch gives tangent normals.
+    if (!p.bakeMode)
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <opaque_fragment>",
+        "#include <opaque_fragment>\nif(uType==27 || uType==28){if(surfaceCoverage<.001)discard;gl_FragColor.a=surfaceCoverage;}",
+      );
     if (p.bakeMode)
       shader.fragmentShader = shader.fragmentShader.replace(
         "#include <opaque_fragment>",
         `#include <opaque_fragment>
-      if(uBakeMode==1)gl_FragColor=vec4(bakeSRGB(diffuseColor.rgb),1.);
-      if(uBakeMode==2)gl_FragColor=vec4(vec3(clamp(roughnessFactor,0.,1.)),1.);
-      if(uBakeMode==3)gl_FragColor=vec4(vec3(clamp(metalnessFactor,0.,1.)),1.);
-      if(uBakeMode==4)gl_FragColor=vec4(normal*.5+.5,1.);
-      if(uBakeMode==5)gl_FragColor=vec4(vec3(clamp(.5+surfaceHeight/uBakeHeightRange,0.,1.)),1.);
-      if(uBakeMode==6)gl_FragColor=vec4(bakeSRGB(totalEmissiveRadiance/uEmissionScale),1.);
+      if(uBakeMode==1)gl_FragColor=vec4(bakeSRGB(diffuseColor.rgb),surfaceCoverage);
+      if(uBakeMode==2)gl_FragColor=vec4(vec3(clamp(roughnessFactor,0.,1.)),surfaceCoverage);
+      if(uBakeMode==3)gl_FragColor=vec4(vec3(clamp(metalnessFactor,0.,1.)),surfaceCoverage);
+      if(uBakeMode==4)gl_FragColor=vec4(normal*.5+.5,surfaceCoverage);
+      if(uBakeMode==5)gl_FragColor=vec4(vec3(clamp(.5+surfaceHeight/uBakeHeightRange,0.,1.)),surfaceCoverage);
+      if(uBakeMode==6)gl_FragColor=vec4(bakeSRGB(totalEmissiveRadiance/uEmissionScale),surfaceCoverage);
     `,
       );
     m.userData.shader = shader;
   };
   m.customProgramCacheKey = () =>
-    `alloy-procedural-v5-${p.type}-${p.bakeMode > 0}`;
+    `alloy-procedural-v6-${p.type}-${p.bakeMode > 0}`;
   return m;
 }
 

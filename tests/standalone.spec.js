@@ -33,7 +33,9 @@ async function frame(page) {
 
 // ALLOY_PUBLIC_URL enables a genuine remote check. Connection failures fail the
 // test; it never silently substitutes the local build for an unreachable host.
-test("standalone page renders, edits and exports without external assets", async ({page}, testInfo) => {
+test("standalone page renders, edits and exports without external assets", async ({
+  page,
+}, testInfo) => {
   const html = await readFile(htmlPath, "utf8");
   const url = publicURL || localURL;
   const errors = [],
@@ -93,7 +95,7 @@ test("standalone page renders, edits and exports without external assets", async
   const cloth = JSON.parse(
     await downloadText(page, /Material preset All surface/),
   );
-  expect(cloth.schema).toBe("alloy.material.v5");
+  expect(cloth.schema).toBe("alloy.material.v6");
   expect(cloth.material).toMatchObject({
     weavePattern: "herringbone",
     warpColor: "#344f81",
@@ -176,6 +178,26 @@ test("standalone page renders, edits and exports without external assets", async
     await page.getByRole("button", { name: "Macro", exact: true }).click();
     await frame(page);
     await page.screenshot({ path: testInfo.outputPath("denim-macro.png") });
+  }
+  if (process.env.ALLOY_CAPTURE === "v6") {
+    for (const name of ["Scratches", "LED Pixel Matrix"]) {
+      await page.getByRole("button", { name: "Fit", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Apply " + name, exact: true })
+        .click();
+      await frame(page);
+      await page
+        .locator(".inspector-scroll")
+        .evaluate((el) => (el.scrollTop = 0));
+      await page.screenshot({
+        path: testInfo.outputPath(name.replaceAll(" ", "-") + "-fit.png"),
+      });
+      await page.getByRole("button", { name: "Macro", exact: true }).click();
+      await frame(page);
+      await page.screenshot({
+        path: testInfo.outputPath(name.replaceAll(" ", "-") + "-macro.png"),
+      });
+    }
   }
   expect(unexpectedRequests).toEqual([]);
   expect(errors).toEqual([]);

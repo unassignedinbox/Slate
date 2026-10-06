@@ -534,7 +534,6 @@ Object.assign(recipes, {
     controls: [
       macro("polish", "Metal polish", [target("roughness", 0.7, 0.045)]),
       macro("grain", "Surface tooth", [target("grain", 0, 1)]),
-      scale("detailScale", "Tooling scale"),
     ],
   },
   rust: {
@@ -620,7 +619,7 @@ Object.assign(recipes, {
   led: {
     title: "LED emitter array",
     caption:
-      "Emissive packages with a dark substrate. No bloom or light cast on neighboring objects.",
+      "Recessed packages, domed lenses, emitter dies, contacts and PCB traces. No bloom or light cast on neighboring objects.",
     fixed: { metalness: 0, coat: 0.25, ior: 1.5, sheen: 0 },
     colors: [
       { key: "color", label: "Substrate color" },
@@ -632,7 +631,204 @@ Object.assign(recipes, {
       ]),
       macro("pixel", "Emitter fill", [target("pixelFill", 0.2, 0.94)]),
       rough("Package Roughness", 0.2, 0.65),
+      macro("lens", "Lens dome", [target("lensDome", 0.1, 1)], "detail"),
+      macro(
+        "housing",
+        "Housing relief",
+        [target("packageDepth", 0.1, 1)],
+        "detail",
+      ),
       scale("detailScale", "Pixel scale"),
+    ],
+  },
+});
+
+Object.assign(recipes, {
+  corrugated: {
+    title: "Corrugated conductor",
+    caption:
+      "Metal optics reused under an axial rib field. Relief changes normals, not the smooth pipe silhouette.",
+    fixed: { metalness: 1, coat: 0, sheen: 0, anisotropy: 0 },
+    colors: [{ key: "color", label: "Conductor reflectance" }],
+    controls: [
+      macro("polish", "Metal polish", [target("roughness", 0.6, 0.08)]),
+      macro("rib", "Rib relief", [target("ribDepth", 0.001, 0.04)]),
+      scale("detailScale", "Rib frequency"),
+    ],
+  },
+  tiles: {
+    title: "Glazed ceramic tiles",
+    caption:
+      "Glaze on the raised tile face; matte grout in the recess. No image maps.",
+    fixed: { metalness: 0, ior: 1.5, coat: 0.85, sheen: 0 },
+    colors: [
+      { key: "color", label: "Glaze color" },
+      { key: "secondaryColor", label: "Grout color" },
+    ],
+    controls: [
+      rough("Glaze Roughness", 0.08, 0.55),
+      macro("grout", "Grout width", [target("groutWidth", 0.01, 0.16)]),
+      macro("variation", "Tile variation", [target("tileVariation", 0, 0.5)]),
+      macro("relief", "Edge relief", [target("grain", 0.1, 1.2)], "detail"),
+      scale("detailScale", "Tile repetition"),
+    ],
+  },
+  granite: {
+    title: "Granite",
+    caption:
+      "Irregular quartz, feldspar and mica grains. A representative stone, not a scanned slab.",
+    fixed: { metalness: 0, ior: 1.52, sheen: 0 },
+    colors: [
+      { key: "color", label: "Feldspar" },
+      { key: "secondaryColor", label: "Quartz" },
+      { key: "tertiaryColor", label: "Mica" },
+    ],
+    controls: [
+      rough("Stone Roughness", 0.12, 0.8),
+      macro("gloss", "Stone polish", [
+        target("coat", 0, 0.5),
+        target("coatRoughness", 0.22, 0.055),
+      ]),
+      macro("grain", "Crystal relief", [target("grain", 0.05, 1)], "detail"),
+      scale("detailScale", "Mineral scale"),
+    ],
+  },
+  marble: {
+    title: "Marble",
+    caption: "Warped multiscale mineral veins in a polished stone matrix.",
+    fixed: { metalness: 0, ior: 1.5, sheen: 0 },
+    colors: [
+      { key: "color", label: "Stone body" },
+      { key: "secondaryColor", label: "Mineral veins" },
+    ],
+    controls: [
+      rough("Stone Roughness", 0.08, 0.7),
+      macro("veins", "Vein width", [target("veinWidth", 0.006, 0.12)]),
+      macro("gloss", "Stone polish", [
+        target("coat", 0, 0.6),
+        target("coatRoughness", 0.2, 0.045),
+      ]),
+      scale("detailScale", "Vein scale"),
+    ],
+  },
+  concrete: {
+    title: "Concrete",
+    caption:
+      "Cement, aggregate and sunken air voids. Board-form presets retain their construction marks.",
+    fixed: { metalness: 0, ior: 1.5, coat: 0, sheen: 0 },
+    colors: [
+      { key: "color", label: "Cement color" },
+      { key: "secondaryColor", label: "Pore color" },
+    ],
+    controls: [
+      rough("Concrete Roughness", 0.65, 0.98),
+      macro("pores", "Air voids", [target("poreDensity", 0, 1)]),
+      macro("grain", "Aggregate relief", [target("grain", 0.1, 1.5)]),
+      scale("detailScale", "Aggregate scale"),
+    ],
+  },
+  stucco: {
+    title: "Lime / mineral stucco",
+    caption:
+      "Dry plaster with raised, multiscale grain. Surface relief is generated, not sampled.",
+    fixed: { metalness: 0, ior: 1.5, coat: 0, sheen: 0 },
+    colors: [{ key: "color", label: "Plaster pigment" }],
+    controls: [
+      rough("Stucco Roughness", 0.75, 0.99),
+      macro("grain", "Plaster relief", [target("grain", 0.1, 1.5)]),
+      scale("detailScale", "Grain scale"),
+    ],
+  },
+  leaf: {
+    title: "Procedural leaf",
+    caption:
+      "UV-card outline, midrib, branching veins and mottled pigment. No alpha texture input. Cutout shadows are not simulated.",
+    fixed: { metalness: 0, ior: 1.45, coat: 0.1, sheen: 0.12 },
+    colors: [
+      { key: "color", label: "Leaf pigment" },
+      { key: "secondaryColor", label: "Vein pigment" },
+    ],
+    controls: [
+      rough("Leaf Roughness", 0.25, 0.8),
+      macro("shape", "Leaf width", [target("leafAspect", 0.2, 0.46)]),
+      macro("veins", "Vein relief", [target("grain", 0.1, 1.2)]),
+      direct("detailScale", "Vein pairs", 5, 20, "detail", "", false, false, 1),
+    ],
+  },
+  grass: {
+    title: "Procedural grass card",
+    caption:
+      "Tapered blades, curved centerlines and rolled normals. A cutout card, not simulated grass geometry.",
+    fixed: { metalness: 0, ior: 1.45, coat: 0, sheen: 0.2 },
+    colors: [
+      { key: "color", label: "Blade pigment" },
+      { key: "secondaryColor", label: "Tip pigment" },
+    ],
+    controls: [
+      rough("Grass Roughness", 0.55, 0.95),
+      macro("width", "Blade width", [target("bladeWidth", 0.05, 0.23)]),
+      macro("bend", "Blade bend", [target("bladeLean", 0, 0.8)]),
+      macro("relief", "Blade roll", [target("grain", 0.1, 1.2)], "detail"),
+      direct(
+        "detailScale",
+        "Blade count",
+        4,
+        30,
+        "detail",
+        "",
+        false,
+        false,
+        1,
+      ),
+    ],
+  },
+  scratches: {
+    title: "Scratches · isolated study",
+    caption:
+      "Finite, tapered cuts with seeded lengths, widths, direction and depth. Tiny lips catch the light. This system is not enabled on other metals.",
+    fixed: { metalness: 1, coat: 0, sheen: 0, anisotropy: 0 },
+    colors: [{ key: "color", label: "Test metal" }],
+    controls: [
+      rough("Test surface Roughness", 0.12, 0.65),
+      macro("density", "Scratch density", [target("scratchDensity", 0, 1)]),
+      macro("length", "Scratch length", [target("scratchLength", 0.1, 1.65)]),
+      macro("width", "Scratch width", [target("scratchWidth", 0.002, 0.035)]),
+      macro("depth", "Scratch depth", [target("scratchDepth", 0, 0.006)]),
+      macro(
+        "spread",
+        "Direction spread",
+        [target("scratchSpread", 0, 1)],
+        "detail",
+      ),
+      macro(
+        "bend",
+        "Scratch curvature",
+        [target("scratchBend", 0, 0.12)],
+        "detail",
+      ),
+      direct(
+        "weaveAngle",
+        "Preferred direction",
+        -180,
+        180,
+        "detail",
+        "°",
+        false,
+        false,
+        1,
+      ),
+      scale("scratchScale", "Scratch field scale"),
+      direct(
+        "surfaceSeed",
+        "Pattern seed",
+        0,
+        9999,
+        "detail",
+        "",
+        false,
+        false,
+        1,
+      ),
     ],
   },
 });
@@ -675,6 +871,15 @@ export function materialFamily(p) {
       18: "golf",
       19: "jersey",
       20: "led",
+      21: "corrugated",
+      22: "tiles",
+      23: "granite",
+      24: "marble",
+      25: "concrete",
+      26: "stucco",
+      27: "leaf",
+      28: "grass",
+      29: "scratches",
     }[p.type] || "paint"
   );
 }

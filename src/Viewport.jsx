@@ -6,6 +6,18 @@ import { MeshSurfaceSampler } from "three/addons/math/MeshSurfaceSampler.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { createMaterial, createBallGeometry, materials } from "./materials";
 
+// Three's compileAsync polls material.currentProgram. Never dispose a material
+// while that poll owns it: removed cloth fibers used to orphan the compile
+// promise during rapid textile -> paint/asset switches.
+function releaseAfterCompilation(engine, material) {
+  if (engine.compiling && engine.compileTask) {
+    engine.compileTask.then(
+      () => material.dispose(),
+      () => material.dispose(),
+    );
+  } else material.dispose();
+}
+
 function makeEnvironment(renderer, mode = "Studio softbox") {
   // The studio is geometry and light only: no downloaded HDRIs or texture maps.
   const room = new THREE.Scene();
@@ -413,17 +425,20 @@ export default function Viewport({
       renderer.domElement.removeEventListener("dblclick", inspect);
       renderer.domElement.removeEventListener("touchstart", touchstart);
       renderer.domElement.removeEventListener("touchmove", touchmove);
-      scene.traverse((o) => {
-        o.geometry?.dispose();
-        if (o.material) {
-          if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
-          else o.material.dispose();
-        }
-      });
-      state.env.dispose();
-      renderer.dispose();
-      renderer.domElement.remove();
       engine.current = null;
+      renderer.domElement.remove();
+      const dispose = () => {
+        scene.traverse((o) => {
+          o.geometry?.dispose();
+          if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
+          else o.material?.dispose();
+        });
+        state.env.dispose();
+        renderer.dispose();
+        renderer.forceContextLoss();
+      };
+      if (state.compileTask) state.compileTask.then(dispose, dispose);
+      else dispose();
     };
   }, []);
   useEffect(() => {
@@ -491,6 +506,22 @@ export default function Viewport({
       e.specimen.geometry = createDrapedClothGeometry();
       e.specimen.position.set(0, 0, 0);
     }
+    e.specimen.castShadow = shape !== "Foliage card";
+    if (shape === "Foliage card") {
+      e.specimen.geometry = new THREE.PlaneGeometry(2.5, 2.5, 1, 1);
+      e.specimen.position.y = 1.5;
+    }
+    if (shape === "Pipe") {
+      const profile = [
+        new THREE.Vector2(0.9, -1.2),
+        new THREE.Vector2(0.96, -1.2),
+        new THREE.Vector2(0.96, 1.2),
+        new THREE.Vector2(0.9, 1.2),
+        new THREE.Vector2(0.9, -1.2),
+      ];
+      e.specimen.geometry = new THREE.LatheGeometry(profile, 128);
+      e.specimen.position.y = 1.45;
+    }
     if (shape === "Sphere") {
       e.specimen.geometry = new THREE.SphereGeometry(1.4, 128, 96);
     }
@@ -554,7 +585,7 @@ export default function Viewport({
     if (old) {
       e.specimen.remove(old);
       old.geometry.dispose();
-      old.material.dispose();
+      releaseAfterCompilation(e, old.material);
     }
     if (params.type === 4 && params.fuzz > 0) {
       let seed = 417;
@@ -611,7 +642,7 @@ export default function Viewport({
       if (fur) {
         e.specimen.remove(fur);
         fur.geometry.dispose();
-        fur.material.dispose();
+        releaseAfterCompilation(e, fur.material);
       }
     };
   }, [params.type, params.fuzz, params.fuzzLength, params.sheenColor, shape]);

@@ -36,9 +36,9 @@ const required = [
   "LED Pixel Matrix",
 ];
 
-test("100 unique procedural recipes include every requested family and support bake outputs", () => {
-  expect(materials).toHaveLength(100);
-  expect(new Set(materials.map((p) => p.id)).size).toBe(100);
+test("growing catalogue preserves the original families and supports bake outputs", () => {
+  expect(materials.length).toBeGreaterThanOrEqual(100);
+  expect(new Set(materials.map((p) => p.id)).size).toBe(materials.length);
   for (const name of required)
     expect(materials.some((p) => p.name === name)).toBe(true);
   for (const p of materials) {
@@ -46,7 +46,7 @@ test("100 unique procedural recipes include every requested family and support b
     expect(material.map).toBeNull();
     expect(material.normalMap).toBeNull();
     expect(material.roughnessMap).toBeNull();
-    expect(material.userData.params.materialVersion).toBe(5);
+    expect(material.userData.params.materialVersion).toBe(6);
     expect(material.userData.params.recipeId).toBe(getRecipe(p).id);
     const shader = {
       uniforms: {},
@@ -94,7 +94,7 @@ test("incremental shader progress, new families and real six-channel ZIP baking"
     .poll(() => page.locator(".material-preview img").count(), {
       timeout: 240000,
     })
-    .toBe(100);
+    .toBe(materials.length);
   await expect(page.locator("canvas")).toHaveAttribute(
     "data-material-ready",
     "true",

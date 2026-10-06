@@ -21,7 +21,7 @@ test("procedural library, live editing, local presets and export", async ({
     if (m.type() === "error") errors.push(m.text());
   });
   await page.goto("/");
-  // Full 100-preview compilation is covered by expansion.spec.js. These
+  // Full catalogue compilation is covered by expansion.spec.js. These
   // interaction tests deliberately exercise the UI while the queue continues.
   await expect(page.locator(".material-preview img").first()).toBeVisible();
   await expect(page.locator("canvas")).toHaveAttribute(
@@ -70,7 +70,7 @@ test("procedural library, live editing, local presets and export", async ({
   let text = "";
   for await (const chunk of stream) text += chunk;
   const preset = JSON.parse(text);
-  expect(preset.schema).toBe("alloy.material.v5");
+  expect(preset.schema).toBe("alloy.material.v6");
   expect(preset.material.recipeId).toBe("paint");
   expect(preset.material.name).toBe("Ocean Chromatic");
   expect(preset.material.flakes).toBe(0.91);
@@ -118,7 +118,7 @@ test("every material family, preview controls and mobile library", async ({
     if (m.type() === "error") errors.push(m.text());
   });
   await page.goto("/");
-  // Full 100-preview compilation is covered by expansion.spec.js. These
+  // Full catalogue compilation is covered by expansion.spec.js. These
   // interaction tests deliberately exercise the UI while the queue continues.
   await expect(page.locator(".material-preview img").first()).toBeVisible();
   await expect(page.locator("canvas")).toHaveAttribute(
@@ -210,7 +210,7 @@ test("macro inspection, extended ranges, bounded finish controls and color ramp 
     if (m.type() === "error") errors.push(m.text());
   });
   await page.goto("/");
-  // Full 100-preview compilation is covered by expansion.spec.js. These
+  // Full catalogue compilation is covered by expansion.spec.js. These
   // interaction tests deliberately exercise the UI while the queue continues.
   await expect(page.locator(".material-preview img").first()).toBeVisible();
   await expect(page.locator("canvas")).toHaveAttribute(
@@ -360,7 +360,7 @@ test("frozen cloth, textile UVs, leather, cellular layers and height-aware wear"
     if (m.type() === "error") errors.push(m.text());
   });
   await page.goto("/");
-  // Full 100-preview compilation is covered by expansion.spec.js. These
+  // Full catalogue compilation is covered by expansion.spec.js. These
   // interaction tests deliberately exercise the UI while the queue continues.
   await expect(page.locator(".material-preview img").first()).toBeVisible();
   await expect(page.locator("canvas")).toHaveAttribute(
@@ -480,7 +480,7 @@ test("frozen cloth, textile UVs, leather, cellular layers and height-aware wear"
   );
   expect(saved.flakeLayers).toBe(4);
   expect(saved.flakeLayerDepth).toBe(0.76);
-  expect(saved.materialVersion).toBe(5);
+  expect(saved.materialVersion).toBe(6);
   expect(errors).toEqual([]);
 });
 
@@ -531,7 +531,7 @@ test("cellular flakes and polished height are actual shader paths", async () => 
 });
 
 test("every material recipe bounds all its art-direction controls", async () => {
-  expect(materials).toHaveLength(100);
+  expect(materials.length).toBeGreaterThanOrEqual(100);
   for (const p of materials) {
     const recipe = getRecipe(p);
     expect(recipe.controls.length).toBeGreaterThan(0);
@@ -633,7 +633,7 @@ test("guided inspector, nine live weaves, yarn colors and iridescent paint", asy
     if (m.type() === "error") errors.push(m.text());
   });
   await page.goto("/");
-  // Full 100-preview compilation is covered by expansion.spec.js. These
+  // Full catalogue compilation is covered by expansion.spec.js. These
   // interaction tests deliberately exercise the UI while the queue continues.
   await expect(page.locator(".material-preview img").first()).toBeVisible();
   await expect(page.locator("canvas")).toHaveAttribute(
