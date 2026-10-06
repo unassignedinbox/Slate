@@ -13,7 +13,9 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-Run `npm run verify:published` for the current immutable GitHack URL. Append `?material=crocodile-belly-leather` or `?material=broadleaf-green` to open a study directly. Choose **Open the page** if GitHack shows its external-content notice.
+**[Launch Alloy 06.1 — Crocodile leather](https://raw.githack.com/unassignedinbox/Slate/9cb071f9f6d76abeeed7f37b78478d8d4e9e8ac6/site/index.html?material=crocodile-belly-leather)** · **[Leaf mesh surface](https://raw.githack.com/unassignedinbox/Slate/9cb071f9f6d76abeeed7f37b78478d8d4e9e8ac6/site/index.html?material=broadleaf-green)**
+
+Choose **Open the page** if GitHack shows its external-content notice. The new rendering/bake tests and targeted regression tests passed; the standalone test checked 123 unique previews, self-contained paint/leaf module exports and a real full-UV leaf bake ZIP without external assets. Publication verification matched all 1,540,084 bytes (SHA-256 `8ebe7ddca3d01c521a196d310c654305a8ee8df9dcfc518c66c219f0d81987e4`). This verifies the GitHub artifact, not a hosted-browser run.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
@@ -208,7 +210,7 @@ The standalone test blocks unexpected HTTP asset requests, checks the full mater
 To exercise the actual hosted page instead, set its URL explicitly:
 
 ```sh
-ALLOY_PUBLIC_URL='https://raw.githack.com/unassignedinbox/Slate/d98e14d7ada53f447891b66a16fe3d4b09ec9fe0/site/index.html' npm run test:standalone
+ALLOY_PUBLIC_URL='https://raw.githack.com/unassignedinbox/Slate/9cb071f9f6d76abeeed7f37b78478d8d4e9e8ac6/site/index.html' npm run test:standalone
 ```
 
 The remote mode confirms GitHack's notice if present. Connection failures **fail the test**; it never substitutes a local copy. Successful artifact verification is not a claim that GitHack's live runtime was tested. Some sandbox networks block direct connections to GitHack.
