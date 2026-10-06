@@ -8,6 +8,7 @@
 
 #include "EditorFeedSequence.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -292,12 +293,13 @@ uint32_t EditorFeedSequence::FillRoster(EditorInstance* Instances, const SceneSt
     {
         EditorInstance& Row = Instances[R];
         Row = EditorInstance{};
-        Row.InspectorKey=0x100000000ull+R+1;
+        const FeedRow& Entry = Layout[R];
+        // Stable across roster refresh/insertion so session-owned Notes can follow the actual scene row.
+        Row.InspectorKey=(Entry.Kind==FeedRowKind::Placement?0x200000000ull:Entry.Kind==FeedRowKind::Folder?0x100000000ull:0x300000000ull)+Entry.Ordinal+1;
         Row.Visible = true;
         Row.Locked  = false;
         Row.Solo    = false;
         Row.Physics = false;
-        const FeedRow& Entry = Layout[R];
         switch (Entry.Kind)
         {
         case FeedRowKind::Folder:
@@ -328,6 +330,10 @@ uint32_t EditorFeedSequence::FillRoster(EditorInstance* Instances, const SceneSt
             {
                 Row.Category = EditorInstanceCategory::Light;
                 CopyTint(Row.Tint, kLightTint);
+                if(P.Luminaire<Level.QueryPunctualLuminaires().size()){
+                    const auto& L=Level.QueryPunctualLuminaires()[P.Luminaire];const char* Type=L.Category==PunctualLuminaireCategory::Directional?"Sun":L.Category==PunctualLuminaireCategory::Point?"Point":L.Category==PunctualLuminaireCategory::Spot?"Spot":L.Category==PunctualLuminaireCategory::Rectangle?"Area":L.Category==PunctualLuminaireCategory::Tube?"Tube":"Strip";
+                    std::snprintf(Row.Meta,sizeof(Row.Meta),"%s %.0f %s",Type,double(L.Intensity),L.Category==PunctualLuminaireCategory::Directional?"lx":"cd");std::snprintf(Row.Tag,sizeof(Row.Tag),"LGT");Row.Standing=L.Enabled?EditorStanding::Ok:EditorStanding::Quiet;std::snprintf(Row.StandingNote,sizeof(Row.StandingNote),L.Enabled?"Enabled":"Disabled");
+                }
             }
             else if (Folder == kFolderCameras)
             {
@@ -413,9 +419,12 @@ void QueryLevelCentre(const SceneStructure& Level, float Centre[3]) noexcept
             const float Vz[3] = { T.VertexAlphaZ, T.VertexBetaZ, T.VertexGammaZ };
             for (int K = 0; K < 3; ++K)
             {
-                if (Vx[K] < Lo[0]) Lo[0] = Vx[K]; if (Vx[K] > Hi[0]) Hi[0] = Vx[K];
-                if (Vy[K] < Lo[1]) Lo[1] = Vy[K]; if (Vy[K] > Hi[1]) Hi[1] = Vy[K];
-                if (Vz[K] < Lo[2]) Lo[2] = Vz[K]; if (Vz[K] > Hi[2]) Hi[2] = Vz[K];
+                if (Vx[K] < Lo[0]) Lo[0] = Vx[K];
+                if (Vx[K] > Hi[0]) Hi[0] = Vx[K];
+                if (Vy[K] < Lo[1]) Lo[1] = Vy[K];
+                if (Vy[K] > Hi[1]) Hi[1] = Vy[K];
+                if (Vz[K] < Lo[2]) Lo[2] = Vz[K];
+                if (Vz[K] > Hi[2]) Hi[2] = Vz[K];
             }
         }
         Centre[0] = (Lo[0] + Hi[0]) * 0.5f;
@@ -507,44 +516,39 @@ EditorProperty* EditorFeedSequence::BuildSheet(uint32_t Index, EditorInstance* I
         {
             float Centroid[3], Normal[3];
             MeasurePlacement(P, Level, Live, Centroid, Normal);
+            const auto& Punctuals = Level.QueryPunctualLuminaires();
+            const bool HasPunctual = P.Luminaire != kPlacementNone && P.Luminaire < Punctuals.size();
+            if (HasPunctual)
+            {
+                Sheet->Appearance=EditorSheetAppearance::Light;
+                const PunctualLuminaireRecord& L=Punctuals[P.Luminaire];
+                EditorPropertyGroup& Source=OpenGroup(Sheet,"Light source");
+                auto& Enabled=OpenProp(Source,"Enabled",EditorPropertyCategory::Switch);Enabled.On=L.Enabled;
+                auto& Shadows=OpenProp(Source,"Cast Shadows",EditorPropertyCategory::Switch);Shadows.On=L.CastShadows;
+                auto& Type=OpenProp(Source,"Type",EditorPropertyCategory::Select);Type.OptionCount=6;Type.Picked=static_cast<uint32_t>(L.Category);
+                const char* Types[]={"Directional","Point","Spot","Rectangle / Area","Tube","Strip"};for(unsigned I=0;I<6;++I)std::snprintf(Type.Options[I],sizeof(Type.Options[I]),"%s",Types[I]);
+                auto& Power=OpenProp(Source,"Intensity",EditorPropertyCategory::Slider);Power.Minimum=0;Power.Maximum=L.Category==PunctualLuminaireCategory::Directional?200000.f:100000.f;Power.Figure=L.Intensity;Power.Decimals=1;std::snprintf(Power.Unit,sizeof(Power.Unit),L.Category==PunctualLuminaireCategory::Directional?"lx":"cd");
+                auto& Hue=OpenProp(Source,"Colour",EditorPropertyCategory::Colour);CopyTint(Hue.ColourTint,L.Colour);
+                auto& Range=OpenProp(Source,"Range",EditorPropertyCategory::Slider);Range.Minimum=0;Range.Maximum=1000;Range.Figure=L.Range;Range.Decimals=1;std::snprintf(Range.Unit,sizeof(Range.Unit),"m");
+                EditorPropertyGroup& Transform=OpenGroup(Sheet,"Transform");
+                auto& Position=OpenProp(Transform,"Position",EditorPropertyCategory::AxisVec3);for(int I=0;I<3;++I)Position.Axes[I]=P.WorldTransform[12+I];Position.AxisStep=.05f;Position.Editable=true;
+                auto& Direction=OpenProp(Transform,"Direction",EditorPropertyCategory::Readout);const float Down[3]={-P.WorldTransform[8],-P.WorldTransform[9],-P.WorldTransform[10]};FormatDirection(Direction.Text,Down);
+                EditorPropertyGroup& Shape=OpenGroup(Sheet,"Distribution");
+                auto& Distribution=OpenProp(Shape,"Distribution",EditorPropertyCategory::Select);Distribution.OptionCount=3;Distribution.Picked=static_cast<uint32_t>(L.Distribution);const char* Distributions[]={"Uniform","IES profile","ECE low beam"};for(unsigned I=0;I<3;++I)std::snprintf(Distribution.Options[I],sizeof(Distribution.Options[I]),"%s",Distributions[I]);
+                auto Slider=[&](const char* Name,float Value,float Min,float Max,const char* Unit){auto& Q=OpenProp(Shape,Name,EditorPropertyCategory::Slider);Q.Minimum=Min;Q.Maximum=Max;Q.Figure=Value;Q.Decimals=2;std::snprintf(Q.Unit,sizeof(Q.Unit),"%s",Unit);};
+                Slider("Inner Cone",L.InnerConeAngle*kRadToDeg,0,89,"deg");Slider("Outer Cone",L.OuterConeAngle*kRadToDeg,1,90,"deg");Slider("Width",L.Size[0],.01f,100,"m");Slider("Height",L.Size[1],.01f,100,"m");
+                return nullptr;
+            }
             EditorPropertyGroup& Lamp = OpenGroup(Sheet, "Light");
             EditorProperty& Power = OpenProp(Lamp, "Intensity", EditorPropertyCategory::Slider);
             EditorProperty& Hue = OpenProp(Lamp, "Colour", EditorPropertyCategory::Colour);
-            const auto& Punctuals = Level.QueryPunctualLuminaires();
-            const bool HasPunctual = P.Luminaire != kPlacementNone && P.Luminaire < Punctuals.size();
             if (Mat != nullptr && (Mat->EmissiveR + Mat->EmissiveG + Mat->EmissiveB) > 0.0f)
             {
-                const float Brightest = Mat->EmissiveR > Mat->EmissiveG
-                    ? (Mat->EmissiveR > Mat->EmissiveB ? Mat->EmissiveR : Mat->EmissiveB)
-                    : (Mat->EmissiveG > Mat->EmissiveB ? Mat->EmissiveG : Mat->EmissiveB);
-                Power.Minimum = 0.0f; Power.Maximum = 64.0f; Power.Figure = Mat->EmissiveR;
-                Power.Decimals = 1u;
-                std::snprintf(Power.Unit, sizeof(Power.Unit), "lx");
-                Hue.ColourTint[0] = Brightest > 0.0f ? Mat->EmissiveR / Brightest : 1.0f;
-                Hue.ColourTint[1] = Brightest > 0.0f ? Mat->EmissiveG / Brightest : 1.0f;
-                Hue.ColourTint[2] = Brightest > 0.0f ? Mat->EmissiveB / Brightest : 1.0f;
+                const float Brightest = std::max({Mat->EmissiveR,Mat->EmissiveG,Mat->EmissiveB});
+                Power.Minimum=0;Power.Maximum=64;Power.Figure=Mat->EmissiveR;Power.Decimals=1;std::snprintf(Power.Unit,sizeof(Power.Unit),"lx");
+                Hue.ColourTint[0]=Brightest>0?Mat->EmissiveR/Brightest:1;Hue.ColourTint[1]=Brightest>0?Mat->EmissiveG/Brightest:1;Hue.ColourTint[2]=Brightest>0?Mat->EmissiveB/Brightest:1;
             }
-            else if (HasPunctual)
-            {
-                const PunctualLuminaireRecord& L = Punctuals[P.Luminaire];
-                Power.Minimum = 0.0f; Power.Maximum = 64.0f; Power.Figure = L.Intensity;
-                Power.Decimals = 1u;
-                std::snprintf(Power.Unit, sizeof(Power.Unit),
-                              L.Category == PunctualLuminaireCategory::Directional ? "lx" : "cd");
-                CopyTint(Hue.ColourTint, L.Colour);
-            }
-            EditorPropertyGroup& Aimed = OpenGroup(Sheet, "Aim");
-            EditorProperty& Facing = OpenProp(Aimed, "Direction", EditorPropertyCategory::Readout);
-            if (Mat != nullptr && (Mat->EmissiveR + Mat->EmissiveG + Mat->EmissiveB) > 0.0f)
-                FormatDirection(Facing.Text, Normal);
-            else if (HasPunctual)
-            {
-                // A file light shines down its node's −Z: negate the world Z axis and snap it.
-                const float Down[3] = { -P.WorldTransform[8], -P.WorldTransform[9], -P.WorldTransform[10] };
-                FormatDirection(Facing.Text, Down);
-            }
-            else
-                std::snprintf(Facing.Text, sizeof(Facing.Text), "—");
+            EditorPropertyGroup& Aimed=OpenGroup(Sheet,"Aim");auto& Facing=OpenProp(Aimed,"Direction",EditorPropertyCategory::Readout);FormatDirection(Facing.Text,Normal);
             return nullptr;
         }
 
@@ -593,22 +597,23 @@ EditorProperty* EditorFeedSequence::BuildSheet(uint32_t Index, EditorInstance* I
 
     if (Picked.Kind == FeedRowKind::PostProcess)
     {
+        Sheet->Appearance=EditorSheetAppearance::PostProcess;
         EditorPropertyGroup& Exp = OpenGroup(Sheet, "Exposure");
         EditorProperty& Ev = OpenProp(Exp, "EV Compensation", EditorPropertyCategory::Slider);
-        Ev.Minimum = -4.0f; Ev.Maximum = 4.0f; Ev.Figure = 0.0f; Ev.Decimals = 2u;
+        Ev.Minimum = -4.0f; Ev.Maximum = 4.0f; Ev.Figure = PostExposure; Ev.Decimals = 2u;
         std::snprintf(Ev.Unit, sizeof(Ev.Unit), "EV");
 
         EditorPropertyGroup& Tone = OpenGroup(Sheet, "Tone Mapping");
         EditorProperty& Sat = OpenProp(Tone, "Saturation", EditorPropertyCategory::Slider);
-        Sat.Minimum = 0.0f; Sat.Maximum = 2.0f; Sat.Figure = 1.0f; Sat.Decimals = 2u;
+        Sat.Minimum = 0.0f; Sat.Maximum = 2.0f; Sat.Figure = PostSaturation; Sat.Decimals = 2u;
         EditorProperty& Contrast = OpenProp(Tone, "Contrast", EditorPropertyCategory::Slider);
-        Contrast.Minimum = 0.5f; Contrast.Maximum = 2.0f; Contrast.Figure = 1.0f; Contrast.Decimals = 2u;
+        Contrast.Minimum = 0.5f; Contrast.Maximum = 2.0f; Contrast.Figure = PostContrast; Contrast.Decimals = 2u;
 
         EditorPropertyGroup& LensFx = OpenGroup(Sheet, "Lens Effects");
         EditorProperty& Bloom = OpenProp(LensFx, "Bloom Intensity", EditorPropertyCategory::Slider);
-        Bloom.Minimum = 0.0f; Bloom.Maximum = 1.0f; Bloom.Figure = 0.05f; Bloom.Decimals = 2u;
+        Bloom.Minimum = 0.0f; Bloom.Maximum = 1.0f; Bloom.Figure = PostBloom; Bloom.Decimals = 2u;
         EditorProperty& Vig = OpenProp(LensFx, "Vignette", EditorPropertyCategory::Slider);
-        Vig.Minimum = 0.0f; Vig.Maximum = 1.0f; Vig.Figure = 0.15f; Vig.Decimals = 2u;
+        Vig.Minimum = 0.0f; Vig.Maximum = 1.0f; Vig.Figure = PostVignette; Vig.Decimals = 2u;
         return nullptr;
     }
 
@@ -620,6 +625,32 @@ void EditorFeedSequence::ApplyCameraSheet(uint32_t Index,uint32_t RowCount,const
     std::vector<FeedRow> Layout(RowCount);const uint32_t Count=BuildLayout(Level,Layout.data(),RowCount);if(Index>=Count)return;
     if(Layout[Index].Kind==FeedRowKind::FlyCamera)ApplyCameraInspectorSheet(Camera,MainLens,Sheet,true);
     else if(Layout[Index].Kind==FeedRowKind::CineCamera)ApplyCameraInspectorSheet(Camera,CineLens,Sheet,false);
+}
+
+void EditorFeedSequence::ApplyPostProcessSheet(const EditorSheet& Sheet) noexcept {
+    if(Sheet.Appearance!=EditorSheetAppearance::PostProcess)return;
+    auto Find=[&](const char* Name)->const EditorProperty*{for(uint32_t G=0;G<Sheet.GroupCount;++G)for(uint32_t I=0;I<Sheet.Groups[G].PropertyCount;++I)if(!std::strcmp(Sheet.Groups[G].Properties[I].Label,Name))return &Sheet.Groups[G].Properties[I];return nullptr;};
+    if(auto* P=Find("EV Compensation"))PostExposure=P->Figure;
+    if(auto* P=Find("Saturation"))PostSaturation=P->Figure;
+    if(auto* P=Find("Contrast"))PostContrast=P->Figure;
+    if(auto* P=Find("Bloom Intensity"))PostBloom=P->Figure;
+    if(auto* P=Find("Vignette"))PostVignette=P->Figure;
+}
+
+void EditorFeedSequence::ApplyLightSheet(uint32_t Index,uint32_t RowCount,SceneStructure& Level,const EditorSheet& Sheet) noexcept {
+    if(RowCount>kMaxEditorInstances||Index>=RowCount||Sheet.Appearance!=EditorSheetAppearance::Light)return;
+    std::vector<FeedRow> Layout(RowCount);const uint32_t Count=BuildLayout(Level,Layout.data(),RowCount);if(Index>=Count||Layout[Index].Kind!=FeedRowKind::Placement)return;
+    auto& Placements=Level.AccessPlacements();auto& Lights=Level.AccessPunctualLuminaires();const uint32_t PIndex=Layout[Index].Ordinal;if(PIndex>=Placements.size())return;auto& P=Placements[PIndex];if(P.Luminaire>=Lights.size())return;auto& L=Lights[P.Luminaire];
+    auto Find=[&](const char* Name)->const EditorProperty*{for(uint32_t G=0;G<Sheet.GroupCount;++G)for(uint32_t I=0;I<Sheet.Groups[G].PropertyCount;++I)if(!std::strcmp(Sheet.Groups[G].Properties[I].Label,Name))return &Sheet.Groups[G].Properties[I];return nullptr;};
+    if(auto* Q=Find("Enabled"))L.Enabled=Q->On;
+    if(auto* Q=Find("Cast Shadows"))L.CastShadows=Q->On;
+    if(auto* Q=Find("Type"))L.Category=static_cast<PunctualLuminaireCategory>(std::min(Q->Picked,5u));
+    if(auto* Q=Find("Distribution"))L.Distribution=static_cast<LuminaireDistribution>(std::min(Q->Picked,2u));
+    if(auto* Q=Find("Intensity"))L.Intensity=std::max(0.f,Q->Figure);
+    if(auto* Q=Find("Range"))L.Range=std::max(0.f,Q->Figure);
+    if(auto* Q=Find("Colour"))CopyTint(L.Colour,Q->ColourTint);
+    constexpr float DegToRad=.01745329251994329577f;if(auto* Q=Find("Inner Cone"))L.InnerConeAngle=std::clamp(Q->Figure*DegToRad,0.f,L.OuterConeAngle);if(auto* Q=Find("Outer Cone"))L.OuterConeAngle=std::clamp(Q->Figure*DegToRad,std::max(.0174533f,L.InnerConeAngle),1.5707964f);if(auto* Q=Find("Width"))L.Size[0]=std::max(.01f,Q->Figure);if(auto* Q=Find("Height"))L.Size[1]=std::max(.01f,Q->Figure);
+    if(auto* Q=Find("Position"))for(int I=0;I<3;++I){P.WorldTransform[12+I]=Q->Axes[I];P.LocalTransform[12+I]=Q->Axes[I];}
 }
 
 bool EditorFeedSequence::QueryAnimatedSpan(uint32_t* First, uint32_t* Count,

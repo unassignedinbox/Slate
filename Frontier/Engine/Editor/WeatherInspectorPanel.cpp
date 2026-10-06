@@ -29,20 +29,21 @@ void Arrow(Panel& U,float X,float Y,float DX,float DY,ImU32 C){float L=std::sqrt
 void End(Panel& U,float W,float Y,const char* Note){U.Wrap(0,Y,W,Note);ImGui::SetCursorScreenPos(U.At(0,Y+88));ImGui::Dummy({W,1});}
 void WindPanel(Panel& U,float W){
  U.Text(0,83,"WIND / AIR · shared advection field",10,Muted);char T[160];
- bool Wide=W>=760;float CW=Wide?(W-16)/2:W,X2=Wide?CW+16:0,Y2=Wide?110:656;
- U.Card(0,110,CW,530,"Direction + magnitude");float R=std::min(142.f,(CW-76)*.5f),CX=CW*.5f,CY=342;
+ auto& Speed=Find(U.Sheet,"Speed")->Figure;auto& Bearing=Find(U.Sheet,"Bearing")->Figure;auto A=WindOf(U,true);unsigned SummaryForce=WindField::BeaufortForce(Speed);
+ U.Card(0,110,W,180,"Anemometer");std::snprintf(T,sizeof(T),"%.1f m/s",double(Speed));U.Text(24,169,T,36);std::snprintf(T,sizeof(T),"%.0f° · Beaufort %u · %s",double(Bearing),SummaryForce,WindField::BeaufortName(SummaryForce));U.Wrap(24,221,W-48,T);float Sample[3];WindField::SampleStep(A,10,Sample);std::snprintf(T,sizeof(T),"10 m vector  X %.1f / Y %.1f m/s",double(Sample[0]),double(Sample[1]));U.Wrap(24,254,W-48,T);
+ bool Wide=W>=760;float CW=Wide?(W-16)/2:W,X2=Wide?CW+16:0,Base=306,Y2=Wide?Base:Base+546;
+ U.Card(0,Base,CW,530,"Composite wind field");float R=std::min(142.f,(CW-76)*.5f),CX=CW*.5f,CY=Base+232;
  ImGui::SetCursorScreenPos(U.At(CX-R,CY-R));ImGui::InvisibleButton("##wind-vector",{2*R,2*R},ImGuiButtonFlags_EnableNav);
- auto& Speed=Find(U.Sheet,"Speed")->Figure;auto& Bearing=Find(U.Sheet,"Bearing")->Figure;
  if(ImGui::IsItemActive()&&ImGui::IsMouseDown(0)){float DX=ImGui::GetIO().MousePos.x-U.At(CX,CY).x,DY=U.At(CX,CY).y-ImGui::GetIO().MousePos.y;float Length=std::sqrt(DX*DX+DY*DY);Speed=std::clamp(Length/R*40,0.f,40.f);if(Length>1)Bearing=std::fmod(std::atan2(DX,DY)*180/Pi+360,360.f);}
  if(ImGui::IsItemFocused()){if(ImGui::IsKeyPressed(ImGuiKey_LeftArrow))Bearing=std::fmod(Bearing+359,360.f);if(ImGui::IsKeyPressed(ImGuiKey_RightArrow))Bearing=std::fmod(Bearing+1,360.f);if(ImGui::IsKeyPressed(ImGuiKey_UpArrow))Speed=std::min(40.f,Speed+.5f);if(ImGui::IsKeyPressed(ImGuiKey_DownArrow))Speed=std::max(0.f,Speed-.5f);if(ImGui::IsKeyPressed(ImGuiKey_Home))Speed=0;}
- WindSettings A=WindOf(U,true);for(int I=1;I<=4;++I)U.D->AddCircle(U.At(CX,CY),R*I/4,IM_COL32(91,121,110,55),64,1);
+ for(int I=1;I<=4;++I)U.D->AddCircle(U.At(CX,CY),R*I/4,IM_COL32(91,121,110,55),64,1);
  U.D->AddLine(U.At(CX-R,CY),U.At(CX+R,CY),IM_COL32(91,121,110,55));U.D->AddLine(U.At(CX,CY-R),U.At(CX,CY+R),IM_COL32(91,121,110,55));
  U.Text(CX-4,CY-R-23,"N",12,Accent);U.Text(CX+R+10,CY-6,"E",11,Muted);U.Text(CX-4,CY+R+12,"S",11,Muted);U.Text(CX-R-21,CY-6,"W",11,Muted);
  float Rad=Bearing*Pi/180,Length=Speed/40*R;Arrow(U,CX,CY,std::sin(Rad)*Length,-std::cos(Rad)*Length,Accent);U.D->AddCircleFilled(U.At(CX,CY),4,Accent);
- std::snprintf(T,sizeof(T),"%.1f m/s   /   %.0f°",double(Speed),double(Bearing));U.Text(24,163,T,24);
- U.Wrap(24,535,CW-48,"Drag outward for speed, around for bearing. Blows TOWARD N = +Y, E = +X. Outer ring = 40 m/s.");U.Wrap(24,587,CW-48,"Arrow keys: bearing / speed · Home: calm");
- U.Card(X2,Y2,CW,600,"Flow");const char* Names[]={"Speed","Bearing","Shear","Veer"};for(int I=0;I<4;++I)U.Slider(X2+24,Y2+65+I*83,CW-48,Names[I]);auto* AirShear=Find(U.Sheet,"Air shear");U.Tile(X2+24,Y2+400,std::min(150.f,CW-48.f),"Air shear",AirShear?&AirShear->On:nullptr);unsigned Force=WindField::BeaufortForce(Speed);std::snprintf(T,sizeof(T),"Beaufort %u · %s",Force,WindField::BeaufortName(Force));U.Wrap(X2+24,Y2+495,CW-48,T);U.Wrap(X2+24,Y2+537,CW-48,"Air shear off = wind slides the cloud rigidly; on = it leans with altitude (a bounded, coherent tilt).");
- float Y=Y2+546,Y3=Wide?Y:Y+388;U.Card(0,Y,CW,372,"Variation");const char* Variation[]={"Gust","Turbulence","Steadiness"};for(int I=0;I<3;++I)U.Slider(24,Y+65+I*83,CW-48,Variation[I]);
+ std::snprintf(T,sizeof(T),"%.1f m/s   /   %.0f°",double(Speed),double(Bearing));U.Text(24,Base+53,T,24);
+ U.Wrap(24,Base+425,CW-48,"Drag outward for speed, around for bearing. Blows TOWARD N = +Y, E = +X. Outer ring = 40 m/s.");U.Wrap(24,Base+477,CW-48,"Arrow keys: bearing / speed · Home: calm");
+ U.Card(X2,Y2,CW,600,"Wind controls");const char* Names[]={"Speed","Bearing","Shear","Veer"};for(int I=0;I<4;++I)U.Slider(X2+24,Y2+65+I*83,CW-48,Names[I]);auto* AirShear=Find(U.Sheet,"Air shear");U.Tile(X2+24,Y2+400,std::min(150.f,CW-48.f),"Air shear",AirShear?&AirShear->On:nullptr);unsigned Force=WindField::BeaufortForce(Speed);std::snprintf(T,sizeof(T),"Beaufort %u · %s",Force,WindField::BeaufortName(Force));U.Wrap(X2+24,Y2+495,CW-48,T);U.Wrap(X2+24,Y2+537,CW-48,"Air shear off = wind slides the cloud rigidly; on = it leans with altitude (a bounded, coherent tilt).");
+ float Y=Y2+616,Y3=Wide?Y:Y+388;U.Card(0,Y,CW,372,"Variation controls");const char* Variation[]={"Gust","Turbulence","Steadiness"};for(int I=0;I<3;++I)U.Slider(24,Y+65+I*83,CW-48,Variation[I]);
  U.Card(X2,Y3,CW,372,"Gust envelope");float L=X2+24,RR=X2+CW-24,Top=Y3+82,Bottom=Y3+220;float Previous=0;for(int I=0;I<=96;++I){auto Q=A;Q.GustPhase=I/96.f*2*Pi;float G=WindField::SampleGust(Q);float YY=Bottom-(G-.0f)/2*(Bottom-Top);if(I)U.D->AddLine(U.At(L+(RR-L)*(I-1)/96,Previous),U.At(L+(RR-L)*I/96,YY),Accent,1.5f);Previous=YY;}
  U.Wrap(L,Y3+242,CW-48,"Actual shared gust model · phase 0–2π · vertical scale 0–2×. Steadiness scales variation in this backend: 0 removes gust and swirl.");float V[3];WindField::SampleStep(A,1000,V);std::snprintf(T,sizeof(T),"1 km flow: X %.1f / Y %.1f m/s",double(V[0]),double(V[1]));U.Wrap(L,Y3+315,CW-48,T);
  End(U,W,Y3+398,"One shared wind field drives cloud advection and precipitation. The compass edits authored flow; the envelope is a model diagnostic, not a scene-camera preview.");

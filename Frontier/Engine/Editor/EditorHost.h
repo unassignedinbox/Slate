@@ -49,6 +49,8 @@ public:
     using InspectorExchange = EditorSheet* (*)(uint32_t, bool, void*) noexcept;
     void AssignInspectorExchange(InspectorExchange Fn,void* Context) noexcept {InspectorExchange_=Fn;InspectorContext_=Context;}
     void AssignBillboardExchange(BillboardExchange Fn,void* Context) noexcept {Viewport_.Billboards.Assign(Fn,Context);}
+    void AssignConstructionWorld(SceneStructure* World) noexcept {Viewport_.AssignConstructionWorld(World);}
+    bool TakeConstructionChanged() noexcept {return Viewport_.TakeConstructionChanged();}
     bool TakeBillboardSelection() noexcept {const bool V=BillboardSelection_;BillboardSelection_=false;return V;}
     ImVec2 QueryBillboardCentre(uint64_t Key) const noexcept {return Viewport_.Billboards.Centre(Key);}
     void AssignInspectorWorkspace(bool On) noexcept {if(InspectorWorkspace_!=On){InspectorWorkspace_=On;LayoutSeated_=false;}}

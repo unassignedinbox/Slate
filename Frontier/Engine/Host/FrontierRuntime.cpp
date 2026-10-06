@@ -1457,6 +1457,7 @@ int Frontier::RunFrontierRuntime(
 #ifdef FRONTIER_DEVELOPMENT
     Frontier::HostRuntime::EditorInspectorSequence InspectorSession{Feed,Celestial,Camera,Level,AnimatedInstances,SceneInstances.data(),SceneRowCount,PickedSheet};
     Panel.AssignInspectorExchange(&Frontier::HostRuntime::EditorInspectorSequence::Exchange,&InspectorSession);
+    Panel.AssignConstructionWorld(&Level);
     Panel.AssignInspectorWorkspace(false);
     Panel.AssignBillboardExchange(&Frontier::HostRuntime::EditorInspectorSequence::Billboards,&InspectorSession);
 #endif
@@ -1890,8 +1891,14 @@ int Frontier::RunFrontierRuntime(
         //    tint mirror carries back onto the row every tick. Development only: without the define the
         //    editor records nothing, so feeding it would be dead work on a shipping build.
 #ifdef FRONTIER_DEVELOPMENT
+        if(Panel.TakeConstructionChanged())SceneReady=false;
         if (!SceneReady)
         {
+            // Construction rebuilds the roster, but Notes are editor-session metadata rather than scene geometry.
+            // Preserve them by the stable inspector identity assigned by each feed, not by volatile row position.
+            std::vector<std::pair<uint64_t,std::string>> SessionNotes;
+            SessionNotes.reserve(SceneRowCount);
+            for(uint32_t I=0;I<SceneRowCount;++I)if(SceneInstances[I].Notes[0])SessionNotes.emplace_back(SceneInstances[I].InspectorKey,SceneInstances[I].Notes);
             Panel.ClearPicks();
             SceneRowCount = Feed.FillRoster(SceneInstances.data(), Level, Frontier::kMaxEditorInstances);
             CanonicalSpanCount = Feed.FillRosterSpans(CanonicalSpans.data(), Level, Frontier::kMaxEditorInstances);
@@ -1899,6 +1906,7 @@ int Frontier::RunFrontierRuntime(
             //    than merged so the scene walk stays exactly what it was.
             CelestialFirstRow = SceneRowCount;
             SceneRowCount += Celestial.AppendRoster(SceneInstances.data(), SceneRowCount, Frontier::kMaxEditorInstances);
+            for(uint32_t I=0;I<SceneRowCount;++I)for(const auto& Saved:SessionNotes)if(Saved.first==SceneInstances[I].InspectorKey){std::snprintf(SceneInstances[I].Notes,sizeof(SceneInstances[I].Notes),"%s",Saved.second.c_str());break;}
             Frontier::ViewportOrbit Home;
             float Middle[3] = { 0.0f, 0.0f, 0.0f };
             Frontier::HostRuntime::QueryLevelCentre(Level, Middle);

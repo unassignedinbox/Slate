@@ -236,6 +236,8 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/Editor/FogInspectorPanel.cpp
     Engine/Editor/WeatherInspectorPanel.cpp
     Engine/Editor/CameraInspectorPanel.cpp
+    Engine/Editor/LightInspectorPanel.cpp
+    Engine/Editor/PostProcessInspectorPanel.cpp
 
     Engine/Editor/SunInspectorPanel.cpp
     Engine/Editor/LensFlareInspectorPanel.cpp

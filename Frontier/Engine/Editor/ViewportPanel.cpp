@@ -7,6 +7,7 @@
 
 #include "ControlPanel.h"
 #include "EditorInstance.h"
+#include "ConstructWorld.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>   // ImGuiWindow: the SkipItems early-out
@@ -1312,10 +1313,11 @@ void ViewportPanel::RecordBar() noexcept
         ImGui::PushFont(Small);
         if (ImGui::BeginMenu("Lights"))
         {
-            if (ImGui::MenuItem("Directional Light (Sun)")) {}
-            if (ImGui::MenuItem("Point Light")) {}
-            if (ImGui::MenuItem("Spot Light")) {}
-            if (ImGui::MenuItem("Rect / Area Light")) {}
+            auto AddLight=[&](ConstructKind Kind,const char* Name){if(!ConstructionWorld_)return;ConstructRequest R;R.Kind=Kind;R.Name=Name;if(ConstructEntity(*ConstructionWorld_,R))ConstructionChanged_=true;};
+            if (ImGui::MenuItem("Directional Light (Sun)")) AddLight(ConstructKind::DirectionalLight,"Directional Light");
+            if (ImGui::MenuItem("Point Light")) AddLight(ConstructKind::PointLight,"Point Light");
+            if (ImGui::MenuItem("Spot Light")) AddLight(ConstructKind::SpotLight,"Spot Light");
+            if (ImGui::MenuItem("Rect / Area Light")) AddLight(ConstructKind::RectangleLight,"Area Light");
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("World & Celestial"))

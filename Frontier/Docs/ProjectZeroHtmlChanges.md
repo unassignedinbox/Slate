@@ -3336,3 +3336,77 @@ This implementation checkpoint applies the first two C069 stages without replaci
 - Full prerequisite execution still stops in the pre-existing Sun interaction assertion `##sun-diameter`; all changed inspector translation units compile with `-Wall -Wextra -Werror`, and their dedicated proofs above pass.
 
 Generated native captures were inspected for wide and narrow Fog, Moon, Stars, Precipitation and Rainbow, plus Lens Flare. They preserve the accepted card designs; this tranche changes ownership/order and diagnostic wiring only.
+
+## C071 — Clouds, Wind, Light components, Notes and Post Process native completion (2026-10-06)
+
+This checkpoint completes the remaining shared inspector work that can be landed without replacing the separately owned
+geometry/material authoring systems.
+
+### Implemented
+
+- **Global and Local Clouds:** both now begin with the approved shared summary, then Cloud settings, interactive Coverage,
+  deck/bounds technical cards and Cloud body. Local base/depth are derived from Centre/Half Size; no duplicate local state
+  was introduced. Global-only shadow ownership remains unchanged.
+- **Wind:** the native order is Anemometer → Composite wind field + Wind controls → Variation controls + Gust envelope.
+  Every editable value remains the existing `WindField` property and the diagnostics call the real wind model.
+- **Lights:** extended the existing scene luminaire component rather than creating a second property model. Core types are
+  Directional, Point, Spot, Rectangle, Tube and Strip; distribution is Uniform, IES or automotive low beam. Components own
+  enablement, shadows, colour, output, range, cone, dimensions and transform. Imported punctual rows and editor-created
+  lights use the same inspector route.
+- **Creation:** native Point, Spot, Directional and Rectangle viewport menu entries now call `ConstructEntity`; the core
+  construction API also supports Tube and Strip. A successful creation refreshes the outliner. The construct proof creates
+  all six light types and verifies stable placement/component attachment.
+- **Light writeback:** `EditorFeedSequence` now builds and applies a dedicated Light sheet. Intensity, range, type,
+  distribution, colour, cone, dimensions, enabled/shadow state and world position survive inspector rebuilds. Outliner
+  metadata reports the real type, output and unit.
+- **Light presentation:** one shared native inspector supplies Main visual/data → Statistics → Quick controls → Transform →
+  Source & response → conditional Distribution → terminal Baking/renderer status. Spot/Point/Directional are labelled as
+  native scene sources. Rectangle/Tube/Strip explicitly say `AUTHORING ONLY`; no unsupported lighting result is claimed.
+- **Post Process:** EV, saturation, contrast, bloom and vignette now have project-owned session writeback and a dedicated
+  native presentation. Its tone curve is derived from authored contrast and it deliberately contains no fake histogram,
+  camera preview or renderer statistics.
+- **Notes:** the existing optional Notes control is now appended to dedicated inspector routes as well as generic entities
+  and folders, so dedicated Fog, Cloud, Weather, Camera, Light and celestial panels no longer bypass entity notes.
+- **Outliner audit:** Light rows now expose type/output/unit and enabled standing. Existing native precipitation and Moon
+  metadata remain model-derived rather than copied HTML strings.
+
+### Renderer and persistence boundary
+
+`PunctualLuminaireRecord` is now the persistent in-scene Light component and the native sheet/writeback path is verified.
+The existing file-import adapters continue to populate that record. The current renderer's triangle-emitter sampler still
+does not consume extended Rectangle/Tube/Strip components, and no lightmap bake path exists, so those states are visibly
+reported as unsupported rather than represented by fabricated images. The component proof verifies reconstruction from the
+scene record (the editor save/rebuild seam); this checkpoint does not claim a new `.space` project-writer workflow that the
+runtime does not currently expose.
+
+### Executed proof
+
+- Clouds: **582 checks**.
+- Wind/Precipitation/Rainbow: **1684 checks**.
+- Existing C070 proofs rerun: Fog **128**, Lens Flare **74**, Moon **146**, Stars **157**.
+- Light/Post presentation: **7 captures/checks**; component creation/writeback/rebuild/Post persistence: **11 checks**.
+- Construct: all **15 catalogue entities**, including six persistent light types, with 1,936 real scene triangles and
+  stable attachment checks.
+- Changed C++ inspector/model/feed sources compile with `-Wall -Wextra -Werror`; the complete `FrontierRuntime.cpp` syntax
+  path also compiles with the construction-world exchange enabled (the runtime retains its pre-existing unused local warning).
+
+Visual index: [`VisualProof/NativeInspectorCards/index.html`](../VisualProof/NativeInspectorCards/index.html).
+
+### Separate native plans retained
+
+General Geometry Fracture/SDF and Material/ShaderEditor remain governed by their separately approved native plans. C071
+keeps the standard Transform/Surface model and existing specialized SolidArc/Tyre routes intact; it does not disguise the
+browser-only fracture or shader workspace as completed native editor functionality.
+
+### C071 HTML reference versus native C++ audit
+
+| Family | HTML/reference presentation | Native C++ result and intentional difference |
+|---|---|---|
+| Global / Local Clouds | Summary-led density/deck card, settings and coverage; Local includes an authored volume | Same hierarchy and visual language. Native derives Local base/top from `Centre ± Half Size`, retains `TextureCloudInspectorPanel`/simulation ownership, and omits any browser-only decorative value that is not in `EditorSheet`. |
+| Wind | Anemometer readout, vector field, speed/direction and gust controls | Same order and card design. Native diagnostics use `WindField::QueryVelocity`; speed, direction, variability, frequency, gust, turbulence and shear all write to canonical properties. No Beaufort/steadiness/driving duplicate model was added. |
+| Point / Spot / Area / Strip lights | Main light visual, compact statistics, quick toggles, transform, source response, conditional distribution, terminal renderer/bake status | Same accepted ordering/grouping. Native cards read `PunctualLuminaireRecord` and placement transforms. The HTML-style appearance is retained, while support labels are stricter: extended emitters say `AUTHORING ONLY`, because native raster consumption is not implemented. Strip keeps horizontal direction and Area keeps source/shape controls together. |
+| Post Process | Exposure hero, tone response curve and lens effects; some reference designs implied analytics/preview panels | Native keeps the accepted three-card composition and real controls only. The curve is computed from contrast. Histogram, camera preview and renderer statistics were removed because no native source provides them. |
+| Notes / outliner | Editable per-entity Notes and informative identity/meta text | Native Notes now appear after every dedicated panel, keep a stable inspector identity across construction-driven roster refresh, and remain session metadata. Light meta is generated from real type/output/unit rather than copied text. |
+
+The visual proof deliberately presents native captures rather than side-by-side browser screenshots: it establishes the shipped
+C++ result, while this table records every intentional data/feature difference from the HTML reference.

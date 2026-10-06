@@ -17,6 +17,7 @@
 namespace Frontier {
 
 class ControlPanel;
+class SceneStructure;
 struct EditorInstance;
 struct EditorReadout;
 
@@ -95,6 +96,8 @@ public:
 
     // The foot strip's live figures (triangle total); without a readout the strip prints its resting dash.
     void AssignReadout(const EditorReadout* Readout) noexcept;
+    void AssignConstructionWorld(SceneStructure* World) noexcept { ConstructionWorld_=World; }
+    bool TakeConstructionChanged() noexcept {const bool Changed=ConstructionChanged_;ConstructionChanged_=false;return Changed;}
 
     // Seats the orbit's home from the harness camera (yaw, pitch, target, distance); the snaps and the
     //    gizmo work from there. Reads the orbit back for the harness trace and the game camera.
@@ -206,6 +209,8 @@ private:
     uint32_t SolidArcSelectMask_ = 1u;   // Body, Face, Edge, Vertex bits: the web rail's selection modes
     uint32_t SolidArcShade_      = 1u;   // 0 Wireframe, 1 Matcap
     uint32_t SolidArcGizmo_      = 0u;   // 0 Move, 1 Rotate, 2 Scale
+    SceneStructure* ConstructionWorld_ = nullptr;
+    bool ConstructionChanged_ = false;
     static constexpr uint32_t kConstructTileCap = 64u;
     const ViewportConstructTile* ConstructTiles_ = nullptr;
     uint32_t ConstructTileCount_ = 0u;

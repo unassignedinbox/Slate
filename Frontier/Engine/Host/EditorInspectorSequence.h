@@ -8,7 +8,7 @@ namespace Frontier::HostRuntime {
 // Project-owned exchange around the native Inspector draw. Row identity survives moves and renames.
 struct EditorInspectorSequence {
  EditorFeedSequence& Feed; CelestialSequence& Celestial; FlyThroughSolver& Camera;
- const SceneStructure& Level; const std::vector<InstanceRecord>& Live;
+ SceneStructure& Level; const std::vector<InstanceRecord>& Live;
  EditorInstance* Rows; uint32_t& Count; EditorSheet& Sheet;
  EditorProperty* Tint=nullptr; bool ProjectionChanged=false,StarBefore=false;
  bool Effective(uint32_t I) const noexcept {
@@ -53,9 +53,11 @@ struct EditorInspectorSequence {
    else if(Environment){
     if(Entity==CelestialEntity::Stars)if(auto* P=StarSwitch();P&&P->On!=StarBefore)Rows[Pick].Visible=P->On;
     Celestial.ApplySheet(Entity,Sheet);
-   }else if((Key>>32)==1){
+   }else if(Sheet.Appearance==EditorSheetAppearance::PostProcess)Feed.ApplyPostProcessSheet(Sheet);
+   else if((Key>>32)==1){
     const float Old=Camera.QueryFieldOfViewRadians();
-    Feed.ApplyCameraSheet(uint32_t(Key)-1,Count,Level,Sheet,Camera);
+    if(Sheet.Appearance==EditorSheetAppearance::Light)Feed.ApplyLightSheet(Pick,Count,Level,Sheet);
+    else Feed.ApplyCameraSheet(uint32_t(Key)-1,Count,Level,Sheet,Camera);
     ProjectionChanged|=Camera.QueryFieldOfViewRadians()!=Old;
     if(Tint)std::memcpy(Rows[Pick].Tint,Tint->ColourTint,sizeof(Rows[Pick].Tint));
    }

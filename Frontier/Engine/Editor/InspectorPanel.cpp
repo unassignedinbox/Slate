@@ -16,6 +16,8 @@
 #include "FogInspectorPanel.h"
 #include "WeatherInspectorPanel.h"
 #include "CameraInspectorPanel.h"
+#include "LightInspectorPanel.h"
+#include "PostProcessInspectorPanel.h"
 #include "SolidArcInspectorPanel.h"
 #include <imgui_internal.h>   // ImGuiWindow: the SkipItems early-out
 
@@ -158,6 +160,7 @@ void InspectorPanel::Record(EditorInstance* Picked, uint32_t PickedIndex, Editor
         ImGui::PushID(static_cast<int>(PickedIndex));
         RecordSolidArcInspector(*Controls_, *Picked, PickedIndex, *Sheet, CardShut_);
         ImGui::PopID();
+        RecordNotes(Picked);
         ImGui::EndChild();
         RecordFooter(Picked);
         if(!Embedded)ImGui::End();
@@ -167,36 +170,54 @@ void InspectorPanel::Record(EditorInstance* Picked, uint32_t PickedIndex, Editor
        ||Sheet->Appearance==EditorSheetAppearance::TyreLattice){
         ImGui::BeginChild("##tyre-properties",ImVec2(0,ImMax(0.f,Controls_->QueryFootTop()-ImGui::GetCursorScreenPos().y)),false);
         ImGui::PushID(static_cast<int>(PickedIndex));RecordTyreInspector(*Controls_,*Picked,*Sheet);ImGui::PopID();
+        RecordNotes(Picked);
+        ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
+    }
+    if(Sheet->Appearance==EditorSheetAppearance::Light){
+        ImGui::BeginChild("##light-properties",ImVec2(0,ImMax(0.f,Controls_->QueryFootTop()-ImGui::GetCursorScreenPos().y)),false);
+        ImGui::PushID(static_cast<int>(PickedIndex));RecordLightInspector(*Controls_,*Picked,*Sheet);ImGui::PopID();
+        RecordNotes(Picked);
+        ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
+    }
+    if(Sheet->Appearance==EditorSheetAppearance::PostProcess){
+        ImGui::BeginChild("##post-process-properties",ImVec2(0,ImMax(0.f,Controls_->QueryFootTop()-ImGui::GetCursorScreenPos().y)),false);
+        ImGui::PushID(static_cast<int>(PickedIndex));RecordPostProcessInspector(*Controls_,*Picked,*Sheet);ImGui::PopID();RecordNotes(Picked);
         ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
     }
     if(Sheet->Appearance==EditorSheetAppearance::Camera){
         ImGui::BeginChild("##camera-properties",ImVec2(0,ImMax(0.f,Controls_->QueryFootTop()-ImGui::GetCursorScreenPos().y)),false);
         ImGui::PushID(static_cast<int>(PickedIndex));RecordCameraInspector(*Controls_,*Picked,*Sheet);ImGui::PopID();
+        RecordNotes(Picked);
         ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
     }
     if (Sheet->Appearance == EditorSheetAppearance::Wind || Sheet->Appearance == EditorSheetAppearance::Precipitation || Sheet->Appearance == EditorSheetAppearance::Rainbow) {
         ImGui::BeginChild("##weather-properties",ImVec2(0,ImMax(0.f,Controls_->QueryFootTop()-ImGui::GetCursorScreenPos().y)),false);
         ImGui::PushID(static_cast<int>(PickedIndex));RecordWeatherInspector(*Controls_,*Picked,*Sheet);ImGui::PopID();
+        RecordNotes(Picked);
         ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
     }
     if (Sheet->Appearance == EditorSheetAppearance::HeightFog || Sheet->Appearance == EditorSheetAppearance::AerialFog || Sheet->Appearance == EditorSheetAppearance::LocalFog) {
         ImGui::BeginChild("##fog-properties",ImVec2(0,ImMax(0.f,Controls_->QueryFootTop()-ImGui::GetCursorScreenPos().y)),false);
         ImGui::PushID(static_cast<int>(PickedIndex));RecordFogInspector(*Controls_,*Picked,*Sheet);ImGui::PopID();
+        RecordNotes(Picked);
         ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
     }
     if (Sheet->Appearance == EditorSheetAppearance::GlobalCloud || Sheet->Appearance == EditorSheetAppearance::LocalCloud) {
         ImGui::BeginChild("##cloud-properties",ImVec2(0,ImMax(0.f,Controls_->QueryFootTop()-ImGui::GetCursorScreenPos().y)),false);
         ImGui::PushID(static_cast<int>(PickedIndex));RecordCloudsInspector(*Controls_,*Picked,*Sheet);ImGui::PopID();
+        RecordNotes(Picked);
         ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
     }
     if (Sheet->Appearance == EditorSheetAppearance::Stars) {
         ImGui::BeginChild("##stars-properties",ImVec2(0,0),ImGuiChildFlags_None,ImGuiWindowFlags_None);
         ImGui::PushID(static_cast<int>(PickedIndex));RecordStarsInspector(*Controls_,*Picked,*Sheet);ImGui::PopID();
+        RecordNotes(Picked);
         ImGui::EndChild();if(!Embedded)ImGui::End();return;
     }
     if (Sheet->Appearance == EditorSheetAppearance::Moon) {
         ImGui::BeginChild("##moon-properties",ImVec2(0,ImMax(0.f,Controls_->QueryFootTop()-ImGui::GetCursorScreenPos().y)),false);
         ImGui::PushID(static_cast<int>(PickedIndex));RecordMoonInspector(*Controls_,*Picked,*Sheet);ImGui::PopID();
+        RecordNotes(Picked);
         ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
     }
     if (Sheet->Appearance == EditorSheetAppearance::AtmosphereSky)
@@ -204,14 +225,14 @@ void InspectorPanel::Record(EditorInstance* Picked, uint32_t PickedIndex, Editor
         ImGui::BeginChild("##sky-properties", ImVec2(0.0f, ImMax(0.0f, Controls_->QueryFootTop() - ImGui::GetCursorScreenPos().y)), false);
         ImGui::PushID(static_cast<int>(PickedIndex));
         RecordAtmosphereSkyInspector(*Controls_, *Picked, *Sheet);
-        ImGui::PopID();ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
+        ImGui::PopID();RecordNotes(Picked);ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
     }
     if (Sheet->Appearance == EditorSheetAppearance::LensFlare)
     {
         ImGui::BeginChild("##flare-properties", ImVec2(0.0f, ImMax(0.0f, Controls_->QueryFootTop() - ImGui::GetCursorScreenPos().y)), false);
         ImGui::PushID(static_cast<int>(PickedIndex));
         RecordLensFlareInspector(*Controls_, *Picked, *Sheet);
-        ImGui::PopID();ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
+        ImGui::PopID();RecordNotes(Picked);ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
     }
 
     if (Picked->Category == EditorInstanceCategory::Folder && Roster_ && PickedIndex < RosterCount_)
@@ -231,6 +252,7 @@ void InspectorPanel::Record(EditorInstance* Picked, uint32_t PickedIndex, Editor
         ImGui::PushID(static_cast<int>(PickedIndex));
         RecordSunInspector(*Controls_, *Picked, *Sheet);
         ImGui::PopID();
+        RecordNotes(Picked);
         ImGui::EndChild();
         RecordFooter(Picked);
         if(!Embedded)ImGui::End();

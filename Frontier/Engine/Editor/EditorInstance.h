@@ -219,7 +219,7 @@ struct EditorPropertyGroup
     uint32_t        PropertyCount = 0u;
 };
 
-enum class EditorSheetAppearance : uint8_t { Generic, Sun, LensFlare, AtmosphereSky, Moon, Stars, GlobalCloud, LocalCloud, HeightFog, AerialFog, LocalFog, Wind, Precipitation, Rainbow, Camera, Tyre, TyreTread, TyreLattice, SolidArc };
+enum class EditorSheetAppearance : uint8_t { Generic, Sun, LensFlare, AtmosphereSky, Moon, Stars, GlobalCloud, LocalCloud, HeightFog, AerialFog, LocalFog, Wind, Precipitation, Rainbow, Camera, Light, PostProcess, Tyre, TyreTread, TyreLattice, SolidArc };
 
 // Borrowed immutable image data; project retains ownership through the editor frame.
 struct EditorSkyImage {

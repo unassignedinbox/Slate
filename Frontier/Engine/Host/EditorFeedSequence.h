@@ -32,6 +32,8 @@ class EditorFeedSequence
 {
 public:
     void ApplyCameraSheet(uint32_t Index,uint32_t RowCount,const SceneStructure& Level,const EditorSheet& Sheet,FlyThroughSolver& Camera) noexcept;
+    void ApplyLightSheet(uint32_t Index,uint32_t RowCount,SceneStructure& Level,const EditorSheet& Sheet) noexcept;
+    void ApplyPostProcessSheet(const EditorSheet& Sheet) noexcept;
     // Fills Instances (capacity Capacity) in preorder from the level's placements; returns the rows
     //    written. Folders are virtual and always present; placement rows stop at capacity.
     [[nodiscard]] uint32_t FillRoster(EditorInstance* Instances, const SceneStructure& Level,
@@ -47,6 +49,7 @@ public:
                                             const std::vector<InstanceRecord>& LiveInstances) const noexcept;
 
     CameraOpticsSettings MainLens{},CineLens{}; // Project-owned session optics; cine remains an inactive lens study.
+    float PostExposure=0,PostSaturation=1,PostContrast=1,PostBloom=.05f,PostVignette=.15f;
 
     // The first contiguous run of dynamic placements that own instances, as instance ordinals — the scripted
     //    driver and the physics bridge animate exactly this run. False when the level flags nothing.

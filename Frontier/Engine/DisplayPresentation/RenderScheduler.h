@@ -86,6 +86,20 @@ public:
         (void)Fn;(void)Context;
 #endif
     }
+    void AssignConstructionWorld(SceneStructure* World) noexcept {
+#ifdef FRONTIER_DEVELOPMENT
+        Editor_.AssignConstructionWorld(World);
+#else
+        (void)World;
+#endif
+    }
+    bool TakeConstructionChanged() noexcept {
+#ifdef FRONTIER_DEVELOPMENT
+        return Editor_.TakeConstructionChanged();
+#else
+        return false;
+#endif
+    }
     void AssignBillboardExchange(BillboardExchange Fn,void* Context) noexcept {
 #ifdef FRONTIER_DEVELOPMENT
         Editor_.AssignBillboardExchange(Fn,Context);

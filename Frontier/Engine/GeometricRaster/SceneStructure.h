@@ -138,17 +138,24 @@ struct CameraRecord
     float       OrthographicHalfHeight = 1.0f;      // [m]
 };
 
-enum class PunctualLuminaireCategory : uint32_t { Directional = 0, Point = 1, Spot = 2 };
+enum class PunctualLuminaireCategory : uint32_t { Directional = 0, Point = 1, Spot = 2, Rectangle = 3, Tube = 4, Strip = 5 };
+enum class LuminaireDistribution : uint32_t { Uniform = 0, IesProfile = 1, AutomotiveLowBeam = 2 };
 
-struct PunctualLuminaireRecord                      // 🚧 stored only in R4a; the kernel does not light from these yet
+// Persistent authoring component used by imported and editor-created lights. Point, Spot and Directional are
+// renderer-ready types; extended emitters remain explicit authoring components until their sampling kernels land.
+struct PunctualLuminaireRecord
 {
     std::string               Name;
     PunctualLuminaireCategory Category = PunctualLuminaireCategory::Point;
+    LuminaireDistribution     Distribution = LuminaireDistribution::Uniform;
     float                     Colour[3] = { 1.0f, 1.0f, 1.0f };   // [-] linear Rec.709
-    float                     Intensity = 1.0f;     // [cd] point/spot, [lux] directional (KHR_lights_punctual)
+    float                     Intensity = 1.0f;     // [cd] point/spot, [lux] directional
     float                     Range     = 0.0f;     // [m]  0 = infinite
     float                     InnerConeAngle = 0.0f;   // [rad]
     float                     OuterConeAngle = 0.7853982f;
+    float                     Size[2] = { 1.0f, 1.0f }; // [m] rectangle width/height, tube/strip length/width
+    bool                      Enabled = true;
+    bool                      CastShadows = true;
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -233,6 +240,8 @@ public:
     [[nodiscard]] MaterialIndex&                        AccessMaterials()       noexcept { return Materials; }   // M7b: the materials page commits drafts through here
     [[nodiscard]] MaterialIndex&                        ModifyMaterials()       noexcept { return Materials; }
     [[nodiscard]] const std::vector<PlacementRecord>&   QueryPlacements() const noexcept { return Placements; }
+    [[nodiscard]] std::vector<PlacementRecord>&         AccessPlacements() noexcept { return Placements; }
+    [[nodiscard]] std::vector<PunctualLuminaireRecord>& AccessPunctualLuminaires() noexcept { return PunctualLuminaires; }
     [[nodiscard]] const std::vector<CameraRecord>&      QueryCameras()    const noexcept { return Cameras; }
     [[nodiscard]] const std::vector<PunctualLuminaireRecord>& QueryPunctualLuminaires() const noexcept { return PunctualLuminaires; }
     [[nodiscard]] const std::vector<LuminaireRecord>&   QueryLuminaires() const noexcept { return Luminaires; }
