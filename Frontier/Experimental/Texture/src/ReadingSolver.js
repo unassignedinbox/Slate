@@ -50,6 +50,54 @@ export const IdentityColour = (Index) =>
 };
 
 //--------------------------------------------------------------------------------------------------------------------------
+// Identity, as a picture rather than as a dropdown.
+//
+// 🔴 Picking an object, a tile, an island or a handful of faces out of a list is picking blind: the list says
+//    "Island 14" and the model says nothing at all. So the same identity the mask keys on is coloured in and put on
+//    the surface, and then the click that chooses is a click on the thing itself. What is already chosen is washed
+//    towards white and everything else is dimmed, which makes the view answer both questions at once — what can I
+//    pick, and what have I picked.
+//
+// Kind is object, tile, island or faces. Chosen is the value a selection generator carries, as the string the mask
+// compares against; Picked is the set of face indices a face generator has collected.
+//--------------------------------------------------------------------------------------------------------------------------
+export const IdentityImage = (Sheets, Candidate = "object", Chosen = "", Picked = null) =>
+{
+    if (!Sheets || !Sheets.Size) return null;
+    // The bake order says "face" and a selection generator says "faces". They are the same question.
+    const Kind = Candidate === "face" ? "faces" : Candidate;
+    const Size = Sheets.Size;
+    const Pixels = new Uint8Array(Size * Size * 4);
+    const Field =
+        Kind === "island" ? Sheets.Island : Kind === "tile" ? Sheets.Tile : Kind === "faces" ? Sheets.Face : Sheets.Owner;
+    if (!Field) return null;
+    const Tiles = Sheets.Tiles || [];
+    const Marks = Kind === "faces" && Picked && Picked.size ? Picked : null;
+    const Wanted = Marks ? "" : String(Chosen ?? "");
+    const Deciding = Boolean(Marks) || Wanted !== "";
+    for (let Texel = 0; Texel < Size * Size; Texel += 1)
+    {
+        const At = Texel * 4;
+        Pixels[At + 3] = 255;
+        if (!Sheets.Filled[Texel]) continue;
+        const Value = Field[Texel];
+        if (Value < 0) continue;
+        // A UDIM number is 1001 and up, so colouring by it straight would hand a four-tile scene four shades of the
+        // same hue. The tile's place in the list is what gets the colour.
+        const Index = Kind === "tile" ? Math.max(0, Tiles.indexOf(Value)) : Value;
+        const Colour = IdentityColour(Index);
+        const Lit = Marks ? Marks.has(Value) : Wanted === "" || String(Value) === Wanted;
+        for (let Channel = 0; Channel < 3; Channel += 1)
+        {
+            // Chosen is the colour pushed most of the way to white, so it is still recognisably the same region.
+            const Shade = Lit ? (Deciding ? Colour[Channel] + (1 - Colour[Channel]) * 0.62 : Colour[Channel]) : Colour[Channel] * 0.3;
+            Pixels[At + Channel] = Math.max(0, Math.min(255, Math.round(Shade * 255)));
+        }
+    }
+    return { Size, Pixels };
+};
+
+//--------------------------------------------------------------------------------------------------------------------------
 // The order, answered. Progress is called with a fraction and a line of text, because a bake at sixteen samples on a
 // big sheet is long enough that silence reads as a hang.
 //--------------------------------------------------------------------------------------------------------------------------

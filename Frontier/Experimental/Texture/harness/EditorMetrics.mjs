@@ -9,6 +9,7 @@
 import { CreateWindow, CreateTally, Settle } from "./DeviceHost.mjs";
 import { SanitiseLayer } from "../src/LayerSpecification.js";
 import { ReadingOrdering } from "../src/ReadingSpecification.js";
+import { DisplayIndex } from "../src/ChannelSpecification.js";
 import { SunDefaults } from "../src/EnvironmentSpecification.js";
 
 const { Window, Faults } = CreateWindow();
@@ -319,8 +320,9 @@ Press(Find("#environment-button"));
 await Settle(Window, 2);
 Check("the header button opens the environment", !Find("#environment-pod").hidden);
 Check(
-    "it sits beside the channel dropdown",
-    Find("#channel-select").closest(".dropdown").nextElementSibling?.id === "environment-button",
+    "it sits beside the channel dropdown, a bake button between them",
+    Find("#channel-select").closest(".dropdown").nextElementSibling?.id === "readings-button" &&
+        Find("#readings-button").nextElementSibling?.id === "environment-button",
     Find("#channel-select").closest(".dropdown").nextElementSibling?.id,
 );
 Check("nine skies, each wearing its own face", All("#environment-pod .sky-tile").length === 9);
@@ -710,6 +712,93 @@ Check("the caption says what was read and how long it took", /256² · 4 samples
 Check("the generators are handed the bake rather than their own measurement", Panel.Measured === Panel.Readings.Sheets);
 Check("which is at the resolution it was read at", Panel.Measured.Size === 256);
 Check("and knows the scene it came from", Panel.Measured.Islands > 0 && Panel.Measured.Owners.length >= 1);
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Seeing what you are doing.
+//
+// 🔴 Three things used to happen quietly: a mask appeared and changed nothing on screen, a selection was chosen out
+//    of a dropdown with no picture of what was being chosen, and a bake could only be looked at inside the dialog
+//    that made it. All three are the same bug — work the editor did that the viewport never showed — and these are
+//    the checks that it now shows them.
+//--------------------------------------------------------------------------------------------------------------------------
+Find("#readings-dialog").close();
+const Strip = () => All("#channel-select option").map((Option) => Option.value);
+Check(
+    "every baked map is a view of its own",
+    Panel.Readings.Maps.every((Map) => Strip().includes(`reading:${Map.Identifier}`)),
+    Strip().filter((Value) => Value.startsWith("reading")).join(","),
+);
+Check("the four identities are always on offer", ["object", "island", "tile", "face"].every((Kind) => Strip().includes(`identity:${Kind}`)));
+Check("both sets under a heading of their own", All("#channel-select optgroup").length === 2);
+Check("and the bake is one button away from the viewport", !!Find("#readings-button"));
+
+Panel.ShowReading("curvature");
+await Settle(Window, 2);
+Check("showing a baked map shuts the dialog behind it", Find("#readings-dialog").open === false);
+Check("and puts that map in the viewport", Panel.Display === "reading:curvature", Panel.Display);
+Check("the picture itself reaches the card", Panel.Integrator.InspectionSize === Panel.Readings.Size, String(Panel.Integrator.InspectionSize));
+Check("the shader is pointed at the branch that draws it", DisplayIndex(Panel.Display) === 16);
+Check("and the strip says which map, not just that it is a map", Panel.DisplayLabel().includes("Curvature"), Panel.DisplayLabel());
+Panel.SetDisplay("material");
+Check("leaving the view drops the picture", Panel.Integrator.InspectionSize === 0);
+
+// A mask that shows itself. This is the screenshot the brief opened with: a curvature mask on a layer, and a
+// viewport that looked exactly as it did before the mask existed.
+Panel.AddLayer("stroke");
+await Settle(Window, 3);
+const Masked = Panel.ActiveLayer;
+Panel.OnInspectorAction("mask-add-black");
+await Settle(Window, 2);
+Check("adding a mask shows the mask", Panel.Display === "mask", Panel.Display);
+Check("and aims the brush at it", Panel.Projection.Brush.Target === "mask");
+Panel.SetMaskView("off");
+Check("M puts the surface back", Panel.Display === "material", Panel.Display);
+Panel.FieldAction("field-add", "curvature");
+await Settle(Window, 2);
+Check("adding a generator to the mask shows the mask too", Panel.Display === "mask", Panel.Display);
+
+// Picking an island: the view becomes the identity map, the click lands on a colour, and the mask takes that
+// island — the same number the dropdown would have written.
+Panel.SetMaskView("off");
+Panel.FieldAction("field-add", "island");
+await Settle(Window, 2);
+const Island = Masked.Mask.Generators.at(-1);
+Check("a selection generator is added like any other", Island.Kind === "island");
+Panel.FieldAction("field-pick", Island.Identifier);
+await Settle(Window, 2);
+Check("picking borrows the viewport for the identity map", Panel.Display === "identity:island", Panel.Display);
+Check("and the map is drawn at the measured sheet's size", Panel.Integrator.InspectionSize === Panel.Measured.Size);
+Check("the mode is on, so a click picks rather than paints", Panel.PickingFaces === true);
+Check("and the viewport says so", Find("#viewport").classList.contains("picking-faces"));
+Press(Find("#focus-button"));
+await Settle(Window, 3);
+At("pointerdown", 480, 270);
+At("pointerup", 480, 270);
+await Settle(Window, 3);
+Check("clicking the model chooses what is under the cursor", String(Island.Choice || "") !== "", `choice ${Island.Choice}`);
+Check(
+    "and it is the island the sheet says is there",
+    Number(Island.Choice) >= 0 && Number(Island.Choice) < Panel.Measured.Islands,
+    `${Island.Choice} of ${Panel.Measured.Islands}`,
+);
+const Chosen = Island.Choice;
+At("pointerdown", 480, 270);
+At("pointerup", 480, 270);
+await Settle(Window, 2);
+Check("clicking the same island again is not a second choice", Island.Choice === Chosen);
+Panel.FieldAction("field-pick", Island.Identifier);
+await Settle(Window, 2);
+Check("stopping hands the view back", Panel.Display !== "identity:island", Panel.Display);
+Check("and the mode is off", Panel.PickingFaces === false);
+
+// Choosing an identity view by hand arms the pick for the generator it belongs to, because there is no other
+// reason to be looking at it.
+Panel.SetDisplay("identity:island");
+await Settle(Window, 2);
+Check("choosing the identity view arms the pick", Panel.PickingFaces === true);
+Panel.SetDisplay("material");
+await Settle(Window, 2);
+Check("and leaving it disarms", Panel.PickingFaces === false);
 
 Report();
 process.exit(process.exitCode || 0);

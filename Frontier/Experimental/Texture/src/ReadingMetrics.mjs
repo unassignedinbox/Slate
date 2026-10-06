@@ -23,8 +23,8 @@ import {
     SampleOffsets,
     SanitiseReading,
 } from "./ReadingSpecification.js";
-import { Dilate, IdentityColour, SolveReadings } from "./ReadingSolver.js";
-import { MeasureBentNormals, MeasureBevelNormals } from "./SurfaceSolver.js";
+import { Dilate, IdentityColour, IdentityImage, SolveReadings } from "./ReadingSolver.js";
+import { MeasureBentNormals, MeasureBevelNormals, MeasureSurface } from "./SurfaceSolver.js";
 
 const Scene = () =>
     AssembleScene([
@@ -316,6 +316,56 @@ test("two parts of a scene never share an identity colour by accident", () =>
     }
     assert.deepEqual(IdentityColour(-1), [0, 0, 0], "nothing is black and black is nothing");
     assert.ok(IdentityKinds.length === 4);
+});
+
+// Identity as a picture. The view exists so that a selection can be made by clicking the thing rather than by
+// guessing which of forty islands "Island 14" is, so what it has to get right is that two neighbours never share a
+// colour, that what is already chosen is obvious, and that the number behind a colour is the number the mask keys on.
+test("an identity map colours every region and lights the one that is chosen", () =>
+{
+    const Surface = AssembleScene([
+        CreateObject({ Identifier: "block", Name: "Block", Kind: "cube", Subdivision: 1, Tile: 1001 }),
+        CreateObject({ Identifier: "ball", Name: "Ball", Kind: "sphere", Subdivision: 1, Tile: 1002, Offset: [1.3, 0, 0] }),
+    ]);
+    const Sheets = MeasureSurface(Surface, { Size: 96 });
+    const Plain = IdentityImage(Sheets, "object");
+    assert.equal(Plain.Size, 96);
+    assert.equal(Plain.Pixels.length, 96 * 96 * 4);
+    const Tint = (Picture, Texel) => [...Picture.Pixels.subarray(Texel * 4, Texel * 4 + 3)].join(",");
+    let First = -1;
+    let Second = -1;
+    for (let Texel = 0; Texel < 96 * 96; Texel += 1)
+    {
+        if (!Sheets.Filled[Texel]) continue;
+        if (Sheets.Owner[Texel] === 0 && First < 0) First = Texel;
+        if (Sheets.Owner[Texel] === 1 && Second < 0) Second = Texel;
+    }
+    assert.ok(First >= 0 && Second >= 0, "the scene should have two objects in the sheet");
+    assert.notEqual(Tint(Plain, First), Tint(Plain, Second), "two objects came out the same colour");
+    const Empty = [...Sheets.Filled].findIndex((Filled) => !Filled);
+    if (Empty >= 0) assert.equal(Tint(Plain, Empty), "0,0,0", "an empty texel should be empty");
+
+    // With a choice made, the chosen object washes towards white and the rest go down, so the view answers both
+    // "what can I pick" and "what did I pick" at once.
+    const Chosen = IdentityImage(Sheets, "object", "1");
+    const Lit = [...Chosen.Pixels.subarray(Second * 4, Second * 4 + 3)].reduce((Sum, Part) => Sum + Part, 0);
+    const Dim = [...Chosen.Pixels.subarray(First * 4, First * 4 + 3)].reduce((Sum, Part) => Sum + Part, 0);
+    const Was = [...Plain.Pixels.subarray(Second * 4, Second * 4 + 3)].reduce((Sum, Part) => Sum + Part, 0);
+    assert.ok(Lit > Was, "the chosen object did not light up");
+    assert.ok(Dim < Lit, "the unchosen object is as loud as the chosen one");
+
+    // A UDIM number is 1001 and up. Colouring by it straight hands a four-tile scene four shades of one hue, so the
+    // tile's place in the list gets the colour instead.
+    const Tiles = IdentityImage(Sheets, "tile");
+    assert.notEqual(Tint(Tiles, First), Tint(Tiles, Second), "two tiles came out the same colour");
+
+    // Faces are picked rather than chosen, so the picture is keyed on the set of marks.
+    const Face = Sheets.Face[First];
+    const Picked = IdentityImage(Sheets, "face", "", new Set([Face]));
+    const Bright = [...Picked.Pixels.subarray(First * 4, First * 4 + 3)].reduce((Sum, Part) => Sum + Part, 0);
+    const Other = [...Picked.Pixels.subarray(Second * 4, Second * 4 + 3)].reduce((Sum, Part) => Sum + Part, 0);
+    assert.ok(Bright > Other, "a picked face should be the loud one");
+    assert.equal(IdentityImage(null, "object"), null, "nothing measured is nothing to draw");
 });
 
 test("the estimate grows with everything that makes a bake slower", () =>

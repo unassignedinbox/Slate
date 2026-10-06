@@ -90,6 +90,7 @@ import {
     ResolutionOrdering,
     DisplayOrdering,
     DisplayIndex,
+    DisplaySubject,
     ExportOrdering,
 } from "./ChannelSpecification.js";
 import {
@@ -138,7 +139,7 @@ import {
     SampleCounts,
     SanitiseReading,
 } from "./ReadingSpecification.js";
-import { SolveReadings } from "./ReadingSolver.js";
+import { SolveReadings, IdentityImage } from "./ReadingSolver.js";
 import { PreviewImage } from "./EnvironmentSolver.js";
 import { CombineModes, DefaultEntry, MissingMeasurements, NormaliseEntry, SheetImage, SolveMask } from "./MaskSolver.js";
 import {
@@ -476,11 +477,18 @@ const DressSelect = (Field) =>
         Face.innerHTML =
             `<span>${Escape(Chosen ? Chosen.textContent.trim() : "")}</span>` +
             `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5 12 15.5 18 9.5" /></svg>`;
-        List.innerHTML = [...Field.options].map(
-            (Option, Index) =>
-                `<button type="button" role="option" data-index="${Index}" class="${Index === Field.selectedIndex ? "chosen" : ""}"
-                         aria-selected="${Index === Field.selectedIndex}">${Escape(Option.textContent.trim())}</button>`,
-        ).join("");
+        // A grouped list keeps its headings. Twenty-five channels with nothing between them is a list nobody reads,
+        // and the groups are where the baked maps and the identity views announce themselves.
+        const Mark = (Option) =>
+            `<button type="button" role="option" data-index="${Option.index}" class="${Option.index === Field.selectedIndex ? "chosen" : ""}"
+                     aria-selected="${Option.index === Field.selectedIndex}">${Escape(Option.textContent.trim())}</button>`;
+        List.innerHTML = [...Field.children]
+            .map((Node) =>
+                Node.tagName === "OPTGROUP"
+                    ? `<div class="dropdown-group">${Escape(Node.label || "")}</div>` + [...Node.children].map(Mark).join("")
+                    : Mark(Node),
+            )
+            .join("");
     };
 
     const Shut = () =>
@@ -533,6 +541,51 @@ const DressSelect = (Field) =>
 };
 
 const DressSelects = (Root) => Root.querySelectorAll("select").forEach((Field) => DressSelect(Field));
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Picking identity off the model.
+//
+// Four of the mask generators are selections rather than shades — they ask which object, which tile, which island,
+// which faces. All four can be answered by clicking the thing, and all four are answered out of the same measured
+// sheet the mask itself reads, so the click and the dropdown can never disagree about what was chosen.
+//--------------------------------------------------------------------------------------------------------------------------
+const PickableKinds = ["object", "tile", "island", "faces"];
+
+const PickableLabel = (Kind) =>
+    Kind === "tile" ? "tile" : Kind === "island" ? "island" : Kind === "faces" ? "face" : "object";
+
+const PickableName = (Kind, Value, Sheets) =>
+{
+    if (Kind === "tile") return TileLabel(Value);
+    if (Kind === "island") return `Island ${Value + 1}`;
+    const Owner = (Sheets?.Owners || []).find((Entry) => Entry.Index === Value);
+    return Owner?.Name || `Object ${Value + 1}`;
+};
+
+// Which texel of the measured sheet a hit landed on. The rasteriser laid the sheet out by the plain coordinate, so
+// reading it back is the same arithmetic in reverse; a texel that holds a different triangle than the one that was
+// hit means the click was near a seam, and the ring around it is searched for the right one before giving up.
+const SheetTexel = (Sheets, Coordinate, Triangle = -1) =>
+{
+    if (!Sheets || !Sheets.Size || !Coordinate) return -1;
+    const Size = Sheets.Size;
+    const Column = Math.min(Size - 1, Math.max(0, Math.floor(Coordinate[0] * Size)));
+    const Row = Math.min(Size - 1, Math.max(0, Math.floor(Coordinate[1] * Size)));
+    const Texel = Row * Size + Column;
+    if (Sheets.Filled[Texel] && (Triangle < 0 || Sheets.Face[Texel] === Triangle)) return Texel;
+    let Nearest = Sheets.Filled[Texel] ? Texel : -1;
+    for (let Reach = 1; Reach <= 3; Reach += 1)
+        for (let Down = -Reach; Down <= Reach; Down += 1)
+            for (let Across = -Reach; Across <= Reach; Across += 1)
+            {
+                const At = (Row + Down) * Size + (Column + Across);
+                if (Row + Down < 0 || Row + Down >= Size || Column + Across < 0 || Column + Across >= Size) continue;
+                if (!Sheets.Filled[At]) continue;
+                if (Triangle >= 0 && Sheets.Face[At] === Triangle) return At;
+                if (Nearest < 0) Nearest = At;
+            }
+    return Nearest;
+};
 
 // Setting .value in code fires nothing, so the face is asked to redraw itself.
 const RefreshSelect = (Field) => Field?.dispatchEvent(new Field.ownerDocument.defaultView.Event("dressrefresh"));
@@ -596,6 +649,8 @@ export class TexturePanel
         // The entry of the stack whose controls are showing, and whether clicking the model is picking faces for it.
         this.FieldSelection = "";
         this.PickingFaces = false;
+        // The view picking borrowed the viewport from, so it can hand it back.
+        this.PickingBefore = "";
         // The reading order, which outlives the dialog it is set in: the second surface of a session is usually read
         // the same way as the first, and being asked the same eight questions again is how a dialog earns its reputation.
         this.Order = ReadingDefaults();
@@ -889,6 +944,7 @@ export class TexturePanel
         Select("#readings-skip").addEventListener("click", () => Dialog.close());
         Select("#readings-run").addEventListener("click", () => this.RunReadings());
         Select("#readings-write").addEventListener("click", () => this.WriteReadings());
+        Select("#readings-show").addEventListener("click", () => this.ShowReading(this.ReadingShown));
         Dialog.addEventListener("click", (Event) =>
         {
             const Button = Event.target.closest("[data-reading]");
@@ -1032,6 +1088,12 @@ export class TexturePanel
         this.DrawReading(Select("#readings-canvas"), Shown);
         Select("#readings-empty").hidden = Boolean(Shown);
         Select("#readings-write").disabled = !Maps.length;
+        const Show = Select("#readings-show");
+        if (Show)
+        {
+            Show.disabled = !Shown;
+            Show.textContent = Shown ? `Show ${Shown.Short.toLowerCase()} on the model` : "Show on the model";
+        }
         Select("#readings-caption").textContent = Shown
             ? `${Shown.Label}${Shown.Space ? ` · ${Shown.Space} space` : ""} · ${this.Readings.Size}² · ` +
               `${this.Readings.Statistics.Samples} sample${this.Readings.Statistics.Samples === 1 ? "" : "s"} · ` +
@@ -1040,6 +1102,19 @@ export class TexturePanel
               `${Estimate.Seconds < 1 ? "a second" : `${Math.ceil(Estimate.Seconds)} seconds`} and ` +
               `${Math.ceil(Estimate.Megabytes)} MB while it runs.`;
         if (!Quietly) Select("#readings-progress").textContent = "";
+    }
+
+    // 🔴 A bake you can only look at inside the dialog that made it is half a bake. Every map goes onto the model at
+    //    the coordinate it was read at, which is both the point of baking one and the only honest way to find out
+    //    that the unwrap, not the bake, is what is wrong with it.
+    ShowReading(Identifier)
+    {
+        const Maps = this.Readings?.Maps || [];
+        const Map = Maps.find((Candidate) => Candidate.Identifier === Identifier) || Maps[0];
+        if (!Map) return;
+        this.ReadingShown = Map.Identifier;
+        Select("#readings-dialog")?.close();
+        this.SetDisplay(`reading:${Map.Identifier}`, true);
     }
 
     // One map onto one canvas. The plates are small and the maps are big, so the browser does the scaling.
@@ -1108,6 +1183,10 @@ export class TexturePanel
             this.Reading = false;
             Select("#readings-run").disabled = false;
             this.RenderReadings(true);
+            // The strip only lists maps that exist, so a finished bake is the moment it grows.
+            this.RenderChannels();
+            if (String(this.Display).startsWith("reading") || String(this.Display).startsWith("identity"))
+                this.RefreshInspection();
             this.RenderInspector();
         }
     }
@@ -3262,18 +3341,9 @@ export class TexturePanel
         SelectAll("[data-mask-view]").forEach((Button) =>
             Button.addEventListener("click", () => this.SetMaskView(Button.dataset.maskView)),
         );
-        Select("#channel-select").innerHTML = DisplayOrdering.map(
-            (Display) => `<option value="${Display.Identifier}">${Display.Label}</option>`,
-        ).join("");
-        Select("#channel-select").addEventListener("change", (Event) =>
-        {
-            this.Display = Event.target.value;
-            if (this.MaskView === "off") this.DisplayBefore = "";
-            this.Recomposite();
-            this.SyncMaskView();
-            this.RenderInspector();
-            this.UpdateCaption();
-        });
+        this.RenderChannels();
+        Select("#channel-select").addEventListener("change", (Event) => this.SetDisplay(Event.target.value));
+        Select("#readings-button")?.addEventListener("click", () => this.OpenReadings(false));
         Select("#wire-button")?.addEventListener("click", () =>
         {
             this.PlaneWire = !this.PlaneWire;
@@ -3548,13 +3618,18 @@ export class TexturePanel
         this.RenderStack();
         this.RenderInspector();
         this.SyncMaskView();
+        // 🔴 A mask you cannot see is a mask you cannot judge. A curvature mask changes nothing about the shaded
+        //    surface until something is painted through it, so adding one used to look exactly like adding nothing
+        //    at all — the one case where the quiet answer is the wrong answer. The new mask puts itself on the
+        //    screen, and M takes you straight back to the surface.
+        if (Announce && this.MaskView === "off") this.SetMaskView("isolated", false);
         if (Announce)
             this.Notify(
                 Kind === "generator"
-                    ? "Generator mask added."
+                    ? "Generator mask added — showing it on the model. M goes back to the surface."
                     : Kind === "colour"
-                      ? "Colour mask added — pick the colour it should select."
-                      : `${Mode === "white" ? "White" : "Black"} mask added.`,
+                      ? "Colour mask added — pick the colour it should select. M goes back to the surface."
+                      : `${Mode === "white" ? "White" : "Black"} mask added — showing it on the model. M goes back to the surface.`,
             );
     }
 
@@ -3603,6 +3678,119 @@ export class TexturePanel
     }
 
     //----------------------------------------------------------------------------------------------------------------------
+    // The channel strip. Fifteen fixed views, four identity views, and one view per map the last bake produced —
+    // which is why it is built rather than written out in the markup: half of it does not exist until the surface has
+    // been read, and a map you baked and cannot look at might as well not have been baked.
+    //----------------------------------------------------------------------------------------------------------------------
+    RenderChannels()
+    {
+        const Field = Select("#channel-select");
+        if (!Field) return;
+        const Option = (Value, Label) => `<option value="${Value}">${Escape(Label)}</option>`;
+        const Baked = this.Readings?.Maps || [];
+        Field.innerHTML =
+            DisplayOrdering.filter((Display) => Display.Identifier !== "identity" && Display.Identifier !== "reading")
+                .map((Display) => Option(Display.Identifier, Display.Label))
+                .join("") +
+            `<optgroup label="Identity">` +
+            IdentityKinds.map((Kind) => Option(`identity:${Kind.Identifier}`, Kind.Label)).join("") +
+            `</optgroup>` +
+            (Baked.length
+                ? `<optgroup label="Baked maps">` +
+                  Baked.map((Map) => Option(`reading:${Map.Identifier}`, Map.Label)).join("") +
+                  `</optgroup>`
+                : "");
+        Field.value = this.Display;
+        // A display whose map has just been baked away falls back rather than leaving the strip blank.
+        if (!Field.value) this.Display = Field.value = "material";
+        RefreshSelect(Field);
+    }
+
+    // Every change of view goes through here: the one place that knows a view may need a picture made for it first.
+    SetDisplay(Identifier, Announce = false)
+    {
+        const Wanted = String(Identifier || "material");
+        this.Display = Wanted;
+        if (this.MaskView === "off") this.DisplayBefore = "";
+        const Field = Select("#channel-select");
+        if (Field && Field.value !== Wanted)
+        {
+            Field.value = Wanted;
+            if (!Field.value) this.RenderChannels();
+            else RefreshSelect(Field);
+        }
+        // 🔴 Choosing an identity view is choosing to pick out of it. There is no other reason to look at a model
+        //    painted in forty flat colours, and a click that landed as a brush stroke on a view you went to in
+        //    order to click would be a trap. The pick mode goes on with the view and comes off with it.
+        const Name = Wanted.split(":")[0];
+        if (Name === "identity")
+        {
+            const Entry = this.SelectionEntry(DisplaySubject(Wanted) || "object");
+            if (Entry && !this.PickingFaces) this.SetFacePicking(true, Entry.Identifier, false);
+        }
+        else if (this.PickingFaces) this.SetFacePicking(false, "", false);
+        this.RefreshInspection();
+        this.Recomposite();
+        this.SyncMaskView();
+        this.RenderInspector();
+        this.UpdateCaption();
+        if (Announce) this.Notify(`Showing ${this.DisplayLabel().toLowerCase()}.`);
+    }
+
+    DisplayLabel()
+    {
+        const Name = String(this.Display).split(":")[0];
+        const Base = DisplayOrdering.find((Entry) => Entry.Identifier === Name)?.Label || "Material";
+        const Subject = DisplaySubject(this.Display);
+        if (!Subject) return Base;
+        if (Name === "identity") return `${Base} · ${IdentityKinds.find((Kind) => Kind.Identifier === Subject)?.Label || Subject}`;
+        return `${Base} · ${this.Readings?.Maps.find((Map) => Map.Identifier === Subject)?.Label || Subject}`;
+    }
+
+    // Which selection generator the identity view is answering for, so the thing already chosen can be lit up.
+    SelectionEntry(Kind)
+    {
+        const Entries = this.ActiveLayer?.Mask?.Generators || [];
+        const Wanted = Kind === "face" ? "faces" : Kind;
+        return (
+            Entries.find((Entry) => Entry.Identifier === this.FieldSelection && Entry.Kind === Wanted) ||
+            Entries.find((Entry) => Entry.Kind === Wanted) ||
+            null
+        );
+    }
+
+    // 🔴 The identity map and the baked maps are pictures, not shader branches, so the processor has to put one in
+    //    the viewport's hand before the view can mean anything. Called on every change of view and after every pick,
+    //    because what is lit in an identity map is part of the picture.
+    RefreshInspection()
+    {
+        const Name = String(this.Display).split(":")[0];
+        const Subject = DisplaySubject(this.Display);
+        if (Name === "identity")
+        {
+            const Kind = Subject || "object";
+            if (!this.Measured) this.MeasureModel(false);
+            const Entry = this.SelectionEntry(Kind);
+            const Picture = IdentityImage(
+                this.Measured,
+                Kind,
+                Entry && Entry.Kind !== "faces" ? String(Entry.Choice ?? "") : "",
+                Entry?.Kind === "faces" ? new Set(Entry.Marks || []) : null,
+            );
+            this.Integrator.SetInspection(Picture?.Pixels, Picture?.Size, true);
+            return;
+        }
+        if (Name === "reading")
+        {
+            const Maps = this.Readings?.Maps || [];
+            const Map = Maps.find((Candidate) => Candidate.Identifier === Subject) || Maps[0];
+            this.Integrator.SetInspection(Map?.Pixels, Map?.Size, false);
+            return;
+        }
+        this.Integrator.SetInspection(null, 0);
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
     // Two ways to look at a mask: at the surface it is shaping, or at the mask on its own in black and white.
     //
     // 🔴 There used to be a third — a pink wash over the surface marking what the mask hid — and it was the one view
@@ -3635,6 +3823,8 @@ export class TexturePanel
         }
         Select("#channel-select").value = this.Display;
         RefreshSelect(Select("#channel-select"));
+        // A view handed back can be one with a picture behind it, so the picture is put back with it.
+        this.RefreshInspection();
         // 🔴 Looking at a mask and painting the layer underneath it is the oldest way to lose an afternoon, so the
         //    view and the side being painted are one switch with two handles: move either and the other follows.
         if (!this.SyncingSide)
@@ -3684,6 +3874,10 @@ export class TexturePanel
         this.PickingMaskColour = true;
         this.ToolBefore = this.Tool;
         this.SetTool("picker");
+        // 🔴 You cannot key a colour you cannot see. If the mask view is up — and after adding a colour mask it is —
+        //    the picker would be aimed at a black and white picture of the mask itself, so the surface comes back
+        //    for as long as the eyedropper is armed.
+        if (this.MaskView !== "off") this.SetMaskView("off", false);
         Select("#viewport")?.classList.add("picking-mask");
         this.Notify("Click the surface to key the mask to that colour.");
     }
@@ -3696,7 +3890,10 @@ export class TexturePanel
         if (Layer && Layer.Mask.Kind === "colour")
         {
             this.CaptureStack(() => (Layer.Mask.Colour = [...Colour]));
-            this.Notify(`Mask keyed to ${ToHex(Colour).toUpperCase()}.`);
+            // What a colour key caught is the only thing worth seeing after keying it, so the view goes there.
+            if (this.MaskView === "off") this.SetMaskView("isolated", false);
+            else this.Recomposite();
+            this.Notify(`Mask keyed to ${ToHex(Colour).toUpperCase()} — showing what it caught. M goes back.`);
         }
         if (this.ToolBefore) this.SetTool(this.ToolBefore);
         this.ToolBefore = "";
@@ -8118,6 +8315,13 @@ export class TexturePanel
             if (Path === "Mask.Generator.Kind")
                 this.ActiveLayer.Mask.Generator = NormaliseGenerator({ Kind: this.ActiveLayer.Mask.Generator.Kind });
             if (Path === "Mask.Kind" && this.ActiveLayer.Mask.Kind === "stroke") this.Integrator.EnsureMask(this.ActiveLayer);
+            // Asking for a different kind of mask, or a different generator behind it, is asking to see the answer.
+            if (
+                (Path === "Mask.Kind" || Path === "Mask.Generator.Kind") &&
+                this.ActiveLayer.Mask.Kind !== "none" &&
+                this.MaskView === "off"
+            )
+                this.SetMaskView("isolated", false);
             this.Recomposite();
             this.RenderStack();
             this.SyncMaskView();
@@ -9136,6 +9340,25 @@ export class TexturePanel
     GeneratorChoice(Entry, Prefix)
     {
         const Sheets = this.Measured;
+        // The same two buttons under every selection generator: go and click the thing, or forget what was clicked.
+        const Picker = (Kind) =>
+        {
+            const Aimed = this.PickingFaces && this.FieldSelection === Entry.Identifier;
+            return `
+            <div class="field-pick">
+                <p class="property-hint">With picking on the model shows one colour per ${PickableLabel(Kind)}, and
+                    clicking ${Kind === "faces" ? "adds a face — shift-click takes it away" : `chooses the ${PickableLabel(Kind)} under the cursor`}.</p>
+                ${ActionRow([
+                    {
+                        Action: "field-pick",
+                        Label: Aimed ? "Stop picking" : "Pick on the model",
+                        Glyph: "picker",
+                        Argument: Entry.Identifier,
+                    },
+                    { Action: "field-pick-clear", Label: "Clear", Glyph: "close", Argument: Entry.Identifier },
+                ])}
+            </div>`;
+        };
         if (Entry.Kind === "object")
         {
             const Options = [{ Value: "", Label: "Every object" }].concat(
@@ -9143,28 +9366,35 @@ export class TexturePanel
                     (Owner) => ({ Value: String(Owner.Index), Label: Owner.Name }),
                 ),
             );
-            return SelectRow({ Label: "Object", Path: `${Prefix}.Choice`, Value: String(Entry.Choice ?? ""), Options });
+            return (
+                SelectRow({ Label: "Object", Path: `${Prefix}.Choice`, Value: String(Entry.Choice ?? ""), Options }) +
+                Picker("object")
+            );
         }
         if (Entry.Kind === "tile")
         {
             const Tiles = Sheets?.Tiles?.length ? Sheets.Tiles : [...new Set(this.SceneObjects.map((Object) => Object.Tile))].sort();
-            return SelectRow({
-                Label: "UDIM tile",
-                Path: `${Prefix}.Choice`,
-                Value: String(Entry.Choice ?? ""),
-                Options: Tiles.map((Tile) => ({ Value: String(Tile), Label: TileLabel(Tile) })),
-            });
+            return (
+                SelectRow({
+                    Label: "UDIM tile",
+                    Path: `${Prefix}.Choice`,
+                    Value: String(Entry.Choice ?? ""),
+                    Options: Tiles.map((Tile) => ({ Value: String(Tile), Label: TileLabel(Tile) })),
+                }) + Picker("tile")
+            );
         }
         if (Entry.Kind === "island")
         {
             const Count = Sheets?.Islands || 0;
             if (!Count) return `<p class="property-hint">Measure the surface to list its UV islands.</p>`;
-            return SelectRow({
-                Label: "UV island",
-                Path: `${Prefix}.Choice`,
-                Value: String(Entry.Choice ?? "0"),
-                Options: Array.from({ length: Count }, (Ignored, Index) => ({ Value: String(Index), Label: `Island ${Index + 1}` })),
-            });
+            return (
+                SelectRow({
+                    Label: "UV island",
+                    Path: `${Prefix}.Choice`,
+                    Value: String(Entry.Choice ?? "0"),
+                    Options: Array.from({ length: Count }, (Ignored, Index) => ({ Value: String(Index), Label: `Island ${Index + 1}` })),
+                }) + Picker("island")
+            );
         }
         if (Entry.Kind === "vertex")
         {
@@ -9178,15 +9408,10 @@ export class TexturePanel
         if (Entry.Kind === "faces")
         {
             const Picked = Entry.Marks?.length || 0;
-            return `
-            <div class="field-pick">
-                <p class="property-hint">${Picked ? `${Picked} face${Picked === 1 ? "" : "s"} picked.` : "No faces picked yet."}
-                    With picking on, clicking the model adds a face and shift-clicking takes one away.</p>
-                ${ActionRow([
-                    { Action: "field-pick", Label: this.PickingFaces ? "Stop picking" : "Pick faces", Glyph: "picker" },
-                    { Action: "field-pick-clear", Label: "Clear", Glyph: "close" },
-                ])}
-            </div>`;
+            return (
+                `<p class="property-hint">${Picked ? `${Picked} face${Picked === 1 ? "" : "s"} picked.` : "No faces picked yet."}</p>` +
+                Picker("faces")
+            );
         }
         return "";
     }
@@ -9217,14 +9442,19 @@ export class TexturePanel
                 this.Integrator.FloodLayer(Layer, "mask", [1, 1, 1], 1);
             }
             this.Chronicle("generator", `${Entry.Label} on the mask`, Layer.Name);
-            this.AfterFieldChange(`${Entry.Label} added to ${Layer.Name}.`);
+            // A generator is a mask that draws itself, so the view goes to the mask the moment one is added: this is
+            // the case the screenshot caught, where a curvature mask was on the layer and nothing on screen said so.
+            if (this.MaskView === "off") this.SetMaskView("isolated", false);
+            this.AfterFieldChange(`${Entry.Label} added to ${Layer.Name} — showing the mask. M goes back.`);
             return;
         }
         if (At < 0 && Action !== "field-pick" && Action !== "field-pick-clear") return;
         if (Action === "field-select")
         {
             this.FieldSelection = this.FieldSelection === Argument ? "" : Argument;
-            if (this.PickingFaces && Entries[At]?.Kind !== "faces") this.SetFacePicking(false);
+            if (this.PickingFaces && (!this.FieldSelection || !PickableKinds.includes(Entries[At]?.Kind)))
+                this.SetFacePicking(false);
+            else if (this.PickingFaces) this.SetFacePicking(true, this.FieldSelection);
             this.RenderInspector();
             return;
         }
@@ -9242,7 +9472,7 @@ export class TexturePanel
             {
                 const [Gone] = Entries.splice(At, 1);
                 if (this.FieldSelection === Gone.Identifier) this.FieldSelection = "";
-                if (this.PickingFaces && Gone.Kind === "faces") this.SetFacePicking(false);
+                if (this.PickingFaces && PickableKinds.includes(Gone.Kind)) this.SetFacePicking(false);
                 this.Chronicle("generator", `${Gone.Label} off the mask`, Layer.Name);
             }
             if (Action === "field-raise" && At > 0) Entries.splice(At - 1, 0, ...Entries.splice(At, 1));
@@ -9251,6 +9481,7 @@ export class TexturePanel
             {
                 const Entry = Entries.find((Candidate) => Candidate.Identifier === this.FieldSelection);
                 if (Entry) Entry.Marks = [];
+                if (Entry && Entry.Kind !== "faces") Entry.Choice = "";
             }
         });
         this.AfterFieldChange("");
@@ -9263,32 +9494,59 @@ export class TexturePanel
         this.SolveLayerSheet(Layer);
         this.RenderStack();
         this.RenderInspector();
+        // What is lit in an identity map is part of the picture, so a change to the selection redraws it.
+        if (String(this.Display).startsWith("identity")) this.RefreshInspection();
         if (Note) this.Notify(Note);
     }
 
-    // Picking faces is a mode the viewport goes into rather than a tool, because it has to be available while a brush
-    // is in hand — the point of it is to mask off the part of the model you are about to paint.
-    SetFacePicking(On, Argument = "")
+    // Picking is a mode the viewport goes into rather than a tool, because it has to be available while a brush is in
+    // hand — the point of it is to mask off the part of the model you are about to paint.
+    //
+    // 🔴 Going into the mode turns the view into the identity map it is picking out of. Choosing "Island 14" out of
+    //    a dropdown is choosing blind; choosing the yellow one you can see on the model is choosing. The view that
+    //    was up comes back when picking stops, so the mode borrows the viewport rather than taking it.
+    SetFacePicking(On, Argument = "", Borrow = true)
     {
+        const Before = this.PickingFaces;
         this.PickingFaces = Boolean(On);
         if (Argument) this.FieldSelection = Argument;
         if (this.PickingFaces && !this.Measured) this.MeasureModel(false);
         Select("#viewport")?.classList.toggle("picking-faces", this.PickingFaces);
+        const Entry = (this.ActiveLayer?.Mask?.Generators || []).find(
+            (Candidate) => Candidate.Identifier === this.FieldSelection,
+        );
+        const Kind = PickableKinds.includes(Entry?.Kind) ? Entry.Kind : "";
+        if (Borrow && this.PickingFaces && Kind)
+        {
+            if (!String(this.Display).startsWith("identity")) this.PickingBefore = this.Display;
+            this.SetDisplay(`identity:${Kind === "faces" ? "face" : Kind}`);
+        }
+        else if (Borrow && !this.PickingFaces && Before && String(this.Display).startsWith("identity"))
+        {
+            this.SetDisplay(this.PickingBefore || "material");
+            this.PickingBefore = "";
+        }
         this.RenderInspector();
         this.Notify(
-            this.PickingFaces
-                ? "Picking faces — click the model to add one, shift-click to take it away, Escape when you are done."
-                : "Face picking off.",
+            !this.PickingFaces
+                ? "Picking off."
+                : Kind === "faces"
+                  ? "Picking faces — click the model to add one, shift-click to take it away, Escape when you are done."
+                  : Kind
+                    ? `Picking — click the ${PickableLabel(Kind)} on the model, Escape when you are done.`
+                    : "Picking — click the model, Escape when you are done.",
         );
     }
 
     // A click on the model while picking. The face index comes back from the same raycast the brush uses, so what is
-    // picked is exactly what is under the cursor rather than the nearest vertex to it.
+    // picked is exactly what is under the cursor rather than the nearest vertex to it; an object, a tile or an island
+    // is read out of the measured sheet at the coordinate that was hit, which is the same number the mask compares
+    // against — so clicking a colour and choosing it from the list cannot disagree.
     PickFaceAt(Event)
     {
         const Layer = this.ActiveLayer;
         const Entry = (Layer?.Mask?.Generators || []).find((Candidate) => Candidate.Identifier === this.FieldSelection);
-        if (!Entry || Entry.Kind !== "faces") return false;
+        if (!Entry || !PickableKinds.includes(Entry.Kind)) return false;
         const [DeviceX, DeviceY] = this.DeviceCoordinates(Event);
         const Hit = this.Projection.Resolve(this.Index, this.Camera, DeviceX, DeviceY);
         if (!Hit || !(Hit.Triangle >= 0))
@@ -9296,14 +9554,37 @@ export class TexturePanel
             this.Notify("Nothing under the cursor to pick.");
             return true;
         }
-        const Marks = new Set(Entry.Marks || []);
-        this.CaptureStack(() =>
+        if (Entry.Kind === "faces")
         {
-            if (Event.shiftKey) Marks.delete(Hit.Triangle);
-            else Marks.add(Hit.Triangle);
-            Entry.Marks = [...Marks];
-        });
-        this.AfterFieldChange("");
+            const Marks = new Set(Entry.Marks || []);
+            this.CaptureStack(() =>
+            {
+                if (Event.shiftKey) Marks.delete(Hit.Triangle);
+                else Marks.add(Hit.Triangle);
+                Entry.Marks = [...Marks];
+            });
+            this.AfterFieldChange("");
+            this.RefreshInspection();
+            return true;
+        }
+        const Sheets = this.Measured;
+        const Texel = SheetTexel(Sheets, Hit.Coordinate, Hit.Triangle);
+        const Field = Entry.Kind === "island" ? Sheets?.Island : Entry.Kind === "tile" ? Sheets?.Tile : Sheets?.Owner;
+        const Value = Texel >= 0 && Field ? Field[Texel] : -1;
+        if (!(Value >= 0))
+        {
+            this.Notify("Nothing measured under the cursor — measure the surface and try again.");
+            return true;
+        }
+        // Shift takes the choice back off, so the same click both chooses and unchooses.
+        const Wanted = Event.shiftKey && String(Entry.Choice ?? "") === String(Value) ? "" : String(Value);
+        this.CaptureStack(() => (Entry.Choice = Wanted));
+        this.AfterFieldChange(
+            Wanted === ""
+                ? `No ${PickableLabel(Entry.Kind)} chosen.`
+                : `${PickableName(Entry.Kind, Value, Sheets)} chosen.`,
+        );
+        this.RefreshInspection();
         return true;
     }
 
@@ -10505,10 +10786,14 @@ export class TexturePanel
             Axis === "none" ? "" : Axis === "radial" ? ` · radial ×${this.Projection.Brush.Sectors}` : ` · mirror ${Axis.toUpperCase()}`;
         Select("#viewport-subtitle").textContent =
             this.ViewMode === "plane"
-                ? `Texture space · ${DisplayOrdering.find((Entry) => Entry.Identifier === this.Display)?.Label}`
+                ? `Texture space · ${this.DisplayLabel()}`
                 : `${ToolLabel} → ${Target} · ${LayerSummary(Layer)}${Mirror}`;
         Select("#live-pill").querySelector("span").textContent =
-            this.ViewMode === "plane" ? "TEXTURE SPACE" : this.Display === "material" ? "OPENPBR" : this.Display.toUpperCase();
+            this.ViewMode === "plane"
+                ? "TEXTURE SPACE"
+                : this.Display === "material"
+                  ? "OPENPBR"
+                  : (DisplaySubject(this.Display) || this.Display).toUpperCase();
     }
 
     UpdateStatusBar()

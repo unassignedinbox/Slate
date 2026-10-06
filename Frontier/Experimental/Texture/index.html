@@ -92,6 +92,7 @@
                         </select>
                         <div class="viewport-bar-end">
                             <select id="channel-select" aria-label="Displayed channel"></select
+                            ><button id="readings-button" class="icon-button" title="Read the surface — bake normal, bevel, identity and the rest" aria-label="Read the surface" data-icon="focus"></button
                             ><button id="environment-button" class="icon-button" title="Environment and lights" aria-label="Environment and lights" aria-expanded="false" data-icon="sun"></button
                             ><select id="symmetry-select" aria-label="Symmetry"></select
                             ><button id="browser-button" class="icon-button" title="Content browser · B" aria-label="Content browser" data-icon="grid"></button
@@ -400,6 +401,7 @@
                 <span id="readings-progress" class="export-progress"></span>
                 <button class="text-button" id="readings-skip">Not now</button>
                 <button class="text-button" id="readings-write" disabled>Write PNGs</button>
+                <button class="text-button" id="readings-show" disabled>Show on the model</button>
                 <button class="button" id="readings-run"><span data-icon="focus"></span>Read the surface</button>
             </div>
         </dialog>

@@ -279,13 +279,24 @@ export const DisplayOrdering = [
     { Identifier: "occlusion_bake", Label: "Baked AO" },
     { Identifier: "checker", Label: "UV checker" },
     { Identifier: "mask", Label: "Layer mask" },
+    { Identifier: "identity", Label: "Identity" },
+    { Identifier: "reading", Label: "Baked map" },
 ];
 
+// 🔴 A display is allowed to carry a subject after a colon — `reading:bevel` is the baked bevel map, `identity:island`
+//    is the islands coloured in. The shader only ever sees the part in front of the colon, because what it does with
+//    the inspection image is the same whichever picture was laid into it; the part behind the colon says which picture
+//    the processor should put there.
+export const DisplaySubject = (Identifier) => String(Identifier || "").split(":")[1] || "";
+
 export const DisplayIndex = (Identifier) =>
-    Math.max(
+{
+    const Name = String(Identifier || "").split(":")[0];
+    return Math.max(
         0,
-        DisplayOrdering.findIndex((Display) => Display.Identifier === Identifier),
+        DisplayOrdering.findIndex((Display) => Display.Identifier === Name),
     );
+};
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Export presets — which channels leave the editor, under which interchange convention, and for which renderer.

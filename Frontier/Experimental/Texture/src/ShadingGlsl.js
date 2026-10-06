@@ -810,25 +810,44 @@ void main()
     vec4 Centre = texture(uNormalSource, vCoordinate);
     vec3 Normal = normalize(Centre.xyz);
     vec3 Position = texture(uPositionSource, vCoordinate).xyz;
-    float Convex = 0.0;
-    float Concave = 0.0;
-    for (int Index = 0; Index < 8; ++Index)
+    // The model's own radius, so the answer is a number about the shape and not a number about how big the scene is.
+    float Radius = max(length(uBoundsExtent), 1e-4);
+    // A neighbour further off than this is not a neighbour: it is the other side of a UV seam, and the jump across
+    // the gutter would read as a canyon wall that is not on the model.
+    float Reach = Radius * 0.14;
+    float Sum = 0.0;
+    float Taken = 0.0;
+    // 🔴 Three rings, and the tightest one is three texels out. A curvature read off the ring next door is a reading
+    //    about the tessellation — on a lathed object every quad row sits a hair off its neighbour's tangent plane, and
+    //    sampling at one texel turns that into the red and green corduroy this pass used to produce. The off-plane
+    //    height of a facet does not grow with distance and real curvature does, so widening the rings and averaging
+    //    them leaves the shape and drops the mesh.
+    for (int Ring = 0; Ring < 3; ++Ring)
     {
-        float Angle = float(Index) * 0.7853981634;
-        vec2 Offset = vec2(cos(Angle), sin(Angle)) * Texel * 2.0;
-        vec3 NeighbourPosition = texture(uPositionSource, vCoordinate + Offset).xyz;
-        vec3 Delta = NeighbourPosition - Position;
-        float Length = length(Delta);
-        if (Length < 1e-6) continue;
-        float Alignment = dot(normalize(Delta), Normal);
-        Convex += max(-Alignment, 0.0);
-        Concave += max(Alignment, 0.0);
+        float Span = 3.0 + float(Ring) * 3.5;
+        for (int Index = 0; Index < 8; ++Index)
+        {
+            // Each ring is turned fifteen degrees off the last so the three of them do not all land on the same spokes.
+            float Angle = float(Index) * 0.7853981634 + float(Ring) * 0.2617993878;
+            vec2 Offset = vec2(cos(Angle), sin(Angle)) * Texel * Span;
+            vec2 At = vCoordinate + Offset;
+            if (At.x < 0.0 || At.x > 1.0 || At.y < 0.0 || At.y > 1.0) continue;
+            if (texture(uNormalSource, At).w < 0.5) continue;
+            vec3 Delta = texture(uPositionSource, At).xyz - Position;
+            float Square = dot(Delta, Delta);
+            if (Square < 1e-12 || Square > Reach * Reach) continue;
+            // How far the neighbour sits off the tangent plane, over the distance to it squared — the reciprocal of
+            // the radius the surface is turning on, which is what curvature actually is. The same reading the
+            // processor takes off the welded mesh in SurfaceSolver.MeasureCurvature, written the same way.
+            Sum += dot(Delta, Normal) / Square;
+            Taken += 1.0;
+        }
     }
-    float Scale = 7.5;
+    float Curve = Taken > 0.0 ? clamp((Sum / Taken) * 0.5 * Radius, -1.0, 1.0) : 0.0;
     float Altitude = clamp((Position.y - uBoundsMinimum.y) / max(uBoundsExtent.y * 2.0, 1e-4), 0.0, 1.0);
     oField = vec4(
-        clamp(Convex * Scale / 8.0, 0.0, 1.0),
-        clamp(Concave * Scale / 8.0, 0.0, 1.0),
+        max(-Curve, 0.0),
+        max(Curve, 0.0),
         Altitude,
         clamp(Centre.w, 0.0, 1.0));
 }`;
@@ -1615,6 +1634,7 @@ uniform sampler2D uChannel2;
 uniform sampler2D uChannel3;
 uniform sampler2D uField;
 uniform sampler2D uMaskPreview;
+uniform sampler2D uInspection;
 
 uniform vec3 uViewPosition;
 uniform float uNormalGain;
@@ -1812,14 +1832,20 @@ void main()
         else if (Mode == 10) Inspection = vec3(Channel3.a);
         else if (Mode == 11) Inspection = vec3(Field.r, Field.g, 0.0);
         else if (Mode == 12) Inspection = vec3(Field.a);
-        else if (Mode == 13) Inspection = vec3(0.0);
         else if (Mode == 14)
         {
             // The selected layer's mask on its own: black is hidden, white is revealed, as the brush sees it.
             float Mask = texture(uMaskPreview, vCoordinate).a;
             Inspection = mix(vec3(0.04, 0.05, 0.07), vec3(0.96), Mask);
         }
-        else
+        // 🔴 Identity and the baked readings are the same branch on purpose. Both are a picture the processor made
+        //    and laid into the inspection image, and the viewport's whole job is to put it back on the model at the
+        //    coordinate it was read at — which is also the proof that the bake landed where the UVs say it should.
+        else if (Mode == 15 || Mode == 16) Inspection = texture(uInspection, vCoordinate).rgb;
+        // 🔴 The checker is mode 13 and says so. It spent a while as the fall-through with mode 13 drawing black,
+        //    which meant choosing the UV checker off the strip turned the model off and choosing a view this stage
+        //    had never heard of drew the checker — the two halves of the same mistake.
+        else if (Mode == 13 || Mode > 16)
         {
             vec2 Cell = floor(vCoordinate * uCheckerScale);
             float Checker = mod(Cell.x + Cell.y, 2.0);
@@ -2034,6 +2060,7 @@ uniform sampler2D uChannel2;
 uniform sampler2D uChannel3;
 uniform sampler2D uField;
 uniform sampler2D uMaskPreview;
+uniform sampler2D uInspection;
 uniform vec2 uPan;
 uniform float uZoom;
 uniform float uAspect;
@@ -2086,6 +2113,7 @@ void main()
             Colour = mix(vec3(0.16), vec3(0.62), mod(CheckerCell.x + CheckerCell.y, 2.0));
         }
         else if (Mode == 14) Colour = mix(vec3(0.04, 0.05, 0.07), vec3(0.96), texture(uMaskPreview, Coordinate).a);
+        else if (Mode == 15 || Mode == 16) Colour = texture(uInspection, Coordinate).rgb;
         else Colour = Channel0.rgb;
         if (Field.a <= 0.0 && Mode == 0) Colour *= 0.35;
     }

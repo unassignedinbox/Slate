@@ -118,9 +118,39 @@ There used to be a third, a pink wash over everything the mask hid. It told you 
 only thing you were looking at, so it is gone, and the tint colour nobody ever set went with it. Aiming the brush at a
 mask no longer changes the view either.
 
+**A new mask shows itself.** Adding one — black, white, generator or colour — switches the viewport to the mask, says
+so, and tells you that `M` goes back. A curvature mask changes nothing about the shaded surface until something is
+painted through it, so adding one used to look exactly like adding nothing at all: the layer was masked, the viewport
+was not, and the only way to find out was to paint and see what survived. Dropping a generator onto the mask stack and
+changing the kind of mask do the same thing, for the same reason. The one exception is keying a colour: the eyedropper
+needs the surface, so arming it brings the surface back for as long as it is armed, and the moment the colour lands the
+view returns to what the key caught.
+
 Generator and colour masks have no image behind them, so a pass of their own resolves whichever kind the layer carries
 into a preview target before the viewport samples it: what you see is what the compositor applied, inversion included.
 Masks are undoable with the rest of the stack, and a removed mask frees its image so the next one starts clean.
+
+### Picking identity off the model
+
+![Identity by object, by UV island, by face, and with one island chosen](identity.png)
+
+**Four of the generators are selections rather than shades** — object, UDIM tile, UV island, faces — and all four used
+to be answered from a dropdown. Choosing "Island 14" out of a list of forty is choosing blind. So the identity the mask
+keys on is coloured in and put on the surface, and the click that chooses is a click on the thing itself:
+
+- **The view and the mode go on together.** Pressing **Pick on the model** under a selection generator borrows the
+  viewport for the identity map it is picking out of, and hands the previous view back when picking stops. Choosing an
+  identity view from the channel strip arms the pick the other way round — there is no other reason to be looking at a
+  model painted in forty flat colours, and a click that landed as a brush stroke on a view you went to in order to
+  click would be a trap.
+- **What is already chosen is obvious.** The chosen object, tile or island washes towards white and everything else
+  dims to a third, so one picture answers both "what can I pick" and "what have I picked". Faces work the same way
+  against the set of marks, which is what makes face picking visible at last.
+- **The click and the dropdown cannot disagree.** The pick reads the object, tile or island out of the measured sheet
+  at the coordinate that was hit — the same number, from the same array, that the mask compares against. Shift takes a
+  choice back off; on faces it takes that face out of the set.
+- **Identity goes up unfiltered.** A blend between two neighbouring object colours is a third object that is not in the
+  scene, and the whole point of the view is that the colour under the cursor is a thing you can pick.
 
 ### Reading the surface
 
@@ -129,8 +159,15 @@ Masks are undoable with the rest of the stack, and a removed mask frees its imag
 **A new scene opens by asking the model what shape it is.** Substance calls them bakers, Unreal calls them bake maps,
 Blender calls them passes and hides two of the best ones — pointiness and the bevel node — inside the shader graph.
 They are the same questions, so the dialog asks all of them at once: ticking a map, previewing it on the plate, and
-then spending the rest of the session asking the texture instead of the triangles. It is reachable later from **Read
-the surface…** in the scene pod and from the generator section on any mask.
+then spending the rest of the session asking the texture instead of the triangles. It is reachable later from the
+**focus button beside the channel strip**, from **Read the surface…** in the scene pod, and from the generator section
+on any mask — a bake you cannot run again is a bake you have to get right first time, and nobody does.
+
+**Every baked map is a view of its own.** A bake you can only look at inside the dialog that made it is half a bake, so
+the channel strip grows a *Baked maps* group the moment one finishes: normal, bevel, bent, thickness, identity, the
+lot, each drawn on the model at the coordinate it was read at. **Show … on the model** in the dialog closes it and puts
+that map up. It is also the only honest way to find out that the unwrap, and not the bake, is what is wrong with a map
+— a bevel that looks shredded in the plate and shredded on the surface in the same places is a UV problem.
 
 | Family | Maps | Where they come from |
 | --- | --- | --- |
@@ -237,6 +274,21 @@ and tile each texel belongs to, the face it came from — none of it exists unti
 tenths of a second rather than milliseconds. So it is done once, held against the surface it was taken from, and dropped
 the moment that surface changes. Dropping a generator that needs it onto a layer measures the model rather than asking;
 the section says what it found, and offers to take it again.
+
+**The live curvature pass reads a radius, not a mesh.**
+
+![The live curvature field before and after: one ring of samples against three](curvature.png)
+
+There are two curvature readings in the editor: the per-vertex one below, taken off the welded mesh when the surface is
+measured, and a live one the card runs over the position and normal bake every time the surface is rebuilt. The live
+one used to take the angle between the normal and a *normalised* step to a neighbour two texels away, which is not a
+curvature at all — it is a reading about the tessellation. On a lathed object every quad ring sits a hair off its
+neighbour's tangent plane, and that is exactly what the Curvature view showed: dense red and green corduroy wrapped
+around a shader ball. It now reads `dot(Pᵤ − Pᵥ, Nᵥ) / |Pᵤ − Pᵥ|²` over three rings at three, six and ten texels, each
+turned off the last, skipping anything that landed in the gutter or on the far side of a seam, and scales the result by
+the model's own radius — the same formula, constant for constant, as `MeasureCurvature`. A cylinder wall now answers one
+flat value along its length instead of rippling a hundred and forty-nine times across it, a sphere answers 0.43 at every
+subdivision, and the ripple that is left is three percent of the signal instead of fifteen.
 
 **Curvature is per vertex on the welded mesh, and it is a real curvature.** The obvious implementation — read the
 neighbouring normals in texture space — cannot see across a UV seam, and a cube is six islands, so every hard edge on it
@@ -910,13 +962,13 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | File | Role |
 | --- | --- |
 | `TexturePanel.js` | The panel: stack, masks, inspector, content browser, tools, documents, shortcuts, dialogs. |
-| `ChannelSpecification.js` | The twelve channels, their packing, encodings, blend and export orderings. |
+| `ChannelSpecification.js` | The twelve channels, their packing, encodings, blend and export orderings, and the viewport's display list — including the identity views and the one a baked map is shown through. |
 | `MaterialSpecification.js` | Surface constants, the conductor archive, material presets; re-exports the environments. |
 | `EnvironmentSpecification.js` | Nine sky recipes, the rig of three lights, and the sun: defaults, sanitising, colour temperature and the vector the shading pass wants. |
 | `EnvironmentSolver.js` | Generating a sky: value-noise fields, the latitude-longitude map and its chain, the nine harmonics, and the tone-mapped tile the pod draws. |
 | `GeneratorSpecification.js` | The twenty-four generators, their families, glyphs, controls and parameter ranges. |
 | `ReadingSpecification.js` | The bake catalogue: fourteen maps, their families and heritage, the sample counts and the six reconstruction filters. |
-| `ReadingSolver.js` | One walk of the triangles per sample, every map accumulated inside it; bent and bevel normals, identity colours, padding. |
+| `ReadingSolver.js` | One walk of the triangles per sample, every map accumulated inside it; bent and bevel normals, identity colours and the identity picture the viewport picks out of, padding. |
 | `SurfaceSolver.js` | Measuring the model: welded-mesh curvature, thickness, UV islands, and the rasterisation that puts every reading into texture space. |
 | `MaskSolver.js` | Solving a stack of generators into one sheet — the weathering recipes, the selections, and how entries combine. |
 | `FinishSpecification.js` | Procedural material families, their styles, named controls and the preset shelf. |

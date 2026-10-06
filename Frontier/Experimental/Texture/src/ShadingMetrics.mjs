@@ -22,8 +22,16 @@ import {
 import { BuildSurface } from "./SurfaceStructure.js";
 import { OrbitProjection } from "./OrbitProjection.js";
 import { DefaultStack, DefaultProject, CreateLayer } from "./LayerSpecification.js";
-import { ExportSlots, SurfaceFragment, PlaneFragment, CompositeFragment, StampFragment, Chunks } from "./ShadingGlsl.js";
-import { DisplayIndex, DisplayOrdering } from "./ChannelSpecification.js";
+import {
+    ExportSlots,
+    SurfaceFragment,
+    PlaneFragment,
+    CompositeFragment,
+    StampFragment,
+    CurvatureFragment,
+    Chunks,
+} from "./ShadingGlsl.js";
+import { DisplayIndex, DisplayOrdering, DisplaySubject } from "./ChannelSpecification.js";
 import { MediaFromInstrument, PlainMedia } from "./MediaSolver.js";
 import { InstrumentByKey } from "./InstrumentSpecification.js";
 
@@ -407,7 +415,65 @@ test("the mask inspection is wired to the display mode the shaders switch on", (
     assert.ok(!DisplayOrdering.some((Entry) => Entry.Identifier === "mask_overlay"), "the overlay is still on offer");
     for (const Source of [SurfaceFragment, PlaneFragment]) assert.doesNotMatch(Source, /uMaskTint/, "a stage still tints a wash");
     assert.match(SurfaceFragment, /if \(uDisplay > 0\.5\)/, "the inspection short-circuit still carries the overlay's escape clause");
-    assert.doesNotMatch(PlaneFragment, /Mode == 15/, "texture space still has an overlay branch");
+});
+
+// 🔴 The live curvature pass and MeasureCurvature in SurfaceSolver answer the same question and have to answer it
+//    the same way. The reading is one over the radius the surface is turning on: how far a neighbour sits off the
+//    tangent plane, DIVIDED BY the distance to it squared, scaled by the model's own radius. Written without that
+//    division — as the angle to a normalised neighbour — it stops being a reading about the shape and becomes a
+//    reading about the tessellation, which is what put red and green lathe rings all over a shader ball.
+test("the live curvature pass reads a radius rather than a mesh", () =>
+{
+    assert.match(CurvatureFragment, /dot\(Delta, Normal\) \/ Square/, "the curvature pass stopped dividing by the distance");
+    assert.match(CurvatureFragment, /Square = dot\(Delta, Delta\)/, "the distance is not squared");
+    assert.doesNotMatch(CurvatureFragment, /normalize\(Delta\)/, "the tessellation-dependent form is back");
+    assert.match(CurvatureFragment, /length\(uBoundsExtent\)/, "the reading is no longer scaled by the model's radius");
+    // Three rings, none of them the one next door, or a facet reads as a crease.
+    assert.match(CurvatureFragment, /Ring < 3/, "the pass is back to a single ring of samples");
+    assert.match(CurvatureFragment, /Span = 3\.0 \+ float\(Ring\)/, "the tightest ring is too tight to be about the shape");
+    // A sample that landed on nothing, or on the far side of a seam, is not a neighbour.
+    assert.match(CurvatureFragment, /texture\(uNormalSource, At\)\.w < 0\.5/, "the pass reads the gutter as if it were surface");
+    assert.match(CurvatureFragment, /Square > Reach \* Reach/, "a jump across a seam still counts as curvature");
+    // Convex is red and concave is green, the same way round as the processor writes them.
+    assert.match(CurvatureFragment, /max\(-Curve, 0\.0\),\s*\n\s*max\(Curve, 0\.0\)/, "convex and concave swapped channels");
+});
+
+// The checker is a view in the list, so it has to be a branch in the shader. It was the fall-through for a while,
+// which meant picking it off the list drew black and picking anything unknown drew the checker — exactly backwards.
+test("every display in the list has a branch of its own", () =>
+{
+    assert.equal(DisplayIndex("checker"), 13);
+    for (const Source of [SurfaceFragment, PlaneFragment])
+    {
+        assert.match(Source, /Mode == 13/, "a fragment stage drops the UV checker on the floor");
+        assert.match(Source, /uCheckerScale/, "a fragment stage has no checker to draw");
+    }
+});
+
+// Identity and the baked readings are pictures the processor makes and the viewport only has to show, so they share
+// one sampler and one branch. What they must never share is a filter: an identity map blended between two objects
+// is a third object that is not in the scene.
+test("the inspection image carries identity and the baked maps onto the model", () =>
+{
+    assert.equal(DisplayIndex("identity"), 15);
+    assert.equal(DisplayIndex("reading"), 16);
+    assert.equal(DisplayIndex("reading:bevel"), 16, "a display with a subject lost its branch");
+    assert.equal(DisplaySubject("reading:bevel"), "bevel");
+    assert.equal(DisplaySubject("material"), "");
+    for (const Source of [SurfaceFragment, PlaneFragment])
+    {
+        assert.match(Source, /uniform sampler2D uInspection;/, "a fragment stage cannot reach the inspection image");
+        assert.match(Source, /Mode == 15 \|\| Mode == 16/, "a fragment stage has no branch for identity or a baked map");
+    }
+    const { Integrator, Device } = Prepare();
+    assert.equal(Integrator.InspectionImage(), Integrator.BlankImage(), "an empty inspection should read blank");
+    const Size = 4;
+    Integrator.SetInspection(new Uint8Array(Size * Size * 4).fill(200), Size, true);
+    assert.notEqual(Integrator.InspectionImage(), Integrator.BlankImage(), "the laid-in picture never arrived");
+    const Filters = Device.Calls.filter((Call) => Call.Name === "texParameteri").map((Call) => Call.Arguments[2]);
+    assert.ok(Filters.includes(Device.NEAREST), "an identity map went up filtered, so two objects can blend into a third");
+    Integrator.SetInspection(null, 0);
+    assert.equal(Integrator.InspectionImage(), Integrator.BlankImage(), "clearing the inspection left the last picture up");
 });
 
 test("generator and colour masks resolve through a pass of their own", () =>

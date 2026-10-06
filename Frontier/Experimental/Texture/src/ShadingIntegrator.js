@@ -308,6 +308,9 @@ export class ShadingIntegrator
         this.Surface = null;
         this.Statistics = { Composites: 0, Stamps: 0, CompositeMicroseconds: 0, Layers: 0, Passes: 0, Triangles: 0 };
         this.LayerImages = new Map();
+        // Whatever the processor last asked the viewport to show flat: an identity map, a baked reading, nothing.
+        this.Inspection = null;
+        this.InspectionSize = 0;
         const { Device: Acquired, Notes } = AcquireDevice(Canvas);
         this.Device = Acquired;
         this.Notes = Notes;
@@ -894,6 +897,45 @@ export class ShadingIntegrator
         Device.bindTexture(Device.TEXTURE_2D, null);
         Record.SheetSize = Size;
         return Record.Sheet;
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // The inspection image — one texture the viewport draws straight, in texture space, with nothing done to it.
+    //
+    // 🔴 An identity map and a baked reading are the same kind of thing: a picture the processor made at sheet
+    //    resolution that answers a question about the model. They share one texture and one display branch, because
+    //    the only difference between them is which question was asked, and the card has no opinion about that.
+    //    Identity goes up unfiltered — a blend between two neighbouring object colours is a third object that is not
+    //    in the scene, and the whole point of the view is that you can click a colour and get the thing under it.
+    //----------------------------------------------------------------------------------------------------------------------
+    SetInspection(Pixels, Size, Sharp = false)
+    {
+        if (!this.Ready) return null;
+        const Device = this.Device;
+        if (!Pixels || !Size)
+        {
+            this.InspectionSize = 0;
+            return null;
+        }
+        if (!this.Inspection) this.Inspection = Device.createTexture();
+        Device.activeTexture(Device.TEXTURE0);
+        Device.bindTexture(Device.TEXTURE_2D, this.Inspection);
+        Device.pixelStorei(Device.UNPACK_FLIP_Y_WEBGL, false);
+        Device.pixelStorei(Device.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        Device.texImage2D(Device.TEXTURE_2D, 0, Device.RGBA8, Size, Size, 0, Device.RGBA, Device.UNSIGNED_BYTE, Pixels);
+        const Filter = Sharp ? Device.NEAREST : Device.LINEAR;
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MIN_FILTER, Filter);
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MAG_FILTER, Filter);
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_WRAP_S, Device.CLAMP_TO_EDGE);
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_WRAP_T, Device.CLAMP_TO_EDGE);
+        Device.bindTexture(Device.TEXTURE_2D, null);
+        this.InspectionSize = Size;
+        return this.Inspection;
+    }
+
+    InspectionImage()
+    {
+        return this.InspectionSize && this.Inspection ? this.Inspection : this.BlankImage();
     }
 
     ClearMaskSheet(Identifier)
@@ -1643,6 +1685,7 @@ export class ShadingIntegrator
         this.BindImage(Shade, "uChannel3", Images[3], 3);
         this.BindImage(Shade, "uField", this.FieldTarget.Images[0], 4);
         this.BindImage(Shade, "uMaskPreview", this.MaskImage(Options.MaskLayer), 5);
+        this.BindImage(Shade, "uInspection", this.InspectionImage(), 7);
         this.UploadEnvironment(Shade, Options.Environment, Options.Material);
         const Uniforms = Shade.Uniforms;
         Device.uniformMatrix4fv(Uniforms.get("uViewClip"), false, Camera.ViewClip);
@@ -1718,6 +1761,7 @@ export class ShadingIntegrator
         this.BindImage(Program, "uChannel3", Images[3], 3);
         this.BindImage(Program, "uField", this.FieldTarget.Images[0], 4);
         this.BindImage(Program, "uMaskPreview", this.MaskImage(Options.MaskLayer), 5);
+        this.BindImage(Program, "uInspection", this.InspectionImage(), 7);
         Device.uniform2fv(Program.Uniforms.get("uPan"), Options.Pan);
         Device.uniform1f(Program.Uniforms.get("uZoom"), Options.Zoom);
         Device.uniform1f(Program.Uniforms.get("uAspect"), this.Canvas.width / Math.max(this.Canvas.height, 1));
