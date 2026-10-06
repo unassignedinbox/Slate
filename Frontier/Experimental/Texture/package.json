@@ -8,7 +8,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node --test src/SurfaceMetrics.mjs src/StackMetrics.mjs src/ShadingMetrics.mjs src/FieldMetrics.mjs src/ReadingMetrics.mjs",
+    "test": "node --test src/SurfaceMetrics.mjs src/StackMetrics.mjs src/ShadingMetrics.mjs src/FieldMetrics.mjs src/ReadingMetrics.mjs src/EnvironmentMetrics.mjs",
     "drive": "node harness/CardMetrics.mjs && node harness/EditorMetrics.mjs"
   },
   "devDependencies": {

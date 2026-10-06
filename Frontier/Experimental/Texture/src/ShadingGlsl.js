@@ -617,6 +617,19 @@ uniform vec3 uLightDirection[3];
 uniform vec3 uLightRadiance[3];
 uniform float uEnvironmentIntensity;
 uniform float uExposure;
+// The procedural sky, generated on the processor and handed over as a small latitude-longitude map with a chain of
+// blurrier copies behind it. uSkyLevels is zero when there is no map — a lost context, the first frame, a headless
+// run — and everything falls back to the three-colour gradient the recipe also carries.
+uniform sampler2D uSkyMap;
+uniform float uSkyLevels;
+uniform float uSkyScale;
+uniform float uSkyTurn;
+uniform vec3 uHarmonics[9];
+uniform vec3 uSunDirection;
+uniform vec3 uSunRadiance;
+uniform vec3 uSunDisc;
+uniform float uSunCosine;
+uniform float uSunOn;
 
 vec3 SkyGradient(vec3 Direction)
 {
@@ -625,9 +638,37 @@ vec3 SkyGradient(vec3 Direction)
     vec3 Lower = mix(uSkyHorizon, uSkyGround, pow(clamp(-Elevation, 0.0, 1.0), 0.35));
     return mix(Lower, Upper, smoothstep(-0.035, 0.035, Elevation));
 }
+// Where a direction lands on the map. The turn is the environment's rotation, applied to the lookup rather than to
+// the map, so spinning the sky is free and the sun — which spins with it — stays where its own glow is.
+vec2 SkyCoordinate(vec3 Direction)
+{
+    float Around = atan(Direction.x, Direction.z) - uSkyTurn;
+    float Polar = acos(clamp(Direction.y, -1.0, 1.0));
+    return vec2(Around / 6.2831853 + 0.5, Polar / 3.1415927);
+}
+vec3 SkyRadiance(vec3 Direction, float Level)
+{
+    if (uSkyLevels < 0.5) return SkyGradient(Direction);
+    vec3 Stored = textureLod(uSkyMap, SkyCoordinate(Direction), Level).rgb;
+    // Stored as the square root of the radiance over the sky's own range: one multiply to put it back.
+    return Stored * Stored * uSkyScale;
+}
+// The sun's disc, which is never in the map — a degree of arc is one texel there, and a texel is a square. Drawn
+// here instead, where it can be round, and widened as the surface roughens the way every reflection of it does.
+vec3 SunHighlight(vec3 Direction, float Roughness)
+{
+    if (uSunOn < 0.5) return vec3(0.0);
+    float Alignment = dot(Direction, uSunDirection);
+    float Edge = mix(uSunCosine, -0.2, clamp(Roughness, 0.0, 1.0));
+    float Disc = smoothstep(Edge, mix(1.0, uSunCosine, 0.35) + (1.0 - uSunCosine) * 0.15, Alignment);
+    // Spread over a wider lobe the rougher it gets, so the energy stays put instead of fading out with the edge.
+    float Spread = mix(1.0, 0.12, clamp(Roughness, 0.0, 1.0));
+    return uSunDisc * Disc * Spread;
+}
 vec3 SampleEnvironment(vec3 Direction, float Roughness)
 {
-    vec3 Radiance = SkyGradient(Direction);
+    float Level = sqrt(clamp(Roughness, 0.0, 1.0)) * max(uSkyLevels - 1.0, 0.0);
+    vec3 Radiance = SkyRadiance(Direction, Level) + SunHighlight(Direction, Roughness);
     float Sharpness = mix(2600.0, 3.0, clamp(Roughness, 0.0, 1.0));
     for (int Index = 0; Index < 3; ++Index)
     {
@@ -637,10 +678,29 @@ vec3 SampleEnvironment(vec3 Direction, float Roughness)
     }
     return Radiance * uEnvironmentIntensity;
 }
+// Nine numbers instead of a thousand samples. The sky's slow changes are all a diffuse surface can see of it, and
+// nine spherical harmonics hold exactly the slow changes.
 vec3 SampleIrradiance(vec3 Normal)
 {
-    vec3 Ambient = (SkyGradient(Normal) * 0.65 + SkyGradient(vec3(0.0, 1.0, 0.0)) * 0.35);
-    return Ambient * uEnvironmentIntensity;
+    if (uSkyLevels < 0.5)
+    {
+        vec3 Ambient = (SkyGradient(Normal) * 0.65 + SkyGradient(vec3(0.0, 1.0, 0.0)) * 0.35);
+        return Ambient * uEnvironmentIntensity;
+    }
+    float X = Normal.x;
+    float Y = Normal.y;
+    float Z = Normal.z;
+    vec3 Irradiance =
+        uHarmonics[0] * 0.886227 +
+        uHarmonics[1] * (1.023328 * Y) +
+        uHarmonics[2] * (1.023328 * Z) +
+        uHarmonics[3] * (1.023328 * X) +
+        uHarmonics[4] * (0.858086 * X * Y) +
+        uHarmonics[5] * (0.858086 * Y * Z) +
+        uHarmonics[6] * (0.247708 * (3.0 * Z * Z - 1.0)) +
+        uHarmonics[7] * (0.858086 * X * Z) +
+        uHarmonics[8] * (0.429043 * (X * X - Y * Y));
+    return max(Irradiance / 3.1415927, vec3(0.0)) * uEnvironmentIntensity;
 }
 vec3 ToneMap(vec3 Colour)
 {
@@ -1777,12 +1837,15 @@ void main()
     float CoatReflectance = pow((uCoatIor - 1.0) / (uCoatIor + 1.0), 2.0);
 
     vec3 Radiance = vec3(0.0);
-    for (int Index = 0; Index < 3; ++Index)
+    // Three rig lights and the sun. The sun is the fourth pass of the same loop rather than fifty lines of its own:
+    // it is a direction and a radiance like the others, and everything a light does to this surface is in here.
+    for (int Index = 0; Index < 4; ++Index)
     {
-        vec3 Light = uLightDirection[Index];
-        vec3 Incident = uLightRadiance[Index] * uEnvironmentIntensity;
+        vec3 Light = Index < 3 ? uLightDirection[Index] : uSunDirection;
+        vec3 Incident = (Index < 3 ? uLightRadiance[Index] : uSunRadiance * uSunOn) * uEnvironmentIntensity;
         float NdotL = dot(Normal, Light);
         if (NdotL <= 0.0) continue;
+        if (dot(Incident, vec3(1.0)) <= 0.0) continue;
         vec3 Half = normalize(Light + View);
         float NdotH = clamp(dot(Normal, Half), 0.0, 1.0);
         float VdotH = clamp(dot(View, Half), 0.0, 1.0);
@@ -1952,7 +2015,10 @@ void main()
 {
     vec2 Device = vCoordinate * 2.0 - 1.0;
     vec3 Direction = normalize(uRayForward + uRayRight * Device.x + uRayUp * Device.y);
-    vec3 Radiance = SampleEnvironment(Direction, 0.55) * mix(0.12, 1.0, uBackgroundVisible);
+    // The backdrop is the sky itself at its sharpest level, with the sun drawn round on top of it. Soft, because a
+    // map two hundred and fifty-six across stretched over a viewport is soft — the model is the subject, and a sky
+    // sharp enough to compete with it would be a sky somebody had to turn off.
+    vec3 Radiance = SampleEnvironment(Direction, 0.04) * mix(0.12, 1.0, uBackgroundVisible);
     float Vignette = 1.0 - 0.34 * length(Device * vec2(0.62, 0.52));
     oColour = vec4(ToneMap(Radiance * Vignette), 1.0);
 }`;

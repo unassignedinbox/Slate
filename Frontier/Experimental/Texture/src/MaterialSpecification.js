@@ -566,63 +566,18 @@ export const MaterialByIdentifier = Object.fromEntries(
 );
 
 //--------------------------------------------------------------------------------------------------------------------------
-// Environment presets for the viewport. Analytic, so roughness widens the lobe instead of sampling a prefiltered cubemap.
+// The environment moved out. A sky is a recipe now rather than three colours, and a recipe with a sun in it is a file
+// of its own — but half the editor reaches for these names through this module, so they keep arriving from here.
 //--------------------------------------------------------------------------------------------------------------------------
-export const EnvironmentOrdering = [
-    { Identifier: "studio", Label: "Studio", Zenith: [0.52, 0.56, 0.62], Horizon: [0.32, 0.33, 0.36], Ground: [0.07, 0.07, 0.08], Key: 7.0, Fill: 1.6, Rim: 2.4 },
-    { Identifier: "sunset", Label: "Sunset", Zenith: [0.24, 0.3, 0.5], Horizon: [0.75, 0.42, 0.22], Ground: [0.08, 0.06, 0.05], Key: 9.0, Fill: 0.9, Rim: 1.6 },
-    { Identifier: "overcast", Label: "Overcast", Zenith: [0.6, 0.63, 0.68], Horizon: [0.48, 0.5, 0.54], Ground: [0.12, 0.12, 0.13], Key: 2.2, Fill: 2.0, Rim: 1.2 },
-    { Identifier: "workshop", Label: "Night shop", Zenith: [0.06, 0.07, 0.09], Horizon: [0.1, 0.1, 0.12], Ground: [0.03, 0.03, 0.035], Key: 12.0, Fill: 0.5, Rim: 3.2 },
-];
-
-export const EnvironmentByIdentifier = Object.fromEntries(
-    EnvironmentOrdering.map((Environment) => [Environment.Identifier, Environment]),
-);
-
-export const EnvironmentIndex = (Identifier) =>
-    Math.max(
-        0,
-        EnvironmentOrdering.findIndex((Environment) => Environment.Identifier === Identifier),
-    );
-
-//--------------------------------------------------------------------------------------------------------------------------
-// The rig. Three lights hang in front of the environment, and until the painter touches one they are whatever the
-// environment says they are: the preset's own key, fill and rim strengths, at the angles the viewport has always used.
-//
-// 🔴 Three, and not a number the painter chooses. The shading pass carries three directions and three radiances, so a
-//    fourth light would be a shader with nowhere to put it — and a rig that silently dropped the light you just added
-//    would be worse than one that says plainly how many it holds. `Swing` is an offset from the environment rotation,
-//    so spinning the sky takes the lights with it, which is what every rotation of a lit scene has meant.
-//--------------------------------------------------------------------------------------------------------------------------
-export const LightOrdering = [
-    { Identifier: "key", Label: "Key", Reads: "Key", Swing: 34, Elevation: 49, Tint: [1, 0.97, 0.92], Note: "The light that shapes it" },
-    { Identifier: "fill", Label: "Fill", Reads: "Fill", Swing: 251, Elevation: 15, Tint: [0.82, 0.88, 1], Note: "Opens the shadow side" },
-    { Identifier: "rim", Label: "Rim", Reads: "Rim", Swing: 155, Elevation: 31, Tint: [0.92, 0.95, 1], Note: "Draws the edge away from the background" },
-];
-
-// The rig written out: what the painter is looking at the moment before they change anything.
-export const DefaultLights = (Identifier) =>
-{
-    const Preset = EnvironmentByIdentifier[Identifier] || EnvironmentByIdentifier.studio;
-    return LightOrdering.map((Light) => ({
-        Identifier: Light.Identifier,
-        On: true,
-        Strength: Number((Preset[Light.Reads] ?? 1).toFixed(2)),
-        Swing: Light.Swing,
-        Elevation: Light.Elevation,
-    }));
-};
-
-// One light as the shading pass wants it: a unit direction and a tinted radiance, with an unlit light simply black.
-export const LightVector = (Light, Index, Rotation) =>
-{
-    const Order = LightOrdering[Index] || LightOrdering[0];
-    const Swing = (((Light?.Swing ?? Order.Swing) + Rotation) * Math.PI) / 180;
-    const Rise = ((Light?.Elevation ?? Order.Elevation) * Math.PI) / 180;
-    const Flat = Math.cos(Rise);
-    const Strength = Light?.On === false ? 0 : Math.max(Light?.Strength ?? 0, 0);
-    return {
-        Direction: [Math.sin(Swing) * Flat, Math.sin(Rise), Math.cos(Swing) * Flat],
-        Radiance: Order.Tint.map((Part) => Part * Strength),
-    };
-};
+export {
+    EnvironmentOrdering,
+    EnvironmentByIdentifier,
+    EnvironmentIndex,
+    LightOrdering,
+    DefaultLights,
+    LightVector,
+    SunDefaults,
+    SanitiseSun,
+    SunVector,
+    WarmthColour,
+} from "./EnvironmentSpecification.js";

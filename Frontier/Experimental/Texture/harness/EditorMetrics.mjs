@@ -9,6 +9,7 @@
 import { CreateWindow, CreateTally, Settle } from "./DeviceHost.mjs";
 import { SanitiseLayer } from "../src/LayerSpecification.js";
 import { ReadingOrdering } from "../src/ReadingSpecification.js";
+import { SunDefaults } from "../src/EnvironmentSpecification.js";
 
 const { Window, Faults } = CreateWindow();
 const { Check, Report } = CreateTally("the editor");
@@ -296,7 +297,7 @@ await Settle(Window, 3);
 Check("adding a mask puts the mask beside the sheet", Plates().length === 2, String(Plates().length));
 Check("and the second plate is the mask", Plates()[1].dataset.thumbnailTarget === "mask");
 
-// The environment pod: four skies with faces on them, and a rig of three lights behind them.
+// The environment pod: nine generated skies with their own faces on them, a sun, and a rig of three lights.
 Press(Find("#environment-button"));
 await Settle(Window, 2);
 Check("the header button opens the environment", !Find("#environment-pod").hidden);
@@ -305,11 +306,35 @@ Check(
     Find("#channel-select").closest(".dropdown").nextElementSibling?.id === "environment-button",
     Find("#channel-select").closest(".dropdown").nextElementSibling?.id,
 );
-Check("four skies, each wearing its own face", All("#environment-pod .sky-tile").length === 4);
+Check("nine skies, each wearing its own face", All("#environment-pod .sky-tile").length === 9);
+Check("and every face is a picture of that sky", All("#environment-pod .sky-face canvas").length === 9);
 Check("the one in use is lit", All("#environment-pod .sky-tile.active").length === 1);
 Press(Find('#environment-pod [data-argument="sunset"]'));
 await Settle(Window, 2);
 Check("picking one lights the surface with it", Panel.Project.Environment.Identifier === "sunset");
+Check("and the sky brings its own sun", Panel.Project.Environment.Sun.Warmth === SunDefaults("sunset").Warmth);
+// 🔴 A pod that rebuilds itself under the press must not read as a press outside itself.
+Check("and the pod it was picked in stays open", !Find("#environment-pod").hidden);
+
+// The sun: one switch, and the five things about it worth moving.
+Check("the sun is off until it is asked for", !Panel.Project.Environment.Sun.On);
+Check("so the group says so", Find('#environment-pod [data-action="toggle-sun"]')?.textContent.trim() === "Off");
+Press(Find('#environment-pod [data-action="toggle-sun"]'));
+await Settle(Window, 2);
+Check("the switch turns it on", Panel.Project.Environment.Sun.On === true);
+Check("and the settings arrive with it", All('#environment-pod [data-bind^="Environment.Sun."]').length >= 10, String(All('#environment-pod [data-bind^="Environment.Sun."]').length));
+const SunHeight = All('#environment-pod input[type="range"][data-bind="Environment.Sun.Elevation"]')[0];
+Check("height is one of them", !!SunHeight);
+SunHeight.value = "11";
+SunHeight.dispatchEvent(new Window.Event("input", { bubbles: true }));
+await Settle(Window, 2);
+Check("dragging it moves the sun", Math.round(Panel.Project.Environment.Sun.Elevation) === 11);
+Press(Find('#environment-pod [data-action="match-sun"]'));
+await Settle(Window, 2);
+Check("matching the sky puts it back", Panel.Project.Environment.Sun.Elevation === SunDefaults("sunset").Elevation);
+Press(Find('#environment-pod [data-action="toggle-sun"]'));
+await Settle(Window, 2);
+Check("and the switch turns it off again", Panel.Project.Environment.Sun.On === false);
 Check("and the rig goes with the sky", Panel.Project.Environment.Lights === null);
 Check("three lights hang in front of it", All("#environment-pod .light-row").length === 3);
 Press(Find('#environment-pod [data-action="toggle-light"]'));

@@ -10,8 +10,8 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 131 unit tests, no browser required
-npm run drive      # 237 checks against the whole editor, booted in a headless window
+npm test           # 195 unit tests, no browser required
+npm run drive      # 338 checks against the whole editor, booted in a headless window
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -178,6 +178,39 @@ neighbours it can see. Coverage is excluded, because the whole point of that map
 start. When the bake finishes, **the generators take it**: the stack on every mask drops its own 256² measurement and
 reads the sheet that was just taken, at the resolution it was taken at. The maps also write out as PNGs beside the
 texture set.
+
+### The sky, and the sun in it
+
+![Nine generated environments, and one sky at three sun heights](environments.png)
+
+**Nine environments, none of them a file.** A painting tool lights the model with an HDRI, and an HDRI is twelve
+megabytes somebody has to ship, host and licence. These are recipes instead — a few dozen numbers each, run through a
+value-noise field at load and turned into a 256×128 latitude-longitude map with its own chain of blurrier copies. Three
+rooms, four skies, a city at night and a nebula. The whole catalogue costs less than a paragraph of this file.
+
+Each map is stored as the **square root of its radiance** over the sky's own range, decoded with one multiply in the
+shader. Eight bits spread linearly over a room with a hundred to one in it leaves the floor in four of those values
+and visibly stepped; square-rooting spends the precision where the eye is. The blurred copies are reduced **in
+radiance and never in the stored bytes** — the mean of square roots is not the square root of a mean, and averaging
+the encoding darkens every level of the chain. A rough reflection reads level `√roughness · (levels − 1)`, a mirror
+reads level zero, and the diffuse ambient does not read the map at all: nine spherical harmonics are projected off the
+float sky as it is generated, and nine numbers hold every slow change a diffuse surface can see of one.
+
+Rotation is a **lookup offset**, not a rebuild. Dragging the sky around the model moves `uSkyTurn` and nothing else.
+
+**The sun is a fourth light, a glow, and a disc — in that order.** Switch it on and the same five numbers do three
+jobs: a direct light the surface's own BRDF runs with the other three, a halo and horizon flush generated into the
+sky, and a round highlight drawn analytically in the shader. The disc is deliberately **never baked into the map**.
+At 256 across, a half-degree sun is less than one texel — it would be a square, it would alias as the sky turned, and
+since the sun is also a direct light the model would be lit twice by one sun. So the map holds the glow, the shader
+draws the disc, and `EnvironmentMetrics` holds the line: a sun sixteen times narrower is a disc two hundred and fifty
+times brighter, and the brightest texel in the map does not move.
+
+Height, swing, strength, warmth and size, plus the switch. Warmth is a Planckian approximation normalised on its
+green, so turning the light amber does not turn it down. Moving any of them regenerates the sky — the glow, the
+flush and the irradiance together, because a sun that lit from one side while glowing from the other is the bug
+this is built to avoid. A drag is generated at **half size** and the full one lands the moment the thumb comes off.
+Each sky also carries its own sun: picking Sunset gets a low orange one at seven degrees, picking Workshop gets none.
 
 ### Generators
 
@@ -788,9 +821,9 @@ hand. Both are gone. What is left is **Layer** and **Timeline**.
   it, and the panel points at it. Layers with no paint behind them — a fill, a generator, a finish — keep their
   sliders, because for those the number *is* the layer.
 - **The environment moved to the viewport header**, one button to the right of the channel dropdown, where the other
-  two decisions about *looking* already live. It opens on four skies wearing their own faces — zenith, horizon and
-  ground drawn as the gradient they are, with the sun where the rotation put it — then rotation, intensity, exposure
-  and the background switch.
+  two decisions about *looking* already live. It opens on nine skies wearing their own faces — each tile a picture of
+  that environment as it was generated, with a mark where the rotation put it — then rotation, intensity, exposure
+  and the background switch, and the sun under them.
 - **Three lights hang in front of the sky.** Key, fill and rim, each with a strength, a swing around the object and a
   height, and each able to be switched off and added back. The shading pass carries three directions and three
   radiances, so the rig says three rather than pretending to an arbitrary number and quietly dropping the fourth.
@@ -874,7 +907,9 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | --- | --- |
 | `TexturePanel.js` | The panel: stack, masks, inspector, content browser, tools, documents, shortcuts, dialogs. |
 | `ChannelSpecification.js` | The twelve channels, their packing, encodings, blend and export orderings. |
-| `MaterialSpecification.js` | Surface constants, the conductor archive, material presets, the environments. |
+| `MaterialSpecification.js` | Surface constants, the conductor archive, material presets; re-exports the environments. |
+| `EnvironmentSpecification.js` | Nine sky recipes, the rig of three lights, and the sun: defaults, sanitising, colour temperature and the vector the shading pass wants. |
+| `EnvironmentSolver.js` | Generating a sky: value-noise fields, the latitude-longitude map and its chain, the nine harmonics, and the tone-mapped tile the pod draws. |
 | `GeneratorSpecification.js` | The twenty-four generators, their families, glyphs, controls and parameter ranges. |
 | `ReadingSpecification.js` | The bake catalogue: fourteen maps, their families and heritage, the sample counts and the six reconstruction filters. |
 | `ReadingSolver.js` | One walk of the triangles per sample, every map accumulated inside it; bent and bevel normals, identity colours, padding. |
@@ -903,6 +938,7 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `ExportSequence.js` | Slot resolve, PNG emission, OpenPBR descriptor. |
 | `SheetCodec.js` | Painted sheets ⇄ PNG text: the writer, the reader, the blank test and the resample a saved document needs. |
 | `ReadingMetrics.mjs` | The bake: that every filter spends every sample, that a negative lobe survives, and that a known shape reads the way it should. |
+| `EnvironmentMetrics.mjs` | The sky: that the map and the shader's lookup agree on which way is up, that no blurred level loses light, and that the sun's disc is never baked into the sky it lights. |
 | `FieldMetrics.mjs` | What the surface measures to and what a stack of generators makes of it, against shapes whose answers are known. |
 | `*.mjs` | Node test files — surface maths, stack semantics, device behaviour and context recovery, against a recording WebGL2 stand-in. |
 

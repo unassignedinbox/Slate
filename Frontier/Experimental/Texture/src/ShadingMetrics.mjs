@@ -484,6 +484,57 @@ test("the viewport and texture-space passes both draw", () =>
     assert.ok(Count(Device, "drawArrays") > Marker, "texture space never drew");
 });
 
+test("the sky reaches the device as a texture, a sun and nine coefficients", () =>
+{
+    const { Integrator, Device } = Prepare();
+    const Project = DefaultProject();
+    const Camera = new OrbitProjection();
+    Camera.Advance(0.016);
+    const Options = { Environment: Project.Environment, Material: Project.Material, Display: DisplayIndex("material"), CheckerScale: 16 };
+    const Sent = (Name) => Device.Calls.filter((Call) => Call.Arguments?.[0]?.Name === Name).at(-1)?.Arguments;
+    // The sky is the only texture here with a chain of its own, so a level above zero can only have come from it.
+    const Levels = () => Device.Calls.filter((Call) => Call.Name === "texImage2D" && Call.Arguments[1] > 0).length + 1;
+
+    Integrator.RenderViewport(Camera, Options);
+    const Built = Levels();
+    assert.ok(Built >= 7, `the sky uploaded ${Built} levels`);
+    assert.equal(Sent("uSkyLevels")[1], 7, "the shader was not told how many levels it has");
+    assert.ok(Sent("uSkyScale")[1] > 0, "the decode scale never arrived");
+    assert.equal(Sent("uHarmonics[0]")?.[1].length, 27, "nine coefficients are nine times three floats");
+    assert.equal(Sent("uSunOn")[1], 0, "a studio has its sun off");
+
+    // 🔴 The same sky twice is one sky. A rebuild on every frame would be a tenth of a second of arithmetic between
+    //    the painter's hand and the screen, so the record has to survive a render that changed nothing.
+    Integrator.RenderViewport(Camera, Options);
+    assert.equal(Levels(), Built, "the sky was generated again for an identical frame");
+
+    // Moving the sun is a different sky: the glow, the horizon flush and the irradiance all move with it.
+    const Lit = { ...Options, Environment: { ...Project.Environment, Sun: { ...Project.Environment.Sun, On: true, Swing: 120 } } };
+    Integrator.RenderViewport(Camera, Lit);
+    assert.ok(Levels() > Built, "switching the sun on did not rebuild the sky");
+    assert.equal(Sent("uSunOn")[1], 1);
+    assert.ok([...Sent("uSunRadiance")[1]].some((Part) => Part > 0.1), "a sun that is on throws no light");
+    assert.ok([...Sent("uSunDisc")[1]].some((Part) => Part > 0.1), "the sun has no disc to draw");
+    assert.ok(Sent("uSunCosine")[1] > 0.99 && Sent("uSunCosine")[1] <= 1, `a two degree sun has cosine ${Sent("uSunCosine")[1]}`);
+    const Direction = [...Sent("uSunDirection")[1]];
+    assert.ok(Math.abs(Math.hypot(...Direction) - 1) < 1e-5, `the sun points ${Math.hypot(...Direction)} long`);
+
+    // 🔴 The sky is uploaded onto its own unit. Everything the viewport pass bound before it has to still be there
+    //    afterwards, or a frame that rebuilt the sky reads the sky where it wanted the mask.
+    const Units = Device.Calls.filter((Call) => Call.Name === "activeTexture").map((Call) => Call.Arguments[0]);
+    const Sky = Device.Calls.findLastIndex((Call) => Call.Name === "texImage2D" && Call.Arguments[1] > 0);
+    const Active = Device.Calls.slice(0, Sky).filter((Call) => Call.Name === "activeTexture").at(-1);
+    assert.ok(Units.length > 0 && Active, "nothing ever chose a texture unit");
+    assert.equal(Active.Arguments[0], Device.TEXTURE0 + 6, "the sky was uploaded onto somebody else's unit");
+
+    // 🔴 Rotation is a lookup offset and nothing else: dragging it must not touch the texture, or every degree of a
+    //    rotation drag would cost a full sky.
+    const Marker = Levels();
+    Integrator.RenderViewport(Camera, { ...Lit, Environment: { ...Lit.Environment, Rotation: 211 } });
+    assert.equal(Levels(), Marker, "turning the sky rebuilt it");
+    assert.ok(Math.abs(Sent("uSkyTurn")[1] - (211 * Math.PI) / 180) < 1e-5, "the turn never reached the shader");
+});
+
 test("every export slot resolves to an image of the project resolution", () =>
 {
     const { Integrator } = Prepare(128);

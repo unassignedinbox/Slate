@@ -36,7 +36,12 @@ import {
 } from "./ChannelSpecification.js";
 import { GeneratorIndex } from "./GeneratorSpecification.js";
 import { FinishFamilyIndex, FinishStyleIndex } from "./FinishSpecification.js";
-import { EnvironmentByIdentifier, LightOrdering, LightVector } from "./MaterialSpecification.js";
+import { EnvironmentByIdentifier, LightOrdering, LightVector, SunVector } from "./MaterialSpecification.js";
+import { SolveEnvironment } from "./EnvironmentSolver.js";
+
+// The texture unit the sky lives on for the whole of a frame. The viewport pass fills nought to five with the painted
+// channels, the field and the mask preview, so six is the first one free.
+const SkyUnit = 6;
 import { TileRectangle } from "./SceneStructure.js";
 import { MediaUniforms, PlainMedia } from "./MediaSolver.js";
 import { WriteOrdering, GradientEasings, SortRampStops, RampLimit } from "./StrokeSpecification.js";
@@ -1481,6 +1486,69 @@ export class ShadingIntegrator
     //----------------------------------------------------------------------------------------------------------------------
     // Environment and material uniforms shared by the viewport and background programs.
     //----------------------------------------------------------------------------------------------------------------------
+    // The sky, as the device holds it: one latitude-longitude texture with its own chain of blurrier copies. Built
+    // from the recipe the first time it is asked for and rebuilt whenever the recipe or the sun changes, which is
+    // what makes the sun draggable — the glow, the horizon and the light on the model are regenerated together.
+    //
+    // 🔴 Keyed on what the sky IS, not on whether a texture exists. Moving the sun leaves a perfectly good texture
+    //    of yesterday's sun behind, and a sky nobody rebuilt is a sun that lights from one side and glows from the
+    //    other.
+    SkyMark(Environment)
+    {
+        const Sun = Environment.Sun || {};
+        return [
+            Environment.Identifier,
+            this.SkyHeight || 128,
+            Sun.On ? 1 : 0,
+            Sun.Elevation,
+            Sun.Swing,
+            Sun.Strength,
+            Sun.Warmth,
+            Sun.Size,
+        ].join(":");
+    }
+
+    EnsureSky(Environment)
+    {
+        const Mark = this.SkyMark(Environment);
+        if (this.SkyRecord?.Mark === Mark) return this.SkyRecord;
+        const Solved = SolveEnvironment(Environment.Identifier, Environment.Sun, { Height: this.SkyHeight || 128 });
+        const Device = this.Device;
+        // 🔴 Uploaded onto the sky's own unit, never onto whichever one the last bind happened to leave active. A
+        //    bare bindTexture here lands on that unit instead, and the mask preview — unit five, bound three lines
+        //    earlier in the viewport pass — would spend the frame sampling the sky.
+        Device.activeTexture(Device.TEXTURE0 + SkyUnit);
+        if (!this.SkyImage)
+        {
+            this.SkyImage = Device.createTexture();
+            Device.bindTexture(Device.TEXTURE_2D, this.SkyImage);
+            Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_WRAP_S, Device.REPEAT);
+            Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_WRAP_T, Device.CLAMP_TO_EDGE);
+            Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MIN_FILTER, Device.LINEAR_MIPMAP_LINEAR);
+            Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MAG_FILTER, Device.LINEAR);
+        }
+        else Device.bindTexture(Device.TEXTURE_2D, this.SkyImage);
+        // 🔴 Every level is uploaded by hand rather than generated on the device. generateMipmap would average the
+        //    encoded square roots, and the mean of square roots is not the square root of a mean — every blurrier
+        //    copy of the sky would come out darker than the one above it.
+        for (const [Level, Sheet] of Solved.Levels.entries())
+            Device.texImage2D(
+                Device.TEXTURE_2D,
+                Level,
+                Device.RGBA,
+                Sheet.Width,
+                Sheet.Height,
+                0,
+                Device.RGBA,
+                Device.UNSIGNED_BYTE,
+                Sheet.Bytes,
+            );
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_BASE_LEVEL, 0);
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MAX_LEVEL, Math.max(0, Solved.Levels.length - 1));
+        this.SkyRecord = { Mark, Solved, Levels: Solved.Levels.length, Scale: Solved.Scale, Harmonics: Solved.Harmonics };
+        return this.SkyRecord;
+    }
+
     UploadEnvironment(Program, Environment, Material)
     {
         const Device = this.Device;
@@ -1506,6 +1574,20 @@ export class ShadingIntegrator
         Device.uniform3fv(Uniforms.get("uLightRadiance"), new Float32Array(Radiance.flat()));
         Device.uniform1f(Uniforms.get("uEnvironmentIntensity"), Environment.Intensity);
         Device.uniform1f(Uniforms.get("uExposure"), Environment.Exposure);
+
+        const Sky = this.EnsureSky(Environment);
+        this.BindImage(Program, "uSkyMap", this.SkyImage, SkyUnit);
+        Device.uniform1f(Uniforms.get("uSkyLevels"), Sky ? Sky.Levels : 0);
+        Device.uniform1f(Uniforms.get("uSkyScale"), Sky ? Sky.Scale : 1);
+        Device.uniform1f(Uniforms.get("uSkyTurn"), Rotation);
+        if (Sky) Device.uniform3fv(Uniforms.get("uHarmonics"), Sky.Harmonics);
+
+        const Sun = SunVector(Environment.Sun, Environment.Rotation);
+        Device.uniform3fv(Uniforms.get("uSunDirection"), new Float32Array(Sun.Direction));
+        Device.uniform3fv(Uniforms.get("uSunRadiance"), new Float32Array(Sun.Radiance));
+        Device.uniform3fv(Uniforms.get("uSunDisc"), new Float32Array(Sun.Disc));
+        Device.uniform1f(Uniforms.get("uSunCosine"), Sun.Cosine);
+        Device.uniform1f(Uniforms.get("uSunOn"), Sun.On ? 1 : 0);
     }
 
     NormalGain(Material)

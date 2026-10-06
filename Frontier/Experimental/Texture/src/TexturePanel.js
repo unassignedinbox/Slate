@@ -98,6 +98,9 @@ import {
     EnvironmentByIdentifier,
     LightOrdering,
     DefaultLights,
+    SunDefaults,
+    SanitiseSun,
+    WarmthColour,
     MaterialLibrary,
     MaterialByIdentifier,
     MetalByIdentifier,
@@ -136,6 +139,7 @@ import {
     SanitiseReading,
 } from "./ReadingSpecification.js";
 import { SolveReadings } from "./ReadingSolver.js";
+import { PreviewImage } from "./EnvironmentSolver.js";
 import { CombineModes, DefaultEntry, MissingMeasurements, NormaliseEntry, SheetImage, SolveMask } from "./MaskSolver.js";
 import {
     CreateLayer,
@@ -5444,9 +5448,15 @@ export class TexturePanel
             this.SetSymmetry(Button.dataset.symmetry, true);
             this.RenderSymmetryChips();
         });
+        // 🔴 Asked of the path the press travelled, not of where its target sits now. Half the buttons in a pod
+        //    rebuild that pod as they run, and a node that has just been replaced has no ancestors left to ask — so
+        //    `closest` alone answers "outside" and the pod shuts the moment anything in it is used.
+        const PodNames = ["brush-pod", "brush-pod-button", "environment-pod", "environment-button", "scene-pod", "scene-button"];
         document.addEventListener("click", (Event) =>
         {
+            const Path = typeof Event.composedPath === "function" ? Event.composedPath() : [];
             const Inside =
+                Path.some((Node) => PodNames.includes(Node?.id)) ||
                 Event.target.closest("#brush-pod, #brush-pod-button, #environment-pod, #environment-button, #scene-pod, #scene-button");
             if (!Inside) this.ShowPopover("", false);
         });
@@ -8113,7 +8123,15 @@ export class TexturePanel
         if (Path.startsWith("Environment."))
         {
             // A sky chosen from the dropdown behind the tiles brings its own rig, the same as one chosen by its face.
-            if (Path === "Environment.Identifier") this.Project.Environment.Lights = null;
+            if (Path === "Environment.Identifier")
+            {
+                this.Project.Environment.Lights = null;
+                this.Project.Environment.Sun = SunDefaults(this.Project.Environment.Identifier);
+            }
+            // 🔴 A sun being dragged is a sky being rebuilt on every frame of the drag, and the slowest of them takes
+            //    a tenth of a second. The thumb gets a half-size sky — still every cloud and every bounce, at a
+            //    quarter of the texels — and the full one is generated the moment it is let go.
+            if (Path.startsWith("Environment.Sun.")) this.Integrator.SkyHeight = Committed ? 128 : 64;
             if (Committed) this.RenderEnvironmentPod();
             this.Recomposite();
             return;
@@ -8372,8 +8390,13 @@ export class TexturePanel
             case "pick-environment":
             {
                 if (this.Project.Environment.Identifier === Argument) return;
+                const Kept = this.Project.Environment.Sun?.On;
                 this.Project.Environment.Identifier = Argument;
                 this.Project.Environment.Lights = null;
+                // The sun belongs to the sky as much as the rig does — a sunset's sun sits low and orange, a
+                // workshop has none at all. Whether it is switched ON is the one thing the user keeps.
+                this.Project.Environment.Sun = SunDefaults(Argument);
+                if (Kept !== undefined) this.Project.Environment.Sun.On = Kept;
                 this.MarkDirty();
                 this.RenderEnvironmentPod();
                 this.Chronicle("surface", `${EnvironmentByIdentifier[Argument]?.Label || Argument} lighting`, "environment");
@@ -8405,6 +8428,25 @@ export class TexturePanel
                 this.MarkDirty();
                 this.RenderEnvironmentPod();
                 this.Notify(`${LightOrdering[Index].Label} light added.`);
+                return;
+            }
+            case "toggle-sun":
+            {
+                const Sun = SanitiseSun(this.Project.Environment.Sun, this.Project.Environment.Identifier);
+                Sun.On = !Sun.On;
+                this.Project.Environment.Sun = Sun;
+                this.MarkDirty();
+                this.RenderEnvironmentPod();
+                this.Chronicle("surface", `Sun ${Sun.On ? "on" : "off"}`, "environment");
+                this.Notify(Sun.On ? "Sun on — the sky was rebuilt around it." : "Sun off.");
+                return;
+            }
+            case "match-sun":
+            {
+                this.Project.Environment.Sun = SunDefaults(this.Project.Environment.Identifier);
+                this.MarkDirty();
+                this.RenderEnvironmentPod();
+                this.Notify("The sun stands where the environment puts it.");
                 return;
             }
             case "reset-lights":
@@ -9727,13 +9769,17 @@ export class TexturePanel
         const Environment = this.Project.Environment;
         const Preset = EnvironmentByIdentifier[Environment.Identifier] || EnvironmentOrdering[0];
         const Rig = Environment.Lights || DefaultLights(Environment.Identifier);
+        const Sun = SanitiseSun(Environment.Sun, Environment.Identifier);
         const Lit = Rig.filter((Light) => Light.On !== false).length;
-        const Sky = (Entry) => `linear-gradient(${ToHex(Entry.Zenith)}, ${ToHex(Entry.Horizon)} 62%, ${ToHex(Entry.Ground)} 63%)`;
         const Tile = (Entry) => `
             <button class="sky-tile ${Entry.Identifier === Environment.Identifier ? "active" : ""}"
                     data-action="pick-environment" data-argument="${Entry.Identifier}"
-                    aria-pressed="${Entry.Identifier === Environment.Identifier}" title="Key ${Entry.Key} · fill ${Entry.Fill} · rim ${Entry.Rim}">
-                <span class="sky-face" style="background:${Sky(Entry)}"><i style="left:${(Environment.Rotation / 360) * 100}%"></i></span>
+                    aria-pressed="${Entry.Identifier === Environment.Identifier}"
+                    title="${Escape(Entry.Note)} · key ${Entry.Key} · fill ${Entry.Fill} · rim ${Entry.Rim}">
+                <span class="sky-face">
+                    <canvas width="112" height="56" data-sky="${Entry.Identifier}"></canvas>
+                    <i style="left:${(((Environment.Rotation % 360) + 360) % 360 / 360) * 100}%"></i>
+                </span>
                 <b>${Escape(Entry.Label)}</b>
             </button>`;
         const LightRow = (Light, Index) =>
@@ -9765,14 +9811,41 @@ export class TexturePanel
                 Badge: Preset.Label.toUpperCase(),
                 Body: `
                     <div class="sky-rail">${EnvironmentOrdering.map(Tile).join("")}</div>
+                    <p class="property-hint">${Escape(Preset.Note)} — generated rather than loaded, which is why the sun
+                        below can move through it.</p>
                     ${SliderRow({ Label: "Rotation", Path: "Environment.Rotation", Value: Environment.Rotation, Minimum: 0, Maximum: 360, Step: 1, Unit: "°" })}
                     ${SliderRow({ Label: "Intensity", Path: "Environment.Intensity", Value: Environment.Intensity, Minimum: 0, Maximum: 4, Step: 0.01, Unit: "×" })}
                     ${SliderRow({ Label: "Exposure", Path: "Environment.Exposure", Value: Environment.Exposure, Minimum: -4, Maximum: 4, Step: 0.01, Unit: "EV" })}
                     ${ToggleRow({ Label: "Show background", Path: "Environment.Background", Value: Environment.Background, Hint: "Off paints the viewport flat and keeps the lighting." })}`,
             }),
             Group({
+                Title: "Sun",
+                Badge: Sun.On ? `${Math.round(Sun.Elevation)}° · ${Math.round(Sun.Warmth)}K` : "OFF",
+                Body: `
+                    <div class="sun-head ${Sun.On ? "" : "dim"}">
+                        <span class="sun-dot" style="--chip:${ToHex(WarmthColour(Sun.Warmth).map((Part) => Math.min(1, Part)))}"></span>
+                        <b>Sunlight</b><span>${Sun.On ? "Lighting the scene and drawn in the sky" : "The sky keeps its glow, the light is off"}</span>
+                        <button class="chip-button" data-action="toggle-sun" aria-pressed="${Sun.On}"
+                                title="${Sun.On ? "Switch the sun off" : "Switch the sun on"}">${Sun.On ? "On" : "Off"}</button>
+                    </div>
+                    ${
+                        Sun.On
+                            ? [
+                                  SliderRow({ Label: "Strength", Path: "Environment.Sun.Strength", Value: Sun.Strength, Minimum: 0, Maximum: 24, Step: 0.1, Unit: "" }),
+                                  SliderRow({ Label: "Height", Path: "Environment.Sun.Elevation", Value: Sun.Elevation, Minimum: -20, Maximum: 90, Step: 1, Unit: "°", Hint: "Below nothing it sets, and the sky goes with it." }),
+                                  SliderRow({ Label: "Swing", Path: "Environment.Sun.Swing", Value: Sun.Swing, Minimum: 0, Maximum: 360, Step: 1, Unit: "°" }),
+                                  SliderRow({ Label: "Warmth", Path: "Environment.Sun.Warmth", Value: Sun.Warmth, Minimum: 1500, Maximum: 12000, Step: 50, Unit: "K" }),
+                                  SliderRow({ Label: "Size", Path: "Environment.Sun.Size", Value: Sun.Size, Minimum: 0.25, Maximum: 20, Step: 0.05, Unit: "°", Hint: "Half a degree is the real one. Wider is the same sun through something." }),
+                                  ActionRow([{ Action: "match-sun", Label: "Match the sky", Glyph: "rotate" }]),
+                              ].join("")
+                            : `<p class="property-hint">A sun is one light the sky is built around: switch it on and the
+                                glow, the horizon flush and the light on the model are regenerated together.</p>`
+                    }`,
+            }),
+            Group({
                 Title: "Lights",
                 Badge: `${Lit} OF ${LightOrdering.length}`,
+                Open: false,
                 Body: `
                     ${Rig.map(LightRow).join("")}
                     ${ActionRow([
@@ -9781,9 +9854,41 @@ export class TexturePanel
                     ])}
                     <p class="property-hint">Three lights hang in front of the environment — the shading pass carries three,
                         so the rig says three. Until one is touched they are the sky's own key, fill and rim, and
-                        <em>Follow the sky</em> hands them back.</p>`,
+                        <em>Follow the sky</em> hands them back. The sun is not one of them; it has its own.</p>`,
             }),
         ].join("");
+    }
+
+    // The tiles, painted after the pod is built. Every sky is drawn with its own sun so the rail reads as a set of
+    // places rather than a set of gradients, and the one in use is drawn with the sun as it actually stands.
+    //
+    // 🔴 Cached on what was drawn. Nine skies at a thousand texels each is a tenth of a second, and the pod is
+    //    rebuilt on every frame of a slider drag — without the cache, moving the exposure would stutter.
+    DrawSkyTiles(Pod)
+    {
+        const Host = Pod || Select("#environment-pod");
+        if (!Host || Host.hidden) return;
+        if (!this.SkyTiles) this.SkyTiles = new Map();
+        const Environment = this.Project.Environment;
+        for (const Canvas of Host.querySelectorAll("canvas[data-sky]"))
+        {
+            const Identifier = Canvas.dataset.sky;
+            const Live = Identifier === Environment.Identifier;
+            const Sun = Live ? SanitiseSun(Environment.Sun, Identifier) : SunDefaults(Identifier);
+            const Mark = `${Identifier}:${Canvas.width}:${Object.values(Sun).join(",")}`;
+            // Nine presets and however many suns the painter stopped on. Dropped wholesale rather than one at a
+            // time: the nine come back for nothing, and an hour of sun-dragging is not a reason to hold a hundred
+            // tiles of a sun nobody kept.
+            if (this.SkyTiles.size > 48) this.SkyTiles.clear();
+            if (!this.SkyTiles.has(Mark))
+                this.SkyTiles.set(Mark, PreviewImage(Identifier, Sun, Canvas.width, Canvas.height, Live ? Environment.Exposure : 0));
+            const Picture = this.SkyTiles.get(Mark);
+            const Context = Canvas.getContext("2d");
+            if (!Context || !Context.createImageData) continue;
+            const Image_ = Context.createImageData(Canvas.width, Canvas.height);
+            Image_.data.set(Picture.Pixels);
+            Context.putImageData(Image_, 0, 0);
+        }
     }
 
     // Both pods are the inspector's rows in another window, so they are filled the way the inspector body is — and a
@@ -9808,6 +9913,7 @@ export class TexturePanel
     RenderEnvironmentPod()
     {
         this.DressPod(Select("#environment-pod"), this.EnvironmentBody());
+        this.DrawSkyTiles();
     }
 
     RenderScenePod()

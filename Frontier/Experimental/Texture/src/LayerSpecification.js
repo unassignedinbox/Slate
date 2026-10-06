@@ -19,7 +19,7 @@ import { NormaliseEntry } from "./MaskSolver.js";
 import { DefaultRampStops, SortRampStops, DecalFitIdentifiers } from "./StrokeSpecification.js";
 import { FinishDefaults, SanitiseFinish, FinishBadge } from "./FinishSpecification.js";
 import { CreateObject, SanitiseObject, FirstTile } from "./SceneStructure.js";
-import { SurfaceDefaults, SurfaceControls, LightOrdering, DefaultLights } from "./MaterialSpecification.js";
+import { SurfaceDefaults, SurfaceControls, LightOrdering, DefaultLights, SunDefaults, SanitiseSun } from "./MaterialSpecification.js";
 
 export const LayerKinds = [
     {
@@ -330,7 +330,16 @@ export const DefaultProject = () => ({
     Objects: [CreateObject({ Name: "Shader ball", Kind: "shaderball", Subdivision: 2, Tile: FirstTile })],
     Object: "",
     Resolution: 1024,
-    Environment: { Identifier: "studio", Rotation: 35, Intensity: 1, Exposure: 0, Background: true, Shadow: true, Lights: null },
+    Environment: {
+        Identifier: "studio",
+        Rotation: 35,
+        Intensity: 1,
+        Exposure: 0,
+        Background: true,
+        Shadow: true,
+        Lights: null,
+        Sun: SunDefaults("studio"),
+    },
     Material: { ...SurfaceDefaults },
     Layers: [],
     Selection: "",
@@ -617,6 +626,7 @@ export const SanitiseProject = (Candidate) =>
             Background: Candidate.Environment.Background !== false,
             Shadow: Candidate.Environment.Shadow !== false,
             Lights: SanitiseLights(Candidate.Environment),
+            Sun: SanitiseSun(Candidate.Environment.Sun, Candidate.Environment.Identifier),
         };
     Project.Material = { ...SurfaceDefaults };
     for (const [Identifier, Value] of Object.entries(Candidate.Material || {}))
