@@ -14,7 +14,13 @@ import FolderInspector from "./FolderInspector.jsx";
 import { FolderInventory } from "./FolderInventory.mjs";
 import DiagnosticsCard from "./DiagnosticsCard.jsx";
 import { BrowserFPS } from "./BrowserTiming.js";
-import { EnsureEditorCamera, IsEditorCamera } from "./ScenePolicy.js";
+import {
+  EnsureEditorCamera,
+  IsEditorCamera,
+  ConsolidateAtmosphere,
+  ConsolidateAtmosphereValues,
+  ConsolidateAtmosphereFlags,
+} from "./ScenePolicy.js";
 import WindEditor from "./WindPanel.jsx";
 import AssetPanel from "./AssetPanel.jsx";
 import { RestoreAssets } from "./AssetDepot.js";
@@ -78,7 +84,6 @@ const InitialRows = [
   ],
   ["sun", "Sun", "sun", "sun", "world", "Directional light"],
   ["flare", "Lens Flare", "flare", "lens-flare", "sun", "Sun optical effect"],
-  ["sky", "Sky", "atmosphere", "sky-scattering", "world", "Atmosphere / Sky"],
   ["moon", "Moons", "moon", "moon", "world", "Lunar bodies · four slots"],
   [
     "stars",
@@ -193,6 +198,18 @@ function Restore() {
   }
 }
 const Saved = Restore();
+const SceneRows = Saved.Rows ? ConsolidateAtmosphere(Saved.Rows) : undefined;
+const SkyAlias = !SceneRows?.some((Row) => Row.Id === "sky");
+Saved.Values = ConsolidateAtmosphereValues(Saved.Values, Saved.Rows);
+Saved.Hidden = ConsolidateAtmosphereFlags(Saved.Hidden, Saved.Rows);
+Saved.Collapsed = ConsolidateAtmosphereFlags(Saved.Collapsed, Saved.Rows);
+if (SceneRows) Saved.Rows = SceneRows;
+if (SkyAlias && Saved.Selected === "sky") Saved.Selected = "atmosphere";
+if (SkyAlias && new URLSearchParams(location.search).get("inspect") === "sky") {
+  const Address = new URL(location.href);
+  Address.searchParams.set("inspect", "atmosphere");
+  history.replaceState(null, "", Address);
+}
 function App() {
   const [Debug, SetDebug] = useState(0),
     [HiZ, ToggleHiZ] = useState(true),
@@ -324,7 +341,9 @@ function App() {
   const AssignRows = (Update) =>
     StoreRows((Previous) =>
       EnsureEditorCamera(
-        typeof Update === "function" ? Update(Previous) : Update,
+        ConsolidateAtmosphere(
+          typeof Update === "function" ? Update(Previous) : Update,
+        ),
       ),
     );
   const [AssetRecords, StoreAssets] = useState(RestoreAssets(Saved.Assets)),
@@ -760,8 +779,11 @@ function App() {
           ? Loaded.Rows
           : EnsureReferenceLights(Loaded.Rows),
       );
-      Collapse(Loaded.Collapsed || {});
-      const ImportedValues = { ...Loaded.Values };
+      Collapse(ConsolidateAtmosphereFlags(Loaded.Collapsed, Loaded.Rows));
+      const ImportedValues = ConsolidateAtmosphereValues(
+        Loaded.Values,
+        Loaded.Rows,
+      );
       for (const Row of Loaded.Rows)
         if (Row.Panel === "geometry")
           ImportedValues[Row.Id] = {
@@ -773,10 +795,17 @@ function App() {
           };
       AssignValues(ImportedValues);
       StoreAssets(RestoreAssets(Loaded.Assets));
-      AssignHidden({ ...Loaded.Hidden, camera: false });
+      AssignHidden({
+        ...ConsolidateAtmosphereFlags(Loaded.Hidden, Loaded.Rows),
+        camera: false,
+      });
       ChangeSettings({ ...DefaultSettings, ...Loaded.Settings });
       RenameProject(Loaded.Name || "Project-Zero");
-      Select(Loaded.Rows[0]?.Id || "camera");
+      Select(
+        Loaded.Rows[0]?.Id === "sky" && Loaded.Rows[0]?.Panel === "atmosphere"
+          ? "atmosphere"
+          : Loaded.Rows[0]?.Id || "camera",
+      );
       Toast("HTML UI state imported");
     } catch {
       Toast("Not a valid HTML UI study file");
@@ -1502,7 +1531,6 @@ function App() {
     ) : Tab === "Inspector" ? (
       <>
         <div className="inspector-scroll" key={Subject.Id}>
-          {["sun", "height-fog"].includes(Subject.Panel) && ReferenceCards()}
           {Subject.ReferenceOnly ? null : Subject.Panel === "group" ? (
             <FolderInspector
               Subject={Subject}
@@ -1560,7 +1588,9 @@ function App() {
               AllValues={Values}
               AllHidden={Hidden}
               ReferenceCards={
-                Subject.Panel === "wind" ? ReferenceCards() : null
+                ["sun", "height-fog", "wind"].includes(Subject.Panel)
+                  ? ReferenceCards()
+                  : null
               }
             />
           )}

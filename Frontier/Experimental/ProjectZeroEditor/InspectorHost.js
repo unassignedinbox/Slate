@@ -60,7 +60,7 @@ function Trim() {
       ".mp-rail",
       ".lp-output",
       ".lp-shape",
-      ".lp-placement",
+      ".lp-transform",
       ".lp-participation",
     ],
     spotlight: [
@@ -68,7 +68,7 @@ function Trim() {
       ".mp-rail",
       ".lp-output",
       ".lp-shape",
-      ".lp-placement",
+      ".lp-transform",
       ".lp-participation",
     ],
     ieslight: [
@@ -76,7 +76,7 @@ function Trim() {
       ".mp-rail",
       ".lp-output",
       ".lp-shape",
-      ".lp-placement",
+      ".lp-transform",
       ".lp-participation",
     ],
     arealight: [
@@ -84,7 +84,7 @@ function Trim() {
       ".mp-rail",
       ".lp-output",
       ".lp-shape",
-      ".lp-placement",
+      ".lp-transform",
       ".lp-participation",
     ],
     tubelight: [
@@ -92,7 +92,7 @@ function Trim() {
       ".mp-rail",
       ".lp-output",
       ".lp-shape",
-      ".lp-placement",
+      ".lp-transform",
       ".lp-participation",
     ],
   }[Kind];
@@ -108,7 +108,10 @@ function Trim() {
   Mount.dataset.referenceKind = Kind;
   if (["wind", "fog", "sun"].includes(Kind))
     Sheet.querySelector(".ident")?.remove();
-  if (Kind === "wind") Custom.prepend(Custom.querySelector(".wf-trace"));
+  if (Kind === "wind") {
+    Custom.prepend(Custom.querySelector(".wf-trace"));
+    Custom.querySelector(".wf-specs")?.remove();
+  }
   if (Kind === "fog") {
     const Transport = Custom.querySelector(".fg-scatter");
     Transport.replaceChildren(Transport.querySelector(".fg-chamber"));

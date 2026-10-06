@@ -1,3 +1,4 @@
+import FogPanel from "./FogPanel.jsx";
 import FracturePanel from "./FracturePanel.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
 import {
@@ -691,6 +692,7 @@ export function Inspector({
             </button>
           </div>
         </header>
+        {ReferenceCards}
         <div className="section-caption">
           BAKING <small>Native target bindings pending</small>
         </div>
@@ -1558,13 +1560,24 @@ export function Inspector({
       Aerial = Subject.Panel === "aerial-fog";
     Content = (
       <>
-        {Header("Environment", "Fog")}
+        {Header("Environment")}
+        {ReferenceCards}
+        {(Local || Aerial) && (
+          <FogPanel
+            Kind={Subject.Panel}
+            V={V}
+            Values={Values}
+            Change={AssignProperty}
+          />
+        )}
         <Card Title="Fog settings" Height={142}>
           {Tiles(Local ? ["Enabled", "Follow Wind"] : ["Enabled"])}
         </Card>
-        <Card Title="Visibility through fog" GraphHandled>
-          <FogGraph Kind={Subject.Panel} V={V} Change={AssignProperty} />
-        </Card>
+        {!Local && !Aerial && (
+          <Card Title="Visibility through fog" GraphHandled>
+            <FogGraph Kind={Subject.Panel} V={V} Change={AssignProperty} />
+          </Card>
+        )}
         <div className="card-grid">
           <Card Title="Medium" Height={416}>
             {Fields(

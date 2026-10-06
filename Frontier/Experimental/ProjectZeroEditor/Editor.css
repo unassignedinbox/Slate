@@ -2833,7 +2833,8 @@ img {
 }
 
 /* The second Wind card is an inline addition, not another padded inspector stack. */
-.specialized-inspector.wind > .reference-inspector-copy {
+.specialized-inspector:is(.wind, .sun, .height-fog)
+  > .reference-inspector-copy {
   margin-bottom: 16px;
 }
 

@@ -2508,3 +2508,50 @@ contacts/supports, individual fragment SDF generation with independent bounds/tr
 samples, and native serialization/invalidation. GPU flood-fill/component labeling can identify disconnected voxel
 components when that representation is used; it is not a universal prerequisite for fracture or for baking already
 separated pieces.
+
+## C048 — Quieter Anemometer, header-first cards and shared light transforms
+
+2026-10-06. HTML-only follow-up to the user's C047 review.
+
+- Kept the Anemometer's live trace, instantaneous speed and mean line. Removed its gust-factor, spread, pressure and
+  alternate-unit block through the owned host adapter; the pinned Wind source is untouched.
+- Statistic tiles on Sun, Wind, Height Fog and lights now have **no outline** and **6px corner rounding**, replacing
+  C047's sharp bordered boxes. They retain the two-column layout and readable values.
+- Sun and Height Fog now show their native inspector header **before** the added preview/statistic cards. The
+  additions align with the native card width. Wind's approved composite-first / Anemometer-second order stays intact.
+- Replaced each light's custom Placement & aim card and X/Z diagram with the existing **TransformPanel** component:
+  Position, Rotation and Scale, including numeric entry/drag, resets and locking. The emitter adapter derives an
+  initial rotation from legacy target-based lights, preserves aim when translating, and updates the stored target
+  when rotation is authored. This remains browser authoring, not a native light-transform integration.
+- Added appropriately adapted Atmospheric Fog and Local Fog instruments: sight-line/volume schematic, borderless
+  readings, visibility probe and beam chamber. They use each object's existing native-draft controls and shared
+  HTML extinction model, not independent copied height-fog values. Atmospheric Fog exposes distance start and Mie
+  blend; Local Fog exposes coverage, feature scale, anisotropy and its authored shape. Its transmission probe is
+  explicitly a homogeneous interior study, not an integration through arbitrary volume geometry. Existing medium,
+  bounds, wind and other native controls remain.
+
+### Duplicate environment entries
+
+In this HTML editor, built-in **Sky** and **Atmosphere** both selected the same atmosphere inspector and parameter
+schema. The default scene now contains one **Atmosphere** entry. Saved/imported legacy Sky entries consolidate into
+it, children are reparented, and old `?inspect=sky` links redirect. Explicit canonical Atmosphere values take precedence;
+other authored Sky values are carried over. The original Sky property record is retained in scene/export values so
+conflicting drafts are not silently destroyed. Visibility/collapse state transfers only when Sky was the sole entry;
+reset canonical values do not resurrect the archived draft on a later reload. Non-alias/user-created objects remain.
+
+The three fog entries are not duplicate inspectors: Height Fog has altitude-dependent falloff, Atmospheric Fog has
+surface-distance/aerial haze controls, and Local Fog has bounded geometry. All three are retained.
+
+### Verification
+
+- Standalone build succeeds. `CheckInspectorLayout.mjs` passes **10 checks**, including border/radius/header order,
+  continuing Anemometer animation, both new fog variants and native-control persistence, narrow layout, shared light
+  transforms/reset/lock, and legacy Sky migration. An explicit comparison against C047 checks the complete native
+  input/select/textarea inventories for seven affected inspectors; none are lost.
+- Updated `CheckLighting.mjs` passes **22 checks**, including all light types, persisted transform values and the
+  existing fracture/SDF-authoring workflow. Existing `CheckReference.mjs` passes with no application errors and
+  unchanged pinned inspector hashes. External Fontshare failures remain separately reported by the browser tests.
+- Actual browser captures and receipts are in `ProjectZeroEditor/Screenshots/InspectorRefinement/`, including
+  `Anemometer.png`, `sun-header.png`, `height-fog-header.png`, both added fog variants and `LightTransform.png`.
+
+No native C++ port, fracture geometry algorithm or SDF-generation capability changes in this pass.

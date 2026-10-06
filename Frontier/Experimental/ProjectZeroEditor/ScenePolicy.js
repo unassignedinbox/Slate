@@ -39,3 +39,43 @@ export function EnsureEditorCamera(Rows = []) {
   );
   return Result;
 }
+
+// Only the legacy built-in Sky alias shares Atmosphere's full inspector. User-created skies are untouched.
+export function ConsolidateAtmosphere(Rows = []) {
+  const Sky = Rows.find(
+    (Row) => Row.Id === "sky" && Row.Panel === "atmosphere",
+  );
+  if (!Sky) return Rows;
+  const Atmosphere = Rows.find((Row) => Row.Id === "atmosphere");
+  if (Atmosphere && Atmosphere.Panel !== "atmosphere") return Rows;
+  return Rows.flatMap((Row) =>
+    Row === Sky
+      ? Atmosphere
+        ? []
+        : [
+            {
+              ...Sky,
+              Id: "atmosphere",
+              Name: "Atmosphere",
+              Description: "Procedural sky and atmospheric scattering",
+            },
+          ]
+      : [{ ...Row, Parent: Row.Parent === "sky" ? "atmosphere" : Row.Parent }],
+  );
+}
+export function ConsolidateAtmosphereValues(Values = {}, Rows = []) {
+  const Atmosphere = Rows.find((Row) => Row.Id === "atmosphere");
+  if (Atmosphere && Atmosphere.Panel !== "atmosphere") return { ...Values };
+  // Keep the legacy record in exported values, including conflicting authored properties.
+  return Values.sky &&
+    Rows.some((Row) => Row.Id === "sky" && Row.Panel === "atmosphere")
+    ? { ...Values, atmosphere: { ...Values.sky, ...Values.atmosphere } }
+    : { ...Values };
+}
+
+export function ConsolidateAtmosphereFlags(Flags = {}, Rows = []) {
+  const SkyOnly =
+    !Rows.some((Row) => Row.Id === "atmosphere") &&
+    Rows.some((Row) => Row.Id === "sky" && Row.Panel === "atmosphere");
+  return SkyOnly ? { ...Flags, atmosphere: Flags.sky ?? false } : { ...Flags };
+}

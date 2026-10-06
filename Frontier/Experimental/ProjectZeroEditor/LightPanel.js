@@ -3,6 +3,7 @@
 //============================================================================================================================================
 // 📦 Type-specific browser light instruments with live emission and aperture illustrations.
 
+import { MountLightTransform } from "./EmitterPanel.jsx";
 import { el } from "./InspectorDepot/kit.js";
 const Labels = {
   pointlight: "Point light",
@@ -494,93 +495,10 @@ export function LightPanel(Subject, Context) {
       },
       98,
     );
-  const Placement = Card(
-    Spot || Automotive || Area ? "Placement & aim" : "Placement",
-    "03",
-    "lp-placement",
-  );
-  for (const [Key, Name, Unit] of [
-    ["pos", "Position", "m"],
-    ...(Spot || Automotive || Area
-      ? [["target", "Target", "m"]]
-      : Style === "tubelight"
-        ? [["rot", "Rotation", "°"]]
-        : []),
-  ]) {
-    const Row = el("div", "lp-vector");
-    Row.append(el("span", "", Name));
-    ["X", "Y", "Z"].forEach((Axis, Index) => {
-      const Label = el("label"),
-        Input = el("input");
-      Input.type = "number";
-      Input.step = Unit === "m" ? 0.05 : 1;
-      Input.setAttribute("aria-label", Name + " " + Axis);
-      Label.append(el("small", "", Axis), Input);
-      Input.onblur = Refresh;
-      Input.oninput = () => {
-        if (Input.value === "") return;
-        const Numeric = Number(Input.value);
-        if (!Number.isFinite(Numeric)) return;
-        const Next = [...(Properties[Key] || [0, 0, 0])];
-        Next[Index] = Clamp(Numeric, -999, 999);
-        Write(Key, Next);
-      };
-      Bindings.push(() => {
-        Input.value = Properties[Key]?.[Index] ?? 0;
-        Input.disabled = Subject.locked;
-      });
-      Row.append(Label);
-    });
-    Placement.append(Row);
-  }
-  Canvas(
-    Placement,
-    (Brush, Width, Height) => {
-      Brush.clearRect(0, 0, Width, Height);
-      const Position = Properties.pos || [0, 0, 0],
-        Target = Properties.target || [0, 0, 0];
-      const Extent =
-        Math.max(
-          10,
-          Math.abs(Position[0]),
-          Math.abs(Position[2]),
-          Math.abs(Target[0]),
-          Math.abs(Target[2]),
-        ) * 1.15;
-      const Project = (Coordinates) => [
-        Width / 2 + (Coordinates[0] / Extent) * (Width / 2 - 12),
-        Height / 2 + (Coordinates[2] / Extent) * (Height / 2 - 12),
-      ];
-      Brush.strokeStyle = "#ffffff12";
-      Brush.beginPath();
-      Brush.moveTo(12, Height / 2);
-      Brush.lineTo(Width - 12, Height / 2);
-      Brush.moveTo(Width / 2, 12);
-      Brush.lineTo(Width / 2, Height - 12);
-      Brush.stroke();
-      const Start = Project(Position),
-        End = Project(Target);
-      if (Spot || Automotive || Area) {
-        Brush.setLineDash([3, 4]);
-        Brush.strokeStyle = Tint(0.55);
-        Brush.beginPath();
-        Brush.moveTo(...Start);
-        Brush.lineTo(...End);
-        Brush.stroke();
-        Brush.setLineDash([]);
-        Brush.strokeStyle = "#d2d9d3";
-        Brush.strokeRect(End[0] - 3, End[1] - 3, 6, 6);
-      }
-      Brush.fillStyle = Tint();
-      Brush.beginPath();
-      Brush.arc(...Start, 4, 0, Math.PI * 2);
-      Brush.fill();
-      Brush.fillStyle = "#6b746d";
-      Brush.font = "8px sans-serif";
-      Brush.fillText("X / Z · ±" + Extent.toFixed(1) + " m", 10, Height - 4);
-    },
-    110,
-  );
+  const Placement = el("div", "lp-card lp-transform");
+  Host.append(Placement);
+  const Transform = MountLightTransform(Placement, Subject, Context);
+  Bindings.push(Transform.Refresh);
   const Visibility = Card("Light participation", "04", "lp-participation");
   Toggle(Visibility, "shadows", "Cast shadows");
   Toggle(
@@ -607,7 +525,10 @@ export function LightPanel(Subject, Context) {
   Context.register(Refresh);
   const Observer = new ResizeObserver(Refresh);
   Observer.observe(Host);
-  Host._dispose = () => Observer.disconnect();
+  Host._dispose = () => {
+    Observer.disconnect();
+    Transform.Dispose();
+  };
   Refresh();
   return Host;
 }

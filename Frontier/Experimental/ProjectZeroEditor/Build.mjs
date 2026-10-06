@@ -79,6 +79,8 @@ const Fonts = ["Light", "Regular"]
 // Preserve the reference's document-wide CSS and control behaviour without restyling the current editor.
 const ReferenceOutput = await build({
   entryPoints: [path.join(Folder, "InspectorHost.js")],
+  nodePaths: [path.join(Folder, "../FrontierEditor/node_modules")],
+  define: { "process.env.NODE_ENV": '"production"' },
   bundle: true,
   write: false,
   minify: true,
@@ -123,11 +125,10 @@ Assets.ReferenceInspector = `<!doctype html><html><head><meta charset="utf-8">
 <style>${fs.readFileSync(path.join(Folder, "InspectorDepot/Fontshare.css"), "utf8")}
 ${ReferenceStyle}
 ${LightControls}
+${fs.readFileSync(path.join(Folder, "MaterialPanel.css"), "utf8").split(".material-panel {")[0]}
 ${fs.readFileSync(path.join(Folder, "LightPanel.css"), "utf8")}
-#ReferenceMount[data-reference-kind="wind"]{padding:0;}
+#ReferenceMount:is([data-reference-kind="wind"],[data-reference-kind="sun"],[data-reference-kind="fog"]){padding:0;}
 @media(max-width:320px){#ReferenceMount[data-reference-kind="wind"] .mp-rail{grid-template-columns:repeat(2,minmax(0,1fr));}}
-.wf-trace .wf-specs{gap:12px;}
-.wf-trace .wf-specs>div{background:transparent;border:0;border-top:1px solid var(--stroke-strong);border-radius:0;padding:8px 0;}
 html,body{height:auto;overflow:hidden;background:var(--panel)}
 #ReferenceMount{display:block;overflow:hidden;flex:none}
 </style></head><body><div id="ReferenceMount" class="props"></div><script>${ReferenceScript}</script></body></html>`;

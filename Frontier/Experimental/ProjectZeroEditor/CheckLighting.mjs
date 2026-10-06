@@ -16,7 +16,7 @@ const Folder = path.dirname(fileURLToPath(import.meta.url)),
   { chromium } = Require("playwright");
 const Address =
   process.env.FRONTIER_EDITOR_URL || "http://127.0.0.1:4173/ProjectZeroEditor/";
-const Proof = path.join(Folder, "Screenshots/Lighting"),
+const Proof = path.join(Folder, "Screenshots/InspectorRefinement"),
   Checks = [],
   Errors = [],
   FontFailures = [];
@@ -60,12 +60,16 @@ async function Square(Frame) {
     (Tiles) =>
       Tiles.map((Tile) => ({
         Radius: getComputedStyle(Tile).borderRadius,
+        Border: getComputedStyle(Tile).borderTopWidth,
         Overflow: Tile.scrollWidth > Tile.clientWidth + 1,
       })),
   );
   assert(Reading.length >= 4);
   assert(
-    Reading.every((Tile) => Tile.Radius === "0px" && !Tile.Overflow),
+    Reading.every(
+      (Tile) =>
+        Tile.Radius === "6px" && Tile.Border === "0px" && !Tile.Overflow,
+    ),
     JSON.stringify(Reading),
   );
 }
@@ -146,7 +150,7 @@ try {
     await Page.screenshot({ path: path.join(Proof, Id + ".png") });
     Checks.push(
       Id +
-        ": complete cards, square tiles, live preview and persisted controls",
+        ": complete cards, borderless tiles, live preview and persisted controls",
     );
   }
   let Frame = await Open("reference-ece-low-beam");
@@ -169,17 +173,50 @@ try {
     }).inputValue(),
     "-2",
   );
-  const PositionBefore = await Frame.locator(".lp-placement canvas").evaluate(
-    (Canvas) => Canvas.toDataURL(),
-  );
-  await Frame.getByRole("spinbutton", { name: "Target X", exact: true }).fill(
+  await Frame.getByRole("spinbutton", { name: "Position X", exact: true }).fill(
     "6",
   );
-  assert.notEqual(
-    await Frame.locator(".lp-placement canvas").evaluate((Canvas) =>
-      Canvas.toDataURL(),
-    ),
-    PositionBefore,
+  await Page.waitForFunction(
+    () =>
+      JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")).Values[
+        "reference-ece-low-beam"
+      ].ReferenceInspector.Properties.pos[0] === 6,
+  );
+  await Frame.getByRole("spinbutton", { name: "Rotation Y", exact: true }).fill(
+    "35",
+  );
+  await Frame.getByRole("spinbutton", { name: "Scale Z", exact: true }).fill(
+    "2",
+  );
+  await Page.waitForFunction(
+    () =>
+      JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")).Values[
+        "reference-ece-low-beam"
+      ].ReferenceInspector.Properties.scale[2] === 2,
+  );
+  assert.equal(await Frame.locator(".lp-placement").count(), 0);
+  await Open("reference-ece-low-beam");
+  Frame = Page.frameLocator('iframe[title^="Reference inspector"]');
+  assert.equal(
+    await Frame.getByRole("spinbutton", {
+      name: "Position X",
+      exact: true,
+    }).inputValue(),
+    "6",
+  );
+  assert.equal(
+    await Frame.getByRole("spinbutton", {
+      name: "Rotation Y",
+      exact: true,
+    }).inputValue(),
+    "35",
+  );
+  assert.equal(
+    await Frame.getByRole("spinbutton", {
+      name: "Scale Z",
+      exact: true,
+    }).inputValue(),
+    "2",
   );
   const Shadow = Frame.getByRole("switch", {
       name: "Cast shadows",
@@ -200,7 +237,7 @@ try {
       .isDisabled()),
   );
   Checks.push(
-    "IES profiles, negative cut-off, world aim, shadows and locking respond correctly",
+    "IES profiles, negative cut-off, shared Transform position/rotation/scale persistence, shadows and locking respond correctly",
   );
   Frame = await Open("reference-softbox");
   const TwoSided = Frame.getByRole("switch", {
@@ -260,7 +297,10 @@ try {
     );
     await Page.waitForTimeout(300);
     await Page.screenshot({ path: path.join(Proof, Id + "-tiles.png") });
-    Checks.push(Id + ": square statistics; original card selection retained");
+    Checks.push(
+      Id +
+        ": borderless, lightly rounded statistics; original card selection retained",
+    );
   }
   Frame = await Open("reference-ece-low-beam");
   await Page.locator('iframe[title^="Reference inspector"]').evaluate(

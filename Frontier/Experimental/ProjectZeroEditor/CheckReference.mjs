@@ -131,11 +131,7 @@ try {
       });
       assert.equal(
         Placement,
-        Id === "wind"
-          ? "inline"
-          : ["sun", "height-fog"].includes(Id)
-            ? "before"
-            : "after",
+        ["wind", "sun", "height-fog"].includes(Id) ? "inline" : "after",
       );
     }
     if (["world", "wind", "clouds"].includes(Id))
@@ -161,7 +157,7 @@ try {
         ".mp-rail",
         ".lp-output",
         ".lp-shape",
-        ".lp-placement",
+        ".lp-transform",
         ".lp-participation",
       ],
     ],
@@ -172,7 +168,7 @@ try {
         ".mp-rail",
         ".lp-output",
         ".lp-shape",
-        ".lp-placement",
+        ".lp-transform",
         ".lp-participation",
       ],
     ],
@@ -183,7 +179,7 @@ try {
         ".mp-rail",
         ".lp-output",
         ".lp-shape",
-        ".lp-placement",
+        ".lp-transform",
         ".lp-participation",
       ],
     ],
@@ -194,7 +190,7 @@ try {
         ".mp-rail",
         ".lp-output",
         ".lp-shape",
-        ".lp-placement",
+        ".lp-transform",
         ".lp-participation",
       ],
     ],
@@ -205,7 +201,7 @@ try {
         ".mp-rail",
         ".lp-output",
         ".lp-shape",
-        ".lp-placement",
+        ".lp-transform",
         ".lp-participation",
       ],
     ],
@@ -216,7 +212,7 @@ try {
         ".mp-rail",
         ".lp-output",
         ".lp-shape",
-        ".lp-placement",
+        ".lp-transform",
         ".lp-participation",
       ],
     ],
@@ -227,7 +223,7 @@ try {
         ".mp-rail",
         ".lp-output",
         ".lp-shape",
-        ".lp-placement",
+        ".lp-transform",
         ".lp-participation",
       ],
     ],
@@ -285,12 +281,7 @@ try {
         "pcard mp-metric wf-trace",
       );
       assert.equal(await Frame.locator(".wf-hero").count(), 0);
-      assert.deepEqual(
-        await Frame.locator(".wf-specs > div").evaluateAll((Nodes) =>
-          Nodes.map((Node) => getComputedStyle(Node).backgroundColor),
-        ),
-        Array(4).fill("rgba(0, 0, 0, 0)"),
-      );
+      assert.equal(await Frame.locator(".wf-specs").count(), 0);
       await Page.locator(".reference-inspector-copy").evaluate((Node) =>
         Node.scrollIntoView({ block: "start" }),
       );
@@ -305,14 +296,14 @@ try {
         "Anemometer animates after removal of the standalone hero",
       );
       Results.push(
-        "Wind: composite first, Anemometer second; transparent statistic tiles; chart animates",
+        "Wind: composite first, Anemometer second; unnecessary trace readouts removed; chart animates",
       );
     } else {
-      assert.equal(
-        await Page.locator(".inspector-scroll > :first-child").getAttribute(
-          "class",
-        ),
-        "reference-inspector-copy",
+      assert(
+        await Page.locator(
+          `[data-panel="${Id}"] > header + .reference-inspector-copy`,
+        ).count(),
+        "Preview follows the native inspector header",
       );
       if (Id === "height-fog") {
         assert.deepEqual(
@@ -333,7 +324,7 @@ try {
       }
       Results.push(
         Id +
-          ": preview first; copied identity removed" +
+          ": header then preview; copied identity removed" +
           (Id === "height-fog"
             ? "; Light transport contains only the beam chamber"
             : ""),
