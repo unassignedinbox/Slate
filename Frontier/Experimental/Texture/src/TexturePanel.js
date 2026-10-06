@@ -575,6 +575,7 @@ export class TexturePanel
         this.SheetTimer = 0;
         this.Measuring = false;
         this.Solving = false;
+        this.SheetMarks = new Map();
         // The entry of the stack whose controls are showing, and whether clicking the model is picking faces for it.
         this.FieldSelection = "";
         this.PickingFaces = false;
@@ -778,6 +779,7 @@ export class TexturePanel
         this.Sheets = MeasureSurface(Surface, { Size: this.SheetResolution, Thickness });
         this.SheetEdition = this.SurfaceEdition;
         this.MeasureMilliseconds = Math.round(performance.now() - Started);
+        this.SheetMarks.clear();
         this.Measuring = false;
         for (const Layer of this.Layers) this.SolveLayerSheet(Layer, false);
         if (!this.Solving) this.Recomposite();
@@ -793,12 +795,21 @@ export class TexturePanel
         return this.Sheets;
     }
 
+    // What the stack is, as a string. Two layers with the same generators in the same order and the same numbers on
+    // them have the same sheet, and anything that changes any of that is a sheet the device is holding out of date.
+    SheetMark(Layer)
+    {
+        const Entries = Layer?.Mask?.Generators || [];
+        return Entries.length ? `${this.SheetEdition}:${JSON.stringify(Entries)}` : "";
+    }
+
     // One layer's generator stack, solved into the sheet the shader multiplies into its mask. A stack with nothing in
     // it has no sheet at all, which is how the cost stays at nothing for the layers that never open the section.
     SolveLayerSheet(Layer, Recomposite = true)
     {
         if (!Layer || !this.Integrator?.Ready) return null;
         const Entries = (Layer.Mask?.Generators || []).filter((Entry) => Entry.Enabled !== false);
+        this.SheetMarks.set(Layer.Identifier, this.SheetMark(Layer));
         if (!Entries.length)
         {
             this.Integrator.ClearMaskSheet(Layer.Identifier);
@@ -852,16 +863,14 @@ export class TexturePanel
         {
             if (Layer.Kind === "stroke") this.Integrator.EnsureCoverage(Layer);
             if (Layer.Mask.Kind === "stroke") this.Integrator.EnsureMask(Layer);
-            // A stack nobody has solved yet — a duplicated layer, an opened document, a step back through undo —
-            // has no sheet on the device, and the mask it shapes would composite as though it were not there.
-            if (!this.Solving && (Layer.Mask.Generators || []).some((Entry) => Entry.Enabled !== false))
+            // A stack the device does not have the sheet for — a duplicated layer, an opened document, a step back
+            // through undo — would composite as though its generators were not there, so it is solved here. Keyed on
+            // what the stack says rather than on whether a sheet exists, because an undone weight leaves a stale one.
+            if (!this.Solving && this.SheetMark(Layer) !== this.SheetMarks.get(Layer.Identifier))
             {
-                if (!this.Integrator.LayerImages.get(Layer.Identifier)?.Sheet)
-                {
-                    this.Solving = true;
-                    this.SolveLayerSheet(Layer, false);
-                    this.Solving = false;
-                }
+                this.Solving = true;
+                this.SolveLayerSheet(Layer, false);
+                this.Solving = false;
             }
         }
         this.Integrator.Composite(CompositeOrdering(this.Layers, this.Solo), this.Project.Material);
@@ -8705,8 +8714,8 @@ export class TexturePanel
                             .map(
                                 (Entry) => `
                             <button class="field-chip" data-action="field-add" data-argument="${Entry.Identifier}"
-                                    title="${Escape(Entry.Hint || Entry.Label)}">
-                                ${Icon(Entry.Glyph)}<span>${Escape(Entry.Label)}</span>
+                                    title="${Escape(Entry.Label)} — ${Escape(Entry.Hint || "")}">
+                                ${Icon(Entry.Glyph)}<span>${Escape(Entry.Short || Entry.Label)}</span>
                             </button>`,
                             )
                             .join("")}
@@ -8850,15 +8859,19 @@ export class TexturePanel
             const Entry = NormaliseEntry(DefaultEntry(Argument));
             // The first thing on a stack has nothing under it to multiply into, so it replaces rather than darkens.
             if (!Entries.length) Entry.Combine = "overwrite";
-            Entries.push(Entry);
-            this.FieldSelection = Entry.Identifier;
-            // A generator on a layer with no mask is a generator doing nothing, so the mask it needs comes with it.
-            if (Layer.Mask.Kind === "none")
+            this.CaptureStack(() =>
             {
-                Layer.Mask.Kind = "stroke";
+                Entries.push(Entry);
+                // A generator on a layer with no mask is a generator doing nothing, so the mask comes with it.
+                if (Layer.Mask.Kind === "none") Layer.Mask.Kind = "stroke";
+            });
+            this.FieldSelection = Entry.Identifier;
+            if (Layer.Mask.Kind === "stroke" && !this.Integrator.LayerImages.get(Layer.Identifier)?.Mask)
+            {
                 this.Integrator.EnsureMask(Layer);
                 this.Integrator.FloodLayer(Layer, "mask", [1, 1, 1], 1);
             }
+            this.Chronicle("generator", `${Entry.Label} on the mask`, Layer.Name);
             this.AfterFieldChange(`${Entry.Label} added to ${Layer.Name}.`);
             return;
         }
@@ -8870,25 +8883,31 @@ export class TexturePanel
             this.RenderInspector();
             return;
         }
-        if (Action === "field-visible") Entries[At].Enabled = Entries[At].Enabled === false;
-        if (Action === "field-remove")
-        {
-            const [Gone] = Entries.splice(At, 1);
-            if (this.FieldSelection === Gone.Identifier) this.FieldSelection = "";
-            if (this.PickingFaces && Gone.Kind === "faces") this.SetFacePicking(false);
-        }
-        if (Action === "field-raise" && At > 0) Entries.splice(At - 1, 0, ...Entries.splice(At, 1));
-        if (Action === "field-lower" && At < Entries.length - 1) Entries.splice(At + 1, 0, ...Entries.splice(At, 1));
         if (Action === "field-pick")
         {
             this.SetFacePicking(!this.PickingFaces, Argument);
             return;
         }
-        if (Action === "field-pick-clear")
+        // Everything left standing is an edit to the stack itself, and every edit to the stack is one Ctrl Z takes
+        // back — the layer record travels whole in the revision, generators included.
+        this.CaptureStack(() =>
         {
-            const Entry = Entries.find((Candidate) => Candidate.Identifier === this.FieldSelection);
-            if (Entry) Entry.Marks = [];
-        }
+            if (Action === "field-visible") Entries[At].Enabled = Entries[At].Enabled === false;
+            if (Action === "field-remove")
+            {
+                const [Gone] = Entries.splice(At, 1);
+                if (this.FieldSelection === Gone.Identifier) this.FieldSelection = "";
+                if (this.PickingFaces && Gone.Kind === "faces") this.SetFacePicking(false);
+                this.Chronicle("generator", `${Gone.Label} off the mask`, Layer.Name);
+            }
+            if (Action === "field-raise" && At > 0) Entries.splice(At - 1, 0, ...Entries.splice(At, 1));
+            if (Action === "field-lower" && At < Entries.length - 1) Entries.splice(At + 1, 0, ...Entries.splice(At, 1));
+            if (Action === "field-pick-clear")
+            {
+                const Entry = Entries.find((Candidate) => Candidate.Identifier === this.FieldSelection);
+                if (Entry) Entry.Marks = [];
+            }
+        });
         this.AfterFieldChange("");
     }
 
@@ -8933,9 +8952,12 @@ export class TexturePanel
             return true;
         }
         const Marks = new Set(Entry.Marks || []);
-        if (Event.shiftKey) Marks.delete(Hit.Triangle);
-        else Marks.add(Hit.Triangle);
-        Entry.Marks = [...Marks];
+        this.CaptureStack(() =>
+        {
+            if (Event.shiftKey) Marks.delete(Hit.Triangle);
+            else Marks.add(Hit.Triangle);
+            Entry.Marks = [...Marks];
+        });
         this.AfterFieldChange("");
         return true;
     }
@@ -8961,7 +8983,13 @@ export class TexturePanel
                 Label: "Field",
                 Path: `${Prefix}.Kind`,
                 Value: Generator.Kind,
-                Options: GeneratorOrdering.map((Entry) => ({ Value: Entry.Identifier, Label: Entry.Label })),
+                // 🔴 Only the twelve the shader can draw. A generator layer and a single-generator mask are both
+                //    resolved on the GPU from an index, and the readings that arrived later have no index there —
+                //    they are solved on the processor and arrive as a sheet, which is what the stack below is for.
+                Options: GeneratorOrdering.filter((Entry) => Entry.Layers !== false).map((Entry) => ({
+                    Value: Entry.Identifier,
+                    Label: Entry.Label,
+                })),
                 Hint: Specification.Hint,
             }),
             ...Rows,

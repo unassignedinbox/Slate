@@ -274,6 +274,17 @@ test("generators normalise unknown input without losing their controls", () =>
     }
 });
 
+test("only the generators the shader has an index for may drive a layer or a lone mask", () =>
+{
+    // 🔴 The first twelve are a contract with ShadingGlsl's SampleGenerator, which resolves a kind from an index.
+    //    Everything after them is solved on the processor into a sheet, and offering one where the GPU is doing the
+    //    drawing silently draws the twelfth instead.
+    const Drawable = GeneratorOrdering.filter((Entry) => Entry.Layers !== false);
+    assert.equal(Drawable.length, 12, String(Drawable.length));
+    Drawable.forEach((Entry, Index) => assert.equal(GeneratorIndex(Entry.Identifier), Index, Entry.Identifier));
+    assert.ok(GeneratorOrdering.slice(12).every((Entry) => Entry.Layers === false), "a late arrival claimed a layer");
+});
+
 test("a conductor carries both ends of its Fresnel, and a preset keeps them", () =>
 {
     assert.ok(MetalArchive.length >= 12, "too few metals to be worth calling an archive");

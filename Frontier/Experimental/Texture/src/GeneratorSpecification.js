@@ -19,6 +19,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "fbm",
         Label: "Fractal noise",
+        Short: "Fractal",
         Family: "synthetic",
         Glyph: "noise",
         Controls: ["Scale", "Detail", "Contrast", "Balance", "Warp", "Seed"],
@@ -28,6 +29,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "cells",
         Label: "Cells",
+        Short: "Cells",
         Family: "synthetic",
         Glyph: "cells",
         Controls: ["Scale", "Contrast", "Balance", "Warp", "Seed"],
@@ -37,6 +39,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "scratches",
         Label: "Scratches",
+        Short: "Scratches",
         Family: "synthetic",
         Glyph: "scratch",
         Controls: ["Scale", "Detail", "Contrast", "Balance", "Angle", "Seed"],
@@ -46,6 +49,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "weave",
         Label: "Weave",
+        Short: "Weave",
         Family: "synthetic",
         Glyph: "weave",
         Controls: ["Scale", "Contrast", "Angle"],
@@ -55,6 +59,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "wood",
         Label: "Wood grain",
+        Short: "Wood",
         Family: "synthetic",
         Glyph: "wood",
         Controls: ["Scale", "Detail", "Contrast", "Warp", "Angle", "Seed"],
@@ -64,6 +69,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "checker",
         Label: "Checker",
+        Short: "Checker",
         Family: "synthetic",
         Glyph: "grid",
         Controls: ["Scale", "Contrast", "Angle"],
@@ -73,6 +79,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "gradient",
         Label: "Gradient",
+        Short: "Gradient",
         Family: "synthetic",
         Glyph: "ramp",
         Controls: ["Contrast", "Balance", "Angle"],
@@ -82,6 +89,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "curvature",
         Label: "Curvature · edges",
+        Short: "Curvature",
         Family: "baked",
         Glyph: "edge",
         Controls: ["Contrast", "Balance"],
@@ -91,6 +99,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "cavity",
         Label: "Cavity · crevices",
+        Short: "Cavity",
         Family: "baked",
         Glyph: "cavity",
         Controls: ["Contrast", "Balance"],
@@ -100,6 +109,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "occlusion",
         Label: "Ambient occlusion",
+        Short: "Occlusion",
         Family: "baked",
         Glyph: "occlusion",
         Controls: ["Contrast", "Balance"],
@@ -109,6 +119,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "inclination",
         Label: "Up-facing",
+        Short: "Up-facing",
         Family: "baked",
         Glyph: "up",
         Controls: ["Contrast", "Balance"],
@@ -118,6 +129,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "altitude",
         Label: "World height",
+        Short: "Height",
         Family: "baked",
         Glyph: "height",
         Controls: ["Contrast", "Balance"],
@@ -127,6 +139,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "thickness",
         Label: "Thickness",
+        Short: "Thickness",
         Family: "field",
         Glyph: "thickness",
         Layers: false,
@@ -137,6 +150,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "position",
         Label: "Position",
+        Short: "Position",
         Family: "field",
         Glyph: "axis",
         Layers: false,
@@ -147,6 +161,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "facing",
         Label: "Facing",
+        Short: "Facing",
         Family: "field",
         Glyph: "sun",
         Layers: false,
@@ -157,6 +172,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "dust",
         Label: "Dust",
+        Short: "Dust",
         Family: "weather",
         Glyph: "dust",
         Layers: false,
@@ -167,6 +183,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "grime",
         Label: "Grime",
+        Short: "Grime",
         Family: "weather",
         Glyph: "cavity",
         Layers: false,
@@ -177,6 +194,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "wear",
         Label: "Edge wear",
+        Short: "Wear",
         Family: "weather",
         Glyph: "edge",
         Layers: false,
@@ -187,6 +205,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "drips",
         Label: "Drips",
+        Short: "Drips",
         Family: "weather",
         Glyph: "drip",
         Layers: false,
@@ -197,6 +216,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "object",
         Label: "Object",
+        Short: "Object",
         Family: "selection",
         Glyph: "box",
         Layers: false,
@@ -207,6 +227,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "tile",
         Label: "UDIM tile",
+        Short: "Tile",
         Family: "selection",
         Glyph: "grid",
         Layers: false,
@@ -217,6 +238,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "island",
         Label: "UV island",
+        Short: "Island",
         Family: "selection",
         Glyph: "vector",
         Layers: false,
@@ -227,6 +249,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "faces",
         Label: "Faces",
+        Short: "Faces",
         Family: "selection",
         Glyph: "facet",
         Layers: false,
@@ -237,6 +260,7 @@ export const GeneratorOrdering = [
     {
         Identifier: "vertex",
         Label: "Vertex map",
+        Short: "Vertex",
         Family: "selection",
         Glyph: "vertex",
         Layers: false,
@@ -257,6 +281,8 @@ export const VertexMaps = [
     { Identifier: "island", Label: "Random per island" },
 ];
 
+// Label names the generator in a sentence; Short names it under a 19-pixel mark in a shelf four chips wide. Neither
+// is the other's abbreviation by rule, because "Ambient occlusion" shortens to "Occlusion" and "Faces" does not shorten.
 export const GeneratorFamilies = [
     { Identifier: "noise", Label: "Noise", Hint: "Drawn from the UV coordinate." },
     { Identifier: "field", Label: "Surface", Hint: "Measured off the model." },

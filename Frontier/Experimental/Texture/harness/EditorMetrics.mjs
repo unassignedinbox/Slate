@@ -594,5 +594,20 @@ Check("and keeps what was set on it", Reopened.Mask.Generators[0].Weight === 0.2
 Check("and keeps the order it was in", Reopened.Mask.Generators.map((Entry) => Entry.Kind).join(",") === Copied.Mask.Generators.map((Entry) => Entry.Kind).join(","));
 Panel.RemoveLayer();
 
+// And undo has to take the stack back with everything else, or half of what just happened stays.
+Panel.SelectLayer(Shaped.Identifier);
+const Deep = Shaped.Mask.Generators.length;
+Add("grime");
+Check("adding a generator is a revision", Shaped.Mask.Generators.length === Deep + 1);
+Panel.Undo();
+Check("and Ctrl Z takes it back", Panel.LayerByIdentifier(Shaped.Identifier).Mask.Generators.length === Deep);
+Panel.Redo();
+Check("and Ctrl ⇧ Z puts it back", Panel.LayerByIdentifier(Shaped.Identifier).Mask.Generators.length === Deep + 1);
+Panel.Recomposite();
+Check(
+    "a stack restored by undo is solved again rather than left stale",
+    Panel.SheetMarks.get(Shaped.Identifier) === Panel.SheetMark(Panel.LayerByIdentifier(Shaped.Identifier)),
+);
+
 Report();
 process.exit(process.exitCode || 0);
