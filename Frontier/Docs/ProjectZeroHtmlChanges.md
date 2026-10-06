@@ -3310,3 +3310,29 @@ Representative approved HTML evidence for direct review:
 Sun/Atmosphere and native workspace cards are close or scoped-complete; the remaining environment families have explicit
 order/presentation differences, while Wind, Lights, general Fracture and Material/Shader workflows require larger native
 work. No implementation or fresh native rendering is claimed in this audit.
+
+## C070 — native Fog conversion and rearrangement parity tranche (2026-10-06)
+
+This implementation checkpoint applies the first two C069 stages without replacing the native property model.
+
+### HTML-to-C++ result
+
+| Family | Approved HTML order | Native C++ result | Deliberate native difference |
+|---|---|---|---|
+| Height / Atmospheric / Local Fog | Fog settings → Visibility → Medium with Beam Chamber + technical peer → Wind binding | The shared `FogInspectorPanel.cpp` now uses that order for all three sibling entities. Beam is inside Medium, disabled entities show an authored `PREVIEW`, Atmospheric retains an interactive 380–780 nm response, and Wind binding is terminal. | The Beam is an analytic authoring diagnostic rather than a scene-camera image. Height samples its 25 m layer; Aerial begins after authored Start; Local uses the bounded volume model. |
+| Lens Flare | Composite/switches first → image/export last | Confirmed native order is composite → layers/ghosts → halo → legacy → image/export. | Native retains real cached linear pixels and PFM export; baked scene playback remains explicitly unavailable. |
+| Moon | Lunar phase first → settings → catalogue → lighting/size/pose | Reordered native card coordinates and proof interactions to exactly this sequence. | Native retains the six-body registered atlas, four independent slots, follow-sky protection and unrestricted typed angular size; no duplicate HTML atlas frame was imported. |
+| Stars | Star field first → settings → Twinkle/rotation → renderer scale → bake last | Reordered field before quick settings while preserving all later cards and the terminal unavailable bake card. | Native field uses the real catalogue and sidereal/rotation controls rather than an HTML-only preview dataset. |
+| Precipitation | Type → emission/collision → fall/density → simulation | Reordered Type ahead of Emission; retained particle-scale and simulation/settling cards. | Native telemetry remains backed by the CPU particle simulation and does not claim verified viewport particles. |
+| Rainbow | Optical preview → visibility → bow response → bake last | Swapped only the first two cards; response and unavailable bake state remain unchanged. | Native preview uses the shared CPU spectral kernel under stated fixed test conditions, not the scene camera. |
+
+### Proof and infrastructure corrections
+
+- Fog native proof passes **128 checks**, including shared terminal Wind ordering, narrow layouts and disabled Local Fog preview.
+- Moon passes **146 checks**, Stars **157**, Weather **1684**, and Lens Flare **74** after updating coordinate-sensitive interactions for the approved card moves.
+- The native proof staging scripts now source `CameraInspectorBinding.h` from `Engine/Host` and include the shared Curve, environment-projection and wind-binding headers.
+- Obsolete proof expectations for the compact 208-byte `PostConstantRecord` were corrected while retaining the asserted `PostLayers` and `PostStarEffects` offsets.
+- Weather Wind now treats a missing staged `Air shear` property as unavailable instead of dereferencing null; the current application model still supplies and writes the property.
+- Full prerequisite execution still stops in the pre-existing Sun interaction assertion `##sun-diameter`; all changed inspector translation units compile with `-Wall -Wextra -Werror`, and their dedicated proofs above pass.
+
+Generated native captures were inspected for wide and narrow Fog, Moon, Stars, Precipitation and Rainbow, plus Lens Flare. They preserve the accepted card designs; this tranche changes ownership/order and diagnostic wiring only.
