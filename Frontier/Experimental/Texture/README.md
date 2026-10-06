@@ -10,8 +10,8 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 195 unit tests, no browser required
-npm run drive      # 338 checks against the whole editor, booted in a headless window
+npm test           # 208 unit tests, no browser required
+npm run drive      # 553 checks — the shaders read as text, then the whole editor in a headless window
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -1148,6 +1148,7 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `harness/DeviceHost.mjs` | A jsdom window with a recording WebGL2 device behind it, so the editor can be driven with no browser. |
 | `harness/CardMetrics.mjs` | `npm run drive` — boots the real editor headless and reads the card back the way a hand would. |
 | `harness/EditorMetrics.mjs` | The same window, driving everything around the card: stack, folders, masks, generators, tools, decals, texture space. |
+| `harness/ShadingCriteria.mjs` | The GLSL held to what can be settled from the text, because nothing here can compile it: declarations, call arities, duplicate uniforms, sampler budget. |
 | `InstrumentSpecification.js` | The instrument library: seven families and twenty-seven types, their drawings, settings schema, the material each one lays and the brush mapping. |
 | `InstrumentPanel.js` | The summoned card: the rail of paint properties, the pane frame and the ribbon preview. |
 | `MediaSolver.js` | What each medium does to a mark — bristle lanes, paper tooth, bleed, dust, wax skip — and the uniform packing the stamping pass reads. |
@@ -1155,7 +1156,7 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `SurfaceStructure.js` | Built-in surfaces, Wavefront import, tangents, bounds, occlusion, spatial index. |
 | `SceneStructure.js` | Object records, UDIM tiles, and the assembly that folds a scene into one surface. |
 | `OrbitProjection.js` | Damped orbit camera, framing, panning, picking rays. |
-| `ShadingGlsl.js` | Every shader stage, the flake field the paint resolves per pixel, and the export slot table. |
+| `ShadingGlsl.js` | Every shader stage, the eleven-program assembly table the device links from, the flake field the paint resolves per pixel, and the export slot table. |
 | `ShadingIntegrator.js` | The WebGL2 device: targets, stamping, compositing, viewport and plane passes, readback. |
 | `StrokeProjection.js` | Brush state, stroke spacing, symmetry, placement frames. |
 | `StrokeSpecification.js` | How a mark goes down: freehand, line and gradient, the colour ramp and the two ways a stroke reads it, the pressure curves, the channel writes. |
@@ -1175,6 +1176,33 @@ in step with the fluid app's copy of the same file.
 ---
 
 ## Limits
+
+**No shader here has ever been compiled by a compiler.** There is no GPU in the environment this was built in, no
+browser, and no validator; the headless device answers `getShaderParameter` with `true` and `getProgramParameter` with
+`1`, so every program has always linked and nothing has ever read a line of the GLSL. `harness/ShadingCriteria.mjs`
+closes as much of that as text can — it assembles the eleven programs exactly as the device would, then holds them to
+declarations before use, no uniform declared twice, every call to a function the program has, every call with the
+arguments that function takes, balanced brackets, a target written, and the sampler budget. It catches a signature
+changed under its call sites, a chunk left off a program's list and a sampler used before it is declared. It cannot
+catch a type error, a precision mismatch, an unwritten output in a multi-target pass, or a loop the driver refuses to
+unroll. Those still want a real device, and the first time this runs on one is still the first time.
+
+**The composite pass is at fifteen of the sixteen texture units WebGL2 guarantees.** One more sampler in that program
+and it stops working on conforming minimum hardware. The next thing that wants to be read per texel has to pack into
+a spare channel of an image that is already bound, not take a unit of its own. The check in the criteria fails at
+seventeen and reports the count at every run, so this is noticed rather than discovered.
+
+**A mask is built two different ways and the pane does not say so.** Mask source is one generator the device draws;
+Mask generators is a stack the processor solves. Twelve against twenty-five, different code, different numbers,
+multiplied together at the end. It is documented above rather than designed away, because collapsing the two would
+break every saved document that uses the first.
+
+**`TexturePanel.js` is eleven thousand lines and two hundred and ninety methods.** Nothing in it is broken; it is
+simply the file where the next feature costs more than the last one did. The inspector panes are the obvious thing to
+lift out of it.
+
+**`DocumentSequence.js` is the one module with no test of its own** — which is unfortunate, because saving and loading
+is the one place a defect costs somebody work rather than time.
 
 A saved document carries its painted sheets, but the file is a single JSON string the browser has to hold whole, so the
 set is budgeted at 96 MB of encoded paint; past that the remaining sheets are left out and the toast says how many.

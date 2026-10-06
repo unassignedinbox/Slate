@@ -2329,6 +2329,33 @@ export const Chunks = {
     Environment: EnvironmentChunk,
 };
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Every program the device builds, named once. The integrator links from this table and nothing else, which is what
+// lets a reader — or a check — know the whole set without going looking for Link calls, and what lets the shading
+// criteria assemble exactly the source the device would have compiled.
+//--------------------------------------------------------------------------------------------------------------------------
+export const Assemblies = [
+    { Name: "Bake", Vertex: BakeVertex, Fragment: BakeFragment, Needs: [] },
+    { Name: "Dilate", Vertex: QuadVertex, Fragment: DilateFragment, Needs: [] },
+    { Name: "Curvature", Vertex: QuadVertex, Fragment: CurvatureFragment, Needs: [] },
+    { Name: "Stamp", Vertex: QuadVertex, Fragment: StampFragment, Needs: ["Noise", "Media"] },
+    { Name: "Composite", Vertex: QuadVertex, Fragment: CompositeFragment, Needs: ["Noise", "Generator", "Finish", "Mask", "Blend"] },
+    { Name: "Mask", Vertex: QuadVertex, Fragment: MaskFragment, Needs: ["Noise", "Generator", "Mask"] },
+    { Name: "Shade", Vertex: SurfaceVertex, Fragment: SurfaceFragment, Needs: ["Flake", "Environment"] },
+    { Name: "Background", Vertex: QuadVertex, Fragment: BackgroundFragment, Needs: ["Environment"] },
+    { Name: "Plane", Vertex: QuadVertex, Fragment: PlaneFragment, Needs: [] },
+    { Name: "Resolve", Vertex: QuadVertex, Fragment: ResolveFragment, Needs: [] },
+    { Name: "Settle", Vertex: QuadVertex, Fragment: SettleFragment, Needs: [] },
+];
+
+// The preamble the device puts in front of every shader. Held here so the criteria assemble what the device compiles
+// rather than an approximation of it.
+export const ShadingHeader = "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\n";
+
+// One program's fragment source exactly as the device would see it: preamble, the chunks it asked for, then its body.
+export const AssembleFragment = (Assembly) =>
+    `${ShadingHeader}${Assembly.Needs.map((Name) => Chunks[Name]).join("\n")}\n${Assembly.Fragment}`;
+
 export const ExportSlots = [
     { Slot: 0, Identifier: "base_color", Export: "BaseColor", Encoding: "srgb" },
     { Slot: 1, Identifier: "specular_roughness", Export: "Roughness", Encoding: "linear" },

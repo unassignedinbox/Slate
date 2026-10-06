@@ -8,23 +8,7 @@
 // Everything is allocated on demand and released with the layer, so a stack of fills costs nothing beyond the channel set.
 //============================================================================================================================================
 
-import {
-    QuadVertex,
-    BakeVertex,
-    BakeFragment,
-    DilateFragment,
-    CurvatureFragment,
-    StampFragment,
-    CompositeFragment,
-    MaskFragment,
-    SurfaceVertex,
-    SurfaceFragment,
-    BackgroundFragment,
-    PlaneFragment,
-    ResolveFragment,
-    SettleFragment,
-    Chunks,
-} from "./ShadingGlsl.js";
+import { Chunks, Assemblies, ShadingHeader } from "./ShadingGlsl.js";
 import {
     ChannelSpecification,
     BlendIndex,
@@ -48,7 +32,7 @@ import { WriteOrdering, GradientEasings, SortRampStops, RampLimit } from "./Stro
 
 const MaskKindIndex = (Kind) => ({ stroke: 1, generator: 2, colour: 3 })[Kind] ?? 0;
 
-const Header = "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\n";
+const Header = ShadingHeader;
 
 const Compile = (Device, Kind, Source) =>
 {
@@ -368,22 +352,15 @@ export class ShadingIntegrator
     //----------------------------------------------------------------------------------------------------------------------
     // Programs and static geometry.
     //----------------------------------------------------------------------------------------------------------------------
+    // 🔴 Linked from the table rather than from eleven lines of its own. A program the device builds and a program
+    //    the shading criteria check have to be the same program or the check is theatre, and the only way to be sure
+    //    of that is for both of them to read one list.
     CreatePrograms()
     {
         const Device = this.Device;
-        this.Programs = {
-            Bake: Link(Device, BakeVertex, BakeFragment),
-            Dilate: Link(Device, QuadVertex, DilateFragment),
-            Curvature: Link(Device, QuadVertex, CurvatureFragment),
-            Stamp: Link(Device, QuadVertex, StampFragment, ["Noise", "Media"]),
-            Composite: Link(Device, QuadVertex, CompositeFragment, ["Noise", "Generator", "Finish", "Mask", "Blend"]),
-            Mask: Link(Device, QuadVertex, MaskFragment, ["Noise", "Generator", "Mask"]),
-            Shade: Link(Device, SurfaceVertex, SurfaceFragment, ["Flake", "Environment"]),
-            Background: Link(Device, QuadVertex, BackgroundFragment, ["Environment"]),
-            Plane: Link(Device, QuadVertex, PlaneFragment),
-            Resolve: Link(Device, QuadVertex, ResolveFragment),
-            Settle: Link(Device, QuadVertex, SettleFragment),
-        };
+        this.Programs = {};
+        for (const Assembly of Assemblies)
+            this.Programs[Assembly.Name] = Link(Device, Assembly.Vertex, Assembly.Fragment, Assembly.Needs);
     }
 
     CreateGeometry()
