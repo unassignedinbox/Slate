@@ -160,8 +160,15 @@ keys on is coloured in and put on the surface, and the click that chooses is a c
 Blender calls them passes and hides two of the best ones — pointiness and the bevel node — inside the shader graph.
 They are the same questions, so the dialog asks all of them at once: ticking a map, previewing it on the plate, and
 then spending the rest of the session asking the texture instead of the triangles. It is reachable later from the
-**focus button beside the channel strip**, from **Read the surface…** in the scene pod, and from the generator section
-on any mask — a bake you cannot run again is a bake you have to get right first time, and nobody does.
+**Bake button in the viewport bar**, from **`K`**, from **Bake the surface…** in the scene pod, and from the generator
+section on any mask — a bake you cannot run again is a bake you have to get right first time, and nobody does.
+
+That button is the only one in the viewport bar with a word on it, and it earned the word the hard way: it spent
+several rounds as an anonymous glyph fourth from the end of a row of seven, wearing the **same glyph as Frame
+surface**, which meant the only way to find the bake was to already know it was there. It now carries its own mark —
+a sphere over its own contact shadow, a picture of the thing it makes — the word *Bake*, and **a dot when there is
+nothing baked, or when the surface has changed since there was**. Every generator that reads the surface runs off the
+editor's own measurement until then, and nothing in the interface used to say that a better answer was one press away.
 
 **Every baked map is a view of its own.** A bake you can only look at inside the dialog that made it is half a bake, so
 the channel strip grows a *Baked maps* group the moment one finishes: normal, bevel, bent, thickness, identity, the
@@ -1026,7 +1033,7 @@ panel stand further apart, so a group ends where it looks like it ends.
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
 | Symmetry: off → X → Y → Z → radial | <kbd>Y</kbd> | Isolate the selected layer | <kbd>I</kbd> |
-| Scale the gradient down / up | <kbd>G</kbd> / <kbd>⇧ G</kbd> | | |
+| Scale the gradient down / up | <kbd>G</kbd> / <kbd>⇧ G</kbd> | Bake the surface | <kbd>K</kbd> |
 | Group the selection into a folder | <kbd>Ctrl G</kbd> | Aim a line or gradient | press · drag · release |
 | Size a decal | drag a corner | Stretch one axis | <kbd>Shift</kbd> drag a corner |
 | Turn a decal | drag the knob above it | Snap the angle to 15° | <kbd>Shift</kbd> while turning |

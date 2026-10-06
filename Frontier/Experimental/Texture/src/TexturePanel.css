@@ -359,6 +359,59 @@ a {
 .viewport-bar-end .icon-button {
   width: 25px;
 }
+/* 🔴 The heaviest button in this bar gets the only word in it. Seven unlabelled glyphs in a row is a row nobody
+   reads, and the bake was the one that paid for it: it sat four icons from the end wearing the SAME glyph as
+   Frame surface, so the only way to find it was to hover all seven. */
+.bar-button {
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px 0 9px;
+  margin-right: 4px;
+  border: 1px solid #ffffff14;
+  border-radius: 999px;
+  background: #ffffff0a;
+  color: #cfcfcf;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.bar-button svg {
+  width: 14px;
+  height: 14px;
+}
+.bar-button:hover {
+  background: #ffffff16;
+  color: var(--text);
+}
+.bar-button:active {
+  background: #ffffff20;
+}
+.bar-button.busy {
+  color: var(--accent);
+  border-color: var(--accent-dark);
+}
+/* Nothing baked, or baked against a surface that has since changed. A dot, not a colour: the bar is not an alarm. */
+.bar-button.wanting::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+@media (max-width: 1180px) {
+  .bar-button {
+    padding: 0 9px;
+    font-size: 0;
+    gap: 0;
+  }
+}
 .viewport {
   position: relative;
   flex: 1;

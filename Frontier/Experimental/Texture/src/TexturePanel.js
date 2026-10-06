@@ -1167,6 +1167,7 @@ export class TexturePanel
         try
         {
             this.Readings = SolveReadings(this.SurfaceRecord, this.Index, this.Order, Report);
+            this.Readings.Edition = this.SurfaceEdition;
             // 🔴 The generators take the bake. A dust mask reading a 256 measurement while a 1024 bake of the same
             //    surface sits beside it is the kind of thing nobody notices and everybody can see.
             this.Sheets = this.Readings.Sheets;
@@ -3729,6 +3730,27 @@ export class TexturePanel
         // A display whose map has just been baked away falls back rather than leaving the strip blank.
         if (!Field.value) this.Display = Field.value = "material";
         RefreshSelect(Field);
+        this.DressBake();
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // 🔴 The button says whether it is worth pressing. Every generator that reads the surface — dust, grime, wear,
+    //    cavity, occlusion, thickness — is running off whatever measurement the editor took on its own, and a proper
+    //    bake is better than that in every way that matters. There is nothing in the editor that ever says so, which
+    //    is why the bake was something you had to already know about. Now it asks.
+    //----------------------------------------------------------------------------------------------------------------------
+    DressBake()
+    {
+        const Button = Select("#readings-button");
+        if (!Button) return;
+        const Maps = this.Readings?.Maps || [];
+        const Fresh = Maps.length > 0 && this.Readings.Edition === this.SurfaceEdition;
+        Button.classList.toggle("wanting", !Fresh);
+        Button.title = Fresh
+            ? `${Maps.length} maps baked at ${this.Readings.Size}² in ${(this.Readings.Milliseconds / 1000).toFixed(1)}s — bake again · K`
+            : Maps.length
+              ? "The surface changed since the last bake — bake it again · K"
+              : "Bake the surface — occlusion, curvature, normal, bevel, thickness, identity and the rest · K";
     }
 
     // Every change of view goes through here: the one place that knows a view may need a picture made for it first.
@@ -9252,7 +9274,7 @@ export class TexturePanel
                         been measured on this shape yet.</p>
                      ${ActionRow([
                          { Action: "measure-surface", Label: "Measure it now", Glyph: "focus" },
-                         { Action: "open-readings", Label: "Read it properly…", Glyph: "layers" },
+                         { Action: "open-readings", Label: "Bake it properly…", Glyph: "occlusion" },
                      ])}
                    </div>`
                 : Measured
@@ -9262,7 +9284,7 @@ export class TexturePanel
                       ${this.MeasureMilliseconds ? `· ${this.MeasureMilliseconds} ms` : ""}
                       ${ActionRow([
                           { Action: "measure-surface", Label: "Measure again", Glyph: "rotate" },
-                          { Action: "open-readings", Label: "Read the surface…", Glyph: "layers" },
+                          { Action: "open-readings", Label: "Bake the surface…", Glyph: "occlusion" },
                       ])}</p>`
                   : "",
             Chosen >= 0 ? this.GeneratorEntryBody(Entries[Chosen], Chosen) : "",
@@ -10057,7 +10079,7 @@ export class TexturePanel
                               { Action: "import-mesh", Label: "Import OBJ", Glyph: "folder" },
                               { Action: "bake-occlusion", Label: "Re-bake AO", Glyph: "rotate" },
                           ]),
-                          ActionRow([{ Action: "open-readings", Label: "Read the surface…", Glyph: "focus" }]),
+                          ActionRow([{ Action: "open-readings", Label: "Bake the surface…", Glyph: "occlusion" }]),
                       ].join("")
                     : "",
             }),
@@ -10585,6 +10607,12 @@ export class TexturePanel
             }
             if (Key === "b") this.SetBrowserState(this.BrowserState === "closed" ? "half" : "closed");
             if (Key === "f") Select("#focus-button").click();
+            // K for baKe. B was already the content browser and the two sit beside each other in the same bar.
+            if (Key === "k")
+            {
+                this.OpenReadings(false);
+                return;
+            }
             // 🔴 `S` is size — the brush's, not the gradient's. Held down it hands the head to the mouse: drag out
             //    to grow it, back in to shrink it, with the ring on the canvas showing the answer. The ramp moved to
             //    `G`, the letter of the thing it scales, and symmetry sits on `Y` where it went when the ramp came.

@@ -732,6 +732,41 @@ Check("the four identities are always on offer", ["object", "island", "tile", "f
 Check("both sets under a heading of their own", All("#channel-select optgroup").length === 2);
 Check("and the bake is one button away from the viewport", !!Find("#readings-button"));
 
+// 🔴 One button away is worth nothing if nobody can see which button. The bake sat in a row of seven unlabelled
+//    glyphs wearing the SAME glyph as Frame surface four places along, which is not a button, it is a treasure hunt.
+const BakeButton = Find("#readings-button");
+Check("the bake button says a word, it is not a glyph in a row of glyphs", BakeButton.textContent.trim().toLowerCase().includes("bake"), BakeButton.textContent.trim());
+Check("and the word is the one somebody would look for", BakeButton.title.toLowerCase().includes("bake"), BakeButton.title);
+const BarGlyphs = All(".viewport-bar-end [data-icon]").map((Element_) => Element_.dataset.icon);
+Check(
+    "no two buttons in that bar wear the same glyph",
+    new Set(BarGlyphs).size === BarGlyphs.length,
+    BarGlyphs.join(","),
+);
+Check("the bake's glyph is its own", BakeButton.querySelector("[data-icon]").dataset.icon === "occlusion");
+Check("and it draws, rather than falling back to the box", BakeButton.querySelector("svg path, svg circle, svg ellipse") !== null);
+
+// The dot. Nothing baked means the button asks to be pressed; a finished bake means it stops asking.
+const Baked = Panel.Readings;
+Panel.Readings = null;
+Panel.RenderChannels();
+Check("an unbaked surface puts a mark on the button", BakeButton.classList.contains("wanting"));
+Panel.Readings = Baked;
+Panel.Readings.Edition = Panel.SurfaceEdition;
+Panel.RenderChannels();
+Check("a fresh bake takes it off again", !BakeButton.classList.contains("wanting"));
+Check("and the button then says what it holds", BakeButton.title.includes(`${Baked.Maps.length} maps`), BakeButton.title);
+Panel.SurfaceEdition += 1;
+Panel.RenderChannels();
+Check("changing the surface puts it back", BakeButton.classList.contains("wanting") && BakeButton.title.includes("changed"), BakeButton.title);
+Panel.SurfaceEdition -= 1;
+
+Find("#readings-dialog").close();
+Type("k");
+await Settle(Window, 1);
+Check("K opens the bake", Find("#readings-dialog").open === true);
+Find("#readings-dialog").close();
+
 Panel.ShowReading("curvature");
 await Settle(Window, 2);
 Check("showing a baked map shuts the dialog behind it", Find("#readings-dialog").open === false);

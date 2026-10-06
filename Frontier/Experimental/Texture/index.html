@@ -92,7 +92,7 @@
                         </select>
                         <div class="viewport-bar-end">
                             <select id="channel-select" aria-label="Displayed channel"></select
-                            ><button id="readings-button" class="icon-button" title="Read the surface — bake normal, bevel, identity and the rest" aria-label="Read the surface" data-icon="focus"></button
+                            ><button id="readings-button" class="bar-button" title="Bake the surface — occlusion, curvature, normal, bevel, thickness, identity and the rest · K" aria-label="Bake the surface"><span data-icon="occlusion"></span>Bake</button
                             ><button id="environment-button" class="icon-button" title="Environment and lights" aria-label="Environment and lights" aria-expanded="false" data-icon="sun"></button
                             ><select id="symmetry-select" aria-label="Symmetry"></select
                             ><button id="browser-button" class="icon-button" title="Content browser · B" aria-label="Content browser" data-icon="grid"></button
@@ -380,7 +380,7 @@
         <dialog id="readings-dialog" class="wide-dialog">
             <div class="dialog-heading">
                 <span data-icon="focus"></span>
-                <h2>Read the surface</h2>
+                <h2>Bake the surface</h2>
                 <button id="close-readings" class="icon-button" aria-label="Close" data-icon="close"></button>
             </div>
             <p class="dialog-description">
@@ -405,7 +405,7 @@
                 <button class="text-button" id="readings-skip">Not now</button>
                 <button class="text-button" id="readings-write" disabled>Write PNGs</button>
                 <button class="text-button" id="readings-show" disabled>Show on the model</button>
-                <button class="button" id="readings-run"><span data-icon="focus"></span>Read the surface</button>
+                <button class="button" id="readings-run"><span data-icon="occlusion"></span>Bake the surface</button>
             </div>
         </dialog>
         <script type="module" src="./src/TexturePanel.js"></script>
