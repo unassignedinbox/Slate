@@ -167,24 +167,19 @@ try {
   assert(
     (await Frame().locator(".lp-readings").innerText()).includes("360 LEDs"),
   );
-  const Routes = [];
-  for (const Route of ["Straight", "Cove", "Ring"]) {
-    await Frame().getByRole("button", { name: Route, exact: true }).click();
-    await Persist("reference-led-strip", "routing", Route);
-    Routes.push(await Plot());
-  }
-  assert.equal(new Set(Routes).size, 3);
+  const HorizontalStrip = await Plot();
+  assert(HorizontalStrip.length > 0);
   await Frame()
     .getByRole("switch", { name: "Opal diffuser", exact: true })
     .click();
   await Persist("reference-led-strip", "diffuser", true);
-  assert.notEqual(await Plot(), Routes.at(-1));
+  assert.notEqual(await Plot(), HorizontalStrip);
   await Ready("reference-led-strip");
   assert.equal(
     await Frame()
-      .getByRole("button", { name: "Ring", exact: true })
-      .getAttribute("aria-pressed"),
-    "true",
+      .getByRole("slider", { name: "Strip length", exact: true })
+      .inputValue(),
+    "3",
   );
   assert.equal(
     await Frame()
@@ -192,9 +187,9 @@ try {
       .getAttribute("aria-checked"),
     "true",
   );
-  await Capture("StripRing");
+  await Capture("StripHorizontal");
   Checks.push(
-    "Strip length/output/density/load estimates, three routing shapes and diffuser respond and persist",
+    "Strip length/output/density/load estimates, horizontal run and diffuser respond and persist",
   );
   await Ready("reference-ies-downlight");
   const Lobes = [];
@@ -253,7 +248,7 @@ try {
   }).click();
   await Edit("reference-led-strip", "voltage", 12);
   Checks.push(
-    "LED strip lock covers numeric fields, routing, diffuser and standard Transform; parent unlock restores editing",
+    "LED strip lock covers numeric fields, diffuser and standard Transform; parent unlock restores editing",
   );
   await Page.getByRole("button", { name: "Construct", exact: true }).click();
   await Page.locator(".construct-matrix").waitFor();

@@ -51,50 +51,74 @@ export default function FogPanel({ Kind, V, Values, Change, QuickControls }) {
             </linearGradient>
           </defs>
           <rect width="300" height="166" fill={`url(#${Id}air)`} />
-          {Array.from({ length: 15 }, (_, Index) => (
-            <path
-              key={Index}
-              d={`M150 70L${150 + (Index - 7) * 39} 166`}
-              stroke="#ffffff12"
-            />
-          ))}
-          {Array.from({ length: 12 }, (_, Index) => (
-            <path
-              key={Index}
-              d={`M0 ${70 + Math.pow((Index + 1) / 12, 1.75) * 96}H300`}
-              stroke="#ffffff12"
-            />
-          ))}
-          {(Local
-            ? [10, 25, 50, 100, 200, 400]
-            : [50, 200, 500, 1000, 2000, 4000]
-          )
-            .slice()
-            .reverse()
-            .map((Distance, Index) => {
-              const Scale = 0.16 + (Index / 5) * 0.7,
-                W = 108 * Scale,
-                H = 96 * Scale,
-                Y = 70 + (Index / 5) * 79;
-              return (
+          {Local ? (
+            <>
+              {Array.from({ length: 15 }, (_, Index) => (
+                <path
+                  key={"ray" + Index}
+                  d={`M150 70L${150 + (Index - 7) * 39} 166`}
+                  stroke="#ffffff12"
+                />
+              ))}
+              {Array.from({ length: 12 }, (_, Index) => (
+                <path
+                  key={"grid" + Index}
+                  d={`M0 ${70 + Math.pow((Index + 1) / 12, 1.75) * 96}H300`}
+                  stroke="#ffffff12"
+                />
+              ))}
+            </>
+          ) : (
+            <>
+              <circle cx="244" cy="34" r="14" fill="#d6d3bf" opacity=".18" />
+              <path
+                d="M0 83L38 58 70 75 112 44 157 76 201 54 245 73 300 49V112H0Z"
+                fill="#2c3438"
+                opacity={0.12 + Transmission(2000) * 0.25}
+              />
+              <path
+                d="M0 102L34 81 66 93 103 70 137 97 177 75 220 95 264 72 300 89V128H0Z"
+                fill="#30383a"
+                opacity={0.18 + Transmission(1000) * 0.34}
+              />
+              <path
+                d="M0 128L41 105 78 117 118 96 153 121 195 102 237 119 275 98 300 109V166H0Z"
+                fill="#23292a"
+                opacity={0.34 + Transmission(500) * 0.42}
+              />
+              <path d="M128 166L146 111H154L172 166Z" fill="#101314" />
+              <path d="M148 111V166" stroke="#7f898b" opacity=".55" />
+              {[210, 235, 260].map((X, Index) => (
                 <g
-                  key={Distance}
-                  opacity={0.05 + Transmission(Distance) * 0.58}
+                  key={X}
+                  opacity={0.25 + Transmission(250 + Index * 350) * 0.52}
                 >
-                  <rect
-                    x={150 - W / 2}
-                    y={Y - H}
-                    width={W}
-                    height={H}
-                    fill="none"
-                    stroke="#d5dde0"
+                  <path d={`M${X} 126v40`} stroke="#161a1b" strokeWidth="3" />
+                  <path
+                    d={`M${X - 13} 133l13-32 13 32M${X - 10} 121l10-28 10 28`}
+                    stroke="#202627"
+                    strokeWidth="5"
+                    strokeLinejoin="round"
                   />
-                  <text x="150" y={Y - H + 10} textAnchor="middle">
-                    {Distance} m
-                  </text>
                 </g>
-              );
-            })}
+              ))}
+              {[50, 200, 500, 1000, 2000, 4000].map((Distance, Index) => {
+                const X = 22 + Index * 50;
+                return (
+                  <g
+                    key={Distance}
+                    opacity={0.25 + Transmission(Distance) * 0.65}
+                  >
+                    <path d={`M${X} 148v5`} stroke="#c5ccca" />
+                    <text x={X} y="162" textAnchor="middle">
+                      {Distance >= 1000 ? Distance / 1000 + "k" : Distance} m
+                    </text>
+                  </g>
+                );
+              })}
+              <path d="M20 148H280" stroke="#ffffff2b" />
+            </>
+          )}
           {Array.from({ length: 32 }, (_, Index) => (
             <rect
               key={Index}

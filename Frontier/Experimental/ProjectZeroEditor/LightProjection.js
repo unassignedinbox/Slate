@@ -295,20 +295,10 @@ export function ProjectLight(
     Text(Read("angle", 120) + "° OPTIC", 190, 17, "center");
   } else if (Style === "ledstrip") {
     const Count = Math.round(Read("length", 2.4) * Read("ledsPerMetre", 60)),
-      Routing = Properties.routing || "Cove",
       Samples = Math.min(64, Math.max(4, Count));
     const Points = Array.from({ length: Samples }, (_, Index) => {
       const Fraction = Index / (Samples - 1);
-      return Routing === "Ring"
-        ? [
-            190 + 112 * Math.cos(Fraction * Math.PI * 2),
-            123 + 76 * Math.sin(Fraction * Math.PI * 2),
-          ]
-        : Routing === "Cove"
-          ? Fraction < 0.62
-            ? [42 + (Fraction / 0.62) * 285, 67]
-            : [327, 67 + ((Fraction - 0.62) / 0.38) * 133]
-          : [40 + Fraction * 300, 123];
+      return [40 + Fraction * 300, 123];
     });
     Brush.lineWidth = 18;
     Path(Points, "#424238");

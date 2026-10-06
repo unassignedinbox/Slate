@@ -204,10 +204,7 @@ export function LightPanel(Subject, Context) {
           Read("height", 1).toFixed(1) +
           " m aperture"
         : Strip
-          ? (Properties.routing || "Cove") +
-            " / " +
-            Read("length", 2.4).toFixed(1) +
-            " m run"
+          ? "Horizontal / " + Read("length", 2.4).toFixed(1) + " m run"
           : Diode
             ? Read("diameter", 40) +
               " mm package / " +
@@ -385,7 +382,6 @@ export function LightPanel(Subject, Context) {
     Field(Shape, "diameter", "Package diameter", 5, 120, 1, "mm");
     Field(Shape, "angle", "Emission angle", 10, 180, 1, "°");
   } else if (Strip) {
-    Choice(Shape, "routing", ["Straight", "Cove", "Ring"]);
     Field(Shape, "length", "Strip length", 0.1, 20, 0.1, "m");
     Field(Shape, "ledsPerMetre", "Emitter density", 10, 240, 1, "/m");
     Field(Shape, "voltage", "Supply voltage", 5, 48, 1, "V");

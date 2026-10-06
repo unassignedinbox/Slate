@@ -2796,3 +2796,16 @@ Actual browser screenshots and receipts are in `ProjectZeroEditor/Screenshots/In
 `StarsBakingLast.png`. The response screenshot demonstrates an edited 50 cd / decay 1 source; default Fill Point remains
 10 cd / decay 2. External Fontshare failures are recorded separately; fallback fonts were exercised. No native renderer,
 fracture algorithm, SDF computation, source-property schema or Construct behavior was changed.
+
+## C054 — LED strip direction and atmospheric-fog visual (2026-10-06)
+
+- Simplified the LED strip projection to one horizontal run. The earlier synthetic Cove and Ring routing choices were
+  removed; length, emitter density, supply, diffuser, photometric estimates, locking, persistence and Transform remain.
+- Replaced Atmospheric Fog's nested distance boxes with a layered landscape visibility study. Receding ridgelines,
+  trees, a road/centre line, distance ticks and extinction-driven contrast now communicate aerial perspective directly.
+  Local Fog retains its bounded-volume sight-line treatment.
+- This remains an HTML inspector visualisation. It does not claim a native renderer capture or measured atmospheric
+  data.
+- Validation: 149 focused checks passed (89 inspector-order, 28 reference-preservation, 21 light-design and 11
+  instrument-style), with no reported errors. The generated standalone remains 4.64 MiB with 161 shipped icons and 57
+  native vector glyphs.

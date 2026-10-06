@@ -49,7 +49,6 @@ export const LightDefaults = {
     ledsPerMetre: 60,
     voltage: 24,
     dimmer: 1,
-    routing: "Cove",
     diffuser: false,
     shadows: true,
     showShape: true,
