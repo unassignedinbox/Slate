@@ -462,6 +462,17 @@ during the drag paints nothing and does not end it — holding the button while 
 this — <kbd>Esc</kbd> or letting go of <kbd>S</kbd> ends it, and the brackets and <kbd>Alt</kbd> + wheel still step
 the size without a drag.
 
+**And on a decal layer, <kbd>S</kbd> sizes the decal.** A decal layer cannot take a stroke — the brush is not even
+offered for one — so the most-reached-for key in painting was sizing a head that layer was never going to paint with,
+and the only way to resize a stamp was the Width slider two panes deep in the card or, for a projected mark, a corner
+handle that does not exist until the mark has been placed. It is the same gesture measured the same way: hold
+<kbd>S</kbd>, pull away from the box to grow the footprint, push in towards it to shrink it, a pixel for a pixel. What
+is drawn is a **rectangle**, not a ring, because that is the shape that is going to land — a circle would be claiming a
+footprint the stamp does not have. The artwork already on the model grows under the hand as the drag runs, rather than
+waiting for the key to come up, and the whole drag is **one revision**: a single undo puts the decal back at the width
+it started at. In texture space it takes the footprint across the sheet in UV instead, the same way the brush there is
+measured as a multiple rather than in screen pixels.
+
 **A test sheet, before the model.** The expand button in the head of any pane opens a third column on the card: a sheet
 of paper the width of the column, drawn on with the pointer. It runs the same deposition model the ribbon and the GPU
 run, at the brush's real size, through the same ramp the paint runs through — so a gradient that fades over forty
@@ -1039,7 +1050,7 @@ panel stand further apart, so a group ends where it looks like it ends.
 | --- | --- | --- | --- |
 | Orbit / brush / eraser | <kbd>1 2 3</kbd> | Content ⇄ mask (adds one if needed) | <kbd>M</kbd> |
 | Flood / decal / pick | <kbd>4 5 6</kbd> | Look at the mask on its own | <kbd>⇧ M</kbd> |
-| Size the head by hand | hold <kbd>S</kbd> · drag out / in | Texture space | <kbd>X</kbd> |
+| Size the head — or the decal | hold <kbd>S</kbd> · drag out / in | Texture space | <kbd>X</kbd> |
 | Brush size by steps | <kbd>[</kbd> <kbd>]</kbd> · <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
 | Show / hide the unwrap | <kbd>W</kbd> | Show / hide the UDIM tiles | <kbd>U</kbd> |
 | Paint card: open, and closed again | <kbd>Tab</kbd> | Delete the selected layer | <kbd>Del</kbd> / <kbd>⌫</kbd> |

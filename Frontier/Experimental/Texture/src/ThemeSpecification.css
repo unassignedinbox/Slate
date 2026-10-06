@@ -3030,6 +3030,10 @@ dialog {
   background: currentColor;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
 }
+/*  A decal is a rectangle, so sizing one draws the footprint it will actually stamp rather than a ring around it.   */
+.brush-ghost.footprint {
+  border-radius: 3px;
+}
 #symmetry-select.armed,
 .dropdown.armed .dropdown-face {
   color: var(--green);

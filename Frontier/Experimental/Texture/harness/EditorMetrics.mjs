@@ -123,8 +123,9 @@ const Decal = Panel.ActiveLayer;
 Check("but a decal layer stamps", Panel.Tool === "decal", Panel.Tool);
 Panel.SelectLayer(Painted);
 Check("and the brush comes back for paint", Panel.Tool === "brush" || Panel.Tool === "eraser", Panel.Tool);
-Panel.SelectLayer(Decal.Identifier);
 
+// 🔴 The head is sized with a PAINT layer in hand, because S no longer always means the head: on a decal layer it
+//    takes the decal's footprint instead. These checks are about the brush, so they hold a brush.
 const Radius = Panel.Projection.Brush.Radius;
 Type("]");
 const Wider = Panel.Projection.Brush.Radius;
@@ -198,6 +199,7 @@ Check("without touching the head", Panel.Projection.Brush.Radius === Stretched);
 //--------------------------------------------------------------------------------------------------------------------------
 // Decals on the surface: a mark is placed, handled, and carries the artwork's ink.
 //--------------------------------------------------------------------------------------------------------------------------
+Panel.SelectLayer(Decal.Identifier);
 Panel.SetTool("decal", true);
 Decal.Decal.Placement = "project";
 const Canvas = Find("#surface-canvas");
@@ -348,6 +350,61 @@ Check(
     "and no longer takes the whole right angle around it",
     SurfaceFragment.includes("smoothstep(uPlaceFacing, mix(uPlaceFacing, 1.0, 0.45)") && !SurfaceFragment.includes("step(0.0, dot(normalize(vNormal), uPlaceNormal))"),
 );
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Sizing a decal with S. The size key used to hand the mouse a brush head, and a decal layer cannot take a stroke —
+// the brush is not even offered for one — so on a decal the most-reached-for key in painting sized something that was
+// never going to paint. It now takes the decal's footprint, by the same drag, drawn as the rectangle that will land.
+//--------------------------------------------------------------------------------------------------------------------------
+const Lift = (Key) => Window.dispatchEvent(new Window.KeyboardEvent("keyup", { key: Key, bubbles: true }));
+// 🔴 On the template the panel will actually read: with marks on the layer, ActiveMark is the last one placed, and
+//    the layer's own transform is not what the footprint is measured from.
+(Panel.ActiveMark || Decal.Decal).Transform.Aspect = 2;
+At("pointermove", 480, 270);
+await Settle(Window, 2);
+const Bristle = Panel.Projection.Brush.Radius;
+const Started = Panel.DecalWidth();
+Check("S has hold of the decal, not the head", Panel.SizingDecal()?.Identifier === Decal.Identifier);
+Type("s");
+Check("holding it opens a size drag on that layer", Panel.Sizing?.Decal === Decal.Identifier, String(Panel.Sizing?.Decal));
+const Ghost = Find("#brush-ghost");
+Check("drawn as a footprint rather than a ring", Ghost.classList.contains("footprint") && Ghost.classList.contains("sizing"));
+Check(
+    "at the decal's own aspect",
+    Math.abs(parseFloat(Ghost.style.width) / parseFloat(Ghost.style.height) - 2) < 0.02,
+    `${Ghost.style.width} x ${Ghost.style.height}`,
+);
+
+At("pointermove", 760, 270);
+const Grew = Panel.DecalWidth();
+Check("dragging away from the box grows the decal", Grew > Started, `${Started} → ${Grew}`);
+Check("the artwork on the model grows with it", Math.abs(Panel.Placement.Size[0] - Grew) < 1e-9, `${Panel.Placement.Size[0]} vs ${Grew}`);
+Check("and the brush is left exactly where it was", Panel.Projection.Brush.Radius === Bristle);
+At("pointermove", 300, 270);
+const Shrank = Panel.DecalWidth();
+Check("dragging back in towards it shrinks it", Shrank < Grew, `${Grew} → ${Shrank}`);
+At("pointermove", -4000, 270);
+Check("and it cannot be dragged past the width the card allows", Panel.DecalWidth() >= 0.02, String(Panel.DecalWidth()));
+At("pointermove", 300, 270);
+const Landing = Panel.DecalWidth();
+
+Lift("s");
+Check("letting the key go closes the drag", !Panel.Sizing && Find("#brush-ghost").hidden);
+Check("and leaves the footprint where the hand left it", Panel.DecalWidth() === Landing);
+Panel.Undo();
+Check("one undo takes the whole drag back, not a hundred moves", Math.abs(Panel.DecalWidth() - Started) < 1e-6, `${Panel.DecalWidth()} vs ${Started}`);
+
+// A stroke layer still gets the head, and the ring that goes with it.
+Panel.SelectLayer(Painted);
+Panel.SetTool("brush", true);
+At("pointermove", 480, 270);
+Type("s");
+Check("a paint layer still hands S the brush", !Panel.Sizing.Decal && !Find("#brush-ghost").classList.contains("footprint"));
+At("pointermove", 700, 270);
+Check("and the head follows the drag as it always did", Panel.Projection.Brush.Radius !== Bristle, String(Panel.Projection.Brush.Radius));
+Lift("s");
+Panel.SelectLayer(Decal.Identifier);
+Panel.SetTool("decal", true);
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Texture space. The same tools, the same layer, and the squares that must not eat the press.

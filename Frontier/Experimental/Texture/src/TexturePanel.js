@@ -2479,17 +2479,27 @@ export class TexturePanel
         const At = this.PointerAt ? [...this.PointerAt] : [Bounds.left + Bounds.width / 2, Bounds.top + Bounds.height / 2];
         // Room to work in: a hair of a brush still needs a few dozen pixels of travel to shrink into, and a brush the
         // size of the viewport cannot put its centre off the edge of it.
-        const Pixels = this.RadiusPixels();
+        const Decal = this.SizingDecal();
+        const Pixels = Decal ? this.DecalPixels(Decal) : this.RadiusPixels();
         const Reach = Clamp(Pixels, 28, 260);
         this.Sizing = {
             Anchor: [At[0] - Reach, At[1]],
-            From: this.Projection.Brush.Radius,
+            From: Decal ? this.DecalWidth(Decal) : this.Projection.Brush.Radius,
             Pixels,
             Reach,
             Flat: this.ViewMode !== "surface",
+            // Which thing the hand has hold of, and what it would take to put it back.
+            Decal: Decal?.Identifier || "",
+            Opening: Decal ? this.DecalWidth(Decal) : 0,
+            Before: Decal ? structuredClone(this.StackRecord()) : null,
         };
         this.DrawSizingRing();
-        if (!this.SizingTold)
+        if (Decal && !this.FootprintTold)
+        {
+            this.FootprintTold = true;
+            this.Notify("Drag away from the box to grow the decal, in towards it to shrink it.");
+        }
+        if (!Decal && !this.SizingTold)
         {
             this.SizingTold = true;
             this.Notify("Drag away from the ring to grow the head, in towards it to shrink it.");
@@ -2504,9 +2514,66 @@ export class TexturePanel
         // 📝 In the viewport the head is sized in SCREEN pixels, one for one: the rim of the ring sits under the
         //    cursor and stays there, so the size being chosen is the size being looked at. Texture space has no
         //    camera to measure a pixel against, so there the drag is a plain multiple of where it started.
-        if (Sizing.Flat) this.SetRadius(Sizing.From * Clamp(Away / Sizing.Reach, 0.02, 40));
-        else this.SetRadius(this.RadiusFromPixels(Math.max(1, Sizing.Pixels + (Away - Sizing.Reach))));
+        const Reached = Sizing.Flat
+            ? Sizing.From * Clamp(Away / Sizing.Reach, 0.02, 40)
+            : Math.max(1, Sizing.Pixels + (Away - Sizing.Reach));
+        if (Sizing.Decal) this.SetDecalWidth(Sizing.Flat ? Reached : this.WidthFromPixels(Reached));
+        else this.SetRadius(Sizing.Flat ? Reached : this.RadiusFromPixels(Reached));
         this.DrawSizingRing();
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // 🔴 `S` sizes whatever is in the hand, and with a decal layer selected that is NOT the brush. A decal layer cannot
+    //    take a stroke — the brush is not even offered for one — so the key that every painter reaches for first was
+    //    sizing a head that could not paint, and the only way to resize a stamp was the Width slider two panes deep or,
+    //    for a projected mark, a corner handle that does not exist until the mark has been placed. The gesture is the
+    //    same one, measured the same way; only the number at the end of it changes.
+    //----------------------------------------------------------------------------------------------------------------------
+    SizingDecal()
+    {
+        const Layer = this.ActiveLayer;
+        return this.Tool === "decal" && Layer?.Kind === "decal" ? Layer : null;
+    }
+
+    // The footprint across the model in metres, or across the sheet in UV — whichever one the click is about to use.
+    DecalWidth(Layer = this.SizingDecal())
+    {
+        if (!Layer) return 0;
+        const Template = this.ActiveMark || Layer.Decal;
+        return this.ViewMode === "surface" ? Template.Transform.Size : (Template.Plane?.Size ?? 0.4);
+    }
+
+    SetDecalWidth(Value)
+    {
+        const Layer = this.SizingDecal();
+        if (!Layer) return;
+        if (this.ViewMode === "surface") this.ShapeMark({ Size: Clamp(Value, 0.02, 2.4) });
+        else
+        {
+            const Template = this.ActiveMark || Layer.Decal;
+            Template.Plane = { ...Template.Plane, Size: Clamp(Value, 0.01, 2) };
+            if (!this.ActiveMark) Layer.Decal.Plane = Template.Plane;
+            this.Recomposite();
+            this.MarkDirty();
+        }
+        // 🔴 The artwork drawn on the model is a snapshot taken the last time the pointer moved over it, and during an
+        //    S-drag the pointer is not moving over it — it is out in the viewport dragging an edge. Rebuilt from the
+        //    frame the snapshot already carries, so the preview grows under the hand instead of waiting for the key
+        //    to come up and the next hover to notice.
+        if (this.Placement) this.Placement = this.PlacementRecord(Layer, this.Placement);
+    }
+
+    // Half the footprint in screen pixels, which is what the drag is measured against — the decal's answer to the
+    // brush's radius, so one gesture serves both.
+    DecalPixels(Layer = this.SizingDecal())
+    {
+        if (this.ViewMode !== "surface") return 60;
+        return this.DecalWidth(Layer) / (2 * this.PixelReach());
+    }
+
+    WidthFromPixels(Pixels)
+    {
+        return Pixels * 2 * this.PixelReach();
     }
 
     // The head's radius in screen pixels, which is what the ring is drawn at and what the drag is measured against,
@@ -2531,29 +2598,53 @@ export class TexturePanel
 
     EndSizing()
     {
-        if (!this.Sizing) return;
+        const Sizing = this.Sizing;
+        if (!Sizing) return;
         this.Sizing = null;
         const Ghost = Select("#brush-ghost");
-        if (!Ghost) return;
-        Ghost.classList.remove("sizing");
-        Ghost.hidden = true;
+        if (Ghost)
+        {
+            Ghost.classList.remove("sizing", "footprint");
+            Ghost.hidden = true;
+        }
+        if (!Sizing.Decal) return;
+        const Layer = this.LayerByIdentifier(Sizing.Decal);
+        if (!Layer) return;
+        const Width = this.DecalWidth(Layer);
+        if (Math.abs(Width - Sizing.Opening) < 1e-4) return;
+        // One revision for the whole drag, recorded exactly the way the gizmo records one for a corner pulled across
+        // the model: a hundred pointer moves are one thing the hand did, and undo should take back all of it.
+        this.Revisions.Record({ Kind: "stack", Before: Sizing.Before, After: structuredClone(this.StackRecord()) });
+        this.AfterStackChange();
+        const Flat = this.ViewMode !== "surface";
+        this.Chronicle("decal", `Sized ${Layer.Name}`, Flat ? `${Width.toFixed(2)} uv` : `${Width.toFixed(2)} m`, (this.ActiveMark || Layer.Decal).Tint);
+        this.Notify(`${Layer.Name} lands ${Flat ? `${Width.toFixed(2)} across the sheet` : `${(Width * 100).toFixed(0)} cm across`}.`);
+        this.Instruments?.RenderRail();
+        if (this.InspectorTab === "layer") this.RenderInspector();
     }
 
     // The ring sits where the key went down, not under the pointer: the hand is dragging the EDGE of the head out,
     // and a ring that chased the cursor would be showing the size somewhere the paint is not going to land.
+    //
+    // 📝 A brush is a disc and a decal is a rectangle, so each is drawn as what it is. A circle around a decal would
+    //    be claiming a footprint the stamp does not have, which is the whole complaint the preview gate just answered.
     DrawSizingRing()
     {
         const Ghost = Select("#brush-ghost");
         if (!Ghost || !this.Sizing || this.ViewMode !== "surface") return;
         const Bounds = this.Canvas.getBoundingClientRect();
-        const Pixels = this.RadiusPixels();
+        const Layer = this.Sizing.Decal ? this.LayerByIdentifier(this.Sizing.Decal) : null;
+        const Template = Layer ? this.ActiveMark || Layer.Decal : null;
+        const Wide = Layer ? this.DecalWidth(Layer) / this.PixelReach() : this.RadiusPixels() * 2;
+        const Tall = Template ? Wide / Math.max(Template.Transform.Aspect, 0.05) : Wide;
         Ghost.hidden = false;
         Ghost.classList.add("sizing");
-        Ghost.style.width = `${Math.max(Pixels * 2, 8)}px`;
-        Ghost.style.height = `${Math.max(Pixels * 2, 8)}px`;
+        Ghost.classList.toggle("footprint", !!Layer);
+        Ghost.style.width = `${Math.max(Wide, 8)}px`;
+        Ghost.style.height = `${Math.max(Tall, 8)}px`;
         Ghost.style.left = `${this.Sizing.Anchor[0] - Bounds.left}px`;
         Ghost.style.top = `${this.Sizing.Anchor[1] - Bounds.top}px`;
-        Ghost.style.borderColor = `${ToHex(this.PreviewInk().Ink)}cc`;
+        Ghost.style.borderColor = `${ToHex(Template ? Template.Tint : this.PreviewInk().Ink)}cc`;
     }
 
     // Scaling the gradient, from the keyboard as well as the card: `G` shortens it, `⇧G` lengthens it, by the same
@@ -6942,8 +7033,9 @@ export class TexturePanel
         const Note = document.createElement("p");
         Note.className = "card-note";
         Note.textContent =
-            "Drag a corner on the model to resize, shift-drag to stretch one axis, and drag the knob above the top edge to turn it. " +
-            "Rotation zero is upright as the artwork was dropped.";
+            "Hold S and drag in the viewport to size the footprint, as you would a brush. Drag a corner on the model to resize, " +
+            "shift-drag to stretch one axis, and drag the knob above the top edge to turn it. Rotation zero is upright as the " +
+            "artwork was dropped.";
         Sheet.append(Note);
         return Sheet;
     }
@@ -10625,6 +10717,8 @@ export class TexturePanel
             // 🔴 `S` is size — the brush's, not the gradient's. Held down it hands the head to the mouse: drag out
             //    to grow it, back in to shrink it, with the ring on the canvas showing the answer. The ramp moved to
             //    `G`, the letter of the thing it scales, and symmetry sits on `Y` where it went when the ramp came.
+            //    With a decal layer in hand it is the decal's footprint that follows the drag, drawn as a rectangle
+            //    rather than a ring, because the brush is not offered for a decal and the key should not go to waste.
             if (Key === "s")
             {
                 if (!Event.repeat) this.BeginSizing();
