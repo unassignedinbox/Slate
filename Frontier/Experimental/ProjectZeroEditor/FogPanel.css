@@ -1,152 +1,426 @@
 .fog-instruments {
+  --fog-accent: #8fd0bf;
   display: grid;
   gap: 12px;
   margin-bottom: 18px;
   min-width: 0;
 }
+
 .fog-instrument {
-  background: #191919;
-  border-radius: 18px;
-  padding: 16px;
-  overflow: hidden;
+  position: relative;
   min-width: 0;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid #ffffff0a;
+  border-radius: 22px;
+  background: #1b1b1b;
+  box-shadow: inset 0 1px 0 #ffffff06;
 }
+
 .fog-instrument h2 {
+  margin: 0;
+  color: #e4e4df;
   font-size: 15px;
-  font-weight: 400;
-  color: #ddd;
-  margin: 0 0 9px;
+  font-weight: 450;
 }
+
 .fog-instrument > small {
+  color: #81817d;
   font-size: 9px;
-  color: #888;
 }
+
 .fog-instrument svg {
   display: block;
   width: 100%;
   height: auto;
 }
+
 .fog-instrument svg text {
-  fill: #9aa6ad;
+  fill: #8d918f;
   font: 8px sans-serif;
 }
+
+/* One shared Fog overview card, modelled after the supplied KPI infographics. */
 .fog-sight {
+  min-height: 274px;
   padding: 0;
+  border-radius: 24px;
+  background:
+    radial-gradient(
+      circle at 78% 8%,
+      color-mix(in srgb, var(--fog-accent) 12%, transparent),
+      transparent 36%
+    ),
+    #1a1a1a;
 }
-.fog-caption {
-  padding: 12px 14px;
+
+.fog-overview-head {
+  position: absolute;
+  z-index: 3;
+  top: 18px;
+  right: 18px;
+  left: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #b9bbb7;
+  font-size: 11px;
+}
+
+.fog-overview-head span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fog-overview-head i,
+.fog-card-heading h2 i {
+  width: 3px;
+  height: 15px;
+  border-radius: 4px;
+  background: var(--fog-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--fog-accent) 48%, transparent);
+}
+
+.fog-overview-head em {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #ffffff09;
+  color: #777a76;
+  font-size: 8px;
+  font-style: normal;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+}
+
+.fog-overview-metric {
+  position: absolute;
+  z-index: 3;
+  top: 54px;
+  right: 18px;
+  left: 18px;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.fog-overview-metric strong {
+  color: #e8e8e3;
+  font-size: 43px;
+  font-weight: 300;
+  letter-spacing: -2.2px;
+  line-height: 1;
+}
+
+.fog-overview-metric small {
+  color: #777a76;
+  font-size: 12px;
+}
+
+.fog-overview-metric b {
+  margin-left: auto;
+  color: var(--fog-accent);
+  font-size: 22px;
+  font-weight: 300;
+}
+
+.fog-height-style > svg {
+  height: 274px;
+  opacity: 0.82;
+}
+
+.fog-height-style .fog-caption {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  bottom: 0;
+  left: 0;
   display: grid;
-  gap: 5px;
+  gap: 3px;
+  padding: 34px 15px 12px;
+  background: linear-gradient(transparent, #171717 48%);
 }
-.fog-caption strong {
-  font-size: 14px;
-  font-weight: 400;
-  color: #ccc;
+
+.fog-height-style .fog-caption strong {
+  color: #d5d6d1;
+  font-size: 13px;
+  font-weight: 450;
 }
-.fog-caption small {
-  font-size: 9px;
-  color: #7d858b;
-  line-height: 1.6;
+
+.fog-height-style .fog-caption small {
+  display: flex;
+  justify-content: space-between;
+  gap: 7px;
+  color: #717571;
+  font-size: 8px;
+  letter-spacing: 0.25px;
+  line-height: 1.5;
 }
+
+.fog-height-style .fog-caption span {
+  color: var(--fog-accent);
+  font-size: 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.fog-height-style svg text {
+  font-size: 7px;
+}
+
+/* Reused KPI tile component for every Fog model. */
 .fog-readings {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
+
 .fog-reading {
-  border: 0;
-  border-radius: 12px;
-  box-shadow: none;
-  background: #191919;
-  min-height: 62px;
-  padding: 11px 12px;
   display: grid;
-  gap: 5px;
+  min-width: 0;
+  min-height: 116px;
+  gap: 8px;
+  overflow: hidden;
+  padding: 13px;
+  border: 1px solid #ffffff08;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #ffffff04, transparent 42%), #1b1b1b;
+  box-shadow: inset 0 1px 0 #ffffff05;
+}
+
+.fog-reading-label {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 7px;
   min-width: 0;
 }
+
+.fog-reading small {
+  color: #858783;
+  font-size: 8px;
+  letter-spacing: 0.75px;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.fog-reading-label span {
+  flex: none;
+  color: var(--fog-accent);
+  font-size: 13px;
+}
+
 .fog-reading b {
-  font-size: 18px;
-  line-height: 1.25;
-  font-weight: 400;
-  color: #e0e0e0;
+  color: #e2e2dd;
+  font-size: 24px;
+  font-weight: 300;
+  letter-spacing: -0.7px;
+  line-height: 1;
   overflow-wrap: anywhere;
 }
-.fog-reading small {
-  font-size: 8px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: #747474;
-  line-height: 1.5;
+
+.fog-reading svg {
+  align-self: end;
+  height: 27px;
+  overflow: visible;
 }
+
+.fog-reading svg path:not(.fog-reading-area) {
+  fill: none;
+  stroke: var(--fog-accent);
+  stroke-width: 1.3;
+  vector-effect: non-scaling-stroke;
+}
+
+.fog-reading-area {
+  fill: color-mix(in srgb, var(--fog-accent) 10%, transparent);
+}
+
+.fog-reading svg circle {
+  fill: var(--fog-accent);
+  stroke: #1b1b1b;
+  stroke-width: 1.2;
+}
+
+.fog-reading-summary .fog-reading {
+  min-height: 100px;
+}
+
+.fog-reading-meter {
+  align-self: end;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #ffffff0a;
+}
+
+.fog-reading-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--fog-accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--fog-accent) 50%, transparent);
+}
+
+.fog-reading-dots {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  align-self: end;
+}
+
+.fog-reading-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fog-accent);
+}
+
+.fog-reading-dots i:nth-child(2) {
+  opacity: 0.7;
+}
+.fog-reading-dots i:nth-child(3) {
+  opacity: 0.42;
+}
+.fog-reading-dots i:nth-child(4) {
+  opacity: 0.2;
+}
+
 .fog-instruments .property-card {
   margin: 0;
 }
-.fog-beam svg {
-  margin-top: 12px;
-  border-radius: 7px;
+
+.fog-instruments > .property-card {
+  border: 1px solid #ffffff08;
+  border-radius: 22px;
+  background: #1b1b1b;
+  box-shadow: inset 0 1px 0 #ffffff05;
 }
 
-.fog-height-style {
+.fog-instruments > .property-card > h3 {
   position: relative;
-  border: 1px solid #ffffff12;
-  border-radius: 20px;
-  background: #08090a;
-}
-.fog-height-style .fog-caption {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 9px 12px 5px;
-  gap: 1px;
-  background: linear-gradient(transparent, #070809e6);
-}
-.fog-height-style .fog-caption strong {
-  font-size: 16px;
-  font-weight: 400;
-  color: #dfe0dc;
-}
-.fog-height-style .fog-caption small {
-  font-size: 8px;
-  color: #7b8388;
-  letter-spacing: 0.35px;
-  display: flex;
-  justify-content: space-between;
-  gap: 5px;
-}
-.fog-height-style .fog-caption span {
-  text-align: right;
-  font-size: 8px;
-  white-space: nowrap;
-}
-.fog-height-style svg text {
-  font-size: 7px;
+  padding-left: 11px;
 }
 
-.fog-height-style > svg {
-  height: 166px;
+.fog-instruments > .property-card > h3::before {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  left: 0;
+  width: 3px;
+  border-radius: 4px;
+  background: var(--fog-accent);
+  content: "";
 }
-.fog-height-style {
-  margin-bottom: 8px;
+
+.fog-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
 }
+
+.fog-card-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.fog-card-heading span {
+  color: #71736f;
+  font-size: 8px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.fog-visibility-card .graph-metric {
+  margin: 3px 0 1px;
+  font-size: 46px;
+  letter-spacing: -2px;
+}
+
+.fog-visibility-card .graph-status i {
+  background: var(--fog-accent);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--fog-accent) 55%, transparent);
+}
+
+.fog-visibility-card .parameter-plot {
+  margin-top: 7px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff02, transparent);
+}
+
 .fog-instrument > .fog-beam {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid #ffffff14;
-  background: transparent;
+  margin-top: 18px;
 }
+
+.fog-beam-card {
+  padding: 14px;
+  border: 1px solid #ffffff08;
+  border-radius: 17px;
+  background:
+    radial-gradient(
+      circle at 15% 50%,
+      color-mix(in srgb, var(--fog-accent) 8%, transparent),
+      transparent 46%
+    ),
+    #171717;
+}
+
 .fog-beam > div:first-child {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
 }
+
 .fog-beam strong {
-  color: #cfd1cf;
+  color: #d2d3ce;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 450;
 }
+
 .fog-beam small {
-  color: #777f82;
+  color: #727572;
   font-size: 8px;
+}
+
+.fog-beam svg {
+  margin-top: 8px;
+  border-radius: 9px;
+}
+
+/* Keep the shared Medium and model cards in the same infographic family. */
+.fog-medium-grid > .property-card {
+  border-color: #ffffff08;
+  border-radius: 22px;
+  background: #1b1b1b;
+  box-shadow: inset 0 1px 0 #ffffff05;
+}
+
+.fog-medium-grid > .property-card > h3 {
+  position: relative;
+  padding-left: 11px;
+}
+
+.fog-medium-grid > .property-card > h3::before {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  left: 0;
+  width: 3px;
+  border-radius: 4px;
+  background: var(--fog-accent, #8fd0bf);
+  content: "";
+}
+
+@media (min-width: 540px) {
+  .fog-readings {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .fog-reading-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

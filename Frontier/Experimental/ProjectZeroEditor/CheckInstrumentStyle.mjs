@@ -156,15 +156,22 @@ try {
     );
     assert(
       await Page.locator(".fog-reading").evaluateAll((Tiles) =>
-        Tiles.every((Tile) => getComputedStyle(Tile).borderRadius === "12px"),
+        Tiles.every((Tile) => {
+          const Style = getComputedStyle(Tile);
+          return (
+            Style.borderRadius === "18px" && Style.borderTopWidth === "1px"
+          );
+        }),
       ),
     );
     const Appearance = await Page.locator(".fog-beam").evaluate((Beam) => ({
       Background: getComputedStyle(Beam).backgroundColor,
+      Radius: getComputedStyle(Beam).borderRadius,
       Parent: Beam.closest('[data-card="Visibility through fog"]')?.dataset
         .card,
     }));
-    assert.equal(Appearance.Background, "rgba(0, 0, 0, 0)");
+    assert.equal(Appearance.Background, "rgb(23, 23, 23)");
+    assert.equal(Appearance.Radius, "17px");
     assert.equal(Appearance.Parent, "Visibility through fog");
     await Page.locator(".fog-beam").evaluate((Card) =>
       Card.scrollIntoView({ block: "center" }),
@@ -172,7 +179,7 @@ try {
     await Capture(Id + "Chamber");
     Checks.push(
       Id +
-        ": beam chamber is nested transparently in Visibility and compact fog statistics share the rounding",
+        ": infographic Beam chamber is nested in Visibility and shared Fog KPI cards retain the new rounding",
     );
   }
   await Open("reference-softbox");

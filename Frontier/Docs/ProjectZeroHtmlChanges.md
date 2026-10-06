@@ -2862,3 +2862,18 @@ fracture algorithm, SDF computation, source-property schema or Construct behavio
   Tests were updated to assert the unified native architecture instead of the superseded imported Height Fog path.
 - Nine actual browser screenshots and a proof manifest are in `ProjectZeroEditor/Screenshots/UnifiedFog/`, covering the
   top, Visibility / Light Transport and Medium regions for Height, Atmospheric and Local Fog.
+
+## C058 — Fog infographic card redesign (2026-10-06)
+
+- Redesigned only the shared Fog card family, using the supplied dark dashboard and biomarker-card references: larger
+  headline metrics, slim colour keys, rounded inset surfaces, micro status labels, compact trend plots and restrained
+  model accents. No other inspector family was restyled.
+- Kept one reused `FogPanel` implementation for Height, Atmospheric and Local Fog. The models still differ only in
+  authored values, calculations, labels and technical content; no separate model-specific card implementation was added.
+- Reworked the shared overview and six KPI readings into infographic cards. Visibility retains the shared interactive
+  transmission plot, while Beam Chamber remains nested inside Visibility as a rounded Light Transport inset rather than
+  becoming a standalone card.
+- Fog Settings, Medium and each model's existing technical card retain their controls and now use the same rounded,
+  keyed visual language. Notes, persistence, outliner context, Wind Binding and model independence are unchanged.
+- The standalone HTML build succeeds at 4.65 MiB. Fog-specific computed-style assertions now cover the authorized
+  18 px KPI cards and 17 px nested Beam Chamber treatment.

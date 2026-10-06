@@ -155,11 +155,14 @@ try {
     assert.equal(await Page.locator("iframe").count(), 0);
     assert(
       await Page.locator(".fog-reading").evaluateAll((Nodes) =>
-        Nodes.every(
-          (Node) =>
-            getComputedStyle(Node).borderTopWidth === "0px" &&
-            Node.scrollWidth <= Node.clientWidth,
-        ),
+        Nodes.every((Node) => {
+          const Style = getComputedStyle(Node);
+          return (
+            Style.borderTopWidth === "1px" &&
+            Style.borderRadius === "18px" &&
+            Node.scrollWidth <= Node.clientWidth
+          );
+        }),
       ),
     );
     const Before = await Page.locator(".fog-readings").first().innerText();

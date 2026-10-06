@@ -340,7 +340,7 @@ try {
   assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
   assert.equal(
     await Page.locator(".fog-reading").evaluateAll((Tiles) =>
-      Tiles.every((Tile) => getComputedStyle(Tile).borderRadius === "12px"),
+      Tiles.every((Tile) => getComputedStyle(Tile).borderRadius === "18px"),
     ),
     true,
   );

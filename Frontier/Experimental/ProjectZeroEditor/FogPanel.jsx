@@ -18,6 +18,13 @@ export default function FogPanel({ Kind, V, Values, Change, QuickControls }) {
     Sight = Extinction > 0 ? Start - Math.log(0.02) / Extinction : Infinity,
     Shape = ResolveFogShape(Values),
     Percent = (Value) => (Value * 100).toFixed(0) + "%",
+    SightValue = Number.isFinite(Sight)
+      ? Sight >= 1000
+        ? (Sight / 1000).toFixed(1)
+        : Math.round(Sight).toLocaleString("en-US")
+      : "∞",
+    SightUnit = Number.isFinite(Sight) && Sight >= 1000 ? "km" : "m",
+    Accent = Height ? "#f0c16b" : Aerial ? "#8fd0bf" : "#b8a8f2",
     MaximumDistance = Aerial ? 4000 : 400,
     Markers = Aerial
       ? [0, 500, 1000, 2000, 3000, 4000]
@@ -32,37 +39,74 @@ export default function FogPanel({ Kind, V, Values, Change, QuickControls }) {
       : Aerial
         ? Number(V("Mie Blend")) || 0
         : Number(V("Anisotropy")) || 0;
-  const Tiles = Height
-    ? [
-        [Density.toFixed(4), "Density"],
-        [V("Falloff Height") + " m", "Falloff height"],
-        [
-          Number.isFinite(Sight) ? Math.round(Sight) + " m" : "Clear",
-          "2% contrast",
-        ],
-        [Number(V("Sun Scatter")).toFixed(2), "Sun scatter"],
-      ]
-    : Aerial
+  const Level = (Value) => Math.max(0, Math.min(1, Number(Value) || 0)),
+    Tiles = Height
       ? [
-          [Density.toFixed(2) + "×", "Density"],
-          [Start + " m", "Start distance"],
-          [Percent(V("Mie Blend")), "Mie blend"],
+          [Density.toFixed(4), "Density", Level(Density / 0.1)],
           [
-            Number.isFinite(Sight)
-              ? (Sight / 1000).toFixed(2) + " km"
-              : "Clear",
+            V("Falloff Height") + " m",
+            "Falloff height",
+            Level(V("Falloff Height") / 2000),
+          ],
+          [
+            Number.isFinite(Sight) ? Math.round(Sight) + " m" : "Clear",
             "2% contrast",
+            Number.isFinite(Sight) ? Level(Sight / MaximumDistance) : 1,
+          ],
+          [
+            Number(V("Sun Scatter")).toFixed(2),
+            "Sun scatter",
+            Level(V("Sun Scatter")),
           ],
         ]
-      : [
-          [Density.toFixed(2), "Density"],
-          [Percent(V("Coverage")), "Coverage"],
-          [V("Feature Scale") + " m", "Feature scale"],
-          [Number(V("Anisotropy")).toFixed(2), "Anisotropy"],
-        ];
+      : Aerial
+        ? [
+            [Density.toFixed(2) + "×", "Density", Level(Density / 3)],
+            [Start + " m", "Start distance", Level(Start / MaximumDistance)],
+            [Percent(V("Mie Blend")), "Mie blend", Level(V("Mie Blend"))],
+            [
+              Number.isFinite(Sight)
+                ? (Sight / 1000).toFixed(2) + " km"
+                : "Clear",
+              "2% contrast",
+              Number.isFinite(Sight) ? Level(Sight / MaximumDistance) : 1,
+            ],
+          ]
+        : [
+            [Density.toFixed(2), "Density", Level(Density / 3)],
+            [Percent(V("Coverage")), "Coverage", Level(V("Coverage"))],
+            [
+              V("Feature Scale") + " m",
+              "Feature scale",
+              Level(V("Feature Scale") / MaximumDistance),
+            ],
+            [
+              Number(V("Anisotropy")).toFixed(2),
+              "Anisotropy",
+              Level((Number(V("Anisotropy")) + 1) / 2),
+            ],
+          ];
   return (
-    <div className="fog-instruments" data-fog-kind={Kind}>
-      <section className="fog-instrument fog-sight fog-height-style">
+    <div
+      className="fog-instruments"
+      data-fog-kind={Kind}
+      style={{ "--fog-accent": Accent }}
+    >
+      <section
+        className="fog-instrument fog-sight fog-height-style"
+        style={{ "--fog-accent": Accent }}
+      >
+        <div className="fog-overview-head">
+          <span>
+            <i /> Fog profile
+          </span>
+          <em>{Enabled ? "Live" : "Preview"}</em>
+        </div>
+        <div className="fog-overview-metric">
+          <strong>{SightValue}</strong>
+          <small>{SightUnit} sight</small>
+          <b aria-hidden="true">↘</b>
+        </div>
         <svg
           viewBox="0 0 300 166"
           preserveAspectRatio="none"
@@ -190,23 +234,52 @@ export default function FogPanel({ Kind, V, Values, Change, QuickControls }) {
         </div>
       </section>
       <div className="fog-readings">
-        {Tiles.map(([Value, Label]) => (
-          <div className="fog-reading" key={Label}>
-            <b>{Value}</b>
-            <small>{Label}</small>
-          </div>
-        ))}
+        {Tiles.map(([Value, Label, Normalized], Index) => {
+          const Y = 18 - Normalized * 13,
+            PreviousY = 18 - Normalized * 8;
+          const Curve = `M0 18L24 ${18 - Normalized * 3}L46 ${18 - Normalized * 5}L68 ${PreviousY}L100 ${Y}`;
+          return (
+            <div className="fog-reading" key={Label}>
+              <div className="fog-reading-label">
+                <small>{Label}</small>
+                <span aria-hidden="true">{Index % 2 ? "↗" : "↘"}</span>
+              </div>
+              <b>{Value}</b>
+              <svg
+                viewBox="0 0 100 22"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path className="fog-reading-area" d={`${Curve}V22H0Z`} />
+                <path d={Curve} />
+                <circle cx="100" cy={Y} r="2" />
+              </svg>
+            </div>
+          );
+        })}
       </div>
-      <div className="fog-readings">
+      <div className="fog-readings fog-reading-summary">
         <div className="fog-reading">
+          <div className="fog-reading-label">
+            <small>
+              {Local ? "200 m interior transmission" : "Transmission at 200 m"}
+            </small>
+            <span aria-hidden="true">↘</span>
+          </div>
           <b>{Percent(Transmission(200))}</b>
-          <small>
-            {Local ? "200 m interior transmission" : "Transmission at 200 m"}
-          </small>
+          <div className="fog-reading-meter">
+            <i style={{ width: Percent(Transmission(200)) }} />
+          </div>
         </div>
         <div className="fog-reading">
+          <div className="fog-reading-label">
+            <small>{Model}</small>
+            <span aria-hidden="true">↗</span>
+          </div>
           <b>{Enabled ? "Active" : "Disabled"}</b>
-          <small>{Model}</small>
+          <div className="fog-reading-dots" aria-hidden="true">
+            <i /> <i /> <i /> <i />
+          </div>
         </div>
       </div>
       {QuickControls}
@@ -214,9 +287,14 @@ export default function FogPanel({ Kind, V, Values, Change, QuickControls }) {
         className="property-card fog-instrument fog-visibility-card"
         data-card="Visibility through fog"
       >
-        <h2>Visibility</h2>
+        <div className="fog-card-heading">
+          <h2>
+            <i /> Visibility
+          </h2>
+          <span>0–{MaximumDistance.toLocaleString("en-US")} m</span>
+        </div>
         <FogGraph Kind={Kind} V={V} Change={Change} />
-        <div className="fog-beam">
+        <div className="fog-beam fog-beam-card">
           <div>
             <strong>Light transport</strong>
             <small>
