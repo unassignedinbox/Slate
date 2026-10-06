@@ -1,7 +1,7 @@
 {
-  "harnessSource": "09c5099c57e21136dab99e9d2c93835d997fdbe5",
-  "run": "37475997317",
-  "shaderSource": "09c5099c57e21136dab99e9d2c93835d997fdbe5",
+  "harnessSource": "a1b598a45e127258d42f8ba8d40cf47890584f87",
+  "run": "37481068015",
+  "shaderSource": "a1b598a45e127258d42f8ba8d40cf47890584f87",
   "reference": "matte-reference.png is independent CPU area quadrature, not a Vulkan readback.",
   "execution": "Production SPIR-V on CPU Vulkan. Receiver-plane lighting maps, not perspective camera renders.",
   "shaders": {
