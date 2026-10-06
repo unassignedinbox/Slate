@@ -71,7 +71,9 @@ async function Square(Frame) {
   assert(
     Reading.every(
       (Tile) =>
-        Tile.Radius === "6px" && Tile.Border === "0px" && !Tile.Overflow,
+        Tile.Radius === (Lighting ? "6px" : "12px") &&
+        Tile.Border === "0px" &&
+        !Tile.Overflow,
     ),
     JSON.stringify(Reading),
   );

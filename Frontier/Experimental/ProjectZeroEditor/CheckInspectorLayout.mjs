@@ -87,7 +87,9 @@ try {
       await Frame.locator(".mp-pill,.mp-stat").evaluateAll((Nodes) =>
         Nodes.every((Node) => {
           const Style = getComputedStyle(Node);
-          return Style.borderRadius === "6px" && Style.borderTopWidth === "0px";
+          return (
+            Style.borderRadius === "12px" && Style.borderTopWidth === "0px"
+          );
         }),
       ),
     );
@@ -95,7 +97,7 @@ try {
     await Page.screenshot({ path: path.join(Proof, Id + "-header.png") });
     Checks.push(
       Id +
-        ": header precedes imported cards; borderless six-pixel metric corners",
+        ": header precedes imported cards; borderless twelve-pixel metric corners",
     );
   }
   await Open("wind");

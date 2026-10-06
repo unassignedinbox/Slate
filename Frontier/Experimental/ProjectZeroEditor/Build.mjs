@@ -1,3 +1,4 @@
+import { RecolourInstrument } from "./InstrumentSpecification.js";
 import { LightIcons } from "./LightSpecification.js";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
@@ -79,6 +80,23 @@ const Fonts = ["Light", "Regular"]
   .join("\n");
 // Preserve the reference's document-wide CSS and control behaviour without restyling the current editor.
 const ReferenceOutput = await build({
+  plugins: [
+    {
+      name: "instrument-presentation",
+      setup(Build) {
+        Build.onLoad(
+          { filter: /InspectorDepot[\\/]panels[\\/](wind|fog)\.js$/ },
+          (Args) => ({
+            contents: RecolourInstrument(
+              path.basename(Args.path),
+              fs.readFileSync(Args.path, "utf8"),
+            ),
+            loader: "js",
+          }),
+        );
+      },
+    },
+  ],
   entryPoints: [path.join(Folder, "InspectorHost.js")],
   nodePaths: [path.join(Folder, "../FrontierEditor/node_modules")],
   define: {

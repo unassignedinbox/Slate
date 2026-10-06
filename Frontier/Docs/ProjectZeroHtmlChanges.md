@@ -2716,3 +2716,32 @@ Native control inventories are compared against C050 (`4068a2a`); pinned Inspect
 Actual screenshots and receipts are in `ProjectZeroEditor/Screenshots/SharedCloudLighting/`, including the expanded
 Softbox/IES/LED views and both Cloud modes. Fontshare network failures remain separate from application errors;
 fallback fonts were exercised. No native engine, fracture algorithm, SDF generation or measured photometry is added.
+
+## C052 — Neutral Anemometer, matching beam chambers and softer statistic corners
+
+2026-10-06. Targeted styling follow-up to the supplied Wind/Fog screenshots and dashboard JPG.
+
+- Removed the Anemometer's green rectangular gust band and green trace. The existing live samples now draw a faint
+  neutral-grey under-curve wash, subdued grey line, white above-mean sections and white peak/latest markers, with one
+  restrained amber trough marker. Mean/axis guides, sixty-second history, sampling, animation and taller-trace control
+  are retained. Wind's composite colours, card order and numeric readings are unchanged.
+- Removed the Height Fog beam chamber's black canvas fill, black wrapper and inset border. Its transparent drawing
+  now reveals the same charcoal card background as the surrounding imported cards. Atmospheric and Local Fog beam
+  drawings likewise reveal their containing instrument surface. Beam/scatter calculations and labels are unchanged.
+- Increased compact environment statistic corners from 6px to **12px**, keeping them rectangular and borderless.
+  This applies to both statistic rows on Wind, Sun, Height Fog, Clouds and Local Cloud, plus the corresponding compact
+  Atmospheric/Local Fog readings. Large cards, light-card styling, native controls and other layouts are untouched.
+
+The owned `InstrumentSpecification.js` applies checked presentation substitutions during bundling. Each source anchor
+must match exactly once or the build fails. Pinned InspectorDepot files remain byte-identical; only the generated
+Wind-trace palette/drawing decoration and Fog-chamber background differ from those sources.
+
+Verification: standalone build succeeds (**4.63 MiB**). **74 checks** pass with no application errors: 11 focused
+instrument-style checks, 10 inspector-layout/native-control checks, 28 reference checks and 25 lighting/authoring
+regressions. Pixel checks verify no green Anemometer pixels, neutral highlights and the amber sample, continued
+animation, taller/narrow views and transparent chamber corners. Computed-style checks verify 12px environment corners,
+retained borderless cards and unchanged 6px light tiles. Native control comparisons use C051 (`0d69d4b`).
+
+Actual browser screenshots and receipts are in `ProjectZeroEditor/Screenshots/InstrumentStyle/`, including
+`windWide.png`, `WindTraceTall.png` and `HeightFogChamber.png`. External Fontshare failures are recorded separately;
+fallback fonts were exercised. No native rendering, fog-model, wind-simulation or saved-property changes are included.

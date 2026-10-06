@@ -554,3 +554,20 @@
   letter-spacing: 0.4px;
   padding: 2px 4px;
 }
+
+/* C052: only the compact environment statistic cards gain softer corners. */
+#ReferenceMount:is(
+    [data-reference-kind="wind"],
+    [data-reference-kind="sun"],
+    [data-reference-kind="fog"],
+    [data-reference-kind="clouds"]
+  )
+  :is(.mp-pill, .mp-stat) {
+  border-radius: 12px;
+}
+#ReferenceMount[data-reference-kind="fog"] .fg-chamber {
+  background: transparent;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}

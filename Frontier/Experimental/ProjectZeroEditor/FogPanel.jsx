@@ -175,7 +175,7 @@ export default function FogPanel({ Kind, V, Values, Change }) {
           {Local ? "Interior beam study" : "Beam chamber · distance haze"}
         </small>
         <svg viewBox="0 0 300 84" role="img" aria-label="Fog beam chamber">
-          <rect width="300" height="84" fill="#0b0c0d" />
+          <rect width="300" height="84" fill="none" />
           {Array.from({ length: 70 }, (_, Index) => {
             const Fraction = Index / 69,
               Distance = Fraction * 400;
