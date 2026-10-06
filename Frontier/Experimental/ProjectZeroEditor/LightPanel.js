@@ -3,15 +3,10 @@
 //============================================================================================================================================
 // 📦 Type-specific browser light instruments with live emission and aperture illustrations.
 
+import { LightGlyphs } from "./LightSpecification.js";
+import { ProjectLight } from "./LightProjection.js";
 import { MountLightTransform } from "./EmitterPanel.jsx";
 import { el } from "./InspectorDepot/kit.js";
-const Labels = {
-  pointlight: "Point light",
-  spotlight: "Spot light",
-  ieslight: "IES / automotive",
-  arealight: "Area light",
-  tubelight: "Tube light",
-};
 const Clamp = (NumberValue, Minimum, Maximum) =>
   Math.max(Minimum, Math.min(Maximum, NumberValue));
 function Temperature(Kelvin) {
@@ -33,11 +28,14 @@ export function LightPanel(Subject, Context) {
     Style = Subject.type,
     Spot = Style === "spotlight",
     Point = Style === "pointlight",
-    Automotive = Style === "ieslight",
-    Area = Style === "arealight";
+    Photometric = Style === "ieslight",
+    Area = Style === "arealight",
+    Diode = Style === "ledlight",
+    Strip = Style === "ledstrip";
   const Host = el("div", "mpanel lighting-panel"),
     Bindings = [],
     Charts = [];
+  Host.dataset.lightType = Style;
   const Read = (Key, Fallback = 0) =>
     Number.isFinite(Number(Properties[Key]))
       ? Number(Properties[Key])
@@ -145,197 +143,82 @@ export function LightPanel(Subject, Context) {
     );
   }
   const Tint = (Opacity = 1) => `rgba(${Colour().join(",")},${Opacity})`;
-  const Flux = () => Math.max(0, Read(Point || Spot ? "intensity" : "lumens"));
-  const Brightness = () =>
-    Clamp(Flux() / (Point ? 30 : Spot ? 100 : 3000), 0, 1);
+  const Flux = () =>
+    Math.max(
+      0,
+      Diode
+        ? Read("watts", 10) * Read("efficacy", 110) * Read("dimmer", 1)
+        : Strip
+          ? Read("lumensPerMetre", 1000) *
+            Read("length", 2.4) *
+            Read("dimmer", 1)
+          : Read(Point || Spot ? "intensity" : "lumens"),
+    );
   const Preview = Card(
-    Automotive
-      ? "Beam distribution"
-      : Point
-        ? "Radial emission"
-        : Spot
-          ? "Spot projection"
-          : Area
-            ? "Luminous aperture"
-            : "Linear emission",
-    Labels[Style],
+    {
+      pointlight: "Radial falloff",
+      spotlight: "Beam envelope",
+      ieslight: "Photometric distribution",
+      arealight: "Luminous surface",
+      tubelight: "Linear radiance",
+      ledlight: "LED emitter",
+      ledstrip: "Ribbon light",
+    }[Style],
+    "",
     "lp-preview",
   );
-  Canvas(Preview, (Brush, Width, Height) => {
-    const Center = Width * 0.5;
-    Brush.fillStyle = "#111313";
-    Brush.fillRect(0, 0, Width, Height);
-    Brush.strokeStyle = "#ffffff09";
-    Brush.lineWidth = 1;
-    for (let Row = 0; Row < 5; Row++) {
-      Brush.beginPath();
-      Brush.moveTo(12, 93 + Row * 14);
-      Brush.lineTo(Width - 12, 93 + Row * 14);
-      Brush.stroke();
-    }
-    for (let Column = -4; Column <= 4; Column++) {
-      Brush.beginPath();
-      Brush.moveTo(Center + Column * 11, 82);
-      Brush.lineTo(Center + Column * 43, Height);
-      Brush.stroke();
-    }
-    if (Point) {
-      const Radius = 50 + Read("distance", 26) * 0.12,
-        Glow = Brush.createRadialGradient(Center, 68, 1, Center, 68, Radius);
-      Glow.addColorStop(0, Tint(0.8 * Brightness()));
-      Glow.addColorStop(0.25, Tint(0.16 * Brightness()));
-      Glow.addColorStop(1, Tint(0));
-      Brush.fillStyle = Glow;
-      Brush.fillRect(0, 0, Width, Height);
-      for (const Scale of [0.4, 0.7, 1]) {
-        Brush.beginPath();
-        Brush.ellipse(
-          Center,
-          77,
-          Radius * Scale,
-          Radius * Scale * 0.42,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        Brush.strokeStyle = Tint(0.25);
-        Brush.stroke();
-      }
-      Brush.fillStyle = Tint();
-      Brush.beginPath();
-      Brush.arc(Center, 65, 4, 0, Math.PI * 2);
-      Brush.fill();
-    } else if (Automotive) {
-      if (Properties.profile === "Custom .IES") {
-        Brush.fillStyle = "#8a938d";
-        Brush.font = "11px sans-serif";
-        Brush.fillText("IES file import pending", 20, 85);
-        return;
-      }
-      const Field = Read("cone", 58),
-        Pitch = Read("cutoff", -1),
-        Profile = Properties.profile || "ECE Low Beam";
-      const Spread = Width * Clamp(Field / 110, 0.08, 0.85),
-        Y = 73 + Pitch * 4,
-        Low = Profile.includes("Low Beam"),
-        Fog = Profile === "Fog Lamp";
-      const Gradient = Brush.createRadialGradient(
-        Center,
-        Y + 14,
-        0,
-        Center,
-        Y + 14,
-        Spread * (Profile === "High Beam" ? 0.3 : Fog ? 0.8 : 0.6),
-      );
-      Gradient.addColorStop(
-        0,
-        Tint(
-          (Profile === "Parking Lamp" ? 0.18 : 0.85) *
-            Brightness() *
-            Math.min(1, Read("multiplier", 1)),
-        ),
-      );
-      Gradient.addColorStop(1, Tint(0));
-      Brush.save();
-      Brush.beginPath();
-      Brush.moveTo(Center - Spread / 2, Y + (Fog ? 14 : 0));
-      Brush.lineTo(Center, Y);
-      Brush.lineTo(Center + Spread / 2, Y - (Low ? 11 : 0));
-      Brush.lineTo(Center + Spread / 2, Y + 65);
-      Brush.lineTo(Center - Spread / 2, Y + 65);
-      Brush.closePath();
-      Brush.clip();
-      Brush.fillStyle = Gradient;
-      Brush.fillRect(0, 0, Width, Height);
-      Brush.restore();
-      Brush.strokeStyle = Tint(0.6);
-      Brush.beginPath();
-      Brush.moveTo(Center - Spread / 2, Y);
-      Brush.lineTo(Center, Y);
-      Brush.lineTo(Center + Spread / 2, Y - (Low ? 11 : 0));
-      Brush.stroke();
-      Brush.setLineDash([3, 6]);
-      Brush.strokeStyle = "#ffffff30";
-      Brush.beginPath();
-      Brush.moveTo(Center, 16);
-      Brush.lineTo(Center, Height - 12);
-      Brush.stroke();
-      Brush.setLineDash([]);
-    } else if (Spot) {
-      const Spread = Math.tan((Read("angle", 26) * Math.PI) / 360) * 110,
-        Soft = Read("penumbra", 0.42);
-      const Beam = Brush.createLinearGradient(0, 27, 0, 135);
-      Beam.addColorStop(0, Tint(0.55 * Brightness()));
-      Beam.addColorStop(1, Tint(0.04 * Brightness()));
-      Brush.fillStyle = Beam;
-      Brush.beginPath();
-      Brush.moveTo(Center, 27);
-      Brush.lineTo(Center - Spread, 126);
-      Brush.ellipse(Center, 126, Spread, Spread * 0.23, 0, Math.PI, 0, true);
-      Brush.closePath();
-      Brush.fill();
-      const Pool = Brush.createRadialGradient(
-        Center,
-        126,
-        0,
-        Center,
-        126,
-        Math.max(Spread, 1),
-      );
-      Pool.addColorStop(Math.max(0, 1 - Soft) * 0.5, Tint(0.6 * Brightness()));
-      Pool.addColorStop(1, Tint(0));
-      Brush.save();
-      Brush.translate(Center, 126);
-      Brush.scale(1, 0.25);
-      Brush.fillStyle = Pool;
-      Brush.translate(-Center, -126);
-      Brush.fillRect(Center - Spread, 126 - Spread, Spread * 2, Spread * 2);
-      Brush.restore();
-      Brush.fillStyle = "#c8ceca";
-      Brush.fillRect(Center - 9, 18, 18, 11);
-    } else {
-      const Span = Area
-          ? Clamp(Read("width", 2) / Math.max(0.1, Read("height", 1)), 0.2, 4)
-          : Clamp(Read("length", 1.5) * 1.5, 0.2, 4),
-        Across = Math.min(Width * 0.7, 55 * Math.sqrt(Span)),
-        Depth = Area
-          ? Math.min(55, 55 / Math.sqrt(Span))
-          : Clamp(Read("radius", 0.04) * 90, 3, 20);
-      Brush.shadowColor = Tint(0.8);
-      Brush.shadowBlur = 20 * Brightness();
-      Brush.fillStyle = Tint(0.25 + 0.7 * Brightness());
-      Brush.beginPath();
-      Brush.moveTo(Center - Across / 2, 50);
-      Brush.lineTo(Center + Across / 2, 35);
-      Brush.lineTo(Center + Across / 2, 35 + Depth);
-      Brush.lineTo(Center - Across / 2, 50 + Depth);
-      Brush.closePath();
-      Brush.fill();
-      Brush.shadowBlur = 0;
-      Brush.strokeStyle = "#ffffffb0";
-      Brush.stroke();
-      const Pool = Brush.createRadialGradient(
-        Center,
-        115,
-        0,
-        Center,
-        115,
-        Across * (Area ? 0.3 + Read("spread", 120) / 120 : 1),
-      );
-      Pool.addColorStop(0, Tint(0.22 * Brightness()));
-      Pool.addColorStop(1, Tint(0));
-      Brush.save();
-      Brush.translate(Center, 115);
-      Brush.scale(1, 0.3);
-      Brush.translate(-Center, -115);
-      Brush.fillStyle = Pool;
-      Brush.fillRect(0, 0, Width, Height * 2);
-      Brush.restore();
-    }
-    Brush.font = "8px sans-serif";
-    Brush.fillStyle = "#7a807d";
-    Brush.fillText("SCHEMATIC", 12, 17);
+  const Glyph = el("span", "lp-source-icon");
+  Glyph.innerHTML = LightGlyphs[Style];
+  Preview.querySelector("header").prepend(Glyph);
+  const Primary = el("div", "lp-primary"),
+    NumberPart = el("span", "lp-integer"),
+    DecimalPart = el("span", "lp-decimal"),
+    Unit = el("small", "", Point || Spot ? "cd" : "lm");
+  Primary.append(NumberPart, DecimalPart, Unit);
+  Preview.append(Primary);
+  const Caption = el(
+    "p",
+    "lp-primary-caption",
+    Diode || Strip
+      ? "Estimated luminous flux"
+      : Point || Spot
+        ? "Authored luminous intensity"
+        : Photometric
+          ? "Profile source flux"
+          : "Authored luminous flux",
+  );
+  Preview.append(Caption);
+  Bindings.push(() => {
+    const Parts = Flux()
+      .toLocaleString("en-US", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })
+      .split(".");
+    NumberPart.textContent = Parts[0];
+    DecimalPart.textContent = "." + Parts[1];
   });
+  Canvas(
+    Preview,
+    (Brush, Width, Height) =>
+      ProjectLight(Brush, Width, Height, {
+        Style,
+        Read,
+        Properties,
+        Tint,
+        Flux,
+      }),
+    180,
+  );
+  Preview.append(
+    el(
+      "p",
+      "lp-study-note",
+      Photometric
+        ? "Illustrative preset · no measured IES data"
+        : "Source study · HTML authoring",
+    ),
+  );
   const Rail = el("div", "mp-rail lp-readings");
   Host.append(Rail);
   const Metric = (Name, Readout) => {
@@ -347,53 +230,78 @@ export function LightPanel(Subject, Context) {
   };
   const Format = (Numeric, Digits = 0) =>
     Numeric.toLocaleString("en-US", { maximumFractionDigits: Digits });
-  if (Point || Spot) {
-    Metric("Intensity", () => Format(Flux(), 1) + " cd");
+  if (Diode) {
+    Metric("Driver power", () => Format(Read("watts", 10), 1) + " W");
+    Metric("Efficacy target", () => Format(Read("efficacy", 110)) + " lm/W");
+  } else if (Strip) {
     Metric(
-      "5 m · estimate",
-      () => Format(Flux() / 5 ** (Point ? Read("decay", 2) : 2), 2) + " lx",
+      "Connected load",
+      () => Format(Read("length", 2.4) * Read("wattsPerMetre", 14.4), 1) + " W",
     );
-    Metric(Spot ? "Cone" : "Reach", () =>
-      Spot ? Format(Read("angle"), 1) + "°" : Format(Read("distance")) + " m",
+    Metric(
+      "Emitter count",
+      () =>
+        Format(Math.round(Read("length", 2.4) * Read("ledsPerMetre", 60))) +
+        " LEDs",
     );
-    Metric(Spot ? "Penumbra" : "Decay", () =>
-      Spot ? Format(Read("penumbra") * 100) + "%" : Format(Read("decay"), 2),
+  } else if (Point) {
+    Metric(
+      "At 5 m · estimate",
+      () => Format(Flux() / 5 ** Read("decay", 2), 2) + " lx",
     );
+    Metric("Reach", () => Format(Read("distance")) + " m");
+  } else if (Spot) {
+    Metric("Full cone", () => Format(Read("angle"), 1) + "°");
+    Metric("Soft edge", () => Format(Read("penumbra") * 100) + " %");
+  } else if (Photometric) {
+    Metric(
+      "Scaled output",
+      () => Format(Flux() * Read("multiplier", 1)) + " lm",
+    );
+    Metric("Field angle", () => Format(Read("cone"), 1) + "°");
+  } else if (Area) {
+    Metric(
+      "Aperture",
+      () =>
+        Format(
+          Read("width") *
+            Read("height") *
+            (Properties.aperture === "Disk" ? Math.PI / 4 : 1),
+          2,
+        ) + " m²",
+    );
+    Metric("Emission", () => (Properties.twoSided ? "Two-sided" : "One-sided"));
   } else {
-    Metric("Flux", () => Format(Flux()) + " lm");
-    Metric(Automotive ? "Field angle" : Area ? "Aperture" : "Length", () =>
-      Automotive
-        ? Format(Read("cone"), 1) + "°"
-        : Area
-          ? Format(Read("width") * Read("height"), 2) + " m²"
-          : Format(Read("length"), 2) + " m",
+    Metric(
+      "Linear output",
+      () => Format(Flux() / Math.max(0.1, Read("length", 1.5))) + " lm/m",
     );
-    Metric(Automotive ? "Multiplier" : Area ? "Spread" : "Radius", () =>
-      Automotive
-        ? Format(Read("multiplier"), 2) + "×"
-        : Area
-          ? Format(Read("spread")) + "°"
-          : Format(Read("radius") * 1000) + " mm",
-    );
-    Metric(Area ? "Emission" : "Reach", () =>
-      Area
-        ? Properties.twoSided
-          ? "Two-sided"
-          : "One-sided"
-        : Format(Read(Automotive ? "range" : "distance")) + " m",
-    );
+    Metric("Tube radius", () => Format(Read("radius", 0.04) * 1000) + " mm");
   }
-  const Output = Card("Output & colour", "01", "lp-output");
-  Field(
-    Output,
-    Point || Spot ? "intensity" : "lumens",
-    Point || Spot ? "Intensity" : "Luminous flux",
-    0,
-    Point ? 60 : Spot ? 200 : Automotive ? 8000 : Area ? 20000 : 12000,
-    Point ? 0.1 : Spot ? 1 : 50,
-    Point || Spot ? "cd" : "lm",
+  const Output = Card(
+    Diode ? "Driver & colour" : Strip ? "Output per metre" : "Source & colour",
+    "01",
+    "lp-output",
   );
-  if (Automotive || Style === "tubelight")
+  if (Diode) {
+    Field(Output, "watts", "Driver power", 0.1, 100, 0.1, "W");
+    Field(Output, "efficacy", "Efficacy target", 10, 250, 1, "lm/W");
+    Field(Output, "dimmer", "Dimmer", 0, 1, 0.01, "");
+  } else if (Strip) {
+    Field(Output, "lumensPerMetre", "Flux per metre", 10, 4000, 10, "lm/m");
+    Field(Output, "wattsPerMetre", "Load per metre", 1, 50, 0.1, "W/m");
+    Field(Output, "dimmer", "Dimmer", 0, 1, 0.01, "");
+  } else
+    Field(
+      Output,
+      Point || Spot ? "intensity" : "lumens",
+      Point || Spot ? "Intensity" : "Luminous flux",
+      0,
+      Point ? 60 : Spot ? 200 : Photometric ? 8000 : Area ? 20000 : 12000,
+      Point ? 0.1 : Spot ? 1 : 50,
+      Point || Spot ? "cd" : "lm",
+    );
+  if (Photometric || Style === "tubelight" || Diode || Strip)
     Field(Output, "temperature", "Colour temperature", 1800, 12000, 100, "K");
   const ColourRow = el("label", "lp-colour"),
     ColourInput = el("input"),
@@ -409,19 +317,51 @@ export function LightPanel(Subject, Context) {
     ColourCode.textContent = ColourInput.value.toUpperCase();
   });
   const Shape = Card(
-    Automotive
-      ? "Distribution profile"
-      : Point
-        ? "Attenuation"
-        : Spot
-          ? "Beam shaping"
-          : "Emitter dimensions",
+    Diode
+      ? "Package & optic"
+      : Strip
+        ? "Layout & segments"
+        : Photometric
+          ? "Distribution profile"
+          : Point
+            ? "Attenuation"
+            : Spot
+              ? "Beam shaping"
+              : "Emitter dimensions",
     "02",
     "lp-shape",
   );
-  if (Automotive) {
+  const Choice = (Section, Key, Names) => {
+    const Options = el("div", "lp-profiles");
+    Names.forEach((Name) => {
+      const Button = el("button", "", Name);
+      Button.onclick = () => Write(Key, Name);
+      Options.append(Button);
+      Bindings.push(() => {
+        Button.disabled = Subject.locked;
+        Button.setAttribute(
+          "aria-pressed",
+          (Properties[Key] || Names[0]) === Name,
+        );
+      });
+    });
+    Section.append(Options);
+  };
+  if (Diode) {
+    Field(Shape, "diameter", "Package diameter", 5, 120, 1, "mm");
+    Field(Shape, "angle", "Emission angle", 10, 180, 1, "°");
+  } else if (Strip) {
+    Choice(Shape, "routing", ["Straight", "Cove", "Ring"]);
+    Field(Shape, "length", "Strip length", 0.1, 20, 0.1, "m");
+    Field(Shape, "ledsPerMetre", "Emitter density", 10, 240, 1, "/m");
+    Field(Shape, "voltage", "Supply voltage", 5, 48, 1, "V");
+    Toggle(Shape, "diffuser", "Opal diffuser");
+  } else if (Photometric) {
     const Profiles = el("div", "lp-profiles");
     for (const Profile of [
+      "Downlight",
+      "Wall wash",
+      "Batwing",
       "ECE Low Beam",
       "SAE Low Beam",
       "High Beam",
@@ -451,6 +391,7 @@ export function LightPanel(Subject, Context) {
     Field(Shape, "angle", "Full cone angle", 2, 80, 0.5, "°");
     Field(Shape, "penumbra", "Penumbra", 0, 1, 0.01, "");
   } else if (Area) {
+    Choice(Shape, "aperture", ["Rectangle", "Disk"]);
     Field(Shape, "width", "Width", 0.1, 20, 0.1, "m");
     Field(Shape, "height", "Height", 0.1, 20, 0.1, "m");
     Field(Shape, "spread", "Beam spread", 1, 180, 1, "°");
@@ -460,57 +401,22 @@ export function LightPanel(Subject, Context) {
     Field(Shape, "radius", "Tube radius", 0.01, 1, 0.01, "m");
     Field(Shape, "distance", "Reach", 1, 120, 1, "m");
   }
-  if (Point || Spot)
-    Canvas(
-      Shape,
-      (Brush, Width, Height) => {
-        Brush.clearRect(0, 0, Width, Height);
-        Brush.strokeStyle = "#ffffff14";
-        Brush.beginPath();
-        Brush.moveTo(10, 8);
-        Brush.lineTo(10, Height - 20);
-        Brush.lineTo(Width - 10, Height - 20);
-        Brush.stroke();
-        const Extent = Point ? Read("distance", 26) : 30,
-          Exponent = Point ? Read("decay", 2) : 2;
-        Brush.beginPath();
-        for (let Sample = 0; Sample <= 80; Sample++) {
-          const Distance = 1 + ((Extent - 1) * Sample) / 80,
-            Illuminance = Flux() / Distance ** Exponent,
-            Normalized = Math.log1p(Illuminance) / Math.log1p(200),
-            Horizontal = 10 + (Sample / 80) * (Width - 20),
-            Vertical = Height - 20 - Normalized * (Height - 28);
-          Sample
-            ? Brush.lineTo(Horizontal, Vertical)
-            : Brush.moveTo(Horizontal, Vertical);
-        }
-        Brush.strokeStyle = Tint(0.9);
-        Brush.stroke();
-        Brush.fillStyle = "#777";
-        Brush.font = "8px sans-serif";
-        Brush.fillText("1 m", 10, Height - 5);
-        Brush.textAlign = "right";
-        Brush.fillText(Extent + " m", Width - 10, Height - 5);
-        Brush.textAlign = "left";
-      },
-      98,
-    );
   const Placement = el("div", "lp-card lp-transform");
   Host.append(Placement);
   const Transform = MountLightTransform(Placement, Subject, Context);
   Bindings.push(Transform.Refresh);
-  const Visibility = Card("Light participation", "04", "lp-participation");
+  const Visibility = Card("Scene participation", "04", "lp-participation");
   Toggle(Visibility, "shadows", "Cast shadows");
   Toggle(
     Visibility,
-    Automotive
+    Photometric
       ? "showDistribution"
       : Spot
         ? "showCone"
         : Point
           ? "gizmoGlow"
           : "showShape",
-    Automotive
+    Photometric
       ? "Draw distribution"
       : Spot
         ? "Draw cone"

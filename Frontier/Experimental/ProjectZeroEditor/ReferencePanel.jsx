@@ -1,3 +1,4 @@
+import { LightNames } from "./LightSpecification.js";
 import React, { useEffect, useRef, useState } from "react";
 
 export const ReferenceLights = [
@@ -7,6 +8,9 @@ export const ReferenceLights = [
   ["reference-ece-low-beam", "ECE Low Beam", "ieslight"],
   ["reference-softbox", "Softbox", "arealight"],
   ["reference-studio-tube", "Studio Tube", "tubelight"],
+  ["reference-led", "LED Emitter", "ledlight"],
+  ["reference-led-strip", "LED Strip", "ledstrip"],
+  ["reference-ies-downlight", "IES Downlight", "ieslight"],
 ].map(([Id, Name, ReferenceType]) => ({
   Id,
   Name,
@@ -14,7 +18,7 @@ export const ReferenceLights = [
   ReferencePreset: Name,
   ReferenceOnly: true,
   Panel: "light",
-  Icon: "editor-area-light",
+  Icon: "light-" + ReferenceType,
   Parent: "lighting",
   Description: "Light authoring · HTML preview",
 }));
@@ -34,6 +38,33 @@ export function EnsureReferenceLights(Rows) {
       },
     ];
   return [...Rows, ...ReferenceLights.filter((Row) => !Present.has(Row.Id))];
+}
+
+export function PrepareLightRows(Rows, Revision = 0) {
+  let Result = Rows;
+  if (Revision < 1) {
+    const NewIds = new Set([
+      "reference-led",
+      "reference-led-strip",
+      "reference-ies-downlight",
+    ]);
+    const Present = new Set(Rows.map((Row) => Row.Id));
+    Result = EnsureReferenceLights(Rows).filter(
+      (Row) =>
+        Present.has(Row.Id) || NewIds.has(Row.Id) || Row.Id === "lighting",
+    );
+  }
+  return Result.map((Row) =>
+    Row.Panel === "light"
+      ? {
+          ...Row,
+          Icon: "light-" + (Row.ReferenceType || "arealight"),
+          Description: Row.ReferenceOnly
+            ? (LightNames[Row.ReferenceType] || "Light") + " · HTML authoring"
+            : Row.Description,
+        }
+      : Row,
+  );
 }
 
 function TypeOf(Row) {

@@ -298,3 +298,164 @@
   color: #aaa;
   height: 30px;
 }
+/* Light instruments follow the supplied quiet, numeric dashboard references. */
+#ReferenceMount .lighting-panel {
+  gap: 12px;
+  --light-accent: #b8c6b7;
+}
+#ReferenceMount .lighting-panel[data-light-type="ledlight"],
+#ReferenceMount .lighting-panel[data-light-type="ledstrip"] {
+  --light-accent: #d0bd8d;
+}
+#ReferenceMount .lighting-panel[data-light-type="ieslight"] {
+  --light-accent: #a6b6c9;
+}
+#ReferenceMount .lighting-panel .lp-card {
+  border: 0;
+  box-shadow: none;
+  border-radius: 22px;
+  background: #1d1e1e;
+  padding: 21px 18px;
+}
+#ReferenceMount .lighting-panel .lp-preview {
+  background: linear-gradient(155deg, #232525, #1b1c1c);
+  padding: 20px 16px 12px;
+}
+#ReferenceMount .lighting-panel .lp-card > header {
+  justify-content: flex-start;
+  gap: 9px;
+  margin-bottom: 20px;
+}
+#ReferenceMount .lighting-panel .lp-card > header h3 {
+  font-size: 14px;
+  font-weight: 400;
+  color: #cdd1cc;
+  flex: 1;
+}
+#ReferenceMount .lighting-panel .lp-card > header > span:not(.lp-source-icon) {
+  color: #525953;
+}
+#ReferenceMount .lighting-panel .lp-source-icon {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+}
+.lp-source-icon svg {
+  width: 20px;
+  height: 20px;
+}
+#ReferenceMount .lighting-panel .lp-primary {
+  font-size: 46px;
+  line-height: 1.08;
+  font-weight: 300;
+  letter-spacing: -2px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  color: #e5e7e1;
+  font-variant-numeric: tabular-nums;
+  margin-top: 8px;
+}
+#ReferenceMount .lighting-panel .lp-decimal {
+  color: #717772;
+}
+#ReferenceMount .lighting-panel .lp-primary small {
+  font-size: 15px;
+  color: #8e968d;
+  letter-spacing: 0;
+  margin-left: 7px;
+  font-weight: 300;
+}
+#ReferenceMount .lighting-panel .lp-primary-caption {
+  margin: 10px 0 19px;
+  color: #898f87;
+  font-size: 10px;
+  letter-spacing: 0.1px;
+}
+#ReferenceMount .lighting-panel .lp-study-note {
+  font-size: 8px;
+  color: #687069;
+  margin: 8px 0 0;
+  text-align: right;
+  letter-spacing: 0.2px;
+}
+#ReferenceMount .lighting-panel .lp-readings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+#ReferenceMount .lighting-panel .lp-readings .mp-pill {
+  border: 0;
+  border-radius: 14px;
+  min-height: 104px;
+  background: #1d1e1e;
+  padding: 15px 12px;
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+#ReferenceMount .lighting-panel .lp-readings .v {
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1.2;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  color: #d9ded6;
+  letter-spacing: -0.7px;
+}
+#ReferenceMount .lighting-panel .lp-readings .k {
+  font-size: 9px;
+  letter-spacing: 0.15px;
+  text-transform: none;
+  color: #a0a89c;
+  line-height: 1.3;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+#ReferenceMount .lighting-panel .lp-readings .k:before {
+  content: "";
+  width: 3px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--light-accent);
+  opacity: 0.55;
+  flex: none;
+}
+#ReferenceMount .lighting-panel .lp-profiles {
+  gap: 5px;
+}
+#ReferenceMount .lighting-panel .lp-profiles button {
+  border: 0;
+  border-radius: 7px;
+  background: #242626;
+  color: #7f8880;
+  font-size: 9px;
+  min-height: 32px;
+}
+#ReferenceMount .lighting-panel .lp-profiles button[aria-pressed="true"] {
+  background: #333a33;
+  color: #d5dfd0;
+}
+#ReferenceMount .lighting-panel .lp-note {
+  font-size: 9px;
+  line-height: 1.7;
+  color: #8b8e80;
+}
+#ReferenceMount .lighting-panel .lp-colour input {
+  border-radius: 50%;
+  overflow: hidden;
+}
+@media (max-width: 260px) {
+  #ReferenceMount .lighting-panel .lp-primary {
+    font-size: 38px;
+  }
+  #ReferenceMount .lighting-panel .lp-readings .v {
+    font-size: 20px;
+  }
+}

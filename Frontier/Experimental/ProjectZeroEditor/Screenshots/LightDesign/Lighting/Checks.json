@@ -1,0 +1,35 @@
+{
+  "Checks": [
+    "SDF requests normalize safely and do not invalidate stored fragment geometry",
+    "reference-rim-point: complete cards, borderless tiles, live preview and persisted controls",
+    "reference-fill-point: complete cards, borderless tiles, live preview and persisted controls",
+    "reference-key-spot: complete cards, borderless tiles, live preview and persisted controls",
+    "reference-ece-low-beam: complete cards, borderless tiles, live preview and persisted controls",
+    "reference-softbox: complete cards, borderless tiles, live preview and persisted controls",
+    "reference-studio-tube: complete cards, borderless tiles, live preview and persisted controls",
+    "light: complete cards, borderless tiles, live preview and persisted controls",
+    "reference-led: complete cards, borderless tiles, live preview and persisted controls",
+    "reference-led-strip: complete cards, borderless tiles, live preview and persisted controls",
+    "reference-ies-downlight: complete cards, borderless tiles, live preview and persisted controls",
+    "IES profiles, negative cut-off, shared Transform position/rotation/scale persistence, shadows and locking respond correctly",
+    "Area-light sidedness updates its square reading",
+    "Emission tint changes the preview and survives reload; incomplete number edits restore the saved value on blur",
+    "sun: borderless, lightly rounded statistics; original card selection retained",
+    "wind: borderless, lightly rounded statistics; original card selection retained",
+    "height-fog: borderless, lightly rounded statistics; original card selection retained",
+    "240px light inspector keeps readings visible without horizontal overflow",
+    "cube: fracture and per-piece SDF authoring controls available",
+    "sphere: fracture and per-piece SDF authoring controls available",
+    "cylinder: fracture and per-piece SDF authoring controls available",
+    "cone: fracture and per-piece SDF authoring controls available",
+    "torus: fracture and per-piece SDF authoring controls available",
+    "Imported geometry entries can author settings without claiming an available mesh preview",
+    "Per-piece SDF settings sync, survive geometry baking and export as ungenerated requests; geometry signature stays valid"
+  ],
+  "FontFailures": [
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2"
+  ],
+  "Errors": []
+}

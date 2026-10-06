@@ -1356,13 +1356,13 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment", Subject.Name)}
+        {ReferenceCards}
         <WindInspector
           Values={Values}
           Change={Change}
           Open={OpenWind}
           Hidden={Hidden}
         />
-        {ReferenceCards}
         <Card Title="Wind controls">
           <div className="tiles">
             <Tile

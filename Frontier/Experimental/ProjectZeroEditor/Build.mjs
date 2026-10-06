@@ -1,3 +1,4 @@
+import { LightGlyphs } from "./LightSpecification.js";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -54,6 +55,9 @@ for (const File of fs
       .readFileSync(path.join(Frontier, "EngineContent/Icons", File))
       .toString("base64");
 }
+for (const [Type, Svg] of Object.entries(LightGlyphs))
+  Assets.Icons["light-" + Type] =
+    "data:image/svg+xml;base64," + Buffer.from(Svg).toString("base64");
 const Vectors = fs.readFileSync(
   path.join(Frontier, "Engine/DisplayPresentation/VectorCodec.cpp"),
   "utf8",
@@ -127,7 +131,7 @@ ${ReferenceStyle}
 ${LightControls}
 ${fs.readFileSync(path.join(Folder, "MaterialPanel.css"), "utf8").split(".material-panel {")[0]}
 ${fs.readFileSync(path.join(Folder, "LightPanel.css"), "utf8")}
-#ReferenceMount:is([data-reference-kind="wind"],[data-reference-kind="sun"],[data-reference-kind="fog"],[data-reference-kind="clouds"],[data-reference-kind$="light"]){padding:0;}
+#ReferenceMount:is([data-reference-kind="wind"],[data-reference-kind="sun"],[data-reference-kind="fog"],[data-reference-kind="clouds"],[data-reference-kind$="light"],[data-reference-kind="ledstrip"]){padding:0;}
 @media(max-width:320px){#ReferenceMount[data-reference-kind="wind"] .mp-rail{grid-template-columns:repeat(2,minmax(0,1fr));}}
 html,body{height:auto;overflow:hidden;background:var(--panel)}
 #ReferenceMount{display:block;overflow:hidden;flex:none}

@@ -1,0 +1,15 @@
+{
+  "Checks": [
+    "Legacy Sky alias consolidates safely; conflicting values remain archived; non-alias objects are untouched",
+    "sun: header precedes imported cards; borderless six-pixel metric corners",
+    "height-fog: header precedes imported cards; borderless six-pixel metric corners",
+    "Anemometer retains its live trace and removes all four secondary readouts",
+    "aerial-fog: type-specific cards use native controls, persist and respond to enable/density/start; no duplicate probe or narrow overflow",
+    "local-fog: type-specific cards use native controls, persist and respond to enable/density/start; no duplicate probe or narrow overflow",
+    "Shared light Transform supports position, aim-preserving moves, rotation, scale, reset, persistence and locking; old target/map UI removed",
+    "Fresh scene and old Sky link select one Atmosphere entry",
+    "Saved scenes consolidate Sky, reparent children and preserve both legacy and canonical settings",
+    "All seven affected native inspectors retain the previous build's control inventory"
+  ],
+  "Errors": []
+}

@@ -2588,3 +2588,70 @@ The existing reference regression passes **28 checks**, lighting/fracture-author
 header/transform/environment-migration suite **10 checks**. Pinned InspectorDepot hashes remain unchanged. Browser
 captures and receipts are in `ProjectZeroEditor/Screenshots/CloudPlacement/`; external Fontshare failures remain
 separate from application errors. No native engine, fracture algorithm or SDF-generation changes are included.
+
+## C050 — Anemometer first, matching fog sightlines and redesigned light instruments
+
+2026-10-06. HTML-only follow-up to the user's Wind/Fog screenshots and two charcoal-dashboard JPG references.
+
+- Wind now runs **normal heading → Anemometer and statistics → Composite Flow / Wind field → Wind controls**.
+  This explicitly supersedes C048's composite-first order. The live trace, accepted composite colours, removed
+  secondary readouts and original controls are unchanged.
+- Atmospheric Fog and Local Fog now use the Height Fog hero's dark 166px sightline, perspective floor, receding
+  contrast gates, dashed sight marker and overlaid caption. Removed the separate blue caption/volume-hero treatment.
+  The retained visibility probe, beam chamber and native controls still use their existing parameters and extinction
+  calculation. Local Fog retains its native shape/bounds controls; the hero is labeled an **interior probe**, not a
+  bounded ray integration. Zero extinction does not incorrectly display an enabled medium as disabled.
+- Height Fog, Atmospheric Fog and Local Fog remain separate. Height Fog controls altitude-dependent density;
+  Atmospheric Fog controls distance/start haze and Mie blend; Local Fog supplies bounded-medium authoring. They can
+  describe overlapping atmospheric effects, but they are not the same parameterization. No fog models were merged.
+
+### Light redesign and source families
+
+The two supplied JPG dashboards, rather than the editor screenshots, guide the new charcoal surfaces, thin large
+numbers, faded decimals/units, quiet labels, coloured metric ticks and sparse plots. Each family has its own source
+study and derived readings, not the former shared room preview with different labels:
+
+- **Point:** analytic attenuation with a logarithmic distance axis, sample illuminance estimates and authored reach.
+- **Spot:** cone/penumbra envelope, full-cone and soft-edge readings.
+- **IES:** synthetic polar distribution with architectural Downlight, Wall wash and Batwing choices alongside the
+  retained automotive presets. Added an **IES Downlight** scene/palette entry. Flux, multiplier, temperature, cone,
+  cut-off pitch and range remain editable. The card explicitly says the presets are illustrative and `.ies` file
+  import is pending; these are not measured photometric samples.
+- **Area:** luminous aperture with rectangle/disk selection, dimensions, spread and one-/two-sided emission.
+- **Tube:** linear emitter with length/radius study and linear-output reading.
+- **LED emitter:** package/optic study, driver wattage, efficacy target, dimmer, temperature, diameter and emission
+  angle. Estimated flux is watts × efficacy × dimmer, not measured output or a thermal/electrical simulation.
+- **LED strip:** distinct ribbon diagram with Straight/Cove/Ring routing and diffuser. Controls include length,
+  lumens/metre, watts/metre, emitters/metre, voltage, temperature and dimmer. Readings show estimated output,
+  connected load and emitter count. Routing is an authoring schematic, not generated scene geometry; the drawing
+  caps its displayed sample count while the numeric count retains the full authored length/density calculation.
+
+Sun remains the directional source. Seven owned SVG source glyphs appear in the outliner, Construct palette and
+light cards. The ten light entries retain header-first placement without copied name/eye/lock identity strips.
+All use the standard Transform panel, including reset/locking. Original native Area Light controls are preserved.
+Construct can author the new light sources before placement; editing a palette draft does not change its scene
+counterpart. Existing source types, native controls and C049 Cloud changes remain intact.
+
+Saved/exported scenes carry `LightDesignRevision: 1`. C049 scenes receive only the three new defaults once; previously
+removed old lights are not resurrected. Deleting a new source after migration also persists. User-created lights,
+authored values and source-specific icons survive reload and scene JSON export/import.
+
+### Verification
+
+Standalone build: **4.62 MiB**. **99 browser checks** pass with no application errors:
+
+- `CheckLightDesign.mjs`: **21** — distinct diagrams/icons, all seven families at 240px width, LED/strip estimates and
+  routing/diffuser, IES lobes/disclosure, area aperture, LED locking, Construct pre-placement editing, JSON round-trip,
+  one-time migration/deletion, Wind order and both native-driven fog sightlines.
+- `CheckLighting.mjs`: **25** — all ten light entries, live controls/reload, Transform, locking, tint and unchanged
+  fracture/SDF-authoring workflow. Updated light-tile expectations reflect the explicitly requested dashboard redesign;
+  Sun/Wind/Height Fog retain their reviewed borderless 6px tiles.
+- `CheckReference.mjs`: **28** — retained reference/native arrangements, source hashes, Wind trace and original Folder.
+- `CheckInspectorLayout.mjs`: **10** — header order, fog parameters, Transform/reset/lock and environment migration.
+- `CheckCloudPlacement.mjs`: **15** — retained C049 Cloud replacement/synchronization and original native controls.
+
+Native control comparisons use C049 (`2112773`). All pinned InspectorDepot files remain unchanged. The checks wait
+for asynchronous stored Transform edits before injecting legacy scene fixtures. Actual browser screenshots and
+receipts are under `ProjectZeroEditor/Screenshots/LightDesign/`; Fontshare request failures are recorded separately
+and the captures exercise fallback fonts. No native engine port, fracture algorithm, SDF generation or native light
+rendering is introduced by this change.

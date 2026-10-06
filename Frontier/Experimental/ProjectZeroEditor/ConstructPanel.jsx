@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import ReferencePanel from "./ReferencePanel.jsx";
 import { Glyph, Icon, Inspector } from "./Inspectors.jsx";
 
 export const ConstructGroups = [
@@ -211,6 +212,32 @@ export default function ConstructPanel({ Catalogue, Add, Close }) {
             <div className="construct-properties">
               <Inspector
                 Subject={{ ...Picked, Name: Name.trim() || Picked.Name }}
+                ReferenceCards={
+                  Picked.ReferenceOnly && Picked.Panel === "light" ? (
+                    <ReferencePanel
+                      Subject={{ ...Picked, Name: Name.trim() || Picked.Name }}
+                      Rows={[{ ...Picked, Name: Name.trim() || Picked.Name }]}
+                      Values={{ [Picked.Id]: Properties }}
+                      Hidden={{ [Picked.Id]: !Visible }}
+                      Collapsed={{}}
+                      Apply={(Records) => {
+                        const Authored = Records.find(
+                          (Record) => Record.Id === Picked.Id,
+                        );
+                        if (Authored)
+                          AssignProperties((Previous) => ({
+                            ...Previous,
+                            ReferenceInspector: {
+                              Properties: Authored.Properties,
+                              Locked: Authored.Locked,
+                              Dynamic: Authored.Dynamic,
+                              Notes: Authored.Notes,
+                            },
+                          }));
+                      }}
+                    />
+                  ) : null
+                }
                 Values={Properties}
                 Change={(Key, Value) =>
                   AssignProperties((Previous) => ({

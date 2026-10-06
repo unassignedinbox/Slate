@@ -1,6 +1,6 @@
 import React, { useId } from "react";
 import { FogGraph, FogDensity } from "./LiveGraph.jsx";
-import { ResolveFogShape, FogGeometry } from "./FogShape.js";
+import { ResolveFogShape } from "./FogShape.js";
 import "./FogPanel.css";
 
 // These probes share the existing HTML fog model; they are not native scene raymarches.
@@ -14,13 +14,7 @@ export default function FogPanel({ Kind, V, Values, Change }) {
   const Transmission = (Distance) =>
     Math.exp(-Extinction * Math.max(0, Distance - Start));
   const Sight = Extinction > 0 ? Start - Math.log(0.02) / Extinction : Infinity;
-  const Shape = ResolveFogShape(Values),
-    Mesh = FogGeometry(Shape);
-  const Extent = Math.max(1, ...Mesh.Vertices.flat().map(Math.abs));
-  const Project = ([X, Y, Z]) => [
-    150 + ((X * 0.7 + Y * 0.3) / Extent) * 68,
-    95 + ((Y * 0.2 - Z * 0.6) / Extent) * 68,
-  ];
+  const Shape = ResolveFogShape(Values);
   const Percent = (Value) => (Value * 100).toFixed(0) + "%";
   const Tiles = Local
     ? [
@@ -40,70 +34,111 @@ export default function FogPanel({ Kind, V, Values, Change }) {
       ];
   return (
     <div className="fog-instruments" data-fog-kind={Kind}>
-      <section className="fog-instrument fog-sight">
+      <section className="fog-instrument fog-sight fog-height-style">
         <svg
-          viewBox="0 0 300 175"
+          viewBox="0 0 300 166"
+          preserveAspectRatio="none"
           role="img"
           aria-label={
-            Local ? "Local fog volume schematic" : "Atmospheric haze sight line"
+            Local ? "Local fog sight line" : "Atmospheric haze sight line"
           }
         >
           <defs>
             <linearGradient id={Id + "air"} x2="0" y2="1">
-              <stop stopColor="#0c1116" />
-              <stop offset="1" stopColor="#252d32" />
+              <stop stopColor="#090b0e" />
+              <stop offset=".42" stopColor="#181d22" />
+              <stop offset="1" stopColor="#08090a" />
             </linearGradient>
           </defs>
-          <rect width="300" height="175" fill={`url(#${Id}air)`} />
-          {[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5].map((Index) => (
+          <rect width="300" height="166" fill={`url(#${Id}air)`} />
+          {Array.from({ length: 15 }, (_, Index) => (
             <path
               key={Index}
-              d={`M150 65 L${150 + Index * 50} 175`}
-              stroke="#ffffff0c"
+              d={`M150 70L${150 + (Index - 7) * 39} 166`}
+              stroke="#ffffff12"
             />
           ))}
-          {[80, 100, 125, 155].map((Y) => (
-            <path key={Y} d={`M0 ${Y}H300`} stroke="#ffffff0c" />
+          {Array.from({ length: 12 }, (_, Index) => (
+            <path
+              key={Index}
+              d={`M0 ${70 + Math.pow((Index + 1) / 12, 1.75) * 96}H300`}
+              stroke="#ffffff12"
+            />
           ))}
-          {Local
-            ? Mesh.Edges.map(([A, B], Index) => (
-                <path
-                  key={Index}
-                  d={`M${Project(Mesh.Vertices[A]).join(" ")}L${Project(Mesh.Vertices[B]).join(" ")}`}
-                  stroke="#bdcfda"
-                  strokeOpacity={Enabled ? 0.75 : 0.2}
-                  fill="none"
-                />
-              ))
-            : [2000, 1000, 500, 200, 50].map((Distance, Index) => (
-                <g key={Distance} opacity={0.07 + 0.8 * Transmission(Distance)}>
+          {(Local
+            ? [10, 25, 50, 100, 200, 400]
+            : [50, 200, 500, 1000, 2000, 4000]
+          )
+            .slice()
+            .reverse()
+            .map((Distance, Index) => {
+              const Scale = 0.16 + (Index / 5) * 0.7,
+                W = 108 * Scale,
+                H = 96 * Scale,
+                Y = 70 + (Index / 5) * 79;
+              return (
+                <g
+                  key={Distance}
+                  opacity={0.05 + Transmission(Distance) * 0.58}
+                >
                   <rect
-                    x={150 - (Index + 2) * 10}
-                    y={85 - (Index + 2) * 6}
-                    width={(Index + 2) * 20}
-                    height={(Index + 2) * 16}
+                    x={150 - W / 2}
+                    y={Y - H}
+                    width={W}
+                    height={H}
                     fill="none"
-                    stroke="#d3e0e8"
+                    stroke="#d5dde0"
                   />
-                  <text x="150" y={96 - (Index + 2) * 6} textAnchor="middle">
+                  <text x="150" y={Y - H + 10} textAnchor="middle">
                     {Distance} m
                   </text>
                 </g>
-              ))}
-          <text x="12" y="17">
-            {Local
-              ? "BOUNDED VOLUME · " + Shape.Type.toUpperCase()
-              : "DISTANCE HAZE · AUTHORING PROBE"}
-          </text>
+              );
+            })}
+          {Array.from({ length: 32 }, (_, Index) => (
+            <rect
+              key={Index}
+              x="0"
+              y={Index * 5}
+              width="300"
+              height="5"
+              fill="#9babb6"
+              opacity={
+                Enabled ? Math.min(0.19, Extinction * 18) * (Index / 32) : 0
+              }
+            />
+          ))}
+          {Number.isFinite(Sight) && (
+            <g>
+              <path
+                d={`M${Math.max(12, Math.min(270, (Sight / (Local ? 400 : 4000)) * 280))} 9v129`}
+                stroke="#ced3d6"
+                strokeDasharray="3 3"
+                opacity=".6"
+              />
+              <text x="288" y="16" textAnchor="end">
+                2% CONTRAST
+              </text>
+            </g>
+          )}
         </svg>
         <div className="fog-caption">
-          <strong>{Local ? "Local medium" : "Atmospheric haze"}</strong>
+          <strong>
+            {!Enabled ? "Clear air" : Local ? "Local fog" : "Atmospheric haze"}
+          </strong>
           <small>
-            {Enabled
-              ? Local
-                ? "Uniform interior probe · not a scene ray"
-                : "Distance attenuation after the start plane"
-              : "Disabled · no attenuation"}
+            {Local
+              ? Shape.Type + " · interior probe"
+              : "Distance haze · start " + Start + " m"}
+            <span>
+              {Number.isFinite(Sight)
+                ? Sight >= 1000
+                  ? (Sight / 1000).toFixed(1) + " km sight"
+                  : Math.round(Sight) + " m sight"
+                : Enabled
+                  ? "CLEAR"
+                  : "DISABLED"}
+            </span>
           </small>
         </div>
       </section>

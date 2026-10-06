@@ -10,7 +10,9 @@ const Require = createRequire(
     path.join(Root, "_AgentScratch/Browser/package.json"),
 );
 const { chromium } = Require("playwright");
-const Proof = path.join(Folder, "Screenshots/CloudPlacement");
+const Proof =
+  process.env.FRONTIER_PROOF_FOLDER ||
+  path.join(Folder, "Screenshots/CloudPlacement");
 fs.mkdirSync(Proof, { recursive: true });
 const Checks = [],
   Errors = [];
@@ -181,6 +183,12 @@ try {
     exact: true,
   }).click();
   await Frame("all").getByLabel("Position X", { exact: true }).fill("5");
+  await Page.waitForFunction(
+    () =>
+      JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")).Values[
+        "reference-studio-tube"
+      ]?.ReferenceInspector?.Properties?.pos?.[0] === 5,
+  );
   Checks.push(
     "Previously locked lights can be unlocked without restoring the removed identity strip",
   );

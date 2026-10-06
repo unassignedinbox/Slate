@@ -1,4 +1,9 @@
 // Browser-only adapter around the pinned, unmodified reference inspector modules.
+import {
+  LightDefaults,
+  LightPresetDefaults,
+  LightNames,
+} from "./LightSpecification.js";
 import { CloudReference } from "./CloudSpecification.js";
 import { LightPanel } from "./LightPanel.js";
 import { CUSTOM_PANELS } from "./InspectorDepot/panels/index.js";
@@ -9,6 +14,8 @@ for (const Type of [
   "ieslight",
   "arealight",
   "tubelight",
+  "ledlight",
+  "ledstrip",
 ])
   CUSTOM_PANELS[Type] = { ...CUSTOM_PANELS[Type], build: LightPanel };
 
@@ -16,6 +23,14 @@ import { buildSheet } from "./InspectorDepot/inspector.js";
 import { makeNode, flat, TYPES } from "./InspectorDepot/world.js";
 import { bus } from "./InspectorDepot/bus.js";
 import { repaintSliders } from "./InspectorDepot/kit.js";
+
+for (const Type of ["ledlight", "ledstrip"])
+  TYPES[Type] = {
+    label: LightNames[Type],
+    icon: "sun",
+    color: "#cab88c",
+    groups: [],
+  };
 
 const Mount = document.getElementById("ReferenceMount");
 const Nodes = new Map();
@@ -52,7 +67,17 @@ function Measure() {
 function Trim() {
   const Custom = Sheet.querySelector(".mpanel");
   // Filter only the imported additions; the host's existing card list is independent.
+  const LightCards = [
+    ".lp-preview",
+    ".mp-rail",
+    ".lp-output",
+    ".lp-shape",
+    ".lp-transform",
+    ".lp-participation",
+  ];
   const Allowed = {
+    ledlight: LightCards,
+    ledstrip: LightCards,
     sun: [".mp-hero", ".mp-rail", ".mp-duo"],
     wind: [".wf-trace", ".mp-rail", ".mp-duo"],
     clouds:
@@ -122,6 +147,8 @@ function Trim() {
       "arealight",
       "ieslight",
       "tubelight",
+      "ledlight",
+      "ledstrip",
     ].includes(Kind)
   )
     Sheet.querySelector(".ident")?.remove();
@@ -210,6 +237,13 @@ function Synchronize(Data) {
       Node = makeNode(Escape(Row.Name), TYPES[Row.Type] ? Row.Type : "cube");
       Node.id = Index + 1;
       Node.HostId = Row.Id;
+      if (LightDefaults[Row.Type])
+        Object.assign(Node.props, structuredClone(LightDefaults[Row.Type]));
+      if (LightPresetDefaults[Row.Preset])
+        Object.assign(
+          Node.props,
+          structuredClone(LightPresetDefaults[Row.Preset]),
+        );
       if (Presets.has(Row.Preset))
         Object.assign(Node.props, structuredClone(Presets.get(Row.Preset)));
       Nodes.set(Row.Id, Node);

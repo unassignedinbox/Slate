@@ -16,7 +16,9 @@ const Folder = path.dirname(fileURLToPath(import.meta.url)),
   { chromium } = Require("playwright");
 const Address =
   process.env.FRONTIER_EDITOR_URL || "http://127.0.0.1:4173/ProjectZeroEditor/";
-const Proof = path.join(Folder, "Screenshots/CloudPlacement/Lighting"),
+const Proof =
+    process.env.FRONTIER_PROOF_FOLDER ||
+    path.join(Folder, "Screenshots/LightDesign/Lighting"),
   Checks = [],
   Errors = [],
   FontFailures = [];
@@ -64,11 +66,14 @@ async function Square(Frame) {
         Overflow: Tile.scrollWidth > Tile.clientWidth + 1,
       })),
   );
-  assert(Reading.length >= 4);
+  const Lighting = await Frame.locator(".lighting-panel").count();
+  assert(Reading.length >= (Lighting ? 2 : 4));
   assert(
     Reading.every(
       (Tile) =>
-        Tile.Radius === "6px" && Tile.Border === "0px" && !Tile.Overflow,
+        Tile.Radius === (Lighting ? "14px" : "6px") &&
+        Tile.Border === "0px" &&
+        !Tile.Overflow,
     ),
     JSON.stringify(Reading),
   );
@@ -104,6 +109,9 @@ try {
     ["reference-softbox", "width", 5],
     ["reference-studio-tube", "length", 4],
     ["light", "height", 3],
+    ["reference-led", "diameter", 65],
+    ["reference-led-strip", "length", 3.6],
+    ["reference-ies-downlight", "cone", 45],
   ]) {
     const Frame = await Open(Id);
     await Frame.locator(".lp-preview").waitFor();
@@ -192,7 +200,7 @@ try {
     () =>
       JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")).Values[
         "reference-ece-low-beam"
-      ].ReferenceInspector.Properties.scale[2] === 2,
+      ].ReferenceInspector.Properties.scale?.[2] === 2,
   );
   assert.equal(await Frame.locator(".lp-placement").count(), 0);
   await Open("reference-ece-low-beam");

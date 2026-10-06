@@ -97,14 +97,13 @@ try {
       await Previous.goto("http://baseline.test/?inspect=" + Id);
       await Previous.locator(".inspector-scroll > [data-panel]").waitFor();
       const Expected = await Previous.evaluate(Inventory);
-      if (Id === "wind") {
-        // Only the first two native cards change order; no native controls are dropped.
-        [Expected.Cards[0], Expected.Cards[1]] = [
-          Expected.Cards[1],
-          Expected.Cards[0],
-        ];
-        Expected.Headings.sort();
-        Actual.Headings.sort();
+      if (Id === "lighting") {
+        assert(Actual.Headings.includes("Browse contents 10 matches"));
+        Expected.Headings = Expected.Headings.map((Heading) =>
+          Heading === "Browse contents 7 matches"
+            ? "Browse contents 10 matches"
+            : Heading,
+        );
       }
       assert.deepEqual(
         Actual,
@@ -279,7 +278,7 @@ try {
         ).evaluateAll((Nodes) =>
           Nodes.slice(0, 3).map((Node) => Node.dataset.card || "Reference"),
         ),
-        ["Wind field", "Reference", "Wind controls"],
+        ["Reference", "Wind field", "Wind controls"],
       );
       assert.equal(
         await Frame.locator(".mpanel > :first-child").getAttribute("class"),
@@ -301,7 +300,7 @@ try {
         "Anemometer animates after removal of the standalone hero",
       );
       Results.push(
-        "Wind: composite first, Anemometer second; unnecessary trace readouts removed; chart animates",
+        "Wind: Anemometer and statistics first, composite second; unnecessary trace readouts removed; chart animates",
       );
     } else {
       assert(

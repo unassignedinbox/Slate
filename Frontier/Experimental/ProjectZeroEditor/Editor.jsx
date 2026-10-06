@@ -9,6 +9,8 @@ import {
 import { CloudProperties } from "./CloudSpecification.js";
 import ReferencePanel, {
   EnsureReferenceLights,
+  PrepareLightRows,
+  ReferenceLights,
   HasReferencePanel,
 } from "./ReferencePanel.jsx";
 import FolderInspector from "./FolderInspector.jsx";
@@ -204,7 +206,8 @@ const SkyAlias = !SceneRows?.some((Row) => Row.Id === "sky");
 Saved.Values = ConsolidateAtmosphereValues(Saved.Values, Saved.Rows);
 Saved.Hidden = ConsolidateAtmosphereFlags(Saved.Hidden, Saved.Rows);
 Saved.Collapsed = ConsolidateAtmosphereFlags(Saved.Collapsed, Saved.Rows);
-if (SceneRows) Saved.Rows = SceneRows;
+if (SceneRows)
+  Saved.Rows = PrepareLightRows(SceneRows, Saved.LightDesignRevision);
 if (SkyAlias && Saved.Selected === "sky") Saved.Selected = "atmosphere";
 if (SkyAlias && new URLSearchParams(location.search).get("inspect") === "sky") {
   const Address = new URL(location.href);
@@ -218,9 +221,12 @@ function App() {
     [PatchError, SetPatchError] = useState(1);
   const [Rows, StoreRows] = useState(() =>
       EnsureEditorCamera(
-        Saved.ReferenceDesignRevision === 1
-          ? Saved.Rows || EnsureReferenceLights(InitialRows)
-          : EnsureReferenceLights(Saved.Rows || InitialRows),
+        PrepareLightRows(
+          Saved.ReferenceDesignRevision === 1
+            ? Saved.Rows || EnsureReferenceLights(InitialRows)
+            : EnsureReferenceLights(Saved.Rows || InitialRows),
+          Saved.LightDesignRevision,
+        ),
       ),
     ),
     [Selected, Select] = useState(
@@ -593,6 +599,7 @@ function App() {
         JSON.stringify({
           Rows,
           ReferenceDesignRevision: 1,
+          LightDesignRevision: 1,
           Assets: AssetRecords,
           Selected,
           Values,
@@ -748,6 +755,7 @@ function App() {
             Format: "Frontier HTML UI study",
             Rows,
             ReferenceDesignRevision: 1,
+            LightDesignRevision: 1,
             Collapsed,
             Assets: AssetRecords,
             Values,
@@ -788,9 +796,12 @@ function App() {
       )
         throw Error();
       AssignRows(
-        Loaded.ReferenceDesignRevision === 1
-          ? Loaded.Rows
-          : EnsureReferenceLights(Loaded.Rows),
+        PrepareLightRows(
+          Loaded.ReferenceDesignRevision === 1
+            ? Loaded.Rows
+            : EnsureReferenceLights(Loaded.Rows),
+          Loaded.LightDesignRevision,
+        ),
       );
       Collapse(ConsolidateAtmosphereFlags(Loaded.Collapsed, Loaded.Rows));
       const ImportedValues = ConsolidateAtmosphereValues(
@@ -1827,7 +1838,9 @@ function App() {
                 <hr />
                 <button
                   onClick={() => {
-                    AssignRows(EnsureReferenceLights(InitialRows));
+                    AssignRows(
+                      PrepareLightRows(EnsureReferenceLights(InitialRows), 1),
+                    );
                     AssignValues(
                       Object.fromEntries(
                         InitialRows.filter(
@@ -1982,13 +1995,13 @@ function App() {
       )}
       {Construct && (
         <ConstructPanel
-          Catalogue={InitialRows.filter(
-            (Subject) => Subject.Panel !== "group",
-          ).map((Row) =>
-            IsEditorCamera(Row)
-              ? { ...Row, Name: "Main Camera", Description: "Scene camera" }
-              : Row,
-          )}
+          Catalogue={[...PrepareLightRows(InitialRows, 1), ...ReferenceLights]
+            .filter((Subject) => Subject.Panel !== "group")
+            .map((Row) =>
+              IsEditorCamera(Row)
+                ? { ...Row, Name: "Main Camera", Description: "Scene camera" }
+                : Row,
+            )}
           Add={AddRow}
           Close={() => OpenConstruct(false)}
         />
