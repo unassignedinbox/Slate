@@ -3188,3 +3188,125 @@ where the underlying component actually stores lumens; unit conversion must not 
 - Every displayed Light control writes through and survives save/reload; unsupported renderer features are labelled.
 - Existing Atmosphere remains an independent source entity; Fog references it without ownership coupling.
 - No changes to Clouds, materials, fracture, GI or unrelated inspectors are included in this conversion.
+
+## C069 — complete HTML-to-native inspector-card audit (source comparison, 2026-10-06)
+
+**Audit/documentation checkpoint only. No C++ or HTML implementation is changed by C069.** The earlier C068 plan was too
+narrow because it treated Fog and Lights as the only conversion work. This audit compares the complete current HTML
+inspector order with every dedicated native inspector route and the generic native fallback.
+
+### Evidence and comparison method
+
+- Current HTML order contract: `Frontier/Experimental/ProjectZeroEditor/CheckInspectorOrder.mjs`, plus the shared Fog
+  implementation in `Inspectors.jsx` and the Light/Cloud reference adapters.
+- Native dispatch: `Frontier/Engine/Editor/InspectorPanel.cpp` and `EditorSheetAppearance` in `EditorInstance.h`.
+- Native card implementations: `AtmosphereSkyInspectorPanel.cpp`, `CameraInspectorPanel.cpp`,
+  `CloudsInspectorPanel.cpp`, `FogInspectorPanel.cpp`, `LensFlareInspectorPanel.cpp`, `MoonInspectorPanel.cpp`,
+  `StarsInspectorPanel.cpp`, `SunInspectorPanel.cpp`, and `WeatherInspectorPanel.cpp`.
+- Generic native sheet/card source: `EditorFeedSequence.cpp` and `CelestialSequence.cpp`.
+- This is a code-level/card-order comparison. Existing native captures are linked below where available; C069 did not
+  rebuild or rerender the native proofs and therefore does not claim a new image comparison.
+
+Status legend: **Aligned** = equivalent native card family/order and real bindings exist; **Partial** = native behavior
+exists but presentation/order/content differs; **Missing** = HTML-approved card/component has no dedicated native route.
+
+### Complete parity matrix
+
+| Inspector family | Current approved HTML cards/order | Current C++ cards/order | Status and difference to resolve |
+|---|---|---|---|
+| Folder / collection | Collection total → visibility status → composition → searchable browser → optional Notes | Native collection inspector, search/filter/paging and Notes from C021/C055-era native work | **Partial/close.** Recheck optional add/reveal Notes behavior and the latest entity-specific outliner metadata; do not replace the native collection implementation. |
+| Geometry | Standard Transform → capabilities → Material → Fracture/SDF last | Generic Transform/Surface property groups; special Tyre/SolidArc routes exist, but the HTML fracture/SDF authoring stack is not a general native geometry card | **Missing/partial.** Retain standard native Transform and Material; port Fracture only through its separately approved native scope. Do not fold Tyre/SolidArc into generic geometry. |
+| Camera | Lens + field of view → Aperture study → Subject plane/sharpness → Sensor/support | Same four dedicated cards in `CameraInspectorPanel.cpp` | **Aligned functionally.** Compare spacing, responsive pairing and card heights; no replacement architecture required. |
+| Post process | Quick/capability controls and data graphs; no invented preview/statistics | Generic Exposure → Tone Mapping → Lens Effects sheet groups | **Partial.** Add a dedicated shared card presentation only if needed; preserve real EV, saturation, contrast, bloom and vignette fields and do not fabricate renderer statistics. |
+| Atmosphere | Atmosphere Lab/main data → settings → scattering → native controls → Atmosphere bake → Baked atmosphere | Atmospheric scattering → Aerosol haze + Ozone → Density falloff → Ground reflectance → additional settings → bake/baked at bottom | **Partial/close.** Native C024 has real interactive curves and bottom baking. Missing HTML AtmosphereLab atlas/orbital presentation remains a separate decision; do not duplicate the existing native scattering controls. |
+| Sun | Main solar visual/readings → quick controls → authored properties/graphs → Sun lighting/disk baking last | Sun direction + intensity/temperature → Daylight cycle + Sun disc → Dynamic/additional settings → both bake cards last | **Partial/close.** Native C024 has real solver-backed graphs and correct bake-last order. Reconcile the HTML summary/readings and quick-control boundary without replacing native solver controls. |
+| Lens flare | Flare composite → switches/settings → source → legacy settings → Lens flare image/bake last | Lens flare image first → Flare composite → Flare layers + Lens ghosts → Halo/response → Legacy settings | **Order mismatch.** Move the native image/export card to the bottom, retain composite/layer/ghost/halo controls, and group switches below the composite. |
+| Moon | Lunar phase first → Moon settings → catalogue → Moonlight/size/position/rotation | Moon settings → catalogue → Lunar phase → Moonlight + size → position + rotation | **Order mismatch.** Reorder native Phase before settings/catalogue while retaining the real atlas, four-slot state, follow-sky, roll/pitch and oversized-moon behavior. No imported HTML Atlas frame should be embedded. |
+| Stars | Star field first → Stars settings → Twinkle → Renderer scale → Star field bake last | Stars settings → Star field → Twinkle + Celestial rotation → Renderer scale → Baking/star atlas last | **Order mismatch.** Move Star field ahead of quick settings; retain native rotation and honest unavailable bake state. |
+| Wind | Anemometer/statistics → Composite Flow/Wind field → Wind controls | Direction + magnitude + Flow → Variation + Gust envelope; wind binding is drawn separately for consumers | **Major presentation gap.** Keep the native `WindField` data/solver, add the reviewed Anemometer first, then composite field, then controls. Remove neither Beaufort/variation behavior nor real wind ownership; avoid a browser iframe port. |
+| Height / Atmospheric / Local Fog | Shared Fog settings → shared interactive Visibility → Medium with shared Beam Chamber + model technical peer → Wind binding | Shared native Fog shell already has Settings → Visibility → Medium + technical peer, but lacks coordinated Beam ownership, has standalone Neutral-light reference, and draws Wind binding before the custom panel | **Partial; C068 work remains.** Add Beam inside Medium, move Wind binding to bottom, fold/remove standalone neutral card, preserve independent Fog entities and equations. |
+| Global / Local Clouds | Shared summary/statistics → Cloud settings → shared Coverage → Cloud base/deck; Local retains bounds-derived base/thickness and body | Settings → Coverage → Cloud base/Local bounds + Layer thickness/Volume section → Cloud body → global shadow foldout | **Partial.** Native has the correct real fields and shared global/local route, but not the approved summary/deck presentation/order. Preserve Local Centre/Half Size and global-only shadow controls; do not invent Local Base/Thickness state. |
+| Precipitation | Precipitation type → Emission + collision → Fall + density → remaining simulation cards | Emission + collision → Precipitation type → Fall + density + Particle scale → Simulation/settling | **Order mismatch.** Move native type first, then emission, retaining real particle-scale and simulation/settling cards. |
+| Rainbow | Optical preview → Visibility → Bow response → Bake/image last | Visibility → Optical preview → Bow response → Baking/image last | **Order mismatch.** Swap only the first two cards; retain the real CPU optical preview, authored response controls and explicit unsupported bake state. |
+| Lights | Shared source-family dashboards, statistics, quick controls, standard Transform, merged Source & response, conditional distribution/dynamics, baking last | No dedicated Light appearance. Generic Light sheet exposes Intensity/Colour and read-only Direction; Point/Spot/Area Construct menu entries are no-ops; punctual records are not consumed by the lighting kernel | **Missing.** C068 Light component/schema/creation/writeback/renderer plan remains required. Presets map to core Point/Spot/Area/Tube/Strip types rather than separate inspector classes. |
+| Materials / Shader editing | Material channels/source editor and dockable ShaderEditor | Generic Surface card exposes Albedo, Emission, Roughness and Metallic readout | **Missing/partial.** Keep real native material properties; port the approved source/channel workflow only after native material ownership and shader compilation contracts are defined. |
+| Entity Notes and outliner context | Optional add/reveal Notes on every entity; type-specific values/units in outliner | Native `EditorInstance::Notes` and `RecordNotes` exist; outliner derives native categories/standing and selected metadata | **Partial/verify.** Audit reveal behavior and every latest metadata example (light output/type/XYZ, precipitation mode, Moon phase angle) rather than assuming C055 parity. |
+| Diagnostics / collection workspace | Movable diagnostics and large-collection browser | Native C021/C022 implementations and proofs exist | **Aligned for the scoped native implementation.** Keep actual native timing semantics and do not replace with HTML browser timing. |
+| Construct / creation | HTML palette includes all reviewed light presets and environment entries | Native Construct exists, but Point/Spot/Area menu callbacks are currently empty | **Missing for Lights.** Replace no-op commands with real component creation; do not add palette-only rows. |
+
+### Cards/components to retain without redesign
+
+- Native Camera cards and optics calculations.
+- Native Atmosphere and Sun solver-backed interactive curves, additional native controls and bake-last sections.
+- Native Moon atlas/data ownership, Cloud bounds/body/shadows, precipitation simulation/settling, Rainbow CPU preview,
+  Wind solver fields, Fog equations, standard Transform, Notes storage and native diagnostics.
+- Existing Tyre and SolidArc specialized routes remain separate from general Project-Zero card conversion.
+
+### Cards/components to rearrange only
+
+- Lens Flare: image/export to bottom; composite and switches first.
+- Moon: Lunar phase before settings/catalogue.
+- Stars: Star field before settings; baking remains last.
+- Precipitation: type before emission/collision.
+- Rainbow: optical preview before visibility.
+- Clouds: apply the same approved summary/settings/coverage/deck ordering to Global and Local while retaining Local bounds.
+- Fog: use the C067 shared order in native code, with model-specific technical peers.
+
+### Cards/components requiring new native implementation
+
+- Shared Fog Beam Chamber and coordinated bottom Wind binding.
+- Wind Anemometer and approved composite-field presentation over the existing native wind model.
+- Persistent Light components, creation, dedicated inspector, writeback, save/reload and honest renderer support.
+- General geometry Fracture/SDF cards only within the separately authorized native fracture plan.
+- Material channel/source editor and ShaderEditor parity.
+- Any missing outliner metadata/reveal behavior identified by the C055 audit.
+
+### Shared native card-kit correction
+
+The dedicated C++ inspectors currently repeat local `Panel`/card drawing helpers. Before converting more families, extract
+or standardize a native inspector card kit for: card surface/radius, heading, metric/readout, tile, slider host, responsive
+pair/stack layout, technical plot, status text and terminal bake section. Model code continues to own calculations and
+writeback. This prevents Fog, Cloud, Moon, Weather and future Light cards from becoming visually different while merely
+sharing similar names.
+
+The card kit is presentation infrastructure, not a second property model. Every control must still bind to the existing
+`EditorSheet` property or a newly approved persistent component field through normal native transactions.
+
+### Existing native visual evidence
+
+These are previously committed native ImGui command rasterizations, not new C069 renders and not Vulkan-window captures:
+
+- [Sun graphs](../../VisualProof/ProjectZeroNative/SunGraphs.png)
+- [Sun narrow](../../VisualProof/ProjectZeroNative/SunGraphsNarrow.png)
+- [Atmosphere graphs](../../VisualProof/ProjectZeroNative/AtmosphereGraphs.png)
+- [Atmosphere narrow](../../VisualProof/ProjectZeroNative/AtmosphereGraphsNarrow.png)
+- [Lens Flare](../../VisualProof/ProjectZeroNative/LensFlare.png)
+- [Stars](../../VisualProof/ProjectZeroNative/Stars.png)
+- [Rainbow](../../VisualProof/ProjectZeroNative/Rainbow.png)
+- [Collection](../../VisualProof/ProjectZeroNative/Collection.png)
+- [Diagnostics](../../VisualProof/ProjectZeroNative/Diagnostics.png)
+
+Representative approved HTML evidence for direct review:
+
+- [Current inspector order captures](../Experimental/ProjectZeroEditor/Screenshots/InspectorOrder/)
+- [Global/Local Cloud layouts](../Experimental/ProjectZeroEditor/Screenshots/SharedCloudLighting/)
+- [Light family layouts](../Experimental/ProjectZeroEditor/Screenshots/LightDesign/)
+- [Fog cards](../Experimental/ProjectZeroEditor/Screenshots/FogCards/)
+
+### Revised native conversion order
+
+1. Establish the shared native card kit and a source-driven card-order test.
+2. Apply rearrangement-only corrections to Lens Flare, Moon, Stars, Precipitation and Rainbow.
+3. Reconcile Global/Local Cloud ordering without changing bounds or simulation ownership.
+4. Implement the complete Fog conversion from C068/C067.
+5. Implement Wind presentation over the real native Wind model.
+6. Implement persistent Light components and the shared Light inspector; remove no-op creation commands.
+7. Audit Folder/Notes/outliner metadata and Post Process.
+8. Handle general Geometry Fracture/SDF and Material/ShaderEditor only under their separate authorized native plans.
+9. Re-run Linux and Windows/MSVC builds, low-stack checks, native writeback/save-reload tests, expanded/narrow captures
+   and existing renderer regressions. A card is not complete merely because a CPU-rasterized screenshot exists.
+
+**C069 conclusion:** Fog and Lights are not the only outstanding conversion. Camera is substantially aligned;
+Sun/Atmosphere and native workspace cards are close or scoped-complete; the remaining environment families have explicit
+order/presentation differences, while Wind, Lights, general Fracture and Material/Shader workflows require larger native
+work. No implementation or fresh native rendering is claimed in this audit.
