@@ -527,7 +527,7 @@ EditorProperty* EditorFeedSequence::BuildSheet(uint32_t Index, EditorInstance* I
                 auto& Shadows=OpenProp(Source,"Cast Shadows",EditorPropertyCategory::Switch);Shadows.On=L.CastShadows;
                 auto& Type=OpenProp(Source,"Type",EditorPropertyCategory::Select);Type.OptionCount=6;Type.Picked=static_cast<uint32_t>(L.Category);
                 const char* Types[]={"Directional","Point","Spot","Rectangle / Area","Tube","Strip"};for(unsigned I=0;I<6;++I)std::snprintf(Type.Options[I],sizeof(Type.Options[I]),"%s",Types[I]);
-                auto& Power=OpenProp(Source,"Intensity",EditorPropertyCategory::Slider);Power.Minimum=0;Power.Maximum=L.Category==PunctualLuminaireCategory::Directional?200000.f:100000.f;Power.Figure=L.Intensity;Power.Decimals=1;std::snprintf(Power.Unit,sizeof(Power.Unit),L.Category==PunctualLuminaireCategory::Directional?"lx":"cd");
+                auto& Power=OpenProp(Source,"Intensity",EditorPropertyCategory::Slider);Power.Minimum=0;Power.Maximum=L.Category==PunctualLuminaireCategory::Directional?200000.f:100000.f;Power.Figure=L.Category==PunctualLuminaireCategory::Strip?L.LumensPerMetre*L.Size[0]*L.Dimmer:L.Intensity;Power.Decimals=1;std::snprintf(Power.Unit,sizeof(Power.Unit),L.Category==PunctualLuminaireCategory::Directional?"lx":L.Category==PunctualLuminaireCategory::Strip?"lm":"cd");
                 auto& Hue=OpenProp(Source,"Colour",EditorPropertyCategory::Colour);CopyTint(Hue.ColourTint,L.Colour);
                 auto& Range=OpenProp(Source,"Range",EditorPropertyCategory::Slider);Range.Minimum=0;Range.Maximum=1000;Range.Figure=L.Range;Range.Decimals=1;std::snprintf(Range.Unit,sizeof(Range.Unit),"m");
                 EditorPropertyGroup& Transform=OpenGroup(Sheet,"Transform");
@@ -537,6 +537,13 @@ EditorProperty* EditorFeedSequence::BuildSheet(uint32_t Index, EditorInstance* I
                 auto& Distribution=OpenProp(Shape,"Distribution",EditorPropertyCategory::Select);Distribution.OptionCount=3;Distribution.Picked=static_cast<uint32_t>(L.Distribution);const char* Distributions[]={"Uniform","IES profile","ECE low beam"};for(unsigned I=0;I<3;++I)std::snprintf(Distribution.Options[I],sizeof(Distribution.Options[I]),"%s",Distributions[I]);
                 auto Slider=[&](const char* Name,float Value,float Min,float Max,const char* Unit){auto& Q=OpenProp(Shape,Name,EditorPropertyCategory::Slider);Q.Minimum=Min;Q.Maximum=Max;Q.Figure=Value;Q.Decimals=2;std::snprintf(Q.Unit,sizeof(Q.Unit),"%s",Unit);};
                 Slider("Inner Cone",L.InnerConeAngle*kRadToDeg,0,89,"deg");Slider("Outer Cone",L.OuterConeAngle*kRadToDeg,1,90,"deg");Slider("Width",L.Size[0],.01f,100,"m");Slider("Height",L.Size[1],.01f,100,"m");
+                if(L.Category==PunctualLuminaireCategory::Strip){
+                    EditorPropertyGroup& Output=OpenGroup(Sheet,"Output per metre");
+                    auto StripSlider=[&](EditorPropertyGroup& Group,const char* Name,float Value,float Min,float Max,uint32_t Decimals,const char* Unit){auto& Q=OpenProp(Group,Name,EditorPropertyCategory::Slider);Q.Minimum=Min;Q.Maximum=Max;Q.Figure=Value;Q.Decimals=Decimals;std::snprintf(Q.Unit,sizeof(Q.Unit),"%s",Unit);};
+                    StripSlider(Output,"Flux per metre",L.LumensPerMetre,10,4000,0,"lm/m");StripSlider(Output,"Load per metre",L.WattsPerMetre,1,50,1,"W/m");StripSlider(Output,"Dimmer",L.Dimmer,0,1,2,"");StripSlider(Output,"Colour temperature",L.Temperature,1800,12000,0,"K");
+                    EditorPropertyGroup& Layout=OpenGroup(Sheet,"Layout & segments");
+                    StripSlider(Layout,"Strip length",L.Size[0],.1f,20,1,"m");StripSlider(Layout,"Emitter density",L.EmittersPerMetre,10,240,0,"/m");StripSlider(Layout,"Supply voltage",L.SupplyVoltage,5,48,0,"V");auto& Diffuser=OpenProp(Layout,"Opal diffuser",EditorPropertyCategory::Switch);Diffuser.On=L.Diffuser;
+                }
                 return nullptr;
             }
             EditorPropertyGroup& Lamp = OpenGroup(Sheet, "Light");
@@ -650,6 +657,15 @@ void EditorFeedSequence::ApplyLightSheet(uint32_t Index,uint32_t RowCount,SceneS
     if(auto* Q=Find("Range"))L.Range=std::max(0.f,Q->Figure);
     if(auto* Q=Find("Colour"))CopyTint(L.Colour,Q->ColourTint);
     constexpr float DegToRad=.01745329251994329577f;if(auto* Q=Find("Inner Cone"))L.InnerConeAngle=std::clamp(Q->Figure*DegToRad,0.f,L.OuterConeAngle);if(auto* Q=Find("Outer Cone"))L.OuterConeAngle=std::clamp(Q->Figure*DegToRad,std::max(.0174533f,L.InnerConeAngle),1.5707964f);if(auto* Q=Find("Width"))L.Size[0]=std::max(.01f,Q->Figure);if(auto* Q=Find("Height"))L.Size[1]=std::max(.01f,Q->Figure);
+    if(auto* Q=Find("Flux per metre")){L.LumensPerMetre=std::clamp(Q->Figure,10.f,4000.f);}
+    if(auto* Q=Find("Load per metre")){L.WattsPerMetre=std::clamp(Q->Figure,1.f,50.f);}
+    if(auto* Q=Find("Dimmer")){L.Dimmer=std::clamp(Q->Figure,0.f,1.f);}
+    if(auto* Q=Find("Colour temperature")){L.Temperature=std::clamp(Q->Figure,1800.f,12000.f);}
+    if(auto* Q=Find("Strip length")){L.Size[0]=std::clamp(Q->Figure,.1f,20.f);}
+    if(auto* Q=Find("Emitter density")){L.EmittersPerMetre=std::clamp(Q->Figure,10.f,240.f);}
+    if(auto* Q=Find("Supply voltage")){L.SupplyVoltage=std::clamp(Q->Figure,5.f,48.f);}
+    if(auto* Q=Find("Opal diffuser")){L.Diffuser=Q->On;}
+    if(L.Category==PunctualLuminaireCategory::Strip){L.Intensity=L.LumensPerMetre*L.Size[0]*L.Dimmer;}
     if(auto* Q=Find("Position"))for(int I=0;I<3;++I){P.WorldTransform[12+I]=Q->Axes[I];P.LocalTransform[12+I]=Q->Axes[I];}
 }
 

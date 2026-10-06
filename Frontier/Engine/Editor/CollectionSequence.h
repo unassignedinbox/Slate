@@ -24,7 +24,7 @@ struct CollectionSequence
     uint64_t                  SelectedKey = 0;
     uint32_t                  Total = 0, Direct = 0, Visible = 0, Locked = 0, Folders = 0, MaximumDepth = 0;
     uint32_t                  Categories[static_cast<unsigned>(EditorInstanceCategory::Count)]{};
-    int                       Page = 0, PageSize = 25, Visibility = 0, Category = 0;
+    int                       Page = 0, PageSize = 25, Visibility = 0, Category = 0, Sort = 0;
     bool                      DirectOnly = false;
     char                      Search[96]{};
     std::vector<RowSelection> Matches;
@@ -57,7 +57,7 @@ struct CollectionSequence
         if (SelectedKey != Rows[Selected].InspectorKey)
         {
             SelectedKey = Rows[Selected].InspectorKey;
-            Page = Category = Visibility = 0;
+            Page = Category = Visibility = Sort = 0;
             DirectOnly = false;
             Search[0] = 0;
         }
@@ -86,6 +86,9 @@ struct CollectionSequence
             }
             EnclosingRows.push_back({Index, Effective});
         }
+        if(Sort==0)std::sort(Matches.begin(),Matches.end(),[&](const RowSelection& A,const RowSelection& B){return std::strcmp(Rows[A.Index].Label,Rows[B.Index].Label)<0;});
+        else if(Sort==1)std::sort(Matches.begin(),Matches.end(),[&](const RowSelection& A,const RowSelection& B){const auto CA=static_cast<unsigned>(Rows[A.Index].Category),CB=static_cast<unsigned>(Rows[B.Index].Category);return CA!=CB?CA<CB:std::strcmp(Rows[A.Index].Label,Rows[B.Index].Label)<0;});
+        else std::sort(Matches.begin(),Matches.end(),[&](const RowSelection& A,const RowSelection& B){return Rows[A.Index].Depth!=Rows[B.Index].Depth?Rows[A.Index].Depth<Rows[B.Index].Depth:std::strcmp(Rows[A.Index].Label,Rows[B.Index].Label)<0;});
         PageSize = std::clamp(PageSize, 1, 100);
         Page = std::clamp(Page, 0, std::max(0, (int(Matches.size()) - 1) / PageSize));
     }

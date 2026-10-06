@@ -97,6 +97,12 @@ void InspectorPanel::AssignTabOpen(bool* Open) noexcept
 {
     TabOpen_ = Open;
 }
+#ifdef FRONTIER_DEVELOPMENT
+void InspectorPanel::RecordCollectionProof(ControlPanel& Controls,EditorInstance* Rows,uint32_t Count,uint32_t Selected) noexcept
+{
+    Controls_=&Controls;Roster_=Rows;RosterCount_=Count;if(Rows&&Selected<Count)RecordCollection(Rows[Selected],Selected);
+}
+#endif
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                           RECORD
@@ -238,9 +244,7 @@ void InspectorPanel::Record(EditorInstance* Picked, uint32_t PickedIndex, Editor
     if (Picked->Category == EditorInstanceCategory::Folder && Roster_ && PickedIndex < RosterCount_)
     {
         ImGui::BeginChild("##collection-content", ImVec2(0, 0));
-        RecordIdent(Picked, PickedIndex);
         RecordCollection(*Picked, PickedIndex);
-        RecordNotes(Picked);
         ImGui::EndChild();
         if (!Embedded) ImGui::End();
         return;
@@ -301,83 +305,33 @@ float InspectorPanel::RecordCaps(const char* Text, const ImVec2& At, ImU32 Tint)
 
 void InspectorPanel::RecordCollection(EditorInstance& Selected, uint32_t Index) noexcept
 {
-    auto& Collection = Collection_;
-    Collection.Traverse(Roster_, RosterCount_, Index);
-    ImGui::PushID("collection");
-    ImGui::PushFont(Controls_->QueryUi(), 14);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 18.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 20));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(32, 32, 32, 255));
-    ImGui::BeginChild("##collection-summary", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
-    ImGui::TextDisabled("COLLECTION / LIVE SCENE ROSTER");
-    ImGui::PushFont(Controls_->QueryUi(), 28);
-    ImGui::Text("%u records", Collection.Total);
-    ImGui::PopFont();
-    ImGui::TextWrapped("%u direct  /  %u folders  /  %u levels deep", Collection.Direct, Collection.Folders, Collection.MaximumDepth);
-    ImGui::Separator();
-    ImGui::Text("%u visible    %u hidden", Collection.Visible, Collection.Total - Collection.Visible);
-    ImGui::Text("%u locked / protected", Collection.Locked);
-    ImGui::TextWrapped("Effective visibility includes enclosing folders. Counts describe scene records, not GPU draws or memory.");
-    ImGui::ColorEdit3("Folder tint", Selected.Tint, ImGuiColorEditFlags_NoInputs);
-    ImGui::EndChild();
-    ImGui::Dummy(ImVec2(0, 10));
-    ImGui::BeginChild("##collection-browser", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
-    ImGui::TextUnformatted("Browse contents");
-    ImGui::SetNextItemWidth(-1);
-    bool Changed = ImGui::InputTextWithHint("##search", "Search names...", Collection.Search, sizeof(Collection.Search));
-    ImGui::SetNextItemWidth(-1);
-    Changed |= ImGui::Combo("##category", &Collection.Category, "All records\0Folders\0Geometry\0Lights\0Cameras\0");
-    ImGui::SetNextItemWidth(-1);
-    Changed |= ImGui::Combo("##visibility", &Collection.Visibility, "Any visibility\0Visible\0Hidden (including inherited)\0");
-    Changed |= ImGui::Checkbox("Direct contents only", &Collection.DirectOnly);
-    if (Changed) Collection.Page = 0;
-    Collection.Traverse(Roster_, RosterCount_, Index);
-    ImGui::TextDisabled("%zu matching records", Collection.Matches.size());
-    const size_t First = size_t(Collection.Page) * Collection.PageSize;
-    const size_t Last = std::min(Collection.Matches.size(), First + Collection.PageSize);
-    if (ImGui::BeginTable("##contents", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
-    {
-        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 65.0f);
-        ImGui::TableHeadersRow();
-        for (size_t Position = First; Position < Last; ++Position)
-        {
-            const auto& Match = Collection.Matches[Position];
-            const auto& Row = Roster_[Match.Index];
-            ImGui::PushID(int(Match.Index));
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            if (ImGui::Selectable(Row.Label, false, ImGuiSelectableFlags_SpanAllColumns)) CollectionPick_ = Match.Index;
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s\nOpen in Outliner and Inspector", Row.Label);
-            ImGui::TableNextColumn();
-            ImGui::TextDisabled(Row.Pinned ? "Protected" : Match.Visible ? "Visible" : "Hidden");
-            ImGui::PopID();
-        }
-        ImGui::EndTable();
-    }
-    if (Collection.Matches.empty()) ImGui::TextDisabled("No matching contents.");
-    ImGui::BeginDisabled(Collection.Page == 0);
-    if (ImGui::Button("Previous")) --Collection.Page;
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    ImGui::BeginDisabled(Last >= Collection.Matches.size());
-    if (ImGui::Button("Next")) ++Collection.Page;
-    ImGui::EndDisabled();
-    ImGui::Text("Page %d / %d", Collection.Page + 1, std::max(1, (int(Collection.Matches.size()) + Collection.PageSize - 1) / Collection.PageSize));
-    ImGui::SetNextItemWidth(-1);
-    int PageChoice = Collection.PageSize == 25 ? 0 : Collection.PageSize == 50 ? 1 : 2;
-    if (ImGui::Combo("##page-size", &PageChoice, "25 per page\0 50 per page\0 100 per page\0"))
-    {
-        Collection.PageSize = PageChoice == 0 ? 25 : PageChoice == 1 ? 50 : 100;
-        Collection.Page = 0;
-    }
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar(2);
-    ImGui::PopFont();
-    ImGui::PopID();
-}
+    auto& C=Collection_;C.Traverse(Roster_,RosterCount_,Index);ImGui::PushID("collection");ImGui::PushFont(Controls_->QueryUi(),14);
+    const float W=ImGui::GetContentRegionAvail().x;auto* D=ImGui::GetWindowDrawList();
+    auto Card=[&](const char* Id,float H){ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,18);ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{18,17});ImGui::PushStyleColor(ImGuiCol_ChildBg,IM_COL32(27,27,27,255));ImGui::PushStyleColor(ImGuiCol_Border,IM_COL32(255,255,255,12));return ImGui::BeginChild(Id,{0,H},ImGuiChildFlags_Borders|ImGuiChildFlags_AlwaysUseWindowPadding);};
+    auto EndCard=[&](){ImGui::EndChild();ImGui::PopStyleColor(2);ImGui::PopStyleVar(2);ImGui::Dummy({0,10});};
+    ImGui::TextDisabled("Inspector / Scene");ImGui::Dummy({0,5});RecordCaps("COLLECTION / SCENE INVENTORY",ImGui::GetCursorScreenPos(),kDim);ImGui::Dummy({0,22});
+    ImGui::PushFont(Controls_->QueryUi(),26);ImGui::SetNextItemWidth(W-70);ImGui::PushStyleColor(ImGuiCol_FrameBg,{0,0,0,0});ImGui::InputText("##folder-name",Selected.Label,sizeof(Selected.Label));ImGui::PopStyleColor();ImGui::PopFont();
+    ImGui::TextDisabled("Scene collection · indexed from the current scene");if(ImGui::SmallButton(Selected.Notes[0]?"Edit Notes":"+ Notes"))NotesFocus_=true;
+    if(Selected.Notes[0]||NotesFocus_){ImGui::SetNextItemWidth(-1);ImGui::PushStyleColor(ImGuiCol_FrameBg,IM_COL32(13,13,13,255));ImGui::InputTextMultiline("##folder-notes",Selected.Notes,sizeof(Selected.Notes),{-1,58});NotesFocus_=ImGui::IsItemFocused()||NotesFocus_;ImGui::PopStyleColor();}
+    ImGui::Dummy({0,5});ImGui::PushStyleColor(ImGuiCol_Button,{0,0,0,0});ImGui::PushStyleColor(ImGuiCol_ButtonHovered,{.12f,.12f,.12f,1});
+    std::vector<uint32_t> Trail;for(uint32_t I=0;I<=Index&&I<RosterCount_;++I){while(!Trail.empty()&&Roster_[Trail.back()].Depth>=Roster_[I].Depth)Trail.pop_back();if(I==Index||Roster_[I].Category==EditorInstanceCategory::Folder)Trail.push_back(I);}const size_t First=Trail.size()>4?Trail.size()-4:0;for(size_t I=First;I<Trail.size();++I){if(I>First)ImGui::SameLine(0,3);if(ImGui::SmallButton(Roster_[Trail[I]].Label))CollectionPick_=Trail[I];if(I+1<Trail.size()){ImGui::SameLine(0,3);ImGui::TextDisabled("/");}}
+    ImGui::PopStyleColor(2);ImGui::Dummy({0,7});
 
+    Card("##collection-total",232);ImGui::TextUnformatted("Collection contents");ImGui::PushFont(Controls_->QueryUi(),40);ImGui::Text("%u",C.Total);ImGui::SameLine();ImGui::PushFont(Controls_->QuerySmall());ImGui::TextDisabled("entries");ImGui::PopFont();ImGui::PopFont();ImGui::TextDisabled("All descendants, including nested folders");ImGui::Dummy({0,13});
+    if(ImGui::BeginTable("##facts",3,ImGuiTableFlags_SizingStretchSame)){const uint32_t V[]={C.Direct,C.Folders,C.MaximumDepth};const char* L[]={"Direct children","Nested folders","Levels below"};for(int I=0;I<3;++I){ImGui::TableNextColumn();ImGui::PushFont(Controls_->QueryUi(),21);ImGui::Text("%u",V[I]);ImGui::PopFont();ImGui::TextDisabled("%s",L[I]);}ImGui::EndTable();}EndCard();
+
+    const float Half=(W-10)*.5f;for(int I=0;I<2;++I){if(I)ImGui::SameLine(0,10);ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,18);ImGui::PushStyleColor(ImGuiCol_ChildBg,IM_COL32(27,27,27,255));ImGui::BeginChild(I?"##hidden-status":"##visible-status",{Half,91},ImGuiChildFlags_Borders);ImGui::SetCursorPos({17,14});D=ImGui::GetWindowDrawList();const auto P=ImGui::GetCursorScreenPos();D->AddCircleFilled({P.x+5,P.y+6},5,I?kFaint:kGreen);ImGui::Dummy({14,0});ImGui::SameLine();ImGui::TextUnformatted(I?"Hidden":"Visible");ImGui::SetCursorPos({17,45});ImGui::PushFont(Controls_->QueryUi(),24);ImGui::Text("%u",I?C.Total-C.Visible:C.Visible);ImGui::PopFont();if(ImGui::IsWindowHovered()&&ImGui::IsMouseClicked(0)){C.Visibility=C.Visibility==I+1?0:I+1;C.Page=0;}ImGui::EndChild();ImGui::PopStyleColor();ImGui::PopStyleVar();}ImGui::Dummy({0,10});
+
+    Card("##collection-composition",302);ImGui::TextUnformatted("Composition");ImGui::SameLine();ImGui::TextDisabled("%u types",unsigned(std::count_if(std::begin(C.Categories),std::end(C.Categories),[](uint32_t N){return N>0;})));ImGui::PushFont(Controls_->QueryUi(),36);ImGui::Text("%u",C.Total);ImGui::SameLine();ImGui::PushFont(Controls_->QuerySmall());ImGui::TextDisabled("entities");ImGui::PopFont();ImGui::PopFont();
+    const ImU32 Palette[]={IM_COL32(185,199,174,255),IM_COL32(156,171,185,255),IM_COL32(209,184,152,255),IM_COL32(166,161,152,255)};float BX=ImGui::GetCursorScreenPos().x,BY=ImGui::GetCursorScreenPos().y,BW=ImGui::GetContentRegionAvail().x;for(unsigned I=0;I<unsigned(EditorInstanceCategory::Count);++I)if(C.Categories[I]){float Part=BW*C.Categories[I]/std::max(1u,C.Total);D->AddRectFilled({BX,BY},{BX+Part,BY+12},Palette[I],2);BX+=Part;}ImGui::Dummy({0,23});
+    const char* Names[]={"Folders","Geometry","Lights","Cameras"};for(unsigned I=0;I<4;++I)if(C.Categories[I]){ImGui::PushID(int(I));if(ImGui::Selectable(Names[I],C.Category==int(I+1),0,{0,27})){C.Category=C.Category==int(I+1)?0:int(I+1);C.Page=0;}ImGui::SameLine(W-86);ImGui::Text("%u",C.Categories[I]);ImGui::PopID();}ImGui::TextDisabled("Visibility includes ancestor folders. Counts are scene records, not render workload or memory.");EndCard();
+
+    Card("##collection-browser",690);ImGui::TextUnformatted("Browse contents");ImGui::SameLine();ImGui::TextDisabled("%zu matches",C.Matches.size());ImGui::TextDisabled("Find an entry");ImGui::SetNextItemWidth(-1);bool Changed=ImGui::InputTextWithHint("##search","Name, ID or description…",C.Search,sizeof(C.Search));
+    const float FW=(ImGui::GetContentRegionAvail().x-8)*.5f;ImGui::SetNextItemWidth(FW);int Scope=C.DirectOnly?1:0;Changed|=ImGui::Combo("##scope",&Scope,"All descendants\0Direct children\0");C.DirectOnly=Scope==1;ImGui::SameLine();ImGui::SetNextItemWidth(FW);Changed|=ImGui::Combo("##type",&C.Category,"All types\0Folders\0Geometry\0Lights\0Cameras\0");ImGui::SetNextItemWidth(FW);Changed|=ImGui::Combo("##visibility",&C.Visibility,"All entries\0Visible\0Hidden\0");ImGui::SameLine();ImGui::SetNextItemWidth(FW);Changed|=ImGui::Combo("##sort",&C.Sort,"Name A-Z\0Type\0Hierarchy depth\0");if(Changed)C.Page=0;C.Traverse(Roster_,RosterCount_,Index);
+    const size_t Start=size_t(C.Page)*C.PageSize,Last=std::min(C.Matches.size(),Start+size_t(C.PageSize));for(size_t J=Start;J<Last&&J<Start+8;++J){const auto M=C.Matches[J];auto& R=Roster_[M.Index];ImGui::PushID(int(M.Index));ImGui::PushStyleColor(ImGuiCol_Button,IM_COL32(12,12,12,255));if(ImGui::Button(R.Label,{ImGui::GetContentRegionAvail().x-50,43}))CollectionPick_=M.Index;ImGui::PopStyleColor();ImGui::SameLine();ImGui::InvisibleButton("##entry-eye",{42,43});if(ImGui::IsItemClicked()&&!R.Pinned)R.Visible=!R.Visible;const ImVec2 EyeMin=ImGui::GetItemRectMin(),EyeC={EyeMin.x+21,EyeMin.y+21.5f};D->AddRectFilled({EyeMin.x+5,EyeMin.y+6},{EyeMin.x+37,EyeMin.y+37},IM_COL32(235,235,235,255),9);D->AddBezierCubic({EyeC.x-7,EyeC.y},{EyeC.x-3,EyeC.y-5},{EyeC.x+3,EyeC.y-5},{EyeC.x+7,EyeC.y},IM_COL32(80,86,84,255),1.3f);D->AddBezierCubic({EyeC.x-7,EyeC.y},{EyeC.x-3,EyeC.y+5},{EyeC.x+3,EyeC.y+5},{EyeC.x+7,EyeC.y},IM_COL32(80,86,84,255),1.3f);if(R.Visible)D->AddCircleFilled(EyeC,2,IM_COL32(80,86,84,255));else D->AddLine({EyeC.x-6,EyeC.y+6},{EyeC.x+6,EyeC.y-6},IM_COL32(80,86,84,255),1.3f);ImGui::PopID();}
+    if(C.Matches.empty()){ImGui::TextDisabled("No matching entries.");}ImGui::BeginDisabled(C.Page==0);if(ImGui::Button("Previous"))--C.Page;ImGui::EndDisabled();ImGui::SameLine();ImGui::BeginDisabled(Last>=C.Matches.size());if(ImGui::Button("Next"))++C.Page;ImGui::EndDisabled();ImGui::SameLine();ImGui::TextDisabled("Page %d / %d",C.Page+1,std::max(1,(int(C.Matches.size())+C.PageSize-1)/C.PageSize));EndCard();
+    ImGui::PopFont();ImGui::PopID();
+}
 void InspectorPanel::RecordEmpty() noexcept
 {
     const float RowWidth = ImGui::GetContentRegionAvail().x;

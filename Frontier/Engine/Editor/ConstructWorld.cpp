@@ -122,7 +122,7 @@ ConstructResult ConstructEntity(SceneStructure& World,const ConstructRequest& R,
         else if(R.Kind==ConstructKind::DirectionalLight)Light.Category=PunctualLuminaireCategory::Directional;
         else if(R.Kind==ConstructKind::RectangleLight)Light.Category=PunctualLuminaireCategory::Rectangle;
         else if(R.Kind==ConstructKind::TubeLight)Light.Category=PunctualLuminaireCategory::Tube;
-        else if(R.Kind==ConstructKind::StripLight){Light.Category=PunctualLuminaireCategory::Strip;Light.Size[0]=2.f;Light.Size[1]=.04f;}
+        else if(R.Kind==ConstructKind::StripLight){Light.Category=PunctualLuminaireCategory::Strip;Light.Size[0]=2.4f;Light.Size[1]=.04f;Light.Intensity=2400.f;Light.LumensPerMetre=1000.f;Light.WattsPerMetre=14.4f;Light.Dimmer=1.f;Light.Temperature=4000.f;Light.EmittersPerMetre=60.f;Light.SupplyVoltage=24.f;Light.Diffuser=true;}
         World.RegisterPunctualLuminaire(Light,P);
     }
     World.Finalise(SlabLimit);

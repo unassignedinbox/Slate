@@ -154,6 +154,15 @@ struct PunctualLuminaireRecord
     float                     InnerConeAngle = 0.0f;   // [rad]
     float                     OuterConeAngle = 0.7853982f;
     float                     Size[2] = { 1.0f, 1.0f }; // [m] rectangle width/height, tube/strip length/width
+    // Strip-specific authoring stays on the same persistent light component. These values mirror the accepted
+    // LED Strip cards rather than deriving an electrical model from generic intensity/size controls.
+    float                     LumensPerMetre = 1000.0f; // [lm/m]
+    float                     WattsPerMetre = 14.4f;    // [W/m]
+    float                     Dimmer = 1.0f;            // [0..1]
+    float                     Temperature = 4000.0f;    // [K]
+    float                     EmittersPerMetre = 60.0f; // [/m]
+    float                     SupplyVoltage = 24.0f;    // [V]
+    bool                      Diffuser = true;
     bool                      Enabled = true;
     bool                      CastShadows = true;
 };

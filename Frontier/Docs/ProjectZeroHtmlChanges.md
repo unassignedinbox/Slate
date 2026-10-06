@@ -3410,3 +3410,14 @@ browser-only fracture or shader workspace as completed native editor functionali
 
 The visual proof deliberately presents native captures rather than side-by-side browser screenshots: it establishes the shipped
 C++ result, while this table records every intentional data/feature difference from the HTML reference.
+
+## C072 — exact LED Strip and Folder card correction (2026-10-06)
+
+The first C071 native proof used a generic line for LED Strip and a generic ImGui folder summary. Those were not faithful ports and are replaced here.
+
+- **LED Strip:** the native inspector now ports the accepted Ribbon light instrument rather than substituting a line glyph. It includes the elliptical 120-point emitter study, authored total flux, connected-load and emitter-count metrics, Output per metre, Electrical budget, Layout & segments, Opal diffuser, horizontal transform direction, scene participation and honest terminal renderer status.
+- The strip values are canonical component fields on `PunctualLuminaireRecord`: flux/load per metre, dimmer, colour temperature, emitter density, voltage, diffuser and length. Build/apply/rebuild tests prove real writeback; total flux is derived as `lm/m × length × dimmer`.
+- **Folder / Collection:** the native route now follows the accepted hierarchy exactly: collection heading and optional notes, ancestry trail, Collection contents, Visible/Hidden status, Composition distribution, then the searchable/filterable/sortable manifest. Result rows retain native selection and visibility writeback. The copied identity strip and the previous generic summary/browser styling are removed.
+- Wide and narrow native CPU captures are included in `VisualProof/NativeInspectorCards/index.html`; the old simplified LED image is replaced.
+
+Executed checks: changed C++ sources compile with `-Wall -Wextra -Werror`; Light presentation passes 7 captures/checks; Light component persistence passes 17 checks; Folder wide/narrow native capture proof passes.

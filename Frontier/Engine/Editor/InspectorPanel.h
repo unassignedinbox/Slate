@@ -35,6 +35,10 @@ public:
     void AssignRoster(EditorInstance* Rows, uint32_t Count) noexcept { Roster_ = Rows; RosterCount_ = Count; }
     uint32_t ConsumeCollectionPick() noexcept { const auto Selected = CollectionPick_; CollectionPick_ = kNoEditorInstance; return Selected; }
     void Record(EditorInstance* Picked, uint32_t PickedIndex, EditorSheet* Sheet, bool Embedded=false) noexcept;
+#ifdef FRONTIER_DEVELOPMENT
+    // CPU visual-proof seam for the collection card; production selection still enters through Record().
+    void RecordCollectionProof(ControlPanel& Controls,EditorInstance* Rows,uint32_t Count,uint32_t Selected) noexcept;
+#endif
 
 private:
     void  RecordCollection(EditorInstance& Selected, uint32_t Index) noexcept;
