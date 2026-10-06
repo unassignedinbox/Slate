@@ -127,7 +127,7 @@ ${ReferenceStyle}
 ${LightControls}
 ${fs.readFileSync(path.join(Folder, "MaterialPanel.css"), "utf8").split(".material-panel {")[0]}
 ${fs.readFileSync(path.join(Folder, "LightPanel.css"), "utf8")}
-#ReferenceMount:is([data-reference-kind="wind"],[data-reference-kind="sun"],[data-reference-kind="fog"]){padding:0;}
+#ReferenceMount:is([data-reference-kind="wind"],[data-reference-kind="sun"],[data-reference-kind="fog"],[data-reference-kind="clouds"],[data-reference-kind$="light"]){padding:0;}
 @media(max-width:320px){#ReferenceMount[data-reference-kind="wind"] .mp-rail{grid-template-columns:repeat(2,minmax(0,1fr));}}
 html,body{height:auto;overflow:hidden;background:var(--panel)}
 #ReferenceMount{display:block;overflow:hidden;flex:none}

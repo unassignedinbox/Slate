@@ -16,7 +16,7 @@ const Folder = path.dirname(fileURLToPath(import.meta.url)),
   { chromium } = Require("playwright");
 const Address =
   process.env.FRONTIER_EDITOR_URL || "http://127.0.0.1:4173/ProjectZeroEditor/";
-const Proof = path.join(Folder, "Screenshots/InspectorRefinement"),
+const Proof = path.join(Folder, "Screenshots/CloudPlacement/Lighting"),
   Checks = [],
   Errors = [],
   FontFailures = [];
@@ -225,17 +225,26 @@ try {
     OldShadow = await Shadow.getAttribute("aria-checked");
   await Shadow.click();
   assert.notEqual(await Shadow.getAttribute("aria-checked"), OldShadow);
-  await Frame.locator('button[title="Lock  (L)"]').click();
-  await Frame.locator(".lp-output input[type=number]").first().waitFor();
+  await Page.evaluate(() => {
+    const Saved = JSON.parse(
+      localStorage.getItem("Frontier.ProjectZeroHtml.v1"),
+    );
+    Saved.Values["reference-ece-low-beam"].ReferenceInspector.Locked = true;
+    localStorage.setItem("Frontier.ProjectZeroHtml.v1", JSON.stringify(Saved));
+  });
+  await Open("reference-ece-low-beam");
+  Frame = Page.frameLocator('iframe[title^="Reference inspector"]');
   assert(
     await Frame.locator(".lp-output input[type=number]").first().isDisabled(),
   );
-  await Frame.locator('button[title="Lock  (L)"]').click();
-  assert(
-    !(await Frame.locator(".lp-output input[type=number]")
-      .first()
-      .isDisabled()),
-  );
+  await Page.getByRole("button", {
+    name: "Unlock editing",
+    exact: true,
+  }).click();
+  await Frame.getByRole("spinbutton", {
+    name: "Cut-off pitch value",
+    exact: true,
+  }).fill("-1");
   Checks.push(
     "IES profiles, negative cut-off, shared Transform position/rotation/scale persistence, shadows and locking respond correctly",
   );

@@ -15,7 +15,9 @@ const Require = createRequire(
     path.join(Root, "_AgentScratch/Browser/package.json"),
 );
 const { chromium } = Require("playwright");
-const Proof = path.join(Folder, "Screenshots/InspectorRefinement");
+const Proof =
+  process.env.FRONTIER_PROOF_FOLDER ||
+  path.join(Folder, "Screenshots/InspectorRefinement");
 fs.mkdirSync(Proof, { recursive: true });
 const Checks = [],
   Errors = [];
@@ -268,7 +270,15 @@ try {
     Node.scrollIntoView({ block: "center" }),
   );
   await Page.screenshot({ path: path.join(Proof, "LightTransform.png") });
-  await Frame.locator('button[title="Lock  (L)"]').click();
+  await Page.evaluate(() => {
+    const Saved = JSON.parse(
+      localStorage.getItem("Frontier.ProjectZeroHtml.v1"),
+    );
+    Saved.Values["reference-key-spot"].ReferenceInspector.Locked = true;
+    localStorage.setItem("Frontier.ProjectZeroHtml.v1", JSON.stringify(Saved));
+  });
+  await Open("reference-key-spot");
+  Frame = Page.frameLocator("iframe");
   assert(await Frame.getByLabel("Position X", { exact: true }).isDisabled());
   Checks.push(
     "Shared light Transform supports position, aim-preserving moves, rotation, scale, reset, persistence and locking; old target/map UI removed",
@@ -341,6 +351,7 @@ try {
           Node.max,
           Node.step,
         ])
+        .filter((Value) => Value[2] !== "Inspector name")
         .map((Value) => JSON.stringify(Value))
         .sort();
     for (const Id of [

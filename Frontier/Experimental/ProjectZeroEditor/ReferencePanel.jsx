@@ -84,17 +84,19 @@ export default function ReferencePanel({
   Hidden,
   Collapsed,
   Apply,
+  Slice = "all",
 }) {
   const Frame = useRef(null),
     Current = useRef(null),
     Ready = useRef(false);
   const [Height, Size] = useState(400);
-  Current.current = { Subject, Rows, Values, Hidden, Collapsed, Apply };
+  Current.current = { Subject, Rows, Values, Hidden, Collapsed, Apply, Slice };
   const Transmit = () => {
     const State = Current.current;
     Frame.current?.contentWindow?.postMessage(
       {
         ReferenceHost: true,
+        Slice: State.Slice,
         Selected: State.Subject.Id,
         Rows: State.Rows.map((Row) => ({
           Id: Row.Id,
@@ -131,16 +133,21 @@ export default function ReferencePanel({
   }, []);
   useEffect(() => {
     if (Ready.current) Transmit();
-  }, [Rows, Values, Hidden, Collapsed]);
+  }, [Rows, Values, Hidden, Collapsed, Slice]);
   if (!HasReferencePanel(Subject)) return null;
   return (
     <section
       className="reference-inspector-copy"
       data-reference-kind={TypeOf(Subject)}
+      data-reference-slice={Slice}
     >
       <iframe
         ref={Frame}
-        title={"Reference inspector · " + Subject.Name}
+        title={
+          "Reference inspector · " +
+          Subject.Name +
+          (Slice === "all" ? "" : " · " + Slice)
+        }
         sandbox="allow-scripts"
         srcDoc={window.NativeAssets.ReferenceInspector}
         onLoad={() => {

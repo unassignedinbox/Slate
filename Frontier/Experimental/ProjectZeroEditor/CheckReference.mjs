@@ -117,7 +117,10 @@ try {
       if (["world", "showcase", "lighting"].includes(Id))
         assert.equal(await Page.locator(".folder-inspector").count(), 1);
     } else {
-      assert.equal(await Page.locator(".reference-inspector-copy").count(), 1);
+      assert.equal(
+        await Page.locator(".reference-inspector-copy").count(),
+        Id === "clouds" ? 2 : 1,
+      );
       const Placement = await Page.evaluate(() => {
         const Native = document.querySelector(
           ".inspector-scroll > [data-panel]",
@@ -131,7 +134,9 @@ try {
       });
       assert.equal(
         Placement,
-        ["wind", "sun", "height-fog"].includes(Id) ? "inline" : "after",
+        ["wind", "sun", "height-fog", "clouds", "light"].includes(Id)
+          ? "inline"
+          : "after",
       );
     }
     if (["world", "wind", "clouds"].includes(Id))
@@ -145,7 +150,7 @@ try {
   for (const [Id, Selectors] of [
     ["sun", [".mp-hero", ".mp-rail", ".mp-duo"]],
     ["wind", [".wf-trace", ".mp-rail", ".mp-duo"]],
-    ["clouds", [".cl-hero", ".mp-rail", ".mp-duo", ".cl-cover", ".cl-layer"]],
+    ["clouds", [".cl-hero", ".mp-rail", ".mp-duo"]],
     [
       "height-fog",
       [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
@@ -256,9 +261,9 @@ try {
         Id,
       )
     ) {
-      await Page.locator(".reference-inspector-copy").evaluate((Node) =>
-        Node.scrollIntoView({ block: "start" }),
-      );
+      await Page.locator(".reference-inspector-copy")
+        .first()
+        .evaluate((Node) => Node.scrollIntoView({ block: "start" }));
       await Page.waitForTimeout(400);
       await Page.screenshot({ path: path.join(Proof, Id + "-added.png") });
     }
@@ -282,9 +287,9 @@ try {
       );
       assert.equal(await Frame.locator(".wf-hero").count(), 0);
       assert.equal(await Frame.locator(".wf-specs").count(), 0);
-      await Page.locator(".reference-inspector-copy").evaluate((Node) =>
-        Node.scrollIntoView({ block: "start" }),
-      );
+      await Page.locator(".reference-inspector-copy")
+        .first()
+        .evaluate((Node) => Node.scrollIntoView({ block: "start" }));
       await Page.waitForTimeout(400);
       const Trace = () =>
         Frame.locator(".wf-trace canvas").evaluate((Node) => Node.toDataURL());
@@ -343,14 +348,14 @@ try {
   Results.push("Narrow Wind inspector: no horizontal iframe overflow");
   await Page.setViewportSize({ width: 1440, height: 1000 });
   let Frame = await Open("clouds");
-  const Control = Frame.locator(".cl-layer .step input").first();
+  const Control = Page.getByLabel("Base value", { exact: true });
   const Before = Number(await Control.inputValue());
   await Control.fill(String(Before + 7));
   await Control.press("Enter");
   await Page.waitForTimeout(150);
   Frame = await Open("clouds");
   assert.equal(
-    Number(await Frame.locator(".cl-layer .step input").first().inputValue()),
+    Number(await Page.getByLabel("Base value", { exact: true }).inputValue()),
     Before + 7,
   );
   assert.ok(

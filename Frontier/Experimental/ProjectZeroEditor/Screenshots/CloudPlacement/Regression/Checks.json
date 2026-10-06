@@ -1,0 +1,41 @@
+{
+  "Browser": "153.0.8010.0",
+  "Baseline": null,
+  "HtmlSha256": "92be400814ffb2cbf8bfe1c923f23a78c7d9fde4f1f01147cd3d24bf46e41abe",
+  "Results": [
+    "world: original inspector retained; correct imported-panel presence and requested placement",
+    "showcase: original inspector retained; correct imported-panel presence and requested placement",
+    "lighting: original inspector retained; correct imported-panel presence and requested placement",
+    "camera: original inspector retained; correct imported-panel presence and requested placement",
+    "moon: original inspector retained; correct imported-panel presence and requested placement",
+    "sun: original inspector retained; correct imported-panel presence and requested placement",
+    "wind: original inspector retained; correct imported-panel presence and requested placement",
+    "clouds: original inspector retained; correct imported-panel presence and requested placement",
+    "height-fog: original inspector retained; correct imported-panel presence and requested placement",
+    "light: original inspector retained; correct imported-panel presence and requested placement",
+    "sun: only selected imported cards are added",
+    "wind: only selected imported cards are added",
+    "clouds: only selected imported cards are added",
+    "height-fog: only selected imported cards are added",
+    "reference-rim-point: only selected imported cards are added",
+    "reference-fill-point: only selected imported cards are added",
+    "reference-key-spot: only selected imported cards are added",
+    "reference-ece-low-beam: only selected imported cards are added",
+    "reference-softbox: only selected imported cards are added",
+    "reference-studio-tube: only selected imported cards are added",
+    "light: only selected imported cards are added",
+    "Wind: composite first, Anemometer second; unnecessary trace readouts removed; chart animates",
+    "sun: header then preview; copied identity removed",
+    "height-fog: header then preview; copied identity removed; Light transport contains only the beam chamber",
+    "Narrow Wind inspector: no horizontal iframe overflow",
+    "Added Cloud deck edits persist without removing original Cloud controls",
+    "Original Folder notes persist; no imported Folder elements or iframe",
+    "Pre-C041 composite WindEditor is restored and opens"
+  ],
+  "Errors": [],
+  "FontFailures": [
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2"
+  ]
+}

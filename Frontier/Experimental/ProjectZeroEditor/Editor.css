@@ -2916,3 +2916,18 @@ img {
   border-radius: 4px;
   color: #b4bcb6;
 }
+
+.cloud-coverage-replacement {
+  margin: 16px 0;
+  background: #191919;
+  border-radius: 18px;
+  overflow: hidden;
+}
+.cloud-coverage-replacement > .field {
+  margin: 0;
+  padding: 0 16px 18px;
+}
+.specialized-inspector.clouds > .reference-inspector-copy,
+.generic-inspector > .reference-inspector-copy {
+  margin-bottom: 16px;
+}

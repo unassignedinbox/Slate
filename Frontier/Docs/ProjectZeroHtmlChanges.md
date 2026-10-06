@@ -2555,3 +2555,36 @@ surface-distance/aerial haze controls, and Local Fog has bounded geometry. All t
   `Anemometer.png`, `sun-header.png`, `height-fog-header.png`, both added fog variants and `LightTransform.png`.
 
 No native C++ port, fracture geometry algorithm or SDF-generation capability changes in this pass.
+
+## C049 — Replace Cloud visuals and bring Cloud/Light additions forward
+
+2026-10-06. HTML-only arrangement follow-up to the supplied Cloud and Area Light screenshots.
+
+- The global Clouds inspector now starts with its normal text header, followed by the ported map/statistics and
+  Coverage card. The old Cloud coverage illustration is replaced, not left alongside a second coverage card.
+  The existing native Coverage number/range control remains, now joined to the replacement card.
+- Cloud base now uses the ported deck's shaded-band visual instead of the old CloudAltitude illustration and
+  redundant generic parameter plot. The owned adaptation fits native base and thickness values rather than clipping
+  everything above the reference's fixed 400 m scale. The base control remains; dragging the visual and keyboard
+  arrows also edit base altitude. Cloud settings follow this top instrument group. Local Cloud is unchanged.
+- Cloud summary and coverage are separate views of the same pinned reference panel, not two independent recipes.
+  Coverage and Base share values with the retained native controls. The reference's normalized optical-density
+  setting maps to the native draft's 0–4 density range; this is a UI-range mapping, not physical calibration.
+  Explicit native values take precedence; legacy imported values are used when no native value was authored.
+- Cloud statistic tiles now use the reviewed borderless, lightly rounded two-column treatment, avoiding clipped
+  base-altitude readouts at narrow widths.
+- Area Light and every added light type show their new cards immediately below one plain Lighting header, ahead
+  of the old native controls/notes. The duplicate icon/name/type/eye/lock identity strips are removed from Clouds
+  and lights. Light Transform and original native Area Light controls remain. Previously locked lights or Clouds
+  have a conditional text unlock action, so removing the strip does not strand an existing locked draft.
+
+Verification: standalone build passes. `CheckCloudPlacement.mjs` passes **15 checks** with no application errors:
+card replacement/order, both directions of coverage synchronization, reload persistence, base/thickness changes,
+base pointer/keyboard editing and full-range display, all seven light entries, legacy cloud values/locks, untouched
+Local Cloud and narrow layout. A comparison against C048 retains the Clouds, Area Light and Local Cloud native
+input/select/textarea inventories, excluding the deliberately removed read-only identity text.
+
+The existing reference regression passes **28 checks**, lighting/fracture-authoring regression **22 checks**, and
+header/transform/environment-migration suite **10 checks**. Pinned InspectorDepot hashes remain unchanged. Browser
+captures and receipts are in `ProjectZeroEditor/Screenshots/CloudPlacement/`; external Fontshare failures remain
+separate from application errors. No native engine, fracture algorithm or SDF-generation changes are included.

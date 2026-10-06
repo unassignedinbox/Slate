@@ -6,6 +6,7 @@ import {
   OpenFracture,
   ReadRecord as ReadFracture,
 } from "../FractureEditor/FractureSpecification.js";
+import { CloudProperties } from "./CloudSpecification.js";
 import ReferencePanel, {
   EnsureReferenceLights,
   HasReferencePanel,
@@ -516,8 +517,20 @@ function App() {
       const Next = { ...Previous };
       for (const Record of Accepted) {
         if (!HasReferencePanel(Known.get(Record.Id))) continue;
+        const CloudChanges = {};
+        if (Known.get(Record.Id).Panel === "clouds") {
+          for (const [Name, Key] of Object.entries(CloudProperties)) {
+            if (
+              Record.Properties[Key] !==
+              Previous[Record.Id]?.ReferenceInspector?.Properties?.[Key]
+            )
+              CloudChanges[Name] =
+                Record.Properties[Key] * (Name === "Density" ? 4 : 1);
+          }
+        }
         Next[Record.Id] = {
           ...Next[Record.Id],
+          ...CloudChanges,
           ReferenceInspector: {
             Properties: Record.Properties,
             Locked: Record.Locked,
@@ -1511,7 +1524,9 @@ function App() {
       </footer>
     </>
   );
-  const ReferenceCards = () => (
+  const ReferenceCards = (
+    Slice = Subject.Panel === "clouds" ? "summary" : "all",
+  ) => (
     <ReferencePanel
       Subject={Subject}
       Rows={Rows}
@@ -1519,6 +1534,7 @@ function App() {
       Hidden={Hidden}
       Collapsed={Collapsed}
       Apply={ApplyReference}
+      Slice={Slice}
     />
   );
   const PanelBody = (Tab) =>
@@ -1531,7 +1547,7 @@ function App() {
     ) : Tab === "Inspector" ? (
       <>
         <div className="inspector-scroll" key={Subject.Id}>
-          {Subject.ReferenceOnly ? null : Subject.Panel === "group" ? (
+          {Subject.Panel === "group" ? (
             <FolderInspector
               Subject={Subject}
               Rows={Rows}
@@ -1587,14 +1603,21 @@ function App() {
               WindFields={WindFields}
               AllValues={Values}
               AllHidden={Hidden}
+              CloudCoverageCards={
+                Subject.Panel === "clouds" ? ReferenceCards("coverage") : null
+              }
               ReferenceCards={
-                ["sun", "height-fog", "wind"].includes(Subject.Panel)
+                ["sun", "height-fog", "wind", "clouds", "light"].includes(
+                  Subject.Panel,
+                )
                   ? ReferenceCards()
                   : null
               }
             />
           )}
-          {!["sun", "height-fog", "wind"].includes(Subject.Panel) &&
+          {!["sun", "height-fog", "wind", "clouds", "light"].includes(
+            Subject.Panel,
+          ) &&
             HasReferencePanel(Subject) &&
             ReferenceCards()}
         </div>

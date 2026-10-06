@@ -1,4 +1,5 @@
 // Browser-only adapter around the pinned, unmodified reference inspector modules.
+import { CloudReference } from "./CloudSpecification.js";
 import { LightPanel } from "./LightPanel.js";
 import { CUSTOM_PANELS } from "./InspectorDepot/panels/index.js";
 
@@ -25,6 +26,7 @@ const Presets = new Map(
 let Sheet,
   Active,
   Kind,
+  Slice = "all",
   LastHeight = 0,
   Applying = false,
   StructureKey = "";
@@ -53,7 +55,10 @@ function Trim() {
   const Allowed = {
     sun: [".mp-hero", ".mp-rail", ".mp-duo"],
     wind: [".wf-trace", ".mp-rail", ".mp-duo"],
-    clouds: [".cl-hero", ".mp-rail", ".mp-duo", ".cl-cover", ".cl-layer"],
+    clouds:
+      Slice === "coverage"
+        ? [".cl-cover"]
+        : [".cl-hero", ".mp-rail", ".mp-duo"],
     fog: [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
     pointlight: [
       ".lp-preview",
@@ -106,7 +111,19 @@ function Trim() {
     });
   }
   Mount.dataset.referenceKind = Kind;
-  if (["wind", "fog", "sun"].includes(Kind))
+  if (
+    [
+      "wind",
+      "fog",
+      "sun",
+      "clouds",
+      "pointlight",
+      "spotlight",
+      "arealight",
+      "ieslight",
+      "tubelight",
+    ].includes(Kind)
+  )
     Sheet.querySelector(".ident")?.remove();
   if (Kind === "wind") {
     Custom.prepend(Custom.querySelector(".wf-trace"));
@@ -186,6 +203,7 @@ Mount.addEventListener("input", (Event) => {
 
 function Synchronize(Data) {
   Applying = true;
+  Slice = Data.Slice || "all";
   for (const [Index, Row] of Data.Rows.entries()) {
     let Node = Nodes.get(Row.Id);
     if (!Node) {
@@ -206,6 +224,8 @@ function Synchronize(Data) {
       Node.dynamic = !!Stored.Dynamic;
       Node.notes = Stored.Notes || "";
     }
+    if (Row.Type === "clouds")
+      Object.assign(Node.props, CloudReference(Data.Values[Row.Id] || {}));
     Node.kids = [];
   }
   const Present = new Set(Data.Rows.map((Row) => Row.Id));

@@ -1,3 +1,5 @@
+import { CloudValue } from "./CloudSpecification.js";
+import CloudDeckPanel from "./CloudDeckPanel.jsx";
 import FogPanel from "./FogPanel.jsx";
 import FracturePanel from "./FracturePanel.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
@@ -19,11 +21,7 @@ import ActionIcon, { QuickSymbol } from "./ActionIcon.jsx";
 import React, { useState, useEffect, useRef } from "react";
 import { SunGizmo } from "../FrontierEditor/environment-graphics.jsx";
 import { DepthOfField } from "../FrontierEditor/camera-graphics.jsx";
-import {
-  Iris,
-  CloudCoverage,
-  CloudAltitude,
-} from "../FrontierEditor/property-graphics.jsx";
+import { Iris, CloudCoverage } from "../FrontierEditor/property-graphics.jsx";
 import {
   CelestialRotation,
   TwinkleSignal,
@@ -452,12 +450,15 @@ export function Inspector({
   AllValues = {},
   AllHidden = {},
   ReferenceCards = null,
+  CloudCoverageCards = null,
 }) {
   const Sheet = Panels[Subject.Panel] || Panels.geometry;
   const [MoonSlot, SelectMoon] = useState(0);
   const Prefix = Subject.Panel === "moon" ? "moon" + MoonSlot + ":" : "";
   const V = (Name) =>
-    Values[Prefix + Name] ??
+    (Subject.Panel === "clouds"
+      ? CloudValue(Values, Name)
+      : Values[Prefix + Name]) ??
     (Subject.Panel === "moon" && Name === "Preset"
       ? MoonSlot
       : Subject.Panel === "moon" && Name === "Visible"
@@ -584,16 +585,33 @@ export function Inspector({
   );
   const Generic = () => (
     <>
-      <div className="ident">
-        <Icon Name={Subject.Icon} Size={36} />
-        <div>
-          <input aria-label="Inspector name" value={Subject.Name} readOnly />
-          <p>{Subject.Description}</p>
+      {Subject.Panel === "light" ? (
+        Header("Lighting")
+      ) : (
+        <div className="ident">
+          <Icon Name={Subject.Icon} Size={36} />
+          <div>
+            <input aria-label="Inspector name" value={Subject.Name} readOnly />
+            <p>{Subject.Description}</p>
+          </div>
+          <button title="Visibility" onClick={ToggleHidden}>
+            <Glyph Name="eye" />
+          </button>
         </div>
-        <button title="Visibility" onClick={ToggleHidden}>
-          <Glyph Name="eye" />
+      )}
+      {Subject.Panel === "light" && ReferenceCards}
+      {Subject.Panel === "light" && Values.ReferenceInspector?.Locked && (
+        <button
+          onClick={() =>
+            Change("ReferenceInspector", {
+              ...Values.ReferenceInspector,
+              Locked: false,
+            })
+          }
+        >
+          Unlock editing
         </button>
-      </div>
+      )}
       {Capabilities()}
       {Subject.Panel === "geometry" && (
         <>
@@ -663,7 +681,26 @@ export function Inspector({
           }
           data-panel={Subject.Panel}
         >
-          {Generic()}
+          {Subject.ReferenceOnly && Subject.Panel === "light" ? (
+            <>
+              {Header("Lighting")}
+              {Values.ReferenceInspector?.Locked && (
+                <button
+                  onClick={() =>
+                    Change("ReferenceInspector", {
+                      ...Values.ReferenceInspector,
+                      Locked: false,
+                    })
+                  }
+                >
+                  Unlock editing
+                </button>
+              )}
+              {ReferenceCards}
+            </>
+          ) : (
+            Generic()
+          )}
         </div>
       </GraphContext.Provider>
     );
@@ -1440,20 +1477,49 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment", Local ? "Local Cloud" : "Clouds")}
-        <Card Title="Cloud settings" Height={165}>
-          {Tiles(["Enabled", "Follow Wind"])}
-        </Card>
-        <Card Title="Cloud coverage" Height={430}>
-          <Metric Value={(V("Coverage") * 100).toFixed(0)} Unit="%" />
-          <CloudCoverage
-            coverage={V("Coverage") * 100}
-            thickness={Local ? 1 : V("Thickness") / 1000}
-          />
-          {F("Coverage")}
-          <p>Top-down density study · static preview</p>
-        </Card>
+        {!Local && Values.ReferenceInspector?.Locked && (
+          <button
+            onClick={() =>
+              Change("ReferenceInspector", {
+                ...Values.ReferenceInspector,
+                Locked: false,
+              })
+            }
+          >
+            Unlock editing
+          </button>
+        )}
+        {!Local && ReferenceCards}
+        {Local && (
+          <Card Title="Cloud settings" Height={165}>
+            {Tiles(["Enabled", "Follow Wind"])}
+          </Card>
+        )}
+        {!Local ? (
+          <section
+            className="cloud-coverage-replacement"
+            data-card="Cloud coverage"
+          >
+            {CloudCoverageCards}
+            {F("Coverage")}
+          </section>
+        ) : (
+          <Card Title="Cloud coverage" Height={430}>
+            <Metric Value={(V("Coverage") * 100).toFixed(0)} Unit="%" />
+            <CloudCoverage
+              coverage={V("Coverage") * 100}
+              thickness={Local ? 1 : V("Thickness") / 1000}
+            />
+            {F("Coverage")}
+            <p>Top-down density study · static preview</p>
+          </Card>
+        )}
         <div className="card-grid">
-          <Card Title={Local ? "Local bounds" : "Cloud base"} Height={452}>
+          <Card
+            Title={Local ? "Local bounds" : "Cloud base"}
+            Height={452}
+            GraphHandled={!Local}
+          >
             {Local ? (
               <>
                 <TransformPanel
@@ -1490,11 +1556,7 @@ export function Inspector({
                   Unit="km"
                   Caption="World Z altitude · drag the base line"
                 />
-                <CloudAltitude
-                  base={V("Base") / 1000}
-                  thickness={V("Thickness") / 1000}
-                  onChange={(Next) => AssignProperty("Base", Next * 1000)}
-                />
+                <CloudDeckPanel V={V} Change={AssignProperty} />
                 {F("Base")}
               </>
             )}
@@ -1519,6 +1581,11 @@ export function Inspector({
             )}
           </Card>
         </div>
+        {!Local && (
+          <Card Title="Cloud settings" Height={165}>
+            {Tiles(["Enabled", "Follow Wind"])}
+          </Card>
+        )}
         <Card Title="Cloud body">
           {Fields(
             "Density",
