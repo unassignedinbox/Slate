@@ -808,7 +808,17 @@ function buildPolyTread(d, pmGeo, wantWire) {
   const wireSeg3 = wantWire ? (p0, p1) => wire.push(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2]) : () => {};
   const wireSeg = wantWire ? (x0, y0, x1, y1, hz) => wireSeg3(place(x0, y0, hz), place(x1, y1, hz)) : () => {};
   const wl = y => pmGeo.wearRow((y + A) / (2 * A) * pmGeo.H);
-  const place = (x, y, hFrac) => { const pr = treadProfileAt(y, d); const off = D * Math.max(hFrac, wl(y)) * pr.w; const ax = pr.x - pr.nx * off, r = pr.r - pr.nr * off; const th = x / circ * TAU; return [ax, r * Math.cos(th), r * Math.sin(th), pr.nx, pr.nr * Math.cos(th), pr.nr * Math.sin(th)]; };
+  // A groove's depth offset is applied along the LOCAL outward normal; in the shoulder arc that
+  // normal direction itself curves (radius of curvature = d.sr). Offsetting inward by more than
+  // that radius makes the offset surface fold back over itself there (like shrinking a circle
+  // past its own centre) - a real, provable source of inverted/degenerate triangles (and the
+  // genuine, visible holes/creases they cause) whenever a configured tread depth is comparable to
+  // or deeper than the shoulder radius. Capping the achievable offset just inside that radius
+  // keeps the offset surface simple (non-self-intersecting) everywhere, at the cost of the very
+  // deepest grooves not quite reaching full depth in the last sliver of the shoulder - the only
+  // geometrically sane option, since cutting deeper than the surface's own curvature allows is
+  // not actually representable without a fold.
+  const place = (x, y, hFrac) => { const pr = treadProfileAt(y, d); let off = D * Math.max(hFrac, wl(y)) * pr.w; if (Math.abs(y) > d.treadHalf) off = Math.min(off, d.sr * 0.9); const ax = pr.x - pr.nx * off, r = pr.r - pr.nr * off; const th = x / circ * TAU; return [ax, r * Math.cos(th), r * Math.sin(th), pr.nx, pr.nr * Math.cos(th), pr.nr * Math.sin(th)]; };
   const push = (p, n, u, v, t) => { pos.push(p[0], p[1], p[2]); nrm.push(n[0], n[1], n[2]); uv.push(u, v); tan.push(t[0], t[1], t[2], 1); };
   const tangentAt = u => { const th = u * TAU; return [0, -Math.sin(th), Math.cos(th)]; };   // +u direction (circumferential)
   const pushTop = (x, y, hz) => { const P3 = place(x, y, hz); push(P3, [P3[3], P3[4], P3[5]], x / circ, (y + A) / (2 * A), tangentAt(x / circ)); };
@@ -827,7 +837,19 @@ function buildPolyTread(d, pmGeo, wantWire) {
     for (const f of faces) {
       const a = all[f[0]], b = all[f[1]], c = all[f[2]];
       const area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y); if (Math.abs(area) < 1e-7) continue;
-      const ord = area > 0 ? [a, b, c] : [a, c, b];
+      let ord = area > 0 ? [a, b, c] : [a, c, b];
+      // The 2D parameter-space area sign alone assumes offsetting along the surface normal never
+      // changes local orientation - that assumption breaks once a deep groove's depth offset
+      // approaches the shoulder arc's own radius of curvature (the offset surface folds near
+      // there even with the cap above taking up the slack). Verify/correct using the REAL 3D
+      // winding against the analytic outward normal so a folded offset can never silently invert
+      // a triangle (which would otherwise face-cull itself into an invisible, hole-like gap).
+      const P0 = place(ord[0].x, ord[0].y, hz), P1 = place(ord[1].x, ord[1].y, hz), P2 = place(ord[2].x, ord[2].y, hz);
+      const e1x = P1[0] - P0[0], e1y = P1[1] - P0[1], e1z = P1[2] - P0[2];
+      const e2x = P2[0] - P0[0], e2y = P2[1] - P0[1], e2z = P2[2] - P0[2];
+      const fnx = e1y * e2z - e1z * e2y, fny = e1z * e2x - e1x * e2z, fnz = e1x * e2y - e1y * e2x;
+      const navgx = P0[3] + P1[3] + P2[3], navgy = P0[4] + P1[4] + P2[4], navgz = P0[5] + P1[5] + P2[5];
+      if (fnx * navgx + fny * navgy + fnz * navgz < 0) ord = [ord[0], ord[2], ord[1]];
       for (const q of ord) pushTop(q.x, q.y, hz);
       wireSeg(ord[0].x, ord[0].y, ord[1].x, ord[1].y, hz); wireSeg(ord[1].x, ord[1].y, ord[2].x, ord[2].y, hz); wireSeg(ord[2].x, ord[2].y, ord[0].x, ord[0].y, hz);
       tris++;
@@ -843,11 +865,18 @@ function buildPolyTread(d, pmGeo, wantWire) {
   const Y_EDGES = [...halfRows.slice(1).reverse().map(v => -v), ...halfRows];
   const xCount = Math.max(1, Math.round(circ / CELL));
   const X_EDGES = []; for (let i = 0; i <= xCount; i++) X_EDGES.push(i / xCount * circ);
-  function buildTopForEx(ex, hz) {
+  function buildTopForEx(ex, hz, ciLoClamp, ciHiClamp) {
     const [ox0, oy0, ox1, oy1] = bboxOf(ex.outer);
     const holeInfo = ex.holes.map(h => ({ ring: h, path: null, bbox: bboxOf(h) }));
     let ci0 = 0; while (ci0 < X_EDGES.length - 1 && X_EDGES[ci0 + 1] <= ox0) ci0++;
     let ci1 = ci0; while (ci1 < X_EDGES.length - 1 && X_EDGES[ci1] < ox1) ci1++;
+    // A chopWide() strip is clipped with extra overlap margin so ClipperLib always has enough
+    // surrounding context to reconstruct a boundary sliver exactly (a sliver lying almost
+    // exactly on a bare strip cut line was otherwise sometimes lost by the per-strip boolean -
+    // a real, visible hole). The overlap would make neighbouring strips double-emit the shared
+    // band though, so each strip still only ever emits its own exclusive column range here.
+    if (ciLoClamp != null) ci0 = Math.max(ci0, ciLoClamp);
+    if (ciHiClamp != null) ci1 = Math.min(ci1, ciHiClamp);
     let ri0 = 0; while (ri0 < Y_EDGES.length - 1 && Y_EDGES[ri0 + 1] <= oy0) ri0++;
     let ri1 = ri0; while (ri1 < Y_EDGES.length - 1 && Y_EDGES[ri1] < oy1) ri1++;
     if (ci1 <= ci0 || ri1 <= ri0) return;
@@ -907,9 +936,9 @@ function buildPolyTread(d, pmGeo, wantWire) {
     // Only worth the extra work (and the handful of seam cells it touches) when the ring and/or
     // its hole set are genuinely large - small/simple exes (most ordinary lugs and grooves) are
     // already cheap to test directly and are left alone.
-    if (ex.outer.length <= 150 && ex.holes.length <= 30) return [ex];
+    if (ex.outer.length <= 150 && ex.holes.length <= 30) return [{ ex, ciLo: null, ciHi: null }];
     const [x0, y0, x1, y1] = bboxOf(ex.outer);
-    if (x1 - x0 <= X_EDGES[Math.min(STRIP_COLS, xCount)] * 1.5) return [ex];
+    if (x1 - x0 <= X_EDGES[Math.min(STRIP_COLS, xCount)] * 1.5) return [{ ex, ciLo: null, ciHi: null }];
     let ci0 = 0; while (ci0 < xCount && X_EDGES[ci0 + 1] <= x0) ci0++;
     let ci1 = ci0; while (ci1 < xCount && X_EDGES[ci1] < x1) ci1++;
     const out = [];
@@ -924,11 +953,21 @@ function buildPolyTread(d, pmGeo, wantWire) {
     // fragment. Clipping the whole {outer + holes} subject against the strip in one boolean and
     // re-deriving outer/hole nesting from the result (exPolygons) sidesteps both problems - the
     // X_EDGES-aligned cut still produces bit-identical coordinates between neighbouring strips.
+    // Each strip's own emission range [ci, ciEnd) stays exclusive (so a cell is never emitted
+    // twice), but the rectangle actually handed to ClipperLib is padded by a couple of columns
+    // on each side first. Without that padding a groove edge lying almost exactly on a bare
+    // strip cut line could come back from the per-strip boolean missing a hairline sliver right
+    // at the cut (a real, visible hole) - the padding gives Clipper's integer-precision boolean
+    // enough surrounding geometry to reconstruct the boundary exactly every time; the clamped
+    // emission range in buildTopForEx discards the (correctly reconstructed) overlap duplicate.
+    const OVERLAP = 8;
     for (let ci = ci0; ci < ci1; ci += STRIP_COLS) {
-      const xs = X_EDGES[ci], xe = X_EDGES[Math.min(ci + STRIP_COLS, ci1)];
-      const clipped = inter(subject, [rectPath(xs, y0 - 1, xe, y1 + 1)]);
+      const ciEnd = Math.min(ci + STRIP_COLS, ci1);
+      const xsClip = X_EDGES[Math.max(0, ci - OVERLAP)];
+      const xeClip = X_EDGES[Math.min(xCount, ciEnd + OVERLAP)];
+      const clipped = inter(subject, [rectPath(xsClip, y0 - 1, xeClip, y1 + 1)]);
       if (!clipped.length) continue;
-      for (const subEx of exPolygons(clipped)) out.push(subEx);
+      for (const subEx of exPolygons(clipped)) out.push({ ex: subEx, ciLo: ci, ciHi: ciEnd });
     }
     return out;
   }
@@ -960,7 +999,7 @@ function buildPolyTread(d, pmGeo, wantWire) {
     return 0;   // pieces tile the whole domain, so this should only hit as a safety net
   }
   for (const pc of pieces) for (const ex of exPolygons(pc.paths)) {
-    for (const localEx of chopWide(ex)) buildTopForEx(localEx, pc.depth);
+    for (const chunk of chopWide(ex)) buildTopForEx(chunk.ex, pc.depth, chunk.ciLo, chunk.ciHi);
     // walls: generated from the lower side of every true (non grid-snapped) boundary edge
     const rings = [ex.outer, ...ex.holes].map(r => subdivideRing(r, CELL, CELL, d.treadHalf, LYS)); if (rings[0].length < 3) continue;
     for (const r of rings) for (let i = 0; i < r.length; i++) {
