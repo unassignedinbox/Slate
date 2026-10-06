@@ -37,3 +37,9 @@ Normal relief cannot alter silhouettes. Six static maps cannot preserve every sh
 Inspected the cinnamon and pecan supplier photographs from [The Leather Guy](https://theleatherguy.org/products/alligator-skin-belly-various-colors-genuine-leather-hide), explicitly sold as **alligator**, as supplementary references for finish and crease behavior—not proof of crocodile anatomy. Search results also returned stock snake images; those were rejected as inappropriate targets.
 
 The implementation no longer uses separate rounded boxes for the plates. It models one height field with shared softly depressed creases, little albedo contrast across joints, local finish variation and fine grain. The regular-leather clearcoat was also corrected to follow its relief. A flexed preview swatch is accompanied by flat-panel and planar-bake checks. Reference photos remain research only, not application assets.
+
+## V7: permitted vector sources and pattern references
+
+The user explicitly permitted an SVG/source-map exception for leather and image/SVG sources for pattern design. `leatherSource.js` now authors one vector height atlas; it is not derived from a photograph. The supplied floral print, geometric pattern collection and cube lattice inform original editable starter motifs in Pattern Studio. Those reference JPEGs are not embedded as application textures. User imports are a separate, opt-in document feature.
+
+The first offset-blended leather sampling approach doubled some crocodile crease lines. Visual inspection prompted replacement with a continuous coordinate warp and softened vector height profiles. Seam/gutter tests and shader compilation are functional checks, not proof of hide realism.

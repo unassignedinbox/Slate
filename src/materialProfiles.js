@@ -336,6 +336,15 @@ const recipes = {
       scale("detailScale", "Machining scale"),
     ],
   },
+  pottery: {
+    title: "Glazed pottery",
+    caption: "Continuous non-metallic ceramic glaze for surface decoration.",
+    fixed: { metalness: 0, ior: 1.5, coat: 0.85, sheen: 0 },
+    colors: [{ ...baseColor, label: "Glaze color" }],
+    controls: [
+      rough("Glaze roughness", 0.08, 0.45, target("coatRoughness", 0.06, 0.25)),
+    ],
+  },
   ceramic: {
     title: "Carbon ceramic",
     caption: "A porous, sintered surface with broad, subdued reflections.",
@@ -414,7 +423,7 @@ const recipes = {
   leather: {
     title: "Automotive leather",
     caption:
-      "Overlapping folded grain, intermittent crease branches and fine pores—not a field of outlined cells.",
+      "Vector-authored furrows and pores with continuous repeat variation. Relief drives the grain and its finish.",
     fixed: { metalness: 0, ior: 1.48, coatIor: 1.5 },
     colors: [{ ...baseColor, label: "Leather dye" }],
     controls: [
@@ -428,6 +437,9 @@ const recipes = {
       macro("leatherSheen", "Finish sheen", [
         target("coat", 0.05, 0.45),
         target("sheen", 0.1, 0.35),
+      ]),
+      macro("hideVariation", "Repeat variation", [
+        target("hideVariation", 0, 1),
       ]),
       scale("detailScale", "Grain scale"),
     ],
@@ -897,6 +909,9 @@ Object.assign(recipes, {
     ],
     controls: [
       rough("Leather Roughness", 0.25, 0.8),
+      macro("hideVariation", "Repeat variation", [
+        target("hideVariation", 0, 1),
+      ]),
       macro("relief", "Scale relief", [target("grain", 0.1, 1.3)]),
       macro("joints", "Crease width", [target("groutWidth", 0.008, 0.065)]),
       macro("pores", "Scale pores", [target("poreDensity", 0, 1)]),

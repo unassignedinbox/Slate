@@ -127,8 +127,8 @@ test("standalone page renders, edits and exports without external assets", async
   const exported = await downloadText(page, /Three.js procedural shader/);
   const factory = exported
     .replace(/import \* as THREE from ['"]three['"];?/, "")
-    .replace(/export const preset/, "const preset")
-    .replace(/export function /g, "function ")
+    .replace(/export const /g, "const ")
+    .replace(/export (async )?function /g, "$1function ")
     .replace(
       /export default createMaterial\(preset\);/,
       "return createMaterial(preset);",
@@ -159,8 +159,8 @@ test("standalone page renders, edits and exports without external assets", async
   const leafSource = await downloadText(page, /Three.js procedural shader/);
   const leafFactory = leafSource
     .replace(/import \* as THREE from ['"]three['"];?/, "")
-    .replace(/export const preset/, "const preset")
-    .replace(/export function /g, "function ")
+    .replace(/export const /g, "const ")
+    .replace(/export (async )?function /g, "$1function ")
     .replace(
       /export default createMaterial\(preset\);/,
       "return createMaterial(preset);",
@@ -212,8 +212,8 @@ test("standalone page renders, edits and exports without external assets", async
   );
   const scratchedFactory = scratchedSource
     .replace(/import \* as THREE from ['"]three['"];?/, "")
-    .replace(/export const preset/, "const preset")
-    .replace(/export function /g, "function ")
+    .replace(/export const /g, "const ")
+    .replace(/export (async )?function /g, "$1function ")
     .replace(
       /export default createMaterial\(preset\);/,
       "return createMaterial(preset);",
@@ -241,8 +241,8 @@ test("standalone page renders, edits and exports without external assets", async
   const leatherSource = await downloadText(page, /Three.js procedural shader/);
   const leatherFactory = leatherSource
     .replace(/import \* as THREE from ['"]three['"];?/, "")
-    .replace(/export const preset/, "const preset")
-    .replace(/export function /g, "function ")
+    .replace(/export const /g, "const ")
+    .replace(/export (async )?function /g, "$1function ")
     .replace(
       /export default createMaterial\(preset\);/,
       "return createMaterial(preset);",
@@ -256,7 +256,7 @@ test("standalone page renders, edits and exports without external assets", async
     };
     leatherMaterial.onBeforeCompile(shader);
     expect(shader.fragmentShader).toContain("#define uType 30");
-    expect(shader.fragmentShader).toContain("leatherCoordinate");
+    expect(shader.fragmentShader).toContain("vectorHide");
     expect(leatherMaterial.map).toBeNull();
   } finally {
     leatherMaterial.dispose();
@@ -306,6 +306,49 @@ test("standalone page renders, edits and exports without external assets", async
         path: testInfo.outputPath(name.replaceAll(" ", "-") + "-macro.png"),
       });
     }
+  }
+  await page
+    .getByRole("button", { name: "Pattern studio", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Painted blossoms", exact: true })
+    .click();
+  await page.getByLabel("Pattern base material").selectOption("pottery");
+  await page
+    .getByLabel("Motif material", { exact: true })
+    .selectOption("ceramic");
+  await page.getByLabel("Relief (mm)", { exact: true }).fill("0");
+  await page
+    .getByRole("button", { name: "Assign this finish to all motifs" })
+    .click();
+  await page
+    .getByRole("button", { name: "Apply to material", exact: false })
+    .click();
+  await expect(page.getByLabel("Preview object")).toHaveValue("Teapot");
+  await frame(page);
+  const decoratedSource = await downloadText(
+    page,
+    /Three.js procedural shader/,
+  );
+  const decoratedFactory = decoratedSource
+    .replace(/import \* as THREE from ['"]three['"];?/, "")
+    .replace(
+      /export default createMaterial\(preset\);/,
+      "return createMaterial(preset);",
+    )
+    .replace(/export /g, "");
+  const decorated = new Function("THREE", decoratedFactory)(THREE);
+  expect(decorated.userData.params.pattern.layers.length).toBeGreaterThan(10);
+  expect(decorated.userData.params.recipeId).toBe("pottery");
+  decorated.dispose();
+  if (process.env.ALLOY_CAPTURE === "patterns") {
+    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    await frame(page);
+    await page.screenshot({ path: ".playwright/final-pottery.png" });
+    await page
+      .getByRole("button", { name: "Pattern studio", exact: true })
+      .click();
+    await page.screenshot({ path: ".playwright/final-pattern-editor.png" });
   }
   expect(unexpectedRequests).toEqual([]);
   expect(errors).toEqual([]);

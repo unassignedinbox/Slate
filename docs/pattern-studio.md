@@ -1,0 +1,73 @@
+# Pattern studio — v7
+
+This is a **hybrid vector/procedural material workflow**, not the previous zero-input-map claim. Existing paint, scratch and botanical families remain analytic. All five leather presets now share one generated SVG height atlas; pattern documents can contain vector shapes, sanitized SVG groups and embedded user images. No reference photographs are shipped as leather maps.
+
+## Design a surface
+
+1. Open **Pattern studio** in the top navigation. `?studio=pattern` opens it directly.
+2. Choose **Diamond weave**, **Painted blossoms**, **Cube lattice**, **Inlaid tile**, or a blank document. These are original geometric/floral starters inspired by the supplied references, not reproductions of a named cultural textile tradition.
+3. Alternatively, choose a generator style, seed and motif count, then **Generate pattern**. The generated layout is editable like a hand-built one.
+4. Add rectangles, ellipses, diamonds, triangles, flowers or SVG paths. Drag to position, draw a freehand path, or edit coordinates, size, rotation, opacity and path commands. Duplicate, reorder, hide and delete motifs; undo/redo retains up to 32 edits.
+5. Use the repeat inspection strip to check **straight**, **half-drop** or **mirrored** layouts. Motifs crossing boundaries are wrapped, rather than cropped and restarted. Half-drop exports a 1024 × 512 supertile; mirror exports 1024 × 1024. The canonical design tile is 512 × 512 units.
+6. Assign finishes per motif: **printed dye, woven cotton, cut-pile wool, glazed ceramic, metal inlay**. Roughness, metalness and relief in millimetres can be edited independently. **Assign this finish to all motifs** is a bulk action, not a hidden automatic conversion.
+7. Pick a base: current material, cotton, linen, porcelain floor tiles, or continuous glazed pottery. **Apply to material** prepares the sources and updates the 3D renderer. Pottery selects the new **Teapot** preview; fabrics select the draped cloth. Flat Panel and other previews remain available.
+8. Use **Save as preset** in the material workspace for browser-local persistence. **Save document** exports editable pattern JSON; **Open document** restores it. SVG export preserves vector geometry and embeds image layers. Material JSON/JavaScript exports retain the pattern too.
+
+The editor is not a complete Illustrator replacement or an arbitrary node/shader graph. It supports an extensible set of motifs and imported artwork—not literally every possible pattern or SVG feature. Material slots are explicit finish models, not arbitrary complete library shaders nested inside one another.
+
+## Imports and sharpness
+
+- PNG, JPEG and WebP: up to 4 MB per file; resized to at most 2048 pixels on the longest side and embedded as PNG. Alpha blends the pattern into the underlying material; it does **not** cut holes in the mesh.
+- SVG: up to 500 KB / 5,000 elements. Paths, basic shapes, groups, gradients and clipping are supported. Simple local 100 × 100 paths are directly editable. Other supported groups preserve their SVG source and expose a source editor.
+- Scripts, events, CSS styles, external links, fonts, animation, filters, `foreignObject`, and document entities are rejected by the import allowlist. Expand unsupported features to paths or import a flattened PNG. The internally generated leather SVG uses trusted filter/use constructs; it is exported for external use, not accepted by the restricted artwork importer.
+- 64 layers per document; 12 MB total serialized document limit. Large imported images can exceed browser storage quota; export JSON rather than relying on local storage in that case.
+- Vector exports remain scalable. **Live GPU rendering is not infinite resolution**: pattern supertiles are rasterized to 1024–2048-pixel maps. Imported bitmap detail remains limited by its original resolution. Vector geometry is retained so another application can rasterize the SVG more finely.
+- The editor retains original colors in image/grouped-SVG imports. Change SVG source to edit its internal palette; per-layer dye controls apply to the built-in vector motifs and paths.
+
+## Surface mapping and repeat limitations
+
+Mesh UV mapping is the default for cloth and decoration. Object projection is available for solid objects; cylindrical projection helps wrap pottery bodies. A complex mesh still needs suitable UVs; the studio does not automatically unwrap or import arbitrary meshes. The built-in teapot's patch UVs may repeat artwork on separate patches; cylindrical mapping trades those patch boundaries for a cylindrical seam and distortion near the spout/handle/poles.
+
+The vector repeat/supertile is seamless by construction. **Importing a rectangular photograph does not automatically repair mismatched image edges.** Use isolated motifs on transparent ground, a mirrored layout, or pre-process the bitmap. The general six-channel baker still exports an arbitrary physical patch; rotated, non-integer repeats, base-material fields, object/cylindrical mappings and dynamically varied leather do not guarantee that every baked patch tiles. Its manifest intentionally leaves `repeatable: false`.
+
+## Material assignment, not only colored stickers
+
+At Apply time, the same vector scene produces color, physical parameters and finish-weight maps. Color is decoded from sRGB; roughness, metalness, height and finish weights remain linear data. Premultiplied-alpha filtering avoids dark fringes. Finish weights are separate from material IDs, so translucent overlaps do not accidentally interpolate into unrelated finish classes.
+
+- Cotton has filtered thread relief; wool has coarser pile relief and a broad sheen.
+- Ceramic regions add a glaze lobe; metal inlay changes the local metallic response.
+- Relief contributes to the surface normal and coat normal, and reaches height/normal bakes.
+- The base stays continuous under transparent decoration. Printed/metallic decoration can retain a base glaze; fibrous regions suppress it.
+- This is **surface relief and shading**, not individually groomed carpet strands, tessellated pile, silhouette displacement, embroidery geometry or a manufacturing/CAD specification.
+
+## Leather source and variation
+
+`src/leatherSource.js` deterministically authors one SVG atlas with four independently wrapped height fields: fine nappa, full grain, bull grain and rectangular belly scales. Both bull presets share the bull field with different finishes. Variant identity is explicitly stored, so saving under a custom name does not silently switch the grain.
+
+The SVG supplies only surface structure—not baked lighting or a photograph. Live rendering rasterizes it at 2048 × 2048, adds periodic gutters to each patch, and uses explicit sampling gradients. A continuous, seeded coordinate warp varies the repeats without abrupt random tile rotations. Offset-image crossfading was tried and rejected because it doubled the crocodile furrows. **Repeat variation** controls the warp; scale, relief, patina and finish remain controllable. Crocodile crease width, pores and seed still affect the result.
+
+This avoids hard tile boundaries but is not an infinite unique scan or a guarantee of photorealism. Large enough surfaces can still reveal the finite source. The atlas can be downloaded from the editor as **Export leather source SVG**.
+
+## Runtime and export
+
+The standalone HTML contains the source generator, editor and SVG/image pipeline. User imports travel inside pattern documents and material exports; they are not uploaded to a service.
+
+`createMaterial()` remains synchronous, but vector/image preparation is asynchronous. Consumers of exported Three.js modules should wait before a single static render or shader compilation:
+
+```js
+import material from "./exported-material.js";
+await material.userData.ready;
+mesh.material = material;
+await renderer.compileAsync(scene, camera);
+renderer.render(scene, camera);
+// On replacement/teardown:
+material.dispose();
+```
+
+This path requires a browser DOM for image/SVG decoding and Three.js 0.180+ for rendering. Sources are shared/ref-counted and released when the last owning material is disposed.
+
+The six-channel ZIP includes the embedded document in `material.json`. Patterned materials use a height range of **at least 0.05 scene units / 5 mm total**, preserving the ±1 mm motif controls without clipping ordinary leather relief. Always decode using the manifest's actual range. Unpatterned leather retains the finer 0.012 range. Static maps cannot encode the full coat/sheen/anisotropy lobes; use the shader export for those.
+
+## Checks
+
+Pattern tests cover document bounds, source identity, SVG sanitization, image/vector import, editing, undo/redo, local persistence, independent exported-shader GPU compilation, actual roughness/metalness/height bake values, repeat-edge continuity and leather atlas gutters. Leather is tested on both swatch and flat panel. The self-contained build is tested with HTTP asset requests blocked, including leather source loading and decorated pottery. Passing these checks establishes functionality, **not visual realism**.

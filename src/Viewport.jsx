@@ -1,3 +1,4 @@
+import { TeapotGeometry } from "three/examples/jsm/geometries/TeapotGeometry.js";
 import { createLeatherSwatchGeometry } from "./leatherGeometry.js";
 import { createBotanicalGeometry } from "./botanicalGeometry.js";
 import React, { useEffect, useRef, useState } from "react";
@@ -121,6 +122,7 @@ export async function renderThumbnails(
       mesh.material = createMaterial(p);
       retainedMaterials.push(mesh.material);
       {
+        await mesh.material.userData.ready;
         await renderer.compileAsync(scene, camera);
         if (signal?.aborted) break;
         renderer.render(scene, camera);
@@ -480,11 +482,13 @@ export default function Viewport({
       e.scene.background =
         params.type === 5 ? new THREE.Color("#25272b") : null;
       try {
+        await e.specimen.material.userData.ready;
         await e.renderer.compileAsync(e.scene, e.camera);
         if (engine.current !== e || ticket !== e.compileTicket) return;
         e.renderer.shadowMap.needsUpdate = true;
         e.dirty = true;
         e.compiling = false;
+        setError(false);
         onReady?.();
         onCompile?.({ phase: "ready", name: params.name });
       } catch (error) {
@@ -546,6 +550,10 @@ export default function Viewport({
     }
     if (shape === "Sphere") {
       e.specimen.geometry = new THREE.SphereGeometry(1.4, 128, 96);
+    }
+    if (shape === "Teapot") {
+      e.specimen.geometry = new TeapotGeometry(1.05, 20);
+      e.specimen.position.y = 1.4;
     }
     if (shape === "Leather swatch") {
       e.specimen.geometry = createLeatherSwatchGeometry();

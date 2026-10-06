@@ -27,8 +27,8 @@ test("leather is continuous relief with matching finish normals, and a closed sw
   const croc = botanicalColor().split("if(uType==31")[0];
   expect(croc).not.toContain("boxMask");
   expect(croc).not.toContain("scute");
-  expect(croc).toContain("leatherCoordinate");
-  expect(croc).toContain("crease*.00105");
+  expect(croc).toContain("vectorHide");
+  expect(croc).toContain("source-.74");
   for (const preset of materials.filter((p) => p.category === "Leather")) {
     const m = createMaterial(preset),
       shader = {

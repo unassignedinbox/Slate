@@ -185,7 +185,8 @@ test("mesh foliage, petals, fruit and cactus render and bake opaque surfaces; sc
     }
     expect(
       result[name]["base-color"].hi - result[name]["base-color"].lo,
-    ).toBeGreaterThan(4);
+      // Leather structure now comes from height, not painted dark joint lines.
+    ).toBeGreaterThan(name === "croc" ? 1 : 4);
     expect(result[name].normal.hi - result[name].normal.lo).toBeGreaterThan(1);
   }
   expect(result.leaf.manifest.domain.projection).toContain("UV0");

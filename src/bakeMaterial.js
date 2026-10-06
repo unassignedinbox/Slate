@@ -28,7 +28,7 @@ export async function bakeMaterial(
   check(signal);
   const params = normalizeMaterial(input),
     span = widthMM / 100;
-  const heightRange = [11, 30].includes(params.type)
+  const baseHeightRange = [11, 30].includes(params.type)
     ? 0.012
     : params.type === 21
       ? 0.12
@@ -37,6 +37,7 @@ export async function bakeMaterial(
         : params.type === 18
           ? 0.08
           : 0.03;
+  const heightRange = Math.max(baseHeightRange, params.pattern ? 0.05 : 0);
   let renderer, geometry, material;
   const files = {};
   try {
@@ -89,6 +90,7 @@ export async function bakeMaterial(
     material.clearcoat = 0;
     material.sheen = 0;
     scene.add(new THREE.Mesh(geometry, material));
+    await material.userData.ready;
     await renderer.compileAsync(scene, camera);
     check(signal);
     for (const [index, name] of bakeChannels.entries()) {
@@ -134,7 +136,7 @@ export async function bakeMaterial(
             ? "Leaf/blade/petal: U across width, V base to tip, midrib U=.5. Fruit/cactus/stem: U around body, V along length. No silhouette alpha; not an atlas."
             : null,
         alpha:
-          "Opaque coverage for mesh-surface materials; legacy types 27/28 retain cutout coverage. No alpha input texture",
+          "Opaque coverage for mesh-surface materials; legacy types 27/28 retain cutout coverage. Pattern image alpha blends finishes; it does not cut out the mesh",
         origin: [0, 0, 0],
         widthMM,
         sceneUnitsPerMM: 0.01,

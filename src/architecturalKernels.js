@@ -60,7 +60,7 @@ export function architecturalColor() {
    surfaceHeight=(cos(phase)*.5+.5)*uRibDepth*resolved;
    diffuseColor.rgb*=.94+.07*noise3(pp*vec3(100.,5.,100.));
  }
- if(uType==22){
+ if(uType==22 && uPotterySurface==0){
    vec2 uv=surfaceUV(pp,weights)*uScale;uv.x+=floor(uv.y)*uTileStagger;
    vec2 tile=floor(uv),q=fract(uv);float edge=min(min(q.x,1.-q.x),min(q.y,1.-q.y));
    float aa=max(max(fwidth(uv.x),fwidth(uv.y)),.001);

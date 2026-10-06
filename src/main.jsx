@@ -1,3 +1,8 @@
+import patternImportSource from "./patternImport.js?raw";
+import PatternEditor from "./PatternEditor.jsx";
+import patternDocumentSource from "./patternDocument.js?raw";
+import leatherSourceModule from "./leatherSource.js?raw";
+import patternRuntimeSource from "./patternRuntime.js?raw";
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -52,6 +57,14 @@ import botanicalModuleSource from "./botanicalKernels.js?raw";
 import architectureModuleSource from "./architecturalKernels.js?raw";
 import BakePanel from "./BakePanel";
 const shaderSource =
+  patternImportSource +
+  "\n" +
+  patternDocumentSource.replace(/^import[\s\S]*?;\s*/gm, "") +
+  "\n" +
+  leatherSourceModule +
+  "\n" +
+  patternRuntimeSource.replace(/^import[\s\S]*?;\s*/gm, "") +
+  "\n" +
   recipeModuleSource +
   "\n" +
   kernelModuleSource +
@@ -129,7 +142,11 @@ function App() {
   const [zoom, setZoom] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [tab, setTab] = useState("Properties");
-  const [modal, setModal] = useState(null);
+  const [modal, setModal] = useState(() =>
+    new URLSearchParams(window.location.search).get("studio") === "pattern"
+      ? "pattern"
+      : null,
+  );
   const [toast, setToast] = useState("");
   const [full, setFull] = useState(false);
   const [mobileLibrary, setMobileLibrary] = useState(false);
@@ -307,6 +324,52 @@ function App() {
   }
   return (
     <div className={"app " + (full ? "is-focused" : "")}>
+      {modal === "pattern" && (
+        <PatternEditor
+          initial={params.pattern}
+          onClose={() => setModal(null)}
+          onApply={(pattern, base) => {
+            const target =
+              base === "pottery"
+                ? normalizeMaterial({
+                    id: "glazed-pottery",
+                    name: "Glazed Porcelain",
+                    category: "Ceramic",
+                    label: "CONTINUOUS CERAMIC GLAZE",
+                    type: 22,
+                    recipeId: "pottery",
+                    potterySurface: true,
+                    color: "#eee9df",
+                    roughness: 0.18,
+                    coat: 0.85,
+                    coatRoughness: 0.12,
+                  })
+                : base === "current"
+                  ? params
+                  : materials.find((m) => m.id === base) || params;
+            setParams({
+              ...target,
+              pattern,
+              name:
+                pattern.name + " · " + (target.patternBaseName || target.name),
+              patternBaseName: target.patternBaseName || target.name,
+              id: target.id,
+            });
+            if (base !== "current") {
+              setSelected(target);
+              setShape(
+                base === "pottery"
+                  ? "Teapot"
+                  : target.category === "Fabric"
+                    ? "Draped cloth"
+                    : "Panel",
+              );
+            }
+            setModal(null);
+            notify("Pattern applied. Save as a preset to keep this material.");
+          }}
+        />
+      )}
       <header className="main-header">
         <a
           className="brand"
@@ -326,6 +389,7 @@ function App() {
           <span className="brand-caption">MATERIAL STUDIO</span>
         </a>
         <nav className="main-nav">
+          <button onClick={() => setModal("pattern")}>Pattern studio</button>
           <button
             className={!onlySaved ? "active" : ""}
             onClick={() => setOnlySaved(false)}
@@ -385,7 +449,7 @@ function App() {
           <span>Automotive essentials</span>
           <ChevronRight size={13} />
           <strong>Material explorer</strong>
-          <span className="version-badge">v6.3</span>
+          <span className="version-badge">v7.0</span>
         </div>
         <div className="project-actions">
           <span className="saved-state">
@@ -535,7 +599,7 @@ function App() {
             </span>
             <div>
               <strong>Beautiful by calculation.</strong>
-              <p>{materials.length} presets. Zero texture inputs.</p>
+              <p>{materials.length} presets. Vector + procedural surfaces.</p>
             </div>
             <CircleHelp size={14} onClick={() => setModal("guide")} />
           </div>
@@ -674,7 +738,7 @@ function App() {
           </div>
           <div className="viewport-caption">
             <span className="caption-line" />
-            <span>EVERY DETAIL. NO TEXTURES.</span>
+            <span>EVERY DETAIL. BY DESIGN.</span>
           </div>
           <div className="viewport-bottom">
             <div className="zoom-dock">
@@ -724,6 +788,7 @@ function App() {
                     "Sphere",
                     "Panel",
                     "Leather swatch",
+                    "Teapot",
                     "Pipe",
                     "Foliage card",
                     "Leaf",
@@ -800,6 +865,24 @@ function App() {
               <RotateCcw size={15} />
             </button>
           </div>
+          {params.pattern && (
+            <div className="pattern-applied">
+              <span>Pattern: {params.pattern.name}</span>
+              <button onClick={() => setModal("pattern")}>Edit</button>
+              <button
+                onClick={() =>
+                  setParams((p) => ({
+                    ...p,
+                    pattern: null,
+                    name: p.patternBaseName || p.name,
+                    patternBaseName: undefined,
+                  }))
+                }
+              >
+                Remove pattern
+              </button>
+            </div>
+          )}
           <div className="inspector-material">
             <div className="inspector-thumbnail">
               {thumbs[selected.id] ? (
@@ -958,7 +1041,7 @@ function App() {
           </button>
         </div>
       )}
-      {modal && (
+      {modal && modal !== "pattern" && (
         <div className="modal-backdrop" onClick={() => setModal(null)}>
           <div
             className={"modal " + (modal === "guide" ? "guide-modal" : "")}
@@ -1105,8 +1188,9 @@ function App() {
                 <span className="eyebrow">WELCOME TO ALLOY</span>
                 <h2 id="modal-title">A studio for the surface.</h2>
                 <p>
-                  Explore physically based automotive materials, generated
-                  entirely with math. No texture maps. No downloads.
+                  Explore procedural materials, vector-backed leather and custom
+                  SVG/image surface patterns. Sources are embedded; no runtime
+                  CDN is needed.
                 </p>
                 <div className="guide-steps">
                   {[
@@ -1118,7 +1202,7 @@ function App() {
                     {
                       icon: <Move3D size={19} />,
                       title: "02 — Look a little closer",
-                      text: "Drag to orbit and scroll to zoom. Switch between fifteen assets, including a frozen cloth drape over a ball. Textile presets select the drape automatically.",
+                      text: "Drag to orbit and scroll to zoom. Switch between sixteen assets, including a frozen cloth drape over a ball. Textile presets select the drape automatically.",
                     },
                     {
                       icon: <SlidersHorizontal size={19} />,

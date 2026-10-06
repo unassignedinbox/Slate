@@ -1,6 +1,6 @@
-# Alloy 06.3 — 100+ Procedural Materials
+# Alloy 07 — Pattern & Material Studio
 
-A real-time procedural material editor built with React, Vite and Three.js. All surface detail is procedural: **no bitmap material maps, external HDRIs, or downloaded 3D assets**. The charcoal interface uses rounded panels and desaturated accents. Fonts are self-hosted.
+A real-time procedural material editor built with React, Vite and Three.js. Most library surfaces are analytic. **V7 adds a generated SVG leather atlas and editable SVG/image pattern sources**, with procedural material shading. No external HDRIs or downloaded 3D assets are required. The charcoal interface uses rounded panels and desaturated accents. Fonts are self-hosted.
 
 ## Run
 
@@ -115,21 +115,21 @@ Use **Panel** for the clearest assessment, orbit the light reflection, then use 
 
 Shader variants now compile the material-family ID as a constant, so drivers can eliminate unrelated kernels. Programs are retained through the thumbnail batch for reuse. Progress still reports real completed previews, not a fictitious GPU percentage.
 
-## Leather correction (v6.3)
+## Pattern studio and vector leather (v7)
 
-This revision is deliberately limited to leather. Scratch and plant fields are unchanged.
+Open **Pattern studio** in the top navigation (or append `?studio=pattern`). Design with vector motifs, freehand/SVG paths, grouped SVG imports and embedded PNG/JPEG/WebP images. Four original floral/geometric starters, seeded layout generators, straight/half-drop/mirror repeats, transform/layer controls and undo/redo are included.
 
-- **Crocodile:** replaced inset plate masks with a continuous height field depressed along shared, jittered crease lines. Adjacent regions no longer each own a border and leave dark corner gaps. Crease dye is a small modulation rather than a separate dark grout material. Fold direction/width vary without regularly spaced sine-wave “stitches.”
-- **Regular leather:** rounded multiscale grain, sparse deeper folds and small pores rather than colored noise-cell outlines. Existing patina controls remain.
-- **Finish correction:** the clearcoat normal now follows the regular leather relief; previously it stayed smooth over the grain. Both leather families also vary finish roughness locally, instead of placing a perfectly uniform highlight over colored detail.
-- **Inspection:** a closed, finite-thickness **Leather swatch** provides gentle physical flex; **Panel** remains available and is covered by the same tests. The swatch geometry is not part of the exported material, and baking still evaluates an undeformed patch. This is not a geometry trick substituted for texture detail.
-- **Baking:** leather types 11/30 use a signed 0.012-scene-unit (1.2 mm total) height range for better 8-bit precision. The ZIP manifest records this; importers must use that range rather than an old hardcoded displacement scale. No input maps are used.
+Each motif has a **material assignment**, not only a color: printed dye, cotton, wool pile, glazed ceramic or metal inlay, with independent roughness, metalness and signed relief. Apply to the current material, fabrics, floor tiles or a dedicated continuous pottery glaze; a **Teapot** preview is now available. Save editable JSON, export seamless SVG, save the composed material as a preset, or export its shader and six surface channels.
 
-These changes are visually inspected renders and analytic approximations, not a promise that passing automated tests establishes photorealism. Tests cover all five leather presets on both the swatch and a flat panel, finite/outward-facing swatch geometry, normal/roughness/height variation in real PNG bakes, unclipped height range, standalone module export and all library thumbnails.
+All five leathers share **one generated SVG height atlas**, with distinct nappa/full-grain/bull/belly fields. Continuous coordinate distortion breaks up repeats without crossfading duplicate crease networks. The vector source is downloadable. This changes the earlier zero-input-map constraint by explicit request; the other existing shader families remain procedural.
+
+**[Workflow, formats, import safety and limitations](docs/pattern-studio.md)**. Live vector sources are rasterized at finite resolution. Pattern slots are selected finish models, not arbitrary shader graphs; wool uses relief/sheen rather than groomed strand geometry. Arbitrary photo edges or physical bake crops are not automatically seamless. SVG import supports a safe subset, not every SVG feature.
+
+The v6.3 grain-following clearcoat fix, finite-thickness swatch and flat-panel checks are retained. Unpatterned leather uses a signed 0.012-scene-unit height range; patterned materials use at least 0.05. Exported materials expose an asynchronous `material.userData.ready` promise—await it before a static render. See the linked guide.
 
 ## Leather and mesh-ready botany (v6.1)
 
-**Regular leather uses rounded grain, sparse folds and fine pores**, retaining existing patina controls. **Crocodile Belly Leather** now uses a continuous hide field with shared soft creases; see the v6.3 correction above. Both are analytic approximations, not scans or reproductions of a particular hide.
+**Regular leather uses rounded grain, sparse folds and fine pores**, retaining existing patina controls. **Crocodile Belly Leather** now uses a continuous hide field with shared soft creases; see the v7 replacement above. Those analytic fields have been superseded by the v7 vector source described above. Neither version is a scan or reproduction of a particular hide.
 
 ### Mapping onto your existing plant geometry
 
@@ -170,7 +170,7 @@ See [reference notes](docs/surface-reference-notes.md) for research links and wh
 - **Macro** jumps to 800%; double-click a visible point to inspect it closely.
 - Drag to orbit; right-drag or shift-drag to pan. **Fit** or **R** restores framing.
 - Optical zoom keeps the camera outside the surface.
-- Fifteen preview assets: grooved shader ball, frozen draped cloth, rounded cube, torus knot, perforated brake rotor, smooth sphere, flat panel, hollow pipe, legacy foliage card, leaf, grass blade, flower petal, stem, ribbed cactus and a flexed leather swatch. Solar/paper/LED presets select the panel; golf-ball covers select the sphere.
+- Sixteen preview assets: grooved shader ball, frozen draped cloth, rounded cube, torus knot, perforated brake rotor, smooth sphere, flat panel, hollow pipe, legacy foliage card, leaf, grass blade, flower petal, stem, ribbed cactus a flexed leather swatch and a teapot. Solar/paper/LED presets select the panel; golf-ball covers select the sphere.
 - Four studio-light setups, auto rotation, wireframe and focus mode.
 
 ## Frozen cloth asset
@@ -209,7 +209,7 @@ Choose **Export material → Bake procedural maps**. Select a 256, 512, 1024 or 
 - `height.png`: linear, 8-bit signed height encoded around 0.5; decode range is in the manifest.
 - `material.json` and `README.txt`: original procedural recipe, scale, color-space conventions and limitations.
 
-The source materials use **zero input bitmap maps**. Baked maps are generated outputs, not texture inputs used to produce the material. The baker has real per-channel progress, cancellation between GPU passes, and resource cleanup.
+Most original families use **zero input bitmap maps**. V7 leather samples a generated vector height source; user patterns may sample embedded SVG/image sources. Baked output maps are not fed back into the live material. The baker has real per-channel progress, cancellation between GPU passes, and resource cleanup.
 
 **Limits:** botanical mesh materials always cover UV0 from 0 to 1 regardless of patch width. Width changes the physical scale of relief/normal generation; choose a width matching your asset. These are ready-to-map organ surfaces, not an unwrap or rebake of imported geometry. Other materials use a planar material swatch. Seamless tiling is not guaranteed. Height has 8-bit precision and clips to the documented range. Clearcoat, transmission, sheen, anisotropy, scattering and angle-dependent iridescence remain shader/recipe properties; static maps alone cannot reproduce the full appearance. No studio lighting or ambient occlusion is baked into base color.
 

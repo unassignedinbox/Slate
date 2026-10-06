@@ -1,3 +1,8 @@
+import {
+  attachSurfaceSources,
+  patternGLSL,
+  patternColorGLSL,
+} from "./patternRuntime.js";
 import * as THREE from "three";
 import { botanicalCatalog } from "./botanicalCatalog.js";
 import { botanicalGLSL, botanicalColor } from "./botanicalKernels.js";
@@ -871,6 +876,16 @@ export function normalizeMaterial(input) {
         ? p.colorStops[i]
         : i / Math.max(1, colors.length - 1),
     ),
+    hideVariant:
+      p.hideVariant ??
+      (p.type === 30
+        ? 3
+        : p.id?.includes("nappa")
+          ? 0
+          : p.id?.includes("bull-grain")
+            ? 2
+            : 1),
+    hideVariation: p.hideVariation ?? 0.65,
     materialVersion: 6,
   });
 }
@@ -911,6 +926,11 @@ export function createMaterial(input) {
     envMapIntensity: p.type === 4 && p.fabricMode === 4 ? 1.8 : 1.35,
     side: THREE.DoubleSide,
   });
+  const surfaceSources = attachSurfaceSources(m, p);
+  if (surfaceSources.doc) {
+    m.clearcoat = Math.max(m.clearcoat, 0.01);
+    m.sheen = Math.max(m.sheen, 0.01);
+  }
   const stops = p.colors.map((color, i) => ({
     color,
     position: p.colorStops[i],
@@ -940,6 +960,7 @@ export function createMaterial(input) {
   while (stops.length < 12) stops.push(stops[stops.length - 1]);
   m.userData.params = p;
   m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, surfaceSources.uniforms);
     const values = {
       uCellLobing: p.cellLobing,
       uStomataDensity: p.stomataDensity,
@@ -1049,10 +1070,13 @@ export function createMaterial(input) {
     );
     shader.fragmentShader =
       `
+      ${surfaceSources.leather ? "#define ALLOY_HIDE_SOURCE" : ""}
+      ${surfaceSources.doc ? "#define ALLOY_PATTERN" : ""}
       varying vec3 vProcPosition;
       varying vec3 vProcNormal;
       varying vec2 vProcUv;
       #define uType ${Math.max(0, Math.min(36, Math.floor(Number(p.type) || 0)))}
+      #define uPotterySurface ${p.potterySurface ? 1 : 0}
       #define uMetalScratches ${p.metalScratches ? 1 : 0}
       uniform int uColorCount, uColorMode, uFabricMode, uFlakeLayers, uCloth, uWeave;
       uniform float uFlakeLayerDepth,uWearSoftness,uWornRoughness;
@@ -1133,6 +1157,7 @@ export function createMaterial(input) {
       float flakeMask=0.,flakeRandom=.5,flakeResolved=1.,surfaceHeight=0.,peelHeight=0.,wearMask=0.;
       ${extendedSurfaceGLSL()}
       ${architecturalGLSL()}
+${patternGLSL()}
 ${botanicalGLSL()}
       vec3 flakeTint=vec3(0.);
       vec2 yarnUV=vec2(0.);
@@ -1230,7 +1255,7 @@ ${botanicalGLSL()}
         float polished=polishHeight(micro,wearField);
         float removed=max(0.,micro-polished);
         wearMask=smoothstep(.005,.24,removed);
-        surfaceHeight=polished*uGrain*(uType==11?.0018:.004);
+        surfaceHeight=polished*uGrain*(uType==11?.003:.004);
         diffuseColor.rgb*=1.-uGrain*.12+micro*uGrain*.15;
         float scratches=noise3(pp*vec3(uScratchScale*8.,uScratchScale*.12,uScratchScale*8.));
         float fine=1.-smoothstep(.5,2.,length(fwidth(pp*uScratchScale*8.)));
@@ -1241,7 +1266,9 @@ ${botanicalGLSL()}
       }
       ${extendedSurfaceColor()}
       ${architecturalColor()}
+      if(uType==22 && uPotterySurface==1)surfaceHeight=(noise3(pp*220.)-.5)*.00004*(1.-smoothstep(.5,1.5,length(fwidth(pp*220.))));
 ${botanicalColor()}
+${patternColorGLSL()}
       #if uMetalScratches == 1
       vec3 metalCuts=scratchField(surfaceUV(pp,weights));
       scratchMask=metalCuts.x;surfaceHeight+=metalCuts.y;
@@ -1262,6 +1289,9 @@ ${botanicalColor()}
       if(uType==22)roughnessFactor=mix(roughnessFactor,.93,groutMask);
       if(uType==30)roughnessFactor=clamp(roughnessFactor+bioJoint*.065+(leatherGrain-.5)*.035,.12,.95);
       if(uType==11)roughnessFactor=clamp(roughnessFactor+leatherFold*.06-(leatherGrain-.5)*.05,.18,.95);
+      #ifdef ALLOY_PATTERN
+        roughnessFactor=mix(roughnessFactor,patternParamsSample.r,patternMaterialCoverage);
+      #endif
       if(uType==34 || uType==35)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.24),bioPore);
       if(uType==29 || uMetalScratches==1)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.3),scratchMask);
     `,
@@ -1274,6 +1304,9 @@ ${botanicalColor()}
       if(uType==16)metalnessFactor*=1.-oxideMask;
       if(uType==17)metalnessFactor=mix(.25,.96,contactMask);
       if(uType==20)metalnessFactor=ledContact*.92;
+      #ifdef ALLOY_PATTERN
+        metalnessFactor=mix(metalnessFactor,patternParamsSample.g,patternMaterialCoverage);
+      #endif
     `,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -1294,7 +1327,11 @@ ${botanicalColor()}
       `
       #include <clearcoat_normal_fragment_maps>
       #ifdef USE_CLEARCOAT
-        clearcoatNormal=reliefNormal(peelHeight+((uType==11 || uType==20 || uType==22 || uType==30 || uType>=31 || uMetalScratches==1)?surfaceHeight:0.),clearcoatNormal,-vViewPosition);
+        #ifdef ALLOY_PATTERN
+          clearcoatNormal=reliefNormal(surfaceHeight+peelHeight,clearcoatNormal,-vViewPosition);
+        #else
+          clearcoatNormal=reliefNormal(peelHeight+((uType==11 || uType==20 || uType==22 || uType==30 || uType>=31 || uMetalScratches==1)?surfaceHeight:0.),clearcoatNormal,-vViewPosition);
+        #endif
       #endif
     `,
     );
@@ -1308,8 +1345,18 @@ ${botanicalColor()}
         if(uType==11 || uType==30){
           material.clearcoatRoughness=clamp(material.clearcoatRoughness+leatherFold*.055+(leatherGrain-.5)*.035,.06,1.);
         }
+        #ifdef ALLOY_PATTERN
+          float glaze=patternFinishSample.r;
+          material.clearcoat=mix(material.clearcoat,glaze*.75+material.clearcoat*(1.-clamp(patternFinishSample.r+patternFinishSample.g+patternFinishSample.b,0.,1.)),patternMaterialCoverage);
+          material.clearcoatRoughness=mix(material.clearcoatRoughness,.16,glaze*patternCoverage);
+        #endif
         if(uType==20)material.clearcoat*=ledLens;
         if(uType==22)material.clearcoat*=1.-groutMask;
+      #endif
+      #if defined(ALLOY_PATTERN) && defined(USE_SHEEN)
+        float wool=patternFinishSample.g;
+        material.sheenColor=mix(material.sheenColor,diffuseColor.rgb*.4,patternMaterialCoverage*wool);
+        material.sheenRoughness=mix(material.sheenRoughness,.85,patternMaterialCoverage*wool);
       #endif
       #ifdef USE_IRIDESCENCE
         material.iridescenceThickness=uFilmThickness+(noise3(pp*3.7)-.5)*uFilmVariation;
@@ -1362,7 +1409,7 @@ ${botanicalColor()}
     m.userData.shader = shader;
   };
   m.customProgramCacheKey = () =>
-    `alloy-procedural-v6.3-${p.type}-${p.metalScratches}-${p.bakeMode > 0}`;
+    `alloy-procedural-v7-${p.type}-${p.metalScratches}-${p.bakeMode > 0}-${!!p.pattern}-${!!p.potterySurface}`;
   return m;
 }
 
