@@ -2824,3 +2824,17 @@ fracture algorithm, SDF computation, source-property schema or Construct behavio
 - Validation: the 212-check C053 regression set still passes, plus 6 entity-context checks covering all 35 entries and the
   collection workspace persistence checks. The generated standalone remains 4.64 MiB with 161 shipped icons and 57
   native vector glyphs.
+
+## C056 — shared Fog visibility and embedded beam chamber (2026-10-06)
+
+- Height Fog now keeps the preferred imported **Visibility** contrast-transmission card and removes the duplicate native
+  visibility graph. Its Beam chamber is nested inside Visibility rather than occupying a separate card.
+- Atmospheric Fog and Local Fog now use the same Visibility / Light transport card structure, while retaining their
+  distinct models: aerial start-distance extinction for Atmospheric Fog and density × coverage for Local Fog. Their
+  distance probes, saved values and native medium controls remain editable.
+- Replaced Atmospheric Fog's landscape illustration with an abstract volumetric fog field: soft layered extinction bands,
+  suspended samples, a fading light path and distance/contrast markers. It is explicitly an HTML authoring visual, not an
+  environment render or native atmosphere march.
+- Validation: 202 focused checks passed across inspector order, references, layout, fog/environment graphs, instrument
+  styling, lighting, shared cards, cloud placement and the new five-check shared Fog-card audit. The generated standalone
+  remains 4.64 MiB with 161 shipped icons and 57 native vector glyphs.

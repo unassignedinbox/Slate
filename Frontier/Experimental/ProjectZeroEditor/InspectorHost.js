@@ -146,9 +146,16 @@ function Trim() {
     Custom.querySelector(".wf-specs")?.remove();
   }
   if (Kind === "fog") {
-    const Transport = Custom.querySelector(".fg-scatter");
-    if (Transport)
-      Transport.replaceChildren(Transport.querySelector(".fg-chamber"));
+    const Visibility = Custom.querySelector(".fg-vis"),
+      Transport = Custom.querySelector(".fg-scatter"),
+      Chamber = Transport?.querySelector(".fg-chamber");
+    if (Visibility && Transport && Chamber) {
+      Transport.replaceChildren(Chamber);
+      Transport.classList.remove("pcard", "mp-light");
+      Transport.style.cssText =
+        "margin:14px 0 0;padding:13px 0 0;border-top:1px solid rgba(255,255,255,.08);background:transparent";
+      Visibility.append(Transport);
+    }
   }
 }
 function Record(Node) {

@@ -188,19 +188,20 @@ try {
         Tiles.every((Tile) => getComputedStyle(Tile).borderRadius === "12px"),
       ),
     );
-    const Backgrounds = await Page.locator(
-      ".fog-beam,.fog-reading",
-    ).evaluateAll((Cards) =>
-      Cards.map((Card) => getComputedStyle(Card).backgroundColor),
-    );
-    assert(Backgrounds.every((Colour) => Colour === "rgb(25, 25, 25)"));
+    const Appearance = await Page.locator(".fog-beam").evaluate((Beam) => ({
+      Background: getComputedStyle(Beam).backgroundColor,
+      Parent: Beam.closest('[data-card="Visibility through fog"]')?.dataset
+        .card,
+    }));
+    assert.equal(Appearance.Background, "rgba(0, 0, 0, 0)");
+    assert.equal(Appearance.Parent, "Visibility through fog");
     await Page.locator(".fog-beam").evaluate((Card) =>
       Card.scrollIntoView({ block: "center" }),
     );
     await Capture(Id + "Chamber");
     Checks.push(
       Id +
-        ": beam background matches its other instruments and compact fog statistics share the rounding",
+        ": beam chamber is nested transparently in Visibility and compact fog statistics share the rounding",
     );
   }
   await Open("reference-softbox");

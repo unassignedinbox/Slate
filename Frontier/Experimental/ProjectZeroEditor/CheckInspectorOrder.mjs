@@ -132,7 +132,6 @@ const Sections = {
     ["summary", ".mp-duo"],
     Card("Fog settings"),
     ["details", ".fg-vis"],
-    ["details", ".fg-scatter"],
     Card("Medium"),
   ],
   "aerial-fog": [
@@ -140,7 +139,6 @@ const Sections = {
     ".fog-readings:last-of-type",
     Card("Fog settings"),
     Card("Visibility through fog"),
-    ".fog-beam",
     Card("Medium"),
   ],
   "local-fog": [
@@ -148,7 +146,6 @@ const Sections = {
     ".fog-readings:last-of-type",
     Card("Fog settings"),
     Card("Visibility through fog"),
-    ".fog-beam",
     Card("Medium"),
   ],
   clouds: [
@@ -324,9 +321,21 @@ try {
       await Open(Row.Id);
       await Previous.goto("http://baseline.test/?inspect=" + Row.Id);
       await Previous.locator(".inspector-scroll").waitFor();
+      const ActualInputs = await Inputs(Page),
+        PreviousInputs = await Inputs(Previous),
+        ExpectedInputs =
+          Row.Panel === "height-fog"
+            ? PreviousInputs.filter(
+                (Input, Index, All) =>
+                  ![
+                    "INPUT number Fog probe altitude",
+                    "INPUT number Fog probe distance",
+                  ].includes(Input) || Index === All.indexOf(Input),
+              )
+            : PreviousInputs;
       assert.deepEqual(
-        await Inputs(Page),
-        await Inputs(Previous),
+        ActualInputs,
+        ExpectedInputs,
         Row.Id + " native input contract",
       );
       Checks.push(

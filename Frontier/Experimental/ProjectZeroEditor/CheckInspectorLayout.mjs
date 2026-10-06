@@ -372,9 +372,20 @@ try {
       await Open(Id);
       await Previous.goto("http://baseline.test/?inspect=" + Id);
       await Previous.locator(".inspector-scroll > [data-panel]").waitFor();
+      const ActualInventory = await Page.evaluate(Inventory),
+        PreviousInventory = await Previous.evaluate(Inventory),
+        ExpectedInventory =
+          Id === "height-fog"
+            ? PreviousInventory.filter(
+                (Input, Index, All) =>
+                  (!Input.includes("Fog probe altitude") &&
+                    !Input.includes("Fog probe distance")) ||
+                  Index === All.indexOf(Input),
+              )
+            : PreviousInventory;
       assert.deepEqual(
-        await Page.evaluate(Inventory),
-        await Previous.evaluate(Inventory),
+        ActualInventory,
+        ExpectedInventory,
         Id + " retains native control inventory",
       );
     }

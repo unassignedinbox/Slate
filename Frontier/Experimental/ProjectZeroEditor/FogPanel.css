@@ -129,3 +129,24 @@
 .fog-height-style {
   margin-bottom: 8px;
 }
+.fog-instrument > .fog-beam {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #ffffff14;
+  background: transparent;
+}
+.fog-beam > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.fog-beam strong {
+  color: #cfd1cf;
+  font-size: 11px;
+  font-weight: 500;
+}
+.fog-beam small {
+  color: #777f82;
+  font-size: 8px;
+}

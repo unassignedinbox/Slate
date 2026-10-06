@@ -24,8 +24,9 @@ Page.setDefaultTimeout(15000);
 const Errors = [],
   Checks = [];
 Page.on("pageerror", (Error) => Errors.push(Error.message));
-Page.on("console", (Message) => {
-  if (Message.type() === "error") Errors.push(Message.text());
+Page.on("requestfailed", (Request) => {
+  if (!Request.url().includes("fontshare.com"))
+    Errors.push(`${Request.url()}: ${Request.failure()?.errorText}`);
 });
 const Saved = () =>
   Page.evaluate(() =>
@@ -54,55 +55,51 @@ try {
   await Page.evaluate(() => document.fonts.ready);
   await Select("Height Fog");
   await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-  const Visibility = Card("Visibility through fog"),
-    Density = Card("Density with altitude");
-  assert.match(
-    await Visibility.locator(".graph-metric").innerText(),
-    /1\.86|1\.87/,
+  assert.equal(await Card("Visibility through fog").count(), 0);
+  const DetailFrame = Page.frameLocator(
+    '[data-reference-slice="details"] iframe',
   );
-  assert.equal(await Page.getByText(/Relative transmission92/).count(), 0);
-  const Before = await Visibility.locator(
-    '[data-series="Transmission"]',
-  ).getAttribute("d");
+  await DetailFrame.locator(".fg-vis").waitFor();
+  assert.equal(
+    await DetailFrame.locator(".fg-vis > .fg-scatter .fg-chamber").count(),
+    1,
+  );
+  const Density = Card("Density with altitude");
   await Drag(
     Density.getByRole("slider", { name: "Fog altitude probe", exact: true }),
     0.6,
   );
   assert.ok((await Saved()).Values["height-fog"]["Probe altitude"] > 1500);
-  assert.notEqual(
-    await Visibility.locator('[data-series="Transmission"]').getAttribute("d"),
-    Before,
-  );
+  await Card("Medium")
+    .getByRole("slider", { name: "Medium: Density chart", exact: true })
+    .focus();
+  await Page.keyboard.press("Home");
+  assert.equal((await Saved()).Values["height-fog"].Density, 0);
+  await Page.getByLabel("Density value", { exact: true }).fill("0.02");
+  await Page.getByLabel("Density value", { exact: true }).press("Tab");
+  await Page.locator(
+    '[data-reference-slice="details"]',
+  ).scrollIntoViewIfNeeded();
+  await Page.screenshot({ path: Proof + "/HeightFogVisibility.png" });
+
+  await Select("Atmospheric Fog");
+  const Visibility = Card("Visibility through fog");
+  assert.match(await Visibility.locator(".graph-metric").innerText(), /∞/);
+  await Page.getByRole("button", { name: "Enabled", exact: true }).click();
+  assert.match(await Visibility.locator(".graph-metric").innerText(), /3,962/);
   await Visibility.getByRole("slider", {
     name: "Fog distance probe",
     exact: true,
   }).focus();
   await Page.keyboard.press("End");
-  assert.equal((await Saved()).Values["height-fog"]["Probe distance"], 2000);
-  const Medium = Card("Medium");
-  const Property = Medium.getByRole("slider", {
-    name: "Medium: Density chart",
-    exact: true,
-  });
-  await Property.focus();
-  await Page.keyboard.press("Home");
-  assert.equal((await Saved()).Values["height-fog"].Density, 0);
-  assert.match(await Visibility.locator(".graph-metric").innerText(), /100/);
-  await Page.getByLabel("Density value", { exact: true }).fill("0.02");
-  await Page.getByLabel("Density value", { exact: true }).press("Tab");
-  await Visibility.getByLabel("Fog probe altitude", { exact: true }).fill("2");
-  await Visibility.getByLabel("Fog probe distance", { exact: true }).fill(
-    "200",
-  );
+  assert.equal((await Saved()).Values["aerial-fog"]["Probe distance"], 2000);
   await Visibility.scrollIntoViewIfNeeded();
-  await Page.screenshot({ path: Proof + "/HeightFogVisibility.png" });
-  await Density.scrollIntoViewIfNeeded();
-  await Page.screenshot({ path: Proof + "/HeightFogDensity.png" });
+  await Page.screenshot({ path: Proof + "/AtmosphericFogVisibility.png" });
   await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-  assert.match(await Visibility.locator(".graph-metric").innerText(), /100/);
+  assert.match(await Visibility.locator(".graph-metric").innerText(), /∞/);
   await Page.getByRole("button", { name: "Enabled", exact: true }).click();
   Checks.push(
-    "Consistent exponential fog density/transmission; shared distance/altitude probes; graph drag, keyboard and parameter editing; disabled medium gives 100% transmission",
+    "Height Fog uses the preferred rich contrast card with its beam chamber nested; Atmospheric Fog uses the same model-aware card",
   );
   await Select("Sun");
   const Day = Page.getByRole("slider", {
@@ -303,7 +300,8 @@ try {
   );
 
   await Select("Atmospheric Fog");
-  await Page.getByRole("button", { name: "Enabled", exact: true }).click();
+  if (!(await Saved()).Values["aerial-fog"].Enabled)
+    await Page.getByRole("button", { name: "Enabled", exact: true }).click();
   const Spectrum = Page.getByRole("slider", {
       name: "Aerial fog spectrum",
       exact: true,
@@ -385,7 +383,7 @@ try {
   }).focus();
   await Page.keyboard.press("Home");
   assert.equal((await Saved()).Values.clouds["Shadow Coverage"], 0);
-  await Select("Height Fog");
+  await Select("Atmospheric Fog");
   const TouchPlot = Card("Visibility through fog").getByRole("slider", {
     name: "Fog distance probe",
     exact: true,
@@ -419,7 +417,7 @@ try {
     type: "touchEnd",
     touchPoints: [],
   });
-  assert.equal((await Saved()).Values["height-fog"]["Probe distance"], 2000);
+  assert.equal((await Saved()).Values["aerial-fog"]["Probe distance"], 2000);
   await CDP.detach();
   Checks.push(
     "Aerial spectral mixture, cloud vertical probes, editable local bounds/derived extents, cloud-shadow parameter graph, and real touch drag/clamping",

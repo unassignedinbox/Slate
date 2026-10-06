@@ -1661,11 +1661,6 @@ export function Inspector({
           </Card>
         )}
         {ReferenceDetailCards}
-        {!Local && !Aerial && (
-          <Card Title="Visibility through fog" GraphHandled>
-            <FogGraph Kind={Subject.Panel} V={V} Change={AssignProperty} />
-          </Card>
-        )}
         <div className="card-grid">
           <Card Title="Medium" Height={416}>
             {Fields(

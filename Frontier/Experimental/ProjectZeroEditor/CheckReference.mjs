@@ -98,6 +98,20 @@ try {
       await Previous.goto("http://baseline.test/?inspect=" + Id);
       await Previous.locator(".inspector-scroll > [data-panel]").waitFor();
       const Expected = await Previous.evaluate(Inventory);
+      if (Id === "height-fog") {
+        Expected.Cards = Expected.Cards.filter(
+          (Name) => Name !== "Visibility through fog",
+        );
+        Expected.Headings = Expected.Headings.filter(
+          (Name) => Name !== "Visibility through fog",
+        );
+        Expected.Controls = Expected.Controls.filter(
+          (Control, Index, All) =>
+            !["Fog probe altitude", "Fog probe distance"].includes(
+              Control[2],
+            ) || Index === All.findIndex((Other) => Other[2] === Control[2]),
+        );
+      }
       if (Id === "lighting") {
         assert(Actual.Headings.includes("Browse contents 10 matches"));
         Expected.Headings = Expected.Headings.map((Heading) =>

@@ -39,9 +39,8 @@ export default function FogPanel({ Kind, V, Values, Change, QuickControls }) {
           viewBox="0 0 300 166"
           preserveAspectRatio="none"
           role="img"
-          aria-label={
-            Local ? "Local fog sight line" : "Atmospheric haze sight line"
-          }
+          data-fog-visual={Local ? "bounded-grid" : "abstract-fog-field"}
+          aria-label={Local ? "Local fog sight line" : "Atmospheric fog field"}
         >
           <defs>
             <linearGradient id={Id + "air"} x2="0" y2="1">
@@ -70,68 +69,89 @@ export default function FogPanel({ Kind, V, Values, Change, QuickControls }) {
             </>
           ) : (
             <>
-              <circle cx="244" cy="34" r="14" fill="#d6d3bf" opacity=".18" />
-              <path
-                d="M0 83L38 58 70 75 112 44 157 76 201 54 245 73 300 49V112H0Z"
-                fill="#2c3438"
-                opacity={0.12 + Transmission(2000) * 0.25}
-              />
-              <path
-                d="M0 102L34 81 66 93 103 70 137 97 177 75 220 95 264 72 300 89V128H0Z"
-                fill="#30383a"
-                opacity={0.18 + Transmission(1000) * 0.34}
-              />
-              <path
-                d="M0 128L41 105 78 117 118 96 153 121 195 102 237 119 275 98 300 109V166H0Z"
-                fill="#23292a"
-                opacity={0.34 + Transmission(500) * 0.42}
-              />
-              <path d="M128 166L146 111H154L172 166Z" fill="#101314" />
-              <path d="M148 111V166" stroke="#7f898b" opacity=".55" />
-              {[210, 235, 260].map((X, Index) => (
-                <g
-                  key={X}
-                  opacity={0.25 + Transmission(250 + Index * 350) * 0.52}
+              <defs>
+                <linearGradient id={Id + "beam"} x1="0" x2="1">
+                  <stop stopColor="#e7e3d2" stopOpacity=".62" />
+                  <stop offset=".38" stopColor="#afbdc4" stopOpacity=".2" />
+                  <stop offset="1" stopColor="#8999a2" stopOpacity="0" />
+                </linearGradient>
+                <filter
+                  id={Id + "soft"}
+                  x="-20%"
+                  y="-40%"
+                  width="140%"
+                  height="180%"
                 >
-                  <path d={`M${X} 126v40`} stroke="#161a1b" strokeWidth="3" />
-                  <path
-                    d={`M${X - 13} 133l13-32 13 32M${X - 10} 121l10-28 10 28`}
-                    stroke="#202627"
-                    strokeWidth="5"
-                    strokeLinejoin="round"
-                  />
-                </g>
+                  <feGaussianBlur stdDeviation="5" />
+                </filter>
+              </defs>
+              <g
+                fill="none"
+                stroke="#aebbc1"
+                filter={`url(#${Id}soft)`}
+                opacity={Enabled ? 0.2 + Math.min(0.48, Extinction * 70) : 0.08}
+              >
+                <path
+                  d="M-20 48C28 18 67 68 116 40S210 20 326 50"
+                  strokeWidth="18"
+                />
+                <path
+                  d="M-28 86C30 55 80 110 139 78S238 58 330 92"
+                  strokeWidth="23"
+                />
+                <path
+                  d="M-18 126C40 94 92 142 156 115S250 98 325 130"
+                  strokeWidth="30"
+                />
+              </g>
+              <g fill="none" stroke="#d4dcdf" opacity={Enabled ? 0.2 : 0.07}>
+                <path d="M0 55C46 31 81 71 128 49S223 36 300 60" />
+                <path d="M0 93C52 70 88 108 148 85S246 75 300 101" />
+                <path d="M0 130C57 109 106 141 166 121S252 112 300 137" />
+              </g>
+              <path d="M18 82H286" stroke={`url(#${Id}beam)`} strokeWidth="4" />
+              <circle cx="18" cy="82" r="4" fill="#eee8d3" opacity=".9" />
+              {Array.from({ length: 20 }, (_, Index) => (
+                <circle
+                  key={"sample" + Index}
+                  cx={35 + ((Index * 47) % 245)}
+                  cy={25 + ((Index * 31) % 112)}
+                  r={1 + (Index % 3) * 0.45}
+                  fill="#d9e0e2"
+                  opacity={Enabled ? 0.08 + (Index % 5) * 0.035 : 0.035}
+                />
               ))}
               {[50, 200, 500, 1000, 2000, 4000].map((Distance, Index) => {
                 const X = 22 + Index * 50;
                 return (
                   <g
                     key={Distance}
-                    opacity={0.25 + Transmission(Distance) * 0.65}
+                    opacity={0.22 + Transmission(Distance) * 0.66}
                   >
-                    <path d={`M${X} 148v5`} stroke="#c5ccca" />
-                    <text x={X} y="162" textAnchor="middle">
+                    <path d={`M${X} 145v5`} stroke="#c5ccca" />
+                    <text x={X} y="161" textAnchor="middle">
                       {Distance >= 1000 ? Distance / 1000 + "k" : Distance} m
                     </text>
                   </g>
                 );
               })}
-              <path d="M20 148H280" stroke="#ffffff2b" />
+              <path d="M20 145H280" stroke="#ffffff24" />
             </>
           )}
-          {Array.from({ length: 32 }, (_, Index) => (
-            <rect
-              key={Index}
-              x="0"
-              y={Index * 5}
-              width="300"
-              height="5"
-              fill="#9babb6"
-              opacity={
-                Enabled ? Math.min(0.19, Extinction * 18) * (Index / 32) : 0
-              }
-            />
-          ))}
+          {Local &&
+            Array.from({ length: 32 }, (_, Index) => (
+              <rect
+                key={Index}
+                x="0"
+                y={Index * 5}
+                width="300"
+                height="5"
+                fill="#9babb6"
+                opacity={
+                  Enabled ? Math.min(0.19, Extinction * 18) * (Index / 32) : 0
+                }
+              />
+            ))}
           {Number.isFinite(Sight) && (
             <g>
               <path
@@ -188,51 +208,53 @@ export default function FogPanel({ Kind, V, Values, Change, QuickControls }) {
       </div>
       {QuickControls}
       <section
-        className="property-card fog-instrument"
+        className="property-card fog-instrument fog-visibility-card"
         data-card="Visibility through fog"
       >
         <h2>Visibility</h2>
         <FogGraph Kind={Kind} V={V} Change={Change} />
-      </section>
-      <section className="fog-instrument fog-beam">
-        <h2>Light transport</h2>
-        <small>
-          {Local ? "Interior beam study" : "Beam chamber · distance haze"}
-        </small>
-        <svg viewBox="0 0 300 84" role="img" aria-label="Fog beam chamber">
-          <rect width="300" height="84" fill="none" />
-          {Array.from({ length: 70 }, (_, Index) => {
-            const Fraction = Index / 69,
-              Distance = Fraction * 400;
-            const Strength = Local
-              ? 0.4 + Math.max(0, V("Anisotropy"))
-              : V("Mie Blend");
-            const Width = 2 + Fraction * Fraction * (5 + Strength * 15);
-            return (
-              <rect
-                key={Index}
-                x={12 + Fraction * 272}
-                y={40 - Width}
-                width="4"
-                height={Width * 2}
-                fill="#b8cddd"
-                opacity={
-                  Enabled && Distance >= Start
-                    ? (0.025 + 0.18 * Strength) * Transmission(Distance)
-                    : 0
-                }
-              />
-            );
-          })}
-          <path d="M12 40H288" stroke="#ffffff15" />
-          <circle cx="12" cy="40" r="3" fill="#ece4ca" />
-          <text x="10" y="14">
-            SCHEMATIC
-          </text>
-          <text x="290" y="75" textAnchor="end">
-            {Percent(Transmission(400))} AT 400 m
-          </text>
-        </svg>
+        <div className="fog-beam">
+          <div>
+            <strong>Light transport</strong>
+            <small>
+              {Local ? "Interior beam study" : "Beam chamber · distance haze"}
+            </small>
+          </div>
+          <svg viewBox="0 0 300 84" role="img" aria-label="Fog beam chamber">
+            <rect width="300" height="84" fill="none" />
+            {Array.from({ length: 70 }, (_, Index) => {
+              const Fraction = Index / 69,
+                Distance = Fraction * 400;
+              const Strength = Local
+                ? 0.4 + Math.max(0, V("Anisotropy"))
+                : V("Mie Blend");
+              const Width = 2 + Fraction * Fraction * (5 + Strength * 15);
+              return (
+                <rect
+                  key={Index}
+                  x={12 + Fraction * 272}
+                  y={40 - Width}
+                  width="4"
+                  height={Width * 2}
+                  fill="#b8cddd"
+                  opacity={
+                    Enabled && Distance >= Start
+                      ? (0.025 + 0.18 * Strength) * Transmission(Distance)
+                      : 0
+                  }
+                />
+              );
+            })}
+            <path d="M12 40H288" stroke="#ffffff15" />
+            <circle cx="12" cy="40" r="3" fill="#ece4ca" />
+            <text x="10" y="14">
+              SCHEMATIC
+            </text>
+            <text x="290" y="75" textAnchor="end">
+              {Percent(Transmission(400))} AT 400 m
+            </text>
+          </svg>
+        </div>
       </section>
     </div>
   );

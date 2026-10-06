@@ -436,29 +436,55 @@ export function FogGraph({ Kind, V, Change, Density = false }) {
       ) * 100;
   return (
     <>
-      <div className="graph-status">
-        <i className={V("Enabled") ? "green" : "red"} />
-        {V("Enabled")
-          ? "LIVE AUTHORING PROBE"
-          : "MEDIUM DISABLED · ZERO EXTINCTION"}
-      </div>
-      <div className="graph-metric">
-        <DecimalMetric
-          Value={
-            Density
-              ? Sigma > 0 && Sigma < 0.0001
-                ? Sigma.toExponential(2)
-                : Sigma.toFixed(4)
-              : At(Distance).toFixed(2)
-          }
-        />
-        <small>{Density ? "m⁻¹" : "%"}</small>
-      </div>
-      <p>
-        {Density
-          ? "Extinction at probe altitude"
-          : "Light transmitted at the selected distance"}
-      </p>
+      {Density ? (
+        <>
+          <div className="graph-status">
+            <i className={V("Enabled") ? "green" : "red"} />
+            {V("Enabled")
+              ? "LIVE AUTHORING PROBE"
+              : "MEDIUM DISABLED · ZERO EXTINCTION"}
+          </div>
+          <div className="graph-metric">
+            <DecimalMetric
+              Value={
+                Sigma > 0 && Sigma < 0.0001
+                  ? Sigma.toExponential(2)
+                  : Sigma.toFixed(4)
+              }
+            />
+            <small>m⁻¹</small>
+          </div>
+          <p>Extinction at probe altitude</p>
+        </>
+      ) : (
+        <div className="fog-visibility-heading">
+          <div className="graph-status">
+            <i className={V("Enabled") ? "green" : "red"} />
+            CONTRAST TRANSMISSION · 2% THRESHOLD
+          </div>
+          <div className="graph-metric">
+            <DecimalMetric
+              Value={
+                Sigma > 0
+                  ? (
+                      (Kind === "aerial-fog" ? V("Start") : 0) -
+                      Math.log(0.02) / Sigma
+                    ).toLocaleString("en-US", {
+                      minimumFractionDigits: 1,
+                      maximumFractionDigits: 1,
+                    })
+                  : "∞"
+              }
+            />
+            <small>m sight</small>
+          </div>
+          <p>Sight range before scene contrast falls below 2%</p>
+          <div className="fog-visibility-sample">
+            <span>{Format(Distance)} m sample</span>
+            <strong>{At(Distance).toFixed(1)}% transmission</strong>
+          </div>
+        </div>
+      )}
       <Plot
         Name={Density ? "Fog altitude probe" : "Fog distance probe"}
         Domain={Density ? [0, 3000] : [0, 2000]}
