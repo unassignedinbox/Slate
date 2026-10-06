@@ -13,7 +13,9 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-Run `npm run verify:published` for the current immutable GitHack URL. Choose **Open the page** if GitHack shows its external-content notice. Append `?material=scratches` to open the isolated scratch study directly.
+**[Launch Alloy 06 — Scratches study](https://raw.githack.com/unassignedinbox/Slate/d98e14d7ada53f447891b66a16fe3d4b09ec9fe0/site/index.html?material=scratches)**
+
+Choose **Open the page** if GitHack shows its external-content notice. This immutable link opens the isolated scratch study directly. The same page includes the full 100+ library. The development suite passed 13 tests; the standalone test passed with all 114 unique previews, module export and an actual bake ZIP. Publication verification matched the exact 1,502,612-byte GitHub artifact (SHA-256 `ee1255ff72db67ad8fb33f3034e3dac7b14e9edee92b4208dc6b7fd6e02e54ff`); this is not a claim of hosted-browser testing.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
@@ -186,7 +188,7 @@ The standalone test blocks unexpected HTTP asset requests, checks the full mater
 To exercise the actual hosted page instead, set its URL explicitly:
 
 ```sh
-ALLOY_PUBLIC_URL='https://raw.githack.com/unassignedinbox/Slate/<published-commit>/site/index.html' npm run test:standalone
+ALLOY_PUBLIC_URL='https://raw.githack.com/unassignedinbox/Slate/d98e14d7ada53f447891b66a16fe3d4b09ec9fe0/site/index.html' npm run test:standalone
 ```
 
 The remote mode confirms GitHack's notice if present. Connection failures **fail the test**; it never substitutes a local copy. Successful artifact verification is not a claim that GitHack's live runtime was tested. Some sandbox networks block direct connections to GitHack.
