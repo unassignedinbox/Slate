@@ -39,127 +39,136 @@ const Saved = () =>
   );
 
 try {
+  const Models = [
+    {
+      Id: "height-fog",
+      Technical: "Height and tint",
+      Fields: [
+        ["Density", "0", "0.2"],
+        ["Falloff Height", "10", "3000"],
+        ["Sun Scatter", "0", "2"],
+      ],
+    },
+    {
+      Id: "aerial-fog",
+      Technical: "Spectral transmission",
+      Fields: [
+        ["Density", "0", "4"],
+        ["Start", "0", "2000"],
+        ["Mie Blend", "0", "1"],
+      ],
+    },
+    {
+      Id: "local-fog",
+      Technical: "Local bounds",
+      Fields: [
+        ["Density", "0", "4"],
+        ["Coverage", "0", "1"],
+        ["Feature Scale", "10", "600"],
+        ["Anisotropy", "-0.9", "0.9"],
+      ],
+    },
+  ];
+  for (const Model of Models) {
+    await Open(Model.Id);
+    assert.equal(
+      await Page.locator(".reference-inspector-copy,.fog-sight,.fog-reading").count(),
+      0,
+      `${Model.Id} must use the shared native card family only`,
+    );
+    for (const Title of [
+      "Fog settings",
+      "Visibility through fog",
+      "Medium",
+      Model.Technical,
+      "Wind binding",
+    ])
+      assert.equal(
+        await Page.locator(`[data-card="${Title}"]`).count(),
+        1,
+        `${Model.Id} must contain ${Title}`,
+      );
+    for (const [Field, Minimum, Maximum] of Model.Fields) {
+      const Input = Page.getByLabel(`${Field} value`, { exact: true });
+      assert.equal(
+        await Input.count(),
+        1,
+        `${Model.Id} must expose the C++ ${Field} slider once`,
+      );
+      assert.equal(await Input.getAttribute("min"), Minimum);
+      assert.equal(await Input.getAttribute("max"), Maximum);
+    }
+    assert.equal(
+      await Page.getByRole("button", { name: "Follow Wind", exact: true }).count(),
+      Model.Id === "local-fog" ? 1 : 0,
+    );
+    assert.equal(
+      await Page.getByLabel("Colour value", { exact: true }).count(),
+      Model.Id === "height-fog" ? 1 : 0,
+    );
+    const Beam = Page.locator('[data-card="Medium"] .fog-shared-beam');
+    assert.equal(await Beam.count(), 1);
+    assert.equal(
+      await Beam.locator("svg").getAttribute("aria-label"),
+      "Fog beam chamber",
+    );
+    const SpreadLabel =
+        Model.Id === "height-fog"
+          ? "Sun Scatter value"
+          : Model.Id === "aerial-fog"
+            ? "Mie Blend value"
+            : "Anisotropy value",
+      BeamBefore = await Beam.locator("svg").innerHTML();
+    await Page.getByLabel(SpreadLabel, { exact: true }).fill(
+      Model.Id === "height-fog" ? "1.7" : "0.8",
+    );
+    await Page.getByLabel(SpreadLabel, { exact: true }).press("Tab");
+    assert.notEqual(
+      await Beam.locator("svg").innerHTML(),
+      BeamBefore,
+      `${SpreadLabel} must repaint the shared chamber`,
+    );
+    const VisibilityPlot = Page.getByRole("slider", {
+        name: "Fog distance probe",
+        exact: true,
+      }),
+      VisibilityBefore = await VisibilityPlot.locator("circle").first().getAttribute("cx");
+    await VisibilityPlot.focus();
+    await Page.keyboard.press("End");
+    assert.notEqual(
+      await VisibilityPlot.locator("circle").first().getAttribute("cx"),
+      VisibilityBefore,
+    );
+    Checks.push(
+      `${Model.Id}: shared C++-aligned card order, model sliders, Visibility and Beam interaction`,
+    );
+  }
+
   await Open("height-fog");
-  assert.equal(await Page.locator('[data-reference-slice="summary"]').count(), 1);
-  assert.equal(await Page.locator('[data-reference-slice="details"]').count(), 1);
-  assert.equal(await Page.locator('[data-reference-slice="beam"]').count(), 1);
-  assert.equal(await Page.locator('[data-card="Visibility through fog"]').count(), 0);
-
-  const Visibility = Page.frameLocator('[data-reference-slice="details"] iframe');
-  await Visibility.locator(".fg-vis").waitFor();
-  assert.equal(await Visibility.locator(".fg-vis").count(), 1);
-  assert.equal(await Visibility.locator(".fg-scatter").count(), 0);
-
-  const Medium = Page.locator('[data-card="Medium"]');
-  assert.equal(await Medium.locator('[data-reference-slice="beam"]').count(), 1);
-  const Beam = Page.frameLocator('[data-reference-slice="beam"] iframe');
-  await Beam.locator(".fg-chamber").waitFor();
-  assert.equal(await Beam.locator(".fg-chamber").count(), 1);
-  assert.equal(await Beam.locator(".fg-vis").count(), 0);
   const DensityProfile = Page.getByRole("img", {
     name: "Interactive Height Fog density profile",
   });
-  assert.equal(await DensityProfile.count(), 1);
-  assert.equal(await Page.getByLabel("Fog probe altitude").count(), 0);
-  assert.equal(await Page.getByLabel("Fog probe distance").count(), 0);
-  const DensityBeforeProfile = await Page.getByLabel("Density value").inputValue(),
-    FalloffBeforeProfile = await Page.getByLabel("Falloff Height value").inputValue();
+  const DensityBefore = await Page.getByLabel("Density value").inputValue(),
+    FalloffBefore = await Page.getByLabel("Falloff Height value").inputValue();
   await DensityProfile.click({ position: { x: 190, y: 75 } });
-  assert.notEqual(await Page.getByLabel("Density value").inputValue(), DensityBeforeProfile);
+  assert.notEqual(await Page.getByLabel("Density value").inputValue(), DensityBefore);
   assert.notEqual(
     await Page.getByLabel("Falloff Height value").inputValue(),
-    FalloffBeforeProfile,
+    FalloffBefore,
   );
-  Checks.push(
-    "Height Fog retains rich Visibility, adds an interactive altitude-density profile, and keeps Beam Chamber in Medium",
-  );
+  assert.equal(await Page.getByLabel("Colour value", { exact: true }).count(), 1);
+  Checks.push("Height and tint retains its interactive profile and canonical colour control");
 
-  const BeamCanvas = Beam.locator(".fg-chamber canvas"),
-    Snapshot = () => BeamCanvas.evaluate((Canvas) => Canvas.toDataURL());
-  await BeamCanvas.waitFor();
-  const DisabledPreview = await Snapshot();
-  await Page.getByLabel("Sun Scatter value", { exact: true }).fill("1.1");
-  await Page.getByLabel("Sun Scatter value", { exact: true }).press("Tab");
-  await Page.waitForTimeout(100);
-  assert.notEqual(
-    await Snapshot(),
-    DisabledPreview,
-    "Disabled Beam Chamber must remain a responsive authored preview",
-  );
-  await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-  for (const [Label, Value] of [
-    ["Density value", "0.08"],
-    ["Falloff Height value", "120"],
-    ["Sun Scatter value", "1.6"],
-    ["Colour value", "#8fa4bb"],
-  ]) {
-    const Before = await Snapshot();
-    await Page.getByLabel(Label, { exact: true }).fill(Value);
-    await Page.getByLabel(Label, { exact: true }).press("Tab");
-    await Page.waitForTimeout(100);
-    assert.notEqual(await Snapshot(), Before, `${Label} must repaint Beam Chamber`);
-  }
-  Checks.push(
-    "Beam Chamber remains visible while disabled and Enabled, Density, Falloff Height, Sun Scatter and Colour all repaint it",
-  );
-
-  const NativeDensity = Page.getByLabel("Density value", { exact: true }),
-    BeforeImportedEdit = await NativeDensity.inputValue();
-  await Visibility.locator(".fg-vis canvas").click({ position: { x: 45, y: 40 } });
-  await Page.waitForTimeout(150);
-  assert.notEqual(await NativeDensity.inputValue(), BeforeImportedEdit);
-  const StoredProperties =
-    (await Saved()).Values["height-fog"].ReferenceInspector?.Properties || {};
-  for (const Key of ["enabled", "density", "height", "sunScatter", "color"])
-    assert.equal(Key in StoredProperties, false, `${Key} must not be stored twice`);
-  Checks.push(
-    "Imported Height visual and native controls are bidirectional; mapped Fog values are stored once",
-  );
-
-  for (const Id of ["aerial-fog", "local-fog"]) {
-    await Open(Id);
-    assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
-    assert.equal(await Page.locator(".fog-sight").count(), 1);
-    assert.equal(await Page.locator(".fog-reading").count(), 6);
-    assert.equal(await Page.locator('[data-card="Visibility through fog"]').count(), 1);
-    assert.equal(await Page.locator(".fog-instruments > .fog-beam").count(), 0);
-    assert.equal(
-      await Page.locator('[data-card="Medium"] .fog-shared-beam').count(),
-      1,
-    );
-    assert.equal(
-      await Page.locator('[data-card="Medium"] .fog-shared-beam svg').getAttribute("aria-label"),
-      "Fog beam chamber",
-    );
-    if (Id === "aerial-fog") {
-      if ((await Saved()).Values[Id].Enabled)
-        await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-      await Page.getByText("AUTHORED PREVIEW · MEDIUM DISABLED", {
-        exact: true,
-      }).waitFor();
-      const VisibilityPlot = Page.getByRole("slider", {
-          name: "Fog distance probe",
-          exact: true,
-        }),
-        VisibilityCircle = VisibilityPlot.locator("circle").first(),
-        BeforeVisibilityX = await VisibilityCircle.getAttribute("cx");
-      await VisibilityPlot.focus();
-      await Page.keyboard.press("End");
-      assert.notEqual(await VisibilityCircle.getAttribute("cx"), BeforeVisibilityX);
-      const SpectrumPlot = Page.getByRole("slider", {
-          name: "Aerial fog spectrum",
-          exact: true,
-        }),
-        BeforeSpectrumX = await SpectrumPlot.locator("circle").first().getAttribute("cx");
-      await SpectrumPlot.focus();
-      await Page.keyboard.press("Home");
-      assert.notEqual(
-        await SpectrumPlot.locator("circle").first().getAttribute("cx"),
-        BeforeSpectrumX,
-      );
-    }
-    Checks.push(`${Id}: uses corrected shared cards and responsive authored previews`);
-  }
+  await Open("aerial-fog");
+  const Spectrum = Page.getByRole("slider", {
+      name: "Aerial fog spectrum",
+      exact: true,
+    }),
+    SpectrumBefore = await Spectrum.locator("circle").first().getAttribute("cx");
+  await Spectrum.focus();
+  await Page.keyboard.press("Home");
+  assert.notEqual(await Spectrum.locator("circle").first().getAttribute("cx"), SpectrumBefore);
+  Checks.push("Atmospheric Fog retains interactive spectral transmission");
 } catch (Error) {
   Errors.push(Error.stack);
 } finally {

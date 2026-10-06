@@ -337,20 +337,15 @@ try {
     );
   }
   await Open("height-fog");
-  assert.equal(await Page.locator(".reference-inspector-copy").count(), 3);
-  assert.equal(await Page.locator('[data-card="Visibility through fog"]').count(), 0);
+  assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
+  assert.equal(await Page.locator('[data-card="Visibility through fog"]').count(), 1);
   assert.equal(
-    await Page.locator(
-      '[data-card="Medium"] > [data-reference-slice="beam"]',
-    ).count(),
+    await Page.locator('[data-card="Medium"] > .fog-shared-beam').count(),
     1,
   );
-  await Page.frameLocator('[data-reference-slice="details"] iframe')
-    .locator(".fg-vis")
-    .waitFor();
   await Page.screenshot({ path: path.join(Proof, "height-fog-tiles.png") });
   Checks.push(
-    "height-fog: retained imported Visibility and Medium-owned Beam Chamber",
+    "height-fog: coordinated shared Visibility and Medium-owned Beam Chamber",
   );
 
   Frame = await Open("reference-ece-low-beam");

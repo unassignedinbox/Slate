@@ -385,30 +385,20 @@ try {
   Checks.push(
     "Wind heading → Anemometer and statistics → Composite Flow, retaining the live trace",
   );
-  for (const Id of ["aerial-fog", "local-fog"]) {
+  for (const Id of ["height-fog", "aerial-fog", "local-fog"]) {
     await Open(Id);
-    const Before = await Page.locator(".fog-sight svg").innerHTML();
-    if (Id === "aerial-fog")
-      await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-    await Page.getByLabel("Density value", { exact: true }).fill("2");
-    assert.notEqual(await Page.locator(".fog-sight svg").innerHTML(), Before);
-    assert.equal(
-      await Page.locator(".fog-caption").evaluate(
-        (Caption) => getComputedStyle(Caption).position,
-      ),
-      "absolute",
+    const Visibility = Page.locator('[data-card="Visibility through fog"] [data-series]'),
+      Before = await Visibility.getAttribute("d");
+    await Page.getByLabel("Density value", { exact: true }).fill(
+      Id === "height-fog" ? "0.08" : "2",
     );
+    assert.notEqual(await Visibility.getAttribute("d"), Before);
     assert.equal(
-      await Page.locator(".fog-sight svg").evaluate((Sight) =>
-        Math.round(Sight.getBoundingClientRect().height),
-      ),
-      166,
+      await Page.locator('[data-card="Medium"] .fog-shared-beam').count(),
+      1,
     );
     await Capture(Id);
-    Checks.push(
-      Id +
-        ": restored C054 visual structure, 166px sightline and overlay caption",
-    );
+    Checks.push(Id + ": shared Visibility and Medium cards respond to model density");
   }
   assert.deepEqual(Errors, []);
   console.log("Light design checks passed:", Checks.length);

@@ -3057,3 +3057,27 @@ as implemented by this documentation-only checkpoint.
   are editor-only authoring feedback, and the card copy distinguishes them from live behavior.
 - Atmospheric and Local Beam Chambers use the same authored-density preview rule, while retaining their uncompressed
   physical labels and explicit LIVE/PREVIEW state.
+
+## C067 — coordinated Fog menus using the native C++ categories (2026-10-06)
+
+- Rearranged Height Fog, Atmospheric Fog and Local Fog into one shared card structure; this is an information-architecture
+  correction, not a new visual-card design. All three now use the same React `Card`, `FogGraph` and `FogBeamChamber`
+  implementations instead of combining imported Height frames with separate Atmospheric/Local instrument families.
+- The shared order is now **Fog settings → Visibility through fog → Medium + model technical card → Wind binding**.
+  Medium and its technical peer use the same two-column grid at expanded widths and the same stacked behavior when narrow.
+- Categories and slider ownership follow `Frontier/Engine/Editor/FogInspectorPanel.cpp` and the extracted native sheets:
+  - Height Fog: Fog settings = Enabled; Medium = Density, Falloff Height, Sun Scatter; Height and tint = interactive
+    altitude-density profile plus Colour.
+  - Atmospheric Fog: Fog settings = Enabled; Medium = Density, Start, Mie Blend; Spectral transmission remains the
+    model-specific technical card.
+  - Local Fog: Fog settings = Enabled and Follow Wind; Medium = Density, Coverage, Feature Scale, Anisotropy; Local bounds
+    retains Centre and Half Size.
+- Visibility through fog is now the same interactive card for all three models. It follows the C++ probe category: one
+  diagnostic Distance control with analytic fog sampled at fixed world Z = 2 m; the former non-native Probe altitude input
+  is removed. The superseded Height-only imported summary/Visibility/Beam frames are no longer mounted, removing the
+  visual mismatch and duplicate Fog menu family.
+- Beam Chamber remains inside Medium for every model and is now one shared component. It maps spread to Sun Scatter,
+  Mie Blend or Anisotropy as appropriate; Height uses its authored Colour and 25 m layer/120 m range while Atmospheric and
+  Local use their own extinction models and 400 m diagnostic range.
+- Existing model values, units and limits still come from `NativePanels.json`; no slider range was invented or changed.
+  Height's canonical-value cleanup remains in place for older saved/imported scenes.

@@ -127,26 +127,22 @@ const Sections = {
     Card("Wind field"),
   ],
   "height-fog": [
-    ["summary", ".fg-hero"],
-    ["summary", ".mp-rail"],
-    ["summary", ".mp-duo"],
     Card("Fog settings"),
-    ["details", ".fg-vis"],
+    Card("Visibility through fog"),
     Card("Medium"),
+    Card("Wind binding"),
   ],
   "aerial-fog": [
-    ".fog-sight",
-    ".fog-readings:last-of-type",
     Card("Fog settings"),
     Card("Visibility through fog"),
     Card("Medium"),
+    Card("Wind binding"),
   ],
   "local-fog": [
-    ".fog-sight",
-    ".fog-readings:last-of-type",
     Card("Fog settings"),
     Card("Visibility through fog"),
     Card("Medium"),
+    Card("Wind binding"),
   ],
   clouds: [
     ["summary", ".cl-hero"],
@@ -324,13 +320,9 @@ try {
       const ActualInputs = await Inputs(Page),
         PreviousInputs = await Inputs(Previous),
         ExpectedInputs =
-          Row.Panel === "height-fog"
+          Row.Panel.includes("fog")
             ? PreviousInputs.filter(
-                (Input) =>
-                  ![
-                    "INPUT number Fog probe altitude",
-                    "INPUT number Fog probe distance",
-                  ].includes(Input),
+                (Input) => Input !== "INPUT number Fog probe altitude",
               )
             : PreviousInputs;
       assert.deepEqual(

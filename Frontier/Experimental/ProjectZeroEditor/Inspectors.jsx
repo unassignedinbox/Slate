@@ -1,6 +1,6 @@
 import { CloudEdit, CloudValue } from "./CloudSpecification.js";
 import CloudDeckPanel from "./CloudDeckPanel.jsx";
-import FogPanel, { FogBeamChamber } from "./FogPanel.jsx";
+import { FogBeamChamber } from "./FogPanel.jsx";
 import HeightFogVisual from "./HeightFogVisual.jsx";
 import FracturePanel from "./FracturePanel.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
@@ -8,6 +8,7 @@ import {
   GraphContext,
   PropertyGraph,
   SunGraph,
+  FogGraph,
   FogSpectrum,
   CloudSection,
   CloudBounds,
@@ -482,7 +483,6 @@ export function Inspector({
   ReferenceCards = null,
   CloudCoverageCards = null,
   ReferenceDetailCards = null,
-  ReferenceBeamCards = null,
 }) {
   const Sheet = Panels[Subject.Panel] || Panels.geometry;
   const [MoonSlot, SelectMoon] = useState(0);
@@ -1643,27 +1643,13 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment")}
-        {ReferenceCards}
-        {(Local || Aerial) && (
-          <FogPanel
-            Kind={Subject.Panel}
-            V={V}
-            Values={Values}
-            Change={AssignProperty}
-            QuickControls={
-              <Card Title="Fog settings" Height={142}>
-                {Tiles(Local ? ["Enabled", "Follow Wind"] : ["Enabled"])}
-              </Card>
-            }
-          />
-        )}
-        {Height && (
-          <Card Title="Fog settings" Height={142}>
-            {Tiles(["Enabled"])}
-          </Card>
-        )}
-        {ReferenceDetailCards}
-        <div className="card-grid">
+        <Card Title="Fog settings" Height={142}>
+          {Tiles(Local ? ["Enabled", "Follow Wind"] : ["Enabled"])}
+        </Card>
+        <Card Title="Visibility through fog" Height={435} GraphHandled>
+          <FogGraph Kind={Subject.Panel} V={V} Change={AssignProperty} />
+        </Card>
+        <div className="card-grid fog-model-cards">
           <Card Title="Medium" Height={416}>
             {Fields(
               "Density",
@@ -1671,17 +1657,13 @@ export function Inspector({
               Local ? "Feature Scale" : Aerial ? "Mie Blend" : "Sun Scatter",
               ...(Local ? ["Anisotropy"] : []),
             )}
-            {Height ? (
-              ReferenceBeamCards
-            ) : (
-              <FogBeamChamber Kind={Subject.Panel} V={V} />
-            )}
+            <FogBeamChamber Kind={Subject.Panel} V={V} />
           </Card>
           {Local ? (
             <FogShapePanel Values={Values} Change={Change} />
           ) : (
             <Card
-              Title={Aerial ? "Spectral transmission" : "Density with altitude"}
+              Title={Aerial ? "Spectral transmission" : "Height and tint"}
               Height={416}
               GraphHandled
             >

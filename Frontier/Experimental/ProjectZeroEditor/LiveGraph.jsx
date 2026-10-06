@@ -426,7 +426,7 @@ function DecimalMetric({ Value }) {
   );
 }
 export function FogGraph({ Kind, V, Change, Density = false }) {
-  const Altitude = V("Probe altitude") ?? 2,
+  const Altitude = 2,
     Distance = V("Probe distance") ?? 200,
     Local = Kind === "local-fog";
   const Sigma = FogDensity(Kind, V, Altitude, true),
@@ -478,19 +478,6 @@ export function FogGraph({ Kind, V, Change, Density = false }) {
         YUnit={Density ? "m⁻¹" : "%"}
       />
       <div className="graph-probes">
-        <label>
-          Probe altitude · m
-          <input
-            aria-label="Fog probe altitude"
-            type="number"
-            min={0}
-            max={3000}
-            value={Altitude}
-            onChange={(E) =>
-              Change("Probe altitude", Clamp(E.target.value, 0, 3000))
-            }
-          />
-        </label>
         <label>
           Distance · m
           <input
@@ -617,8 +604,7 @@ export function SunGraph({ V, Change, Mode }) {
 
 export function FogSpectrum({ V, Change }) {
   const Distance = V("Probe distance") ?? 200,
-    Altitude = V("Probe altitude") ?? 2,
-    Sigma = FogDensity("aerial-fog", V, Altitude, true),
+    Sigma = FogDensity("aerial-fog", V, 2, true),
     Path = Math.max(0, Distance),
     Mix = V("Mie Blend");
   return (

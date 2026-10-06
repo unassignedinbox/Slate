@@ -96,28 +96,22 @@ try {
   );
 
   await Open("height-fog");
+  assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
+  for (const Title of [
+    "Fog settings",
+    "Visibility through fog",
+    "Medium",
+    "Height and tint",
+    "Wind binding",
+  ])
+    assert.equal(await Page.locator(`[data-card="${Title}"]`).count(), 1);
   assert.equal(
-    await Page.locator(
-      '[data-panel="height-fog"] > header + [data-reference-slice="summary"]',
-    ).count(),
-    1,
-  );
-  assert.equal(await Page.locator(".reference-inspector-copy").count(), 3);
-  await Page.frameLocator('[data-reference-slice="details"] iframe')
-    .locator(".fg-vis")
-    .waitFor();
-  await Page.frameLocator('[data-reference-slice="beam"] iframe')
-    .locator(".fg-chamber")
-    .waitFor();
-  assert.equal(
-    await Page.locator(
-      '[data-card="Medium"] > [data-reference-slice="beam"]',
-    ).count(),
+    await Page.locator('[data-card="Medium"] > .fog-shared-beam').count(),
     1,
   );
   await Page.screenshot({ path: path.join(Proof, "height-fog-header.png") });
   Checks.push(
-    "height-fog: retained summary and Visibility cards; Beam Chamber is nested in Medium",
+    "height-fog: shared C++-aligned Fog cards; Beam Chamber remains nested in Medium",
   );
   await Open("wind");
   await Page.locator(".reference-inspector-copy").evaluate((Node) =>
@@ -148,101 +142,35 @@ try {
   );
   for (const Id of ["aerial-fog", "local-fog"]) {
     await Open(Id);
+    assert.equal(await Page.locator(".reference-inspector-copy,.fog-instruments").count(), 0);
+    assert.equal(await Page.getByLabel("Fog probe distance", { exact: true }).count(), 1);
     assert.equal(
-      await Page.locator(
-        `[data-panel="${Id}"] > header + .fog-instruments`,
-      ).count(),
-      1,
-    );
-    assert.equal(await Page.locator(".fog-reading").count(), 6);
-    assert.equal(
-      await Page.getByLabel("Fog probe distance", { exact: true }).count(),
+      await Page.getByRole("img", { name: "Fog beam chamber", exact: true }).count(),
       1,
     );
     assert.equal(
-      await Page.getByRole("img", {
-        name: "Fog beam chamber",
-        exact: true,
-      }).count(),
+      await Page.locator('[data-card="Medium"] > .fog-shared-beam').count(),
       1,
     );
-    assert.equal(await Page.locator("iframe").count(), 0);
-    assert(
-      await Page.locator(".fog-reading").evaluateAll((Nodes) =>
-        Nodes.every((Node) => {
-          const Style = getComputedStyle(Node);
-          return (
-            Style.borderTopWidth === "0px" &&
-            Node.scrollWidth <= Node.clientWidth
-          );
-        }),
-      ),
-    );
-    const Before = await Page.locator(".fog-readings").first().innerText();
+    const Before = await Page.locator('[data-card="Visibility through fog"] .graph-metric').innerText();
     await Page.getByLabel("Density value", { exact: true }).fill("2");
     assert.notEqual(
-      await Page.locator(".fog-readings").first().innerText(),
+      await Page.locator('[data-card="Visibility through fog"] .graph-metric').innerText(),
       Before,
     );
     await Open(Id);
-    assert.equal(
-      await Page.getByLabel("Density value", { exact: true }).inputValue(),
-      "2",
-    );
-    if (Id === "aerial-fog") {
-      await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-      await Page.getByLabel("Start value", { exact: true }).fill("250");
-      assert.equal(
-        await Page.locator(".fog-readings")
-          .nth(1)
-          .locator("b")
-          .first()
-          .innerText(),
-        "100%",
-      );
-      await Page.getByLabel("Start value", { exact: true }).fill("0");
-      assert.equal(
-        await Page.locator(".fog-readings")
-          .nth(1)
-          .locator("b")
-          .first()
-          .innerText(),
-        "67%",
-      );
-    } else {
-      assert.equal(
-        await Page.locator(".fog-readings")
-          .nth(1)
-          .locator("b")
-          .first()
-          .innerText(),
-        "11%",
-      );
-      await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-      assert.equal(
-        await Page.locator(".fog-readings")
-          .nth(1)
-          .locator("b")
-          .first()
-          .innerText(),
-        "100%",
-      );
-      await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-    }
-    await Page.locator(".inspector-scroll").evaluate(
-      (Node) => (Node.scrollTop = 0),
-    );
+    assert.equal(await Page.getByLabel("Density value", { exact: true }).inputValue(), "2");
+    await Page.locator(".inspector-scroll").evaluate((Node) => (Node.scrollTop = 0));
     await Page.screenshot({ path: path.join(Proof, Id + ".png") });
     await Page.setViewportSize({ width: 1024, height: 768 });
     assert(
-      await Page.locator(".fog-instruments").evaluate(
+      await Page.locator(`[data-panel="${Id}"]`).evaluate(
         (Node) => Node.scrollWidth <= Node.clientWidth + 1,
       ),
     );
     await Page.setViewportSize({ width: 1366, height: 900 });
     Checks.push(
-      Id +
-        ": type-specific cards use native controls, persist and respond to enable/density/start; no duplicate probe or narrow overflow",
+      Id + ": coordinated cards use native-model controls, persist and fit narrow layouts",
     );
   }
   await Open("reference-key-spot");
@@ -394,20 +322,19 @@ try {
       await Previous.goto("http://baseline.test/?inspect=" + Id);
       await Previous.locator(".inspector-scroll > [data-panel]").waitFor();
       const ActualInventory = await Page.evaluate(Inventory),
-        PreviousInventory = await Previous.evaluate(Inventory),
-        ExpectedInventory =
-          Id === "height-fog"
-            ? PreviousInventory.filter(
-                (Input) =>
-                  !Input.includes("Fog probe altitude") &&
-                  !Input.includes("Fog probe distance"),
-              )
-            : PreviousInventory;
-      assert.deepEqual(
-        ActualInventory,
-        ExpectedInventory,
-        Id + " retains native control inventory",
-      );
+        PreviousInventory = await Previous.evaluate(Inventory);
+      if (Id.includes("fog")) {
+        assert(
+          ActualInventory.every((Input) => !Input.includes("Fog probe altitude")),
+          Id + " uses the C++ fixed diagnostic altitude",
+        );
+      } else {
+        assert.deepEqual(
+          ActualInventory,
+          PreviousInventory,
+          Id + " retains native control inventory",
+        );
+      }
     }
     await Previous.close();
     Checks.push(

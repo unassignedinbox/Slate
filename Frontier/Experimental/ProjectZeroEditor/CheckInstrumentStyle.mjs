@@ -148,45 +148,17 @@ try {
   Checks.push(
     "Anemometer pixels have no green, retain neutral highlights/amber sample, animate, expand and resize to 240px",
   );
-  await Open("height-fog");
-  const HeightBeam = Page.frameLocator('[data-reference-slice="beam"] iframe');
-  await HeightBeam.locator(".fg-chamber canvas").waitFor();
-  assert.equal(
-    await Page.locator(
-      '[data-card="Medium"] > [data-reference-slice="beam"]',
-    ).count(),
-    1,
-  );
-  assert.equal(await HeightBeam.locator(".fg-vis").count(), 0);
-  assert.equal(
-    await HeightBeam.locator(".fg-chamber").evaluate((Card) => getComputedStyle(Card).backgroundColor),
-    "rgb(25, 25, 25)",
-  );
-  await Page.locator('[data-card="Medium"]').scrollIntoViewIfNeeded();
-  await Capture("HeightFogChamber");
-  Checks.push(
-    "Height Fog Beam Chamber is retained and nested only inside the Medium card",
-  );
-  for (const Id of ["aerial-fog", "local-fog"]) {
+  for (const Id of ["height-fog", "aerial-fog", "local-fog"]) {
     await Open(Id);
+    const Beam = Page.locator('[data-card="Medium"] .fog-shared-beam');
+    assert.equal(await Beam.count(), 1);
     assert.equal(
-      await Page.locator('[data-card="Medium"] .fog-shared-beam').count(),
-      1,
+      await Beam.evaluate((Card) => getComputedStyle(Card).backgroundColor),
+      "rgb(25, 25, 25)",
     );
-    assert(
-      await Page.locator(".fog-reading").evaluateAll((Tiles) =>
-        Tiles.every((Tile) => getComputedStyle(Tile).borderRadius === "12px"),
-      ),
-    );
-    const Backgrounds = await Page.locator(
-      ".fog-shared-beam,.fog-reading",
-    ).evaluateAll((Cards) =>
-      Cards.map((Card) => getComputedStyle(Card).backgroundColor),
-    );
-    assert(Backgrounds.every((Colour) => Colour === "rgb(25, 25, 25)"));
-    await Page.locator(".fog-shared-beam").scrollIntoViewIfNeeded();
+    await Beam.scrollIntoViewIfNeeded();
     await Capture(Id + "Chamber");
-    Checks.push(`${Id}: corrected shared Beam Chamber styling inside Medium`);
+    Checks.push(`${Id}: one shared Beam Chamber style and Medium-card ownership`);
   }
   await Open("reference-softbox");
   await Frame().locator(".lp-readings").waitFor();

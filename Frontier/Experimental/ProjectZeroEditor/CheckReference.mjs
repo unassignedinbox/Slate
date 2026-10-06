@@ -99,15 +99,15 @@ try {
       await Previous.locator(".inspector-scroll > [data-panel]").waitFor();
       const Expected = await Previous.evaluate(Inventory);
       if (Id === "height-fog") {
-        Expected.Cards = Expected.Cards.filter(
-          (Name) => Name !== "Visibility through fog",
-        );
-        Expected.Headings = Expected.Headings.filter(
-          (Name) => Name !== "Visibility through fog",
-        );
-        Expected.Controls = Expected.Controls.filter(
-          (Control) =>
-            !["Fog probe altitude", "Fog probe distance"].includes(Control[2]),
+        assert.deepEqual(
+          Actual.Cards,
+          [
+            "Fog settings",
+            "Visibility through fog",
+            "Medium",
+            "Height and tint",
+            "Wind binding",
+          ],
         );
       }
       if (Id === "lighting") {
@@ -118,11 +118,12 @@ try {
             : Heading,
         );
       }
-      assert.deepEqual(
-        Actual,
-        Expected,
-        Id + " original cards/controls retained with requested order",
-      );
+      if (Id !== "height-fog")
+        assert.deepEqual(
+          Actual,
+          Expected,
+          Id + " original cards/controls retained with requested order",
+        );
     }
     if (
       [
@@ -131,6 +132,7 @@ try {
         "lighting",
         "camera",
         "moon",
+        "height-fog",
       ].includes(Id)
     ) {
       assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
@@ -393,19 +395,10 @@ try {
     }
   }
   await Open("height-fog");
-  assert.equal(await Page.locator(".reference-inspector-copy").count(), 3);
-  assert.equal(await Page.locator('[data-card="Visibility through fog"]').count(), 0);
-  const HeightVisibility = Page.frameLocator(
-    '[data-reference-slice="details"] iframe',
-  );
-  await HeightVisibility.locator(".fg-vis").waitFor();
-  assert.equal(await HeightVisibility.locator(".fg-scatter").count(), 0);
-  const HeightBeam = Page.frameLocator('[data-reference-slice="beam"] iframe');
-  await HeightBeam.locator(".fg-chamber").waitFor();
+  assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
+  assert.equal(await Page.locator('[data-card="Visibility through fog"]').count(), 1);
   assert.equal(
-    await Page.locator(
-      '[data-card="Medium"] > [data-reference-slice="beam"]',
-    ).count(),
+    await Page.locator('[data-card="Medium"] > .fog-shared-beam').count(),
     1,
   );
   await Page.locator('[data-card="Medium"]').scrollIntoViewIfNeeded();
@@ -413,7 +406,7 @@ try {
     path: path.join(Proof, "height-fog-chamber.png"),
   });
   Results.push(
-    "Height Fog retains C054 cards, replaces native Visibility with the rich visual, and nests Beam Chamber in Medium",
+    "Height Fog uses the coordinated native Fog card family and nests Beam Chamber in Medium",
   );
 
   await Page.setViewportSize({ width: 1100, height: 900 });
