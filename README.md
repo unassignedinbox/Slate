@@ -13,6 +13,8 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
+**[Launch the published studio](https://raw.githack.com/unassignedinbox/Slate/75eb5ecab78d570103fe5fa928ca740afbdc5e76/site/index.html).** If GitHack shows its external-content notice, select **Open the page**. GitHack documents this confirmation for HTML pages; it is not an Alloy error.
+
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
 Regenerate it after source changes:
@@ -46,11 +48,11 @@ Examples:
 
 Dimensional size and repetition controls are **not** reduced to arbitrary 0–1 ranges:
 
-| Control | Slider range | Typed range |
-| --- | --- | --- |
-| Flake size | 0.001–1,000 µm, logarithmic | 0.000001–1,000,000 µm |
-| Thread / grain / peel / flake repetition scale | 0.01–1,000×, logarithmic | 0.000001–1,000,000× |
-| Yarn direction | −180–180° | −180–180° |
+| Control                                        | Slider range                | Typed range           |
+| ---------------------------------------------- | --------------------------- | --------------------- |
+| Flake size                                     | 0.001–1,000 µm, logarithmic | 0.000001–1,000,000 µm |
+| Thread / grain / peel / flake repetition scale | 0.01–1,000×, logarithmic    | 0.000001–1,000,000×   |
+| Yarn direction                                 | −180–180°                   | −180–180°             |
 
 The dimensional convention is **1 scene unit = 100 mm**. Extended inputs expand the slider domain. Fine features become subpixel and are filtered; increasingly small features need not remain individually visible.
 
@@ -111,3 +113,23 @@ npm test
 ```
 
 The suite covers all material families, bounded recipe mappings, context-relevant inspector controls, all nine live weave patterns, independent yarn colors, thin-film uniforms and live iridescence, frozen geometry, height-aware wear, local persistence, JSON/JavaScript/PNG exports, macro zoom, extended ranges, color ramps and mobile layouts. Use `PLAYWRIGHT_EXECUTABLE_PATH` for an existing Chromium executable; software-rendering launch flags are included.
+
+### Standalone and publication checks
+
+```sh
+# Rebuild, then exercise only the generated HTML—without a Vite server.
+npm run test:standalone
+
+# Verify GitHub holds the exact local page bytes and print its immutable URL.
+npm run verify:published
+```
+
+The standalone test blocks unexpected HTTP asset requests, checks the full material library, edits cloth construction/yarn colors, checks live iridescence, and executes the exported Three.js shader. It uses an intercepted test origin, not a dev-server fallback. Browser executable/launch settings are shared with the main suite.
+
+To exercise the actual hosted page instead, set its URL explicitly:
+
+```sh
+ALLOY_PUBLIC_URL='https://raw.githack.com/unassignedinbox/Slate/75eb5ecab78d570103fe5fa928ca740afbdc5e76/site/index.html' npm run test:standalone
+```
+
+The remote mode confirms GitHack's notice if present. Connection failures **fail the test**; it never substitutes a local copy. Successful artifact verification is not a claim that GitHack's live runtime was tested. Some sandbox networks block direct connections to GitHack.
