@@ -187,33 +187,6 @@
                             </div>
                             <p class="gpu-detail" id="gpu-error-detail" hidden></p>
                         </div>
-                        <section class="browser" id="content-browser" data-state="closed" aria-label="Content browser">
-                            <button class="browser-tab" id="browser-tab" aria-expanded="false" aria-controls="browser-body">
-                                <span data-icon="grid"></span><span class="browser-tab-label">Content browser</span><i class="browser-grip"></i>
-                            </button>
-                            <div class="browser-body" id="browser-body">
-                                <aside class="browser-library" aria-label="Library">
-                                    <p class="browser-library-head">Library</p>
-                                    <div class="browser-categories" id="browser-categories"></div>
-                                </aside>
-                                <div class="browser-content">
-                                    <header class="browser-head">
-                                        <div class="browser-title">
-                                            <h2 id="browser-heading">Automotive</h2>
-                                            <small id="browser-count">—</small>
-                                        </div>
-                                        <input type="search" id="browser-search" placeholder="Search the shelf" aria-label="Search content" hidden />
-                                        <div class="browser-actions">
-                                            <button class="icon-button" id="browser-search-toggle" title="Search" aria-label="Search" data-icon="search"></button
-                                            ><button class="icon-button active" data-browser-view="grid" title="Grid" aria-label="Grid view" data-icon="grid"></button
-                                            ><button class="icon-button" data-browser-view="list" title="List" aria-label="List view" data-icon="list"></button
-                                            ><button class="icon-button" id="browser-close" title="Close the browser · B" aria-label="Close the browser" data-icon="close"></button>
-                                        </div>
-                                    </header>
-                                    <div class="browser-items" id="browser-items" data-view="grid"></div>
-                                </div>
-                            </div>
-                        </section>
                         <div id="toast" class="toast" role="status" hidden></div>
                         <div id="diagnostics" class="diagnostics" hidden>
                             <div class="panel-heading">
@@ -257,6 +230,36 @@
                     <div class="inspector-footer"><span data-icon="link"></span>Edits composite immediately</div>
                 </aside>
             </main>
+            <!-- The content browser is a row of the window, under all three panels. It used to live inside the 3D
+                 viewport, which made it a shelf that only reached across the middle column and that went away with the
+                 view when the view was maximised. A shelf is furniture, not part of the picture. -->
+            <section class="browser" id="content-browser" data-state="closed" aria-label="Content browser">
+                <button class="browser-tab" id="browser-tab" aria-expanded="false" aria-controls="browser-body">
+                    <span data-icon="grid"></span><span class="browser-tab-label">Content browser</span><i class="browser-grip"></i>
+                </button>
+                <div class="browser-body" id="browser-body">
+                    <aside class="browser-library" aria-label="Library">
+                        <p class="browser-library-head">Library</p>
+                        <div class="browser-categories" id="browser-categories"></div>
+                    </aside>
+                    <div class="browser-content">
+                        <header class="browser-head">
+                            <div class="browser-title">
+                                <h2 id="browser-heading">Automotive</h2>
+                                <small id="browser-count">—</small>
+                            </div>
+                            <input type="search" id="browser-search" placeholder="Search the shelf" aria-label="Search content" hidden />
+                            <div class="browser-actions">
+                                <button class="icon-button" id="browser-search-toggle" title="Search" aria-label="Search" data-icon="search"></button
+                                ><button class="icon-button active" data-browser-view="grid" title="Grid" aria-label="Grid view" data-icon="grid"></button
+                                ><button class="icon-button" data-browser-view="list" title="List" aria-label="List view" data-icon="list"></button
+                                ><button class="icon-button" id="browser-close" title="Close the browser · B" aria-label="Close the browser" data-icon="close"></button>
+                            </div>
+                        </header>
+                        <div class="browser-items" id="browser-items" data-view="grid"></div>
+                    </div>
+                </div>
+            </section>
             <footer class="status-bar">
                 <span class="status-ready" id="status-ready"><i></i>Initialising</span><span class="status-divider"></span><span id="texel-count">1.05 Mtexel · 1024²</span
                 ><span class="status-divider"></span><span id="surface-status">—</span><span class="status-divider"></span><span id="revision-status">0 revisions</span

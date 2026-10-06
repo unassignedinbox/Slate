@@ -323,8 +323,12 @@ moves the brush with it — if you are looking at a mask on its own, that is wha
 brush at a mask no longer changes what is on screen: masking is judged on the surface it is shaping, not on a picture
 of the mask. The stack footer and the chips on every layer row always state which side is live.
 
-**Content browser.** A drawer across the foot of the viewport — drag its tab, press `B`, or use the grid button in the
-viewport bar; it settles closed, half or full. The library column on the left walks Materials (the four finish families
+**Content browser.** A drawer across the foot of the **window**, under all three panels — drag its tab, press `B`, or
+use the grid button in the viewport bar; it settles closed, half or full. It is a row of the shell rather than a child
+of the 3D view, which is the only way it can be the full width: parented to the viewport it could never be wider than
+the middle column, it slid out over the model it was there to dress, and it disappeared with the view whenever the view
+was maximised. Opening it **pushes** the workspace up instead of covering it, and the header, the status bar and a
+workspace worth painting in keep their share of the window however far the tab is dragged. The library column on the left walks Materials (the four finish families
 plus the multi-layer surface presets), Decals (signage, marks, plates, grunge and the ten type families), Generators
 (procedural and baked) and Scene (surfaces and lighting). The shelf on the right searches, switches between tiles and
 rows, and every item is dragged out of it rather than clicked into place: pick a tile up and drop it on the model to add

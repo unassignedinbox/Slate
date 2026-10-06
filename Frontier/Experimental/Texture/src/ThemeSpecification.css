@@ -2283,27 +2283,33 @@ dialog {
 }
 
 /* ------------------------------------------------------------------------------------------------------------------
-   Content browser — a drawer across the foot of the viewport. Library on the left, shelf on the right.
+   Content browser — a drawer across the foot of the WINDOW, under all three panels. Library on the left, shelf on the
+   right.
+
+   🔴 It is a row of the app shell, not a child of the viewport. Parented to the 3D view it could only ever be as wide
+      as the middle column, it slid out over the model it was there to dress, and it went away with the view whenever
+      the view was maximised. A shelf is furniture: it belongs to the window, it opens the full width of it, and what
+      it pushes is the workspace rather than the picture.
    ------------------------------------------------------------------------------------------------------------------ */
 .browser {
-  position: absolute;
-  z-index: 4;
-  inset: 0;
+  position: relative;
+  z-index: 6;
+  flex: 0 1 auto;
+  min-height: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   align-items: center;
-  pointer-events: none;
+  background: var(--bg);
 }
 .browser-tab {
-  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: 9px;
   height: 32px;
   padding: 0 28px;
   border: 0;
-  background: #161616f2;
+  background: #161616;
   color: #9a9a9a;
   font-family: inherit;
   font-size: 10px;
@@ -2311,7 +2317,6 @@ dialog {
   text-transform: uppercase;
   cursor: grab;
   clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 100%, 0 100%);
-  backdrop-filter: blur(14px);
   transition: color 0.16s ease;
   touch-action: none;
 }
@@ -2337,26 +2342,27 @@ dialog {
   background: #4a4a4a;
 }
 .browser-body {
-  pointer-events: auto;
   width: 100%;
   height: var(--browser-height, 0px);
-  max-height: calc(100% - 40px);
+  /* However far it is dragged, the header, the status bar and a workspace worth using keep their share of the window. */
+  max-height: calc(100dvh - 320px);
   overflow: hidden;
   display: grid;
   grid-template-columns: 196px minmax(0, 1fr);
-  background: #0d0d0df2;
+  /* Opaque, and no backdrop blur: the drawer pushes the workspace rather than sliding over it, so there is nothing
+     behind it to see through and nothing to blur. */
+  background: #0d0d0d;
   border-top: 1px solid #ffffff12;
-  backdrop-filter: blur(18px);
   transition: height 0.34s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .browser.dragging .browser-body {
   transition: none;
 }
 .browser[data-state="half"] {
-  --browser-height: min(46vh, 430px);
+  --browser-height: min(40vh, 400px);
 }
 .browser[data-state="full"] {
-  --browser-height: min(74vh, 720px);
+  --browser-height: min(66vh, 680px);
 }
 .browser-library {
   display: flex;

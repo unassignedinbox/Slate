@@ -818,6 +818,7 @@ a {
 .status-bar {
   height: 26px;
   min-height: 26px;
+  flex-shrink: 0;
   border-top: 1px solid #3c3c3c;
   display: flex;
   align-items: center;

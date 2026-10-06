@@ -851,5 +851,38 @@ Check(
     `${Panel.Flake.Metal} against ${Full}`,
 );
 
+//--------------------------------------------------------------------------------------------------------------------------
+// The content browser is furniture, not part of the picture: a row of the window under all three panels, which is a
+// thing the markup has to say rather than the stylesheet, because a drawer inside the viewport can never be wider
+// than the viewport whatever CSS is thrown at it.
+//--------------------------------------------------------------------------------------------------------------------------
+const Drawer = Find("#content-browser");
+Check("the drawer is in the document", !!Drawer);
+Check("and it is not inside the 3D viewport", !Find("#viewport").contains(Drawer), Drawer.parentElement?.id || Drawer.parentElement?.className);
+Check("nor inside the centre column", !Find(".center-panel").contains(Drawer));
+Check("nor inside the workspace, which is only as wide as its three columns", !Find("#texture-workspace").contains(Drawer));
+Check("it is a child of the app shell", Drawer.parentElement?.id === "app", Drawer.parentElement?.id || "—");
+Check(
+    "sitting at the very bottom, under the workspace and above the status bar",
+    Drawer.previousElementSibling?.id === "texture-workspace" && Drawer.nextElementSibling?.classList.contains("status-bar"),
+    `${Drawer.previousElementSibling?.id} → ${Drawer.nextElementSibling?.className}`,
+);
+
+Check("it opens closed", Drawer.dataset.state === "closed", Drawer.dataset.state);
+Press(Find("#browser-button"));
+await Settle(Window, 2);
+Check("the viewport-bar button opens it", Drawer.dataset.state === "half", Drawer.dataset.state);
+Check("and the button reads as on", Find("#browser-button").classList.contains("active"));
+Check("the shelf filled", Find("#browser-items").children.length > 0, String(Find("#browser-items").children.length));
+Press(Find("#browser-close"));
+await Settle(Window, 2);
+Check("closing it closes it", Drawer.dataset.state === "closed" && !Find("#browser-button").classList.contains("active"));
+Type("b");
+await Settle(Window, 2);
+Check("B opens it too", Drawer.dataset.state === "half", Drawer.dataset.state);
+Type("b");
+await Settle(Window, 2);
+Check("and B closes it again", Drawer.dataset.state === "closed", Drawer.dataset.state);
+
 Report();
 process.exit(process.exitCode || 0);

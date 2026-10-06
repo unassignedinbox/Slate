@@ -1778,6 +1778,11 @@ export class TexturePanel
         let Travelled = 0;
         const Sheet = Select("#browser-body");
         const Height = () => Sheet.getBoundingClientRect().height;
+        // 🔴 The drawer is a row of the window now, not a sheet over the 3D view, so what bounds it is the window —
+        //    everything the header, the status bar and a workspace worth painting in do not need. Measuring against
+        //    the viewport was only ever right while the drawer lived inside it, and it got the stops wrong the moment
+        //    the viewport was a different height from the shell.
+        const Headroom = () => Math.max(220, (Select("#app")?.getBoundingClientRect().height || 900) - 320);
         Tab.addEventListener("pointerdown", (Event) =>
         {
             Dragging = true;
@@ -1792,8 +1797,7 @@ export class TexturePanel
             if (!Dragging) return;
             const Delta = Origin - Event.clientY;
             Travelled = Math.max(Travelled, Math.abs(Delta));
-            const Limit = Select("#viewport").getBoundingClientRect().height || 720;
-            Shell.style.setProperty("--browser-height", `${Clamp(Started + Delta, 44, Limit * 0.92)}px`);
+            Shell.style.setProperty("--browser-height", `${Clamp(Started + Delta, 44, Headroom())}px`);
         });
         const Settle = (Event) =>
         {
@@ -1807,8 +1811,7 @@ export class TexturePanel
                 Shell.style.removeProperty("--browser-height");
                 return;
             }
-            const Limit = Select("#viewport").getBoundingClientRect().height || 720;
-            const Fraction = Height() / Math.max(Limit, 1);
+            const Fraction = Height() / Headroom();
             Shell.style.removeProperty("--browser-height");
             this.SetBrowserState(Fraction < 0.22 ? "closed" : Fraction < 0.66 ? "half" : "full");
         };
