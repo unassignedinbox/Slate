@@ -115,6 +115,7 @@ import {
     FinishStyles,
     FinishLabel,
     CreateFinish,
+    FlakeFromFinish,
 } from "./FinishSpecification.js";
 import {
     GeneratorOrdering,
@@ -663,6 +664,7 @@ export class TexturePanel
         this.HoverTile = FirstTile;
         this.HoverObject = "";
         this.Solo = "";
+        this.Flake = null;              // the leaf recipe the topmost paint in the stack hands the shading pass
         // How the next stroke goes down, and what it answers to on the way. All three live on the panel rather than on
         // the brush: they are how the hand is being used, not what is in it, and they outlast swapping instruments.
         this.StrokeMode = "freehand";
@@ -1232,7 +1234,27 @@ export class TexturePanel
                 this.Solving = false;
             }
         }
-        this.Integrator.Composite(CompositeOrdering(this.Layers, this.Solo), this.Project.Material);
+        const Ordering = CompositeOrdering(this.Layers, this.Solo);
+        // 🔴 Which paint owns the sparkle. The leaf in a metallic basecoat cannot be composited into the channels —
+        //    it is a per-pixel facet that only exists once the eye and the lights are known — so what the viewport
+        //    needs is the recipe, taken from the topmost paint in the stack that has anything suspended in it. The
+        //    shading pass then gates it per texel on metalness under coat, which is why a solid stripe masked over a
+        //    metallic panel stops sparkling at the edge of the stripe without anything here knowing about the mask.
+        this.Flake = null;
+        for (let Index = Ordering.length - 1; Index >= 0 && !this.Flake; Index -= 1)
+        {
+            if (Ordering[Index].Kind !== "finish") continue;
+            const Leaf = FlakeFromFinish(Ordering[Index].Finish);
+            // Opacity fades both numbers, because the compositor faded the metalness the shading pass takes them
+            // out of: a half-strength paint has half the leaf in it, not half the sparkle over all of it.
+            if (Leaf)
+                this.Flake = {
+                    ...Leaf,
+                    Weight: Leaf.Weight * Ordering[Index].Opacity,
+                    Metal: Leaf.Metal * Ordering[Index].Opacity,
+                };
+        }
+        this.Integrator.Composite(Ordering, this.Project.Material);
         // Generator and colour masks exist only as a recipe until something resolves them, so the preview pass runs
         // whenever the viewport is actually showing a mask.
         if (this.Display === "mask")
@@ -10870,6 +10892,7 @@ export class TexturePanel
         const Options = {
             Environment: this.Project.Environment,
             Material: this.Project.Material,
+            Flake: this.Flake,
             Display: DisplayIndex(this.Display),
             MaskLayer: this.Project.Selection,
             CheckerScale: 16,

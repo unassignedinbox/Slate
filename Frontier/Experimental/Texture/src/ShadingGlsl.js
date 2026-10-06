@@ -129,57 +129,20 @@ struct FinishSample
 };
 
 //--------------------------------------------------------------------------------------------------------------------------
-// Flake, properly.
+// 🔴 The leaf is NOT written into these maps, and that is the whole correction.
 //
-// 🔴 The flake field lives in the WORLD, not in the unwrap. A flake is a physical thing — aluminium leaf is about 15 to
-//    40 microns across, mica a little wider — and a field laid out in UV would change size wherever the unwrap changed
-//    density, which is the single clearest tell of a faked metallic.
+// Aluminium leaf is fifteen to forty microns across. A texel on a 2048 sheet wrapped round a car panel is most of a
+// millimetre. So a baked flake was only ever one of two wrong things: a speck far below the texel, which the sheet
+// resolved into fizzing noise, or a flake the size of a fingernail, which is glitter. Worse, a flake written into
+// colour and metalness is STATIC — it is the same speck from every angle, and the one thing a metallic panel does is
+// change which flakes are alight as you walk past it. No map can hold that, because the map does not know where the
+// eye is.
 //
-// 📝 And it is a FACET, not a speck. What makes a metallic panel flare as you walk past it is that each flake lies at
-//    its own angle, so the one catching the light is never the one that caught it a second ago. The pass bakes into a
-//    height channel that the shading differentiates into a normal, so a flake is written as a RAMP across its own
-//    width — the derivative of a ramp is the tilt, and the tilt is the flare. A flat bright speck cannot flare.
-//
-// Cells are 3D: the surface only ever crosses a thin slab of them, so they cost a column of empty cells and in return
-// the field has no seams, no poles and no stretch. The jitter and the flake radius are held below half a cell between
-// them, which is what lets the eight nearest cells be the whole search.
-//
-// Returns: x how much of this texel the flake covers · y its own brightness · z the ramp across its facet, ±1 at the
-// rim · w its radius in metres, which is what turns that ramp into a real slope.
+// What a map can hold is the far field: the mean metal loading of the basecoat, the pigment the leaf tints, and the
+// clear coat's orange peel. That is what this pass bakes. The facets themselves are resolved per PIXEL at shading
+// time in FlakeChunk, as a tilt on the basecoat normal under the coat — Unreal's clear-coat bottom normal, Corona's
+// NormalFlakes, Substance's flake normal map. Same idea in all three, for the same reason.
 //--------------------------------------------------------------------------------------------------------------------------
-vec4 FlakeAt(vec3 Position, vec3 Normal, float Size, float Density, float Seed)
-{
-    float Cell = max(Size, 0.00002);
-    vec3 Lattice = Position / Cell;
-    vec3 Base = floor(Lattice - 0.5);
-    vec3 Side = normalize(abs(Normal.y) < 0.9 ? cross(Normal, vec3(0.0, 1.0, 0.0)) : cross(Normal, vec3(1.0, 0.0, 0.0)));
-    vec3 Other = cross(Normal, Side);
-    vec4 Found = vec4(0.0);
-    float Near = 1e9;
-    for (int X = 0; X < 2; ++X)
-    for (int Y = 0; Y < 2; ++Y)
-    for (int Z = 0; Z < 2; ++Z)
-    {
-        vec3 Which = Base + vec3(float(X), float(Y), float(Z));
-        if (Hash31(Which + Seed) > clamp(Density, 0.02, 1.0)) continue;
-        vec3 Centre = (Which + 0.5 + (Hash33(Which + Seed * 3.17) - 0.5) * 0.4) * Cell;
-        vec3 Delta = Position - Centre;
-        float Through = dot(Delta, Normal);
-        if (abs(Through) > Cell * 0.5) continue;
-        vec2 Local = vec2(dot(Delta, Side), dot(Delta, Other));
-        float Reach = length(Local);
-        if (Reach > Near) continue;
-        float Radius = Cell * mix(0.1, 0.25, Hash31(Which + Seed * 7.31));
-        if (Reach > Radius) continue;
-        Near = Reach;
-        float Angle = Hash31(Which + Seed * 13.7) * 6.2831853;
-        float Tilt = mix(0.35, 1.0, Hash31(Which + Seed * 19.3));
-        // The ramp runs across the flake along its own direction: flat at the centre, ±1 at its edges.
-        float Across = dot(Local / max(Radius, 1e-6), vec2(cos(Angle), sin(Angle)));
-        Found = vec4(1.0 - smoothstep(0.72, 1.0, Reach / max(Radius, 1e-6)), Hash31(Which + Seed * 23.9), Across * Tilt, Radius);
-    }
-    return Found;
-}
 
 // The old flake field, still what the galvanised spangle and the weave want: cells in the unwrap, present or absent.
 float FlakeField(vec2 Coordinate, float Scale, float Density, float Seed, out float Facet)
@@ -226,9 +189,8 @@ FinishSample SampleFinish(
     float Variation = Trim.z;
     float Seed = Trim.w;
     float PeelAmount = clamp(Extra.x, 0.0, 1.0);          // [-]   how far the clear coat failed to level
-    float FlakeSize = max(Extra.y, 0.4) * 0.001;          // [m]   flake across, measured on the panel
-    float FlakeTilt = clamp(Extra.z, 0.0, 1.0);           // [-]   how far the flakes lie off the panel
-    float HeightRange = max(Extra.w, 0.25);               // [mm]  what the whole height channel is worth, end to end
+    // Extra.y flake size, Extra.z flake tilt and Extra.w the height range are read by the SHADING pass, not here: a
+    // flake is a per-pixel facet now, and the only thing this pass needs from it is how much of the panel it covers.
 
     vec2 Turned = Rotate(Coordinate - 0.5, Angle) + 0.5;
     FinishSample Result;
@@ -248,20 +210,16 @@ FinishSample SampleFinish(
         // clear coat over the top that never quite levels. That last part is orange peel, and it is the reason a
         // reflection in car paint wobbles while a reflection in a mirror does not — so it is modelled here as a shallow
         // undulation in height and a matching wobble in coat roughness, present on every style that has a coat at all.
-        vec4 Leaf = FlakeAt(Position, Normal, FlakeSize, Density, Seed);
-        float Flakes = Leaf.x;
-        float Facet = Leaf.y;
-        // 🔴 The ramp is what the shading differentiates into a tilted facet, and its height has to be a real length
-        //    or the tilt changes every time the flake size or the height range does. A facet of radius r lying at an
-        //    angle rises r·tanθ above its own centre, so the ramp is written in exactly those terms: the flake's
-        //    radius in millimetres over what the height channel is worth end to end. Pick the numbers any other way
-        //    and a coarse show flake comes out flatter than a fine one, which is backwards.
-        float Slope = clamp((Leaf.w * 1000.0) / HeightRange, 0.0, 0.6);
-        float Relief = Leaf.z * Flakes * FlakeTilt * Slope;
+        // 🔴 Leaf is the MEAN metal loading of the basecoat, and it is the handshake with the per-pixel pass. A cell of
+        //    the flake lattice holds one disc of mean area 0.6 of the cell, so the fraction of the panel that is leaf
+        //    rather than binder is density times that, times how much metal the leaf is worth. Writing exactly that
+        //    number into metalness is what lets the shading pass fade from resolved facets to this average without a
+        //    step: far away the panel is a metalness-0.4 basecoat, up close it is binder at 0 with aluminium at 1, and
+        //    the two have the same mean by construction.
+        float Leaf = clamp(Density * 0.6, 0.0, 1.0) * clamp(Strength, 0.0, 1.0);
         float Drift = Fractal(Turned * (2.0 + Scale * 3.0) + Seed, 4);
         float Peel = (Fractal(Turned * 17.0 + Seed * 0.37, 3) * 0.76 + Fractal(Turned * 54.0, 2) * 0.24 - 0.5) * PeelAmount;
         vec3 Body = mix(ColourA, ColourA * mix(0.86, 1.16, Drift), Variation);
-        float Sparkle = Flakes * Strength * mix(0.55, 1.0, Facet);
         float Clear = clamp(mix(0.075, 0.008, Gloss) + abs(Peel) * 0.26, 0.004, 1.0);
 
         // Style 0 · solid, single stage. Pigment and clear, nothing suspended in it.
@@ -274,28 +232,25 @@ FinishSample SampleFinish(
 
         if (Style == 1)
         {
-            // Metallic basecoat: aluminium flake suspended in the pigment, each one lying at its own angle, which is
-            // what makes the panel flare as you walk past it.
-            // Flake lifts the colour toward aluminium; it never replaces the pigment, or the panel reads as glitter.
-            Result.Colour = mix(Body, ColourB, clamp(Sparkle * 0.55, 0.0, 1.0));
-            Result.Metalness = clamp(Sparkle * 0.85, 0.0, 1.0);
-            Result.Roughness = clamp(mix(0.30, 0.055, Gloss) * (1.0 - 0.55 * Sparkle) + Drift * 0.02 * Variation, 0.02, 1.0);
-            Result.Height = 0.5 + Peel * 0.1 + Relief * Strength;
+            // Metallic basecoat: aluminium leaf suspended in the pigment. What reaches the maps is the average of it —
+            // the pigment tinted toward aluminium, and the metal fraction. The facets are the shading pass's job.
+            Result.Colour = mix(Body, ColourB, clamp(Leaf * 0.45, 0.0, 1.0));
+            Result.Metalness = clamp(Leaf, 0.0, 1.0);
+            Result.Roughness = clamp(mix(0.30, 0.055, Gloss) + Drift * 0.02 * Variation, 0.02, 1.0);
+            Result.Height = 0.5 + Peel * 0.1;
         }
         else if (Style == 2)
         {
-            // Pearl tri-coat: mica, not metal. The flake refracts rather than reflects, so the colour shifts with its
-            // tilt while the metalness stays near nothing and the specular lifts instead.
-            // Mica is a stack of thin plates, so what it does with light depends on the angle it is lying at — the
-            // ramp across the flake is exactly that angle, so the interference travels across each flake rather than
-            // tinting it flat.
-            float Shift = mix(0.15, 1.0, Facet) * Flakes * 0.8;
-            float Travel = clamp(0.5 + Leaf.z * 0.5, 0.0, 1.0);
-            Result.Colour = mix(Body, mix(ColourB, ColourB.gbr, Travel * 0.45), clamp(Shift * Strength, 0.0, 1.0));
-            Result.Metalness = clamp(Sparkle * 0.18, 0.0, 1.0);
-            Result.Roughness = clamp(mix(0.26, 0.05, Gloss) - Shift * 0.03, 0.02, 1.0);
-            Result.Specular = clamp(1.0 + Shift * 0.35, 0.0, 2.0);
-            Result.Height = 0.5 + Peel * 0.1 + Relief * Strength * 0.6;
+            // Pearl tri-coat: mica, not metal. Each platelet is a stack of thin films, so what it does with light
+            // depends on the angle it happens to be lying at AND on where the eye is — which is why the travel cannot
+            // live in a map either. It is carried per pixel by the same facets, through the flake travel uniform.
+            // The loading still has to be visible to the shading pass, so mica keeps a small metal fraction of its
+            // own: it is the mark that says this basecoat has something suspended in it.
+            Result.Colour = mix(Body, ColourB, clamp(Leaf * 0.3, 0.0, 1.0));
+            Result.Metalness = clamp(Leaf * 0.5, 0.02, 1.0);
+            Result.Roughness = clamp(mix(0.26, 0.05, Gloss), 0.02, 1.0);
+            Result.Specular = clamp(1.0 + Leaf * 0.4, 0.0, 2.0);
+            Result.Height = 0.5 + Peel * 0.1;
         }
         else if (Style == 3)
         {
@@ -304,13 +259,14 @@ FinishSample SampleFinish(
             vec3 Ground = mix(vec3(0.78, 0.79, 0.80), ColourB, 0.75);
             float Thickness = mix(0.85, 1.9, Drift) * mix(1.0, 1.4, Variation);
             vec3 Tint = pow(max(ColourA, vec3(0.004)), vec3(Thickness));
-            Result.Colour = Ground * Tint * mix(1.0, 1.0 + Sparkle, 0.4);
-            Result.Metalness = clamp(0.55 + Sparkle * 0.45, 0.0, 1.0);
+            Result.Colour = Ground * Tint;
+            Result.Metalness = clamp(0.55 + Leaf * 0.45, 0.0, 1.0);
             Result.Roughness = clamp(mix(0.22, 0.04, Gloss), 0.02, 1.0);
             Result.Coat = max(Coat, 0.7);
             Result.CoatRoughness = clamp(Clear * 0.75, 0.004, 1.0);
-            // The ground under a candy is a metallic basecoat, and it flares through the tint.
-            Result.Height = 0.5 + Peel * 0.1 + Relief * Strength * 0.8;
+            // The ground under a candy is a metallic basecoat, and it flares through the tint — per pixel, like any
+            // other metallic ground, so the tint sits over moving sparkle rather than over a frozen speckle.
+            Result.Height = 0.5 + Peel * 0.1;
         }
         else if (Style == 4)
         {
@@ -337,10 +293,10 @@ FinishSample SampleFinish(
             float WeightC = pow(0.5 + 0.5 * cos(Phase - 4.1887902), 3.0);
             vec3 Flip = (ColourA * WeightA + ColourB * WeightB + Third * WeightC) / max(WeightA + WeightB + WeightC, 1e-3);
             Result.Colour = mix(Body, Flip, clamp(0.45 + Variation * 0.55, 0.0, 1.0));
-            Result.Metalness = clamp(0.25 + Sparkle * 0.6, 0.0, 1.0);
+            Result.Metalness = clamp(0.25 + Leaf * 0.6, 0.0, 1.0);
             Result.Roughness = clamp(mix(0.22, 0.045, Gloss), 0.02, 1.0);
             Result.Coat = max(Coat, 0.8);
-            Result.Height = 0.5 + Peel * 0.1 + Relief * Strength * 0.7;
+            Result.Height = 0.5 + Peel * 0.1;
         }
         else if (Style == 6)
         {
@@ -1391,7 +1347,7 @@ uniform vec3 uFinishColourA;
 uniform vec3 uFinishColourB;
 uniform vec4 uFinishShape;      // scale, density, strength, gloss
 uniform vec4 uFinishTrim;       // coat, angle, variation, seed
-uniform vec4 uFinishExtra;      // orange peel, reserved, reserved, reserved
+uniform vec4 uFinishExtra;      // orange peel · flake size, tilt and height range, which the SHADING pass reads
 
 uniform int uDecalMode;         // 0 projection · 1 UV plane
 uniform vec3 uDecalPosition;
@@ -1599,6 +1555,100 @@ void main()
 //--------------------------------------------------------------------------------------------------------------------------
 // ⑥ Viewport shading — OpenPBR Surface slab evaluation over the composited channels.
 //--------------------------------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------------------------------
+// Flake — aluminium leaf under the clear coat, resolved per PIXEL.
+//
+// 🔴 How Unreal does it, and why: the Clear Coat shading model takes TWO normals. The ordinary Normal input drives the
+//    top of the coat, which is smooth apart from orange peel; switching on the second normal exposes a Clear Coat
+//    Bottom Normal for the layer underneath, and Epic's own note on it says it is there for "reflective flecks of car
+//    paint, which has different geometric or reflective surfaces than the top clear coat layer". Corona calls the same
+//    thing NormalFlakes, Substance ships it as a flake normal map. Three renderers, one answer: a flake is a TILT, not
+//    a speck of paint. Tilt it and the specular lobe does the rest — the flake that is alight now is the one whose
+//    facet happens to bisect the eye and the light, so walking past the panel lights a different set every frame.
+//    Nothing in a colour or metalness map can do that, because a map cannot see where the eye is.
+//
+// The field is a 3D cell lattice in WORLD space. A flake is a physical object, so it must not change size where the
+// unwrap changes density, must not swim across a seam and must not pole at the top of a sphere. Cells are cubes, the
+// surface crosses one layer of them, and the jitter plus the radius stay under a cell between them — which is what
+// lets the eight nearest cells be the whole search.
+//
+// 📝 LOD, which is the other half of the correction. A flake finer than a pixel cannot be drawn as a flake; drawing
+//    it anyway is what makes fizzing noise that crawls when the camera moves. So the lattice is never allowed to get
+//    finer than the pixel footprint: below that the cell grows, each virtual flake stands in for the several real
+//    ones it swallowed, and Sharp falls away from 1. The caller spends Sharp on the facet tilt and hands what it
+//    took back as roughness — which is exactly right, because a thousand tilted mirrors in one pixel IS a rough
+//    metal. The panel therefore sparkles up close, softens as you pull back, and never aliases on the way.
+//--------------------------------------------------------------------------------------------------------------------------
+const FlakeChunk = /* glsl */ `
+struct LeafSample
+{
+    vec3 Normal;        // the facet's own normal, in world space
+    float Cover;        // how much of this pixel the facet holds, filtered against the pixel footprint
+    float Tone;         // the facet's own brightness, 0..1
+    float Sharp;        // 1 while a flake is wider than a pixel, falling to 0 as they merge below it
+};
+
+float LeafHash1(vec3 Seed)
+{
+    return fract(sin(dot(Seed, vec3(127.1, 311.7, 74.7))) * 43758.5453123);
+}
+vec3 LeafHash3(vec3 Seed)
+{
+    return fract(
+        sin(vec3(dot(Seed, vec3(127.1, 311.7, 74.7)), dot(Seed, vec3(269.5, 183.3, 246.1)), dot(Seed, vec3(113.5, 271.9, 124.6))))
+        * 43758.5453123);
+}
+
+// Span is the world-space width of one pixel at this point, so the field can keep itself above the sampling rate.
+LeafSample LeafUnder(vec3 Position, vec3 Normal, float Size, float Density, float Tilt, float Seed, float Span)
+{
+    float Wanted = max(Size, 2e-5);
+    float Cell = max(Wanted, Span * 1.6);
+    LeafSample Leaf;
+    Leaf.Normal = Normal;
+    Leaf.Cover = 0.0;
+    Leaf.Tone = 0.0;
+    Leaf.Sharp = clamp(Wanted / Cell, 0.0, 1.0);
+
+    vec3 Side = normalize(abs(Normal.y) < 0.9 ? cross(Normal, vec3(0.0, 1.0, 0.0)) : cross(Normal, vec3(1.0, 0.0, 0.0)));
+    vec3 Other = cross(Normal, Side);
+    vec3 Lattice = Position / Cell;
+    vec3 Base = floor(Lattice - 0.5);
+    float Reachable = clamp(Density, 0.0, 1.0);
+    float Near = 1e9;
+
+    for (int X = 0; X < 2; ++X)
+    for (int Y = 0; Y < 2; ++Y)
+    for (int Z = 0; Z < 2; ++Z)
+    {
+        vec3 Which = Base + vec3(float(X), float(Y), float(Z));
+        if (LeafHash1(Which + Seed * 1.61) > Reachable) continue;
+        vec3 Centre = (Which + 0.5 + (LeafHash3(Which + Seed * 3.17) - 0.5) * 0.4) * Cell;
+        vec3 Delta = Position - Centre;
+        // One layer of cells, not a volume: the leaf floats in the top of the basecoat, not through it.
+        if (abs(dot(Delta, Normal)) > Cell * 0.5) continue;
+        vec2 Local = vec2(dot(Delta, Side), dot(Delta, Other));
+        float Reach = length(Local);
+        if (Reach >= Near) continue;
+        float Radius = Cell * mix(0.28, 0.58, LeafHash1(Which + Seed * 7.31));
+        // 🔴 The rim is softened ABOUT itself, never inward. Fading a disc from its centre is the obvious way to
+        //    write this and it is wrong: it throws away most of the disc's area, so the panel loses its metal every
+        //    time the camera pulls back. Half the softening outside the rim and half inside keeps the area, which is
+        //    the whole point of filtering rather than shrinking.
+        float Edge = min(max(Span * 0.6, Radius * 0.1), Cell * 0.2);
+        if (Reach > Radius + Edge) continue;
+        Near = Reach;
+
+        // The facet is FLAT across its own width. A leaf is a plate, and a plate has one normal; the thing that
+        // differs between two flakes is which way each is lying, which is the whole source of the flare.
+        vec3 Lean = LeafHash3(Which + Seed * 13.7) - 0.5;
+        Leaf.Normal = normalize(Normal + (Side * Lean.x + Other * Lean.y) * 1.8 * clamp(Tilt, 0.0, 1.0));
+        Leaf.Cover = 1.0 - smoothstep(Radius - Edge, Radius + Edge, Reach);
+        Leaf.Tone = LeafHash1(Which + Seed * 23.9);
+    }
+    return Leaf;
+}`;
+
 export const SurfaceVertex = /* glsl */ `
 layout(location = 0) in vec3 aPosition;
 layout(location = 1) in vec3 aNormal;
@@ -1656,6 +1706,16 @@ uniform float uTransmissionDepth;
 uniform float uThinFilmWeight;
 uniform float uThinFilmThickness;
 uniform float uThinFilmIor;
+
+uniform float uFlakeWeight;        // how much of the look the leaf owns, 0 for paint with none suspended in it
+uniform float uFlakeMetal;         // [-]  how metallic one flake is: aluminium is all of it, mica about half
+uniform float uFlakeSize;          // [m]  the leaf across, measured on the panel
+uniform float uFlakeDensity;       // [-]  how much of the basecoat is leaf rather than binder
+uniform float uFlakeTilt;          // [-]  how far off the panel the plates lie
+uniform float uFlakeRoughness;     // [-]  the leaf's own polish
+uniform float uFlakeTravel;        // [-]  mica, not aluminium: interference that moves with the eye
+uniform float uFlakeSeed;
+uniform vec3 uFlakeColour;
 
 uniform vec3 uBrushCentre;
 uniform vec3 uBrushNormal;
@@ -1856,6 +1916,61 @@ void main()
         return;
     }
 
+    //----------------------------------------------------------------------------------------------------------------
+    // Flake · the basecoat normal under the coat.
+    //
+    // 🔴 Where, without a channel to say so. There is no sixteenth slot left in the packing and there should not be
+    //    one: the maps already say where the leaf is. A metallic basecoat is the one place on a model that is both
+    //    PART METAL and UNDER A CLEAR COAT — chrome trim is metal with no coat, solid paint is coat with no metal,
+    //    and only paint with something suspended in it is both. So the gate is metalness times coat weight, which
+    //    also means a solid stripe masked over a metallic panel stops sparkling exactly where the stripe begins.
+    //
+    // The two normals are the point. The shading normal keeps the coat: smooth, with the orange peel the finish
+    // baked into height. BaseNormal is the layer under it, carrying the facets. One surface, two interfaces,
+    // which is what car paint actually is.
+    //----------------------------------------------------------------------------------------------------------------
+    vec3 BaseNormal = Normal;
+    if (uFlakeWeight > 0.001)
+    {
+        float Loading = uFlakeWeight * clamp(Coat, 0.0, 1.0) * smoothstep(0.012, 0.14, Metalness);
+        if (Loading > 0.001)
+        {
+            float Span = max(length(dFdx(vPosition)), length(dFdy(vPosition)));
+            LeafSample Leaf = LeafUnder(vPosition, Normal, uFlakeSize, uFlakeDensity, uFlakeTilt, uFlakeSeed, Span);
+            float Caught = Leaf.Cover * Loading * Leaf.Sharp;
+
+            vec3 Metal = Linearise(uFlakeColour) * mix(0.72, 1.0, Leaf.Tone);
+            if (uFlakeTravel > 0.0)
+            {
+                // Mica is a stack of thin films, so its colour is a function of the angle light takes through it —
+                // which depends on how the platelet is lying AND on where the eye is. Both are in hand here, and
+                // neither was in hand when the maps were written.
+                float Through = clamp(dot(Leaf.Normal, View), 0.0, 1.0);
+                vec3 Interference = 0.5 + 0.5 * cos(7.5 * Through + vec3(0.0, 2.0943951, 4.1887902));
+                Metal = mix(Metal, Metal * Interference * 1.7, clamp(uFlakeTravel, 0.0, 1.0));
+            }
+
+            // 🔴 Resolving the metal, without inventing any. The map holds one number for a basecoat that is two
+            //    things: a ground sprayed under the leaf — which a candy has a lot of and a metallic has none of —
+            //    and the leaf itself, worth density times 0.6 times how metallic a flake is. Take the leaf's share
+            //    out and what is left is the ground, so the facets can be put back on top of it one pixel at a
+            //    time. The mean across the panel comes out at the number the map held, by construction, which is
+            //    why pulling the camera back changes how the paint sparkles and not how metallic it is.
+            float Ground = max(Metalness - clamp(uFlakeDensity * 0.6, 0.0, 1.0) * uFlakeMetal, 0.0);
+            float Resolved = clamp(Ground + Leaf.Cover * uFlakeMetal, 0.0, 1.0);
+            BaseNormal = normalize(mix(Normal, Leaf.Normal, Caught));
+            Metalness = clamp(mix(Metalness, Resolved, Leaf.Sharp), 0.0, 1.0);
+            BaseColour = mix(BaseColour, Metal, Caught * 0.9);
+            Roughness = clamp(mix(Roughness, uFlakeRoughness, Caught), 0.012, 1.0);
+            // 📝 And the other half of the handover: every facet the footprint swallowed was a tilted mirror, and a
+            //    great many tilted mirrors in one pixel is the definition of a rough one. What Sharp took off the
+            //    tilt is given back here, so the total energy leaving the panel barely moves as the camera pulls out.
+            float Merged = (1.0 - Leaf.Sharp) * Loading * clamp(uFlakeDensity * 0.6, 0.0, 1.0);
+            Roughness = clamp(Roughness + Merged * uFlakeTilt * 0.55, 0.012, 1.0);
+        }
+    }
+    float BaseNdotV = clamp(dot(BaseNormal, View), 1e-4, 1.0);
+
     float DielectricReflectance = pow((uSpecularIor - 1.0) / (uSpecularIor + 1.0), 2.0);
     vec3 SpecularColour = uSpecularColour * Specular;
     vec3 Reflectance = mix(vec3(DielectricReflectance) * SpecularColour, BaseColour, Metalness);
@@ -1875,6 +1990,10 @@ void main()
         vec3 Half = normalize(Light + View);
         float NdotH = clamp(dot(Normal, Half), 0.0, 1.0);
         float VdotH = clamp(dot(View, Half), 0.0, 1.0);
+        // The coat keeps the smooth normal; everything below it is shaded against the facet. With no leaf in the
+        // paint the two are the same vector and this costs nothing.
+        float BaseNdotL = clamp(dot(BaseNormal, Light), 0.0, 1.0);
+        float BaseNdotH = clamp(dot(BaseNormal, Half), 0.0, 1.0);
 
         float Distribution;
         float Visibility;
@@ -1886,13 +2005,13 @@ void main()
             float Spread = clamp(uAnisotropy, 0.0, 0.98);
             float Along = max(Alpha / max(1.0 - Spread, 0.02), 1e-4);
             float Across = max(Alpha * (1.0 - Spread), 1e-4);
-            Distribution = DistributionGgxAnisotropic(NdotH, Half, Tangent, Bitangent, Along, Across);
-            Visibility = VisibilitySmithAnisotropic(Along, Across, Tangent, Bitangent, View, Light, NdotV, NdotL);
+            Distribution = DistributionGgxAnisotropic(BaseNdotH, Half, Tangent, Bitangent, Along, Across);
+            Visibility = VisibilitySmithAnisotropic(Along, Across, Tangent, Bitangent, View, Light, BaseNdotV, BaseNdotL);
         }
         else
         {
-            Distribution = DistributionGgx(NdotH, Roughness);
-            Visibility = VisibilitySmith(NdotV, NdotL, Roughness);
+            Distribution = DistributionGgx(BaseNdotH, Roughness);
+            Visibility = VisibilitySmith(BaseNdotV, BaseNdotL, Roughness);
         }
         vec3 Fresnel = mix(
             FresnelSchlick(Reflectance, VdotH),
@@ -1906,7 +2025,7 @@ void main()
         float Retro = 1.0 - 0.5 * uDiffuseRoughness * (1.0 - NdotL) * (1.0 - NdotV);
         vec3 DiffuseLobe = DiffuseColour * (1.0 / 3.14159265) * Retro * (1.0 - Metalness);
 
-        vec3 Lobe = (DiffuseLobe + SpecularLobe) * NdotL;
+        vec3 Lobe = DiffuseLobe * NdotL + SpecularLobe * BaseNdotL;
 
         if (Fuzz > 0.0)
             Lobe += uFuzzColour * Fuzz * SheenLobe(NdotH, uFuzzRoughness) * NdotL * 0.6;
@@ -1924,8 +2043,8 @@ void main()
 
     // Image-based terms.
     vec3 ReflectionDirection = reflect(-View, Normal);
-    vec3 SpecularEnvironment = SampleEnvironment(ReflectionDirection, Roughness);
-    vec2 Brdf = EnvironmentBrdf(NdotV, Roughness);
+    vec3 SpecularEnvironment = SampleEnvironment(reflect(-View, BaseNormal), Roughness);
+    vec2 Brdf = EnvironmentBrdf(BaseNdotV, Roughness);
     vec3 AmbientSpecular = SpecularEnvironment * (Reflectance * Brdf.x + Brdf.y) * Occlusion;
     vec3 AmbientDiffuse = SampleIrradiance(Normal) * DiffuseColour * Occlusion * 0.55;
     Radiance += AmbientDiffuse + AmbientSpecular;
@@ -2182,6 +2301,7 @@ export const Chunks = {
     Media: MediaChunk,
     Generator: GeneratorChunk,
     Finish: FinishChunk,
+    Flake: FlakeChunk,
     Mask: MaskChunk,
     Blend: BlendChunk,
     Environment: EnvironmentChunk,

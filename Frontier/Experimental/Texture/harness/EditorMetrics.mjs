@@ -800,5 +800,56 @@ Panel.SetDisplay("material");
 await Settle(Window, 2);
 Check("and leaving it disarms", Panel.PickingFaces === false);
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Car paint. The leaf in a metallic basecoat cannot be composited into the channels, so the stack has to hand it to
+// the viewport every frame instead — and hand over nothing the moment the paint on top has nothing in it.
+//--------------------------------------------------------------------------------------------------------------------------
+Panel.AddLayer("finish");
+await Settle(Window, 3);
+const Paint = Panel.ActiveLayer;
+Check("adding a finish layer reaches for a paint", Paint.Kind === "finish" && Paint.Finish.Style === "metallic", Paint.Finish.Style);
+Check("and the metallic hands its leaf to the viewport", !!Panel.Flake, JSON.stringify(Panel.Flake));
+Check(
+    "the size arrives in metres, measured on the panel",
+    Math.abs(Panel.Flake.Size - Paint.Finish.Flake * 0.001) < 1e-9,
+    `${Panel.Flake.Size} against ${Paint.Finish.Flake} mm`,
+);
+Check("aluminium does not travel with the angle", Panel.Flake.Travel === 0, String(Panel.Flake.Travel));
+
+Paint.Finish.Flake = 9;
+Panel.AfterInspectorChange("Finish.Flake", true);
+await Settle(Window, 2);
+Check("moving the flake slider moves the sparkle", Math.abs(Panel.Flake.Size - 0.009) < 1e-9, String(Panel.Flake.Size));
+
+Paint.Finish.Style = "pearl";
+Panel.AfterInspectorChange("Finish.Style", true);
+await Settle(Window, 2);
+Check("mica travels with the angle and aluminium did not", Panel.Flake.Travel > 0.5, String(Panel.Flake.Travel));
+
+Paint.Finish.Style = "solid";
+Panel.AfterInspectorChange("Finish.Style", true);
+await Settle(Window, 2);
+Check("single-stage paint hands over nothing at all", Panel.Flake === null, JSON.stringify(Panel.Flake));
+
+Paint.Finish.Style = "metallic";
+Panel.AfterInspectorChange("Finish.Style", true);
+await Settle(Window, 2);
+Check("and the leaf comes back with the metallic", !!Panel.Flake);
+Panel.CaptureStack(() => (Paint.Visible = false));
+await Settle(Window, 2);
+Check("hiding the paint takes the sparkle with it", Panel.Flake === null, JSON.stringify(Panel.Flake));
+Panel.CaptureStack(() => (Paint.Visible = true));
+await Settle(Window, 2);
+Check("showing it brings the sparkle back", !!Panel.Flake);
+
+const Full = Panel.Flake.Metal;
+Panel.CaptureStack(() => (Paint.Opacity = 0.5));
+await Settle(Window, 2);
+Check(
+    "half a coat of paint carries half the leaf",
+    Math.abs(Panel.Flake.Metal - Full * 0.5) < 1e-6 && Math.abs(Panel.Flake.Weight - Panel.Flake.Metal) < 1e-6,
+    `${Panel.Flake.Metal} against ${Full}`,
+);
+
 Report();
 process.exit(process.exitCode || 0);

@@ -112,6 +112,8 @@ import {
     FinishControls,
     FinishColours,
     FinishLabel,
+    FlakeStyles,
+    FlakeFromFinish,
 } from "./FinishSpecification.js";
 import {
     StrokeModes,
@@ -911,18 +913,25 @@ test("every finish family declares the controls its shader branch reads", () =>
     assert.equal(FinishFamilyIndex("nonsense"), 0);
 });
 
-test("flake is a size on the panel, and the shelf chooses one per paint", () =>
+test("flake is a size on the panel, and no longer a size the sheet has to hold", () =>
 {
     const Automotive = FinishShelf.filter((Entry) => Entry.Family === "automotive");
     for (const Entry of Automotive)
     {
-        assert.ok(Entry.Settings.Flake >= 0.4 && Entry.Settings.Flake <= 24, `${Entry.Identifier} flake ${Entry.Settings.Flake}`);
+        assert.ok(Entry.Settings.Flake >= 0.05 && Entry.Settings.Flake <= 24, `${Entry.Identifier} flake ${Entry.Settings.Flake}`);
         assert.ok(Entry.Settings.Tilt >= 0 && Entry.Settings.Tilt <= 1, Entry.Identifier);
         // A paint with no flake in it must not be given a tilt, and a flake paint must be given one, or the shelf is
         // choosing numbers the user then has to undo.
-        const Flaked = ["metallic", "pearl", "candy", "chameleon"].includes(Entry.Style);
+        const Flaked = FlakeStyles.includes(Entry.Style);
         if (!Flaked && Entry.Style !== "matte") assert.equal(Entry.Settings.Tilt, 0, `${Entry.Identifier} tilts nothing`);
         if (Flaked) assert.ok(Entry.Settings.Tilt > 0.2, `${Entry.Identifier} has flake that cannot flare`);
+        // Density and brightness are no longer decoration: their product is the metal fraction the maps carry, so a
+        // flake paint whose basecoat averages out to almost no metal cannot switch the per-pixel pass on at all.
+        if (Flaked)
+            assert.ok(
+                Entry.Settings.Density * 0.6 * Entry.Settings.Strength > 0.1,
+                `${Entry.Identifier} carries too little leaf to read as metallic`,
+            );
     }
 
     // The show flake is the coarse one. If that ever stops being true the shelf has lost its range.
@@ -933,12 +942,52 @@ test("flake is a size on the panel, and the shelf chooses one per paint", () =>
     const Clamped = SanitiseFinish({ Family: "automotive", Style: "metallic", Flake: 900, Tilt: 7 });
     assert.equal(Clamped.Flake, 24);
     assert.equal(Clamped.Tilt, 1);
-    assert.equal(SanitiseFinish({ Flake: -5, Tilt: -5 }).Flake, 0.4);
     assert.equal(SanitiseFinish({ Flake: -5, Tilt: -5 }).Tilt, 0);
-    assert.equal(FinishDefaults().Flake, 4, "the default flake moved");
-    // 🔴 Two texels is the floor. At the default sheet a texel is about two millimetres of panel, so a flake any
-    //    finer than this is a number the sheet cannot keep, however honest the millimetres are.
-    assert.ok(FinishDefaults().Flake >= 4, "the default flake is below what a 1024 sheet can hold");
+    // 🔴 The floor used to be two texels, because the flake was baked into a sheet and a sheet cannot hold anything
+    //    finer. It is resolved per pixel now, so the floor is a real measurement instead: fifty microns, which is
+    //    coarse aluminium leaf. Anything below a pixel merges into roughness rather than fizzing.
+    assert.equal(SanitiseFinish({ Flake: -5 }).Flake, 0.05, "the flake floor is no longer a texel count");
+    assert.equal(SanitiseFinish({ Flake: 0.03 }).Flake, 0.05);
+    assert.equal(FinishDefaults().Flake, 3.2, "the default flake moved");
+});
+
+test("a paint hands the shading pass its leaf, and paint with none in it hands over nothing", () =>
+{
+    // Solid, matte and primer have nothing suspended in them. Answering with a recipe anyway would sparkle a
+    // single-stage racing red, which is the one paint on the shelf that must never sparkle.
+    for (const Identifier of ["rosso-corsa", "alpine-white", "satin-black-wrap", "etch-primer"])
+        assert.equal(FlakeFromFinish(CreateFinish(Identifier)), null, `${Identifier} grew flake it does not have`);
+    for (const Family of ["fabric", "metal", "plastic"])
+        assert.equal(FlakeFromFinish({ ...FinishDefaults(), Family, Style: "metallic" }), null, `${Family} is not paint`);
+    assert.equal(FlakeFromFinish(null), null);
+
+    const Silver = FlakeFromFinish(CreateFinish("gt-silver"));
+    assert.ok(Silver, "the showroom metallic hands over no leaf at all");
+    assert.ok(Silver.Size > 0 && Silver.Size < 0.03, "the size must reach the shader in metres, not millimetres");
+    assert.equal(Silver.Size, FinishByIdentifier["gt-silver"].Settings.Flake * 0.001);
+    assert.equal(Silver.Travel, 0, "aluminium does not change colour with the angle");
+    assert.deepEqual(Silver.Colour, FinishByIdentifier["gt-silver"].Settings.ColourB, "the leaf is not the flake colour");
+    assert.ok(Silver.Roughness < 0.2, "polished leaf must be smoother than the pigment around it");
+
+    // Mica does change colour with the angle, and that is the whole difference between a pearl and a metallic.
+    assert.ok(FlakeFromFinish(CreateFinish("pearl-white")).Travel > 0.5, "mica that does not travel is aluminium");
+    assert.ok(FlakeFromFinish(CreateFinish("midnight-flip")).Travel > 0, "a flip with no travel in the leaf is a solid");
+    assert.ok(FlakeFromFinish(CreateFinish("candy-apple")).Travel === 0, "a candy ground is aluminium under tint");
+
+    // And that tint has to be on the leaf as well as on the pigment, or every sparkle in a candy comes back white.
+    const Candy = FlakeFromFinish(CreateFinish("candy-apple"));
+    const CandyGround = FinishByIdentifier["candy-apple"].Settings.ColourB;
+    assert.ok(Candy.Colour[0] < CandyGround[0], "the candy leaf was not taken through the tint");
+    assert.ok(Candy.Colour[1] < CandyGround[1] * 0.1 && Candy.Colour[2] < CandyGround[2] * 0.2, "the candy leaf is not red");
+    assert.ok(Candy.Colour[0] > Candy.Colour[1] && Candy.Colour[0] > Candy.Colour[2], "a candy apple flake must be red");
+
+    // A flake paint turned all the way down is a solid paint, and must switch the pass off rather than run it at zero.
+    assert.equal(FlakeFromFinish({ ...CreateFinish("gt-silver"), Strength: 0 }), null);
+    assert.equal(FlakeFromFinish({ ...CreateFinish("gt-silver"), Density: 0 }), null);
+
+    // Gloss is the clear coat, not the leaf: a satin metallic still has bright flakes under a dulled coat.
+    const Satin = FlakeFromFinish({ ...CreateFinish("gt-silver"), Gloss: 0.1 });
+    assert.ok(Satin.Roughness > Silver.Roughness && Satin.Roughness < 0.4, "a satin coat must not sand the leaf flat");
 });
 
 test("the shelf only offers finishes the families can actually evaluate", () =>

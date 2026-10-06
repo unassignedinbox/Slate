@@ -91,7 +91,7 @@ shelf, and one inspector that renames itself to suit the family:
 
 | Family | Styles | What the inspector asks about |
 | --- | --- | --- |
-| Automotive | solid single stage, metallic basecoat, pearl tri-coat, candy over metallic, matte wrap, flip, primer | flake scale, flake density, flake brightness, gloss, clear coat, orange peel, pigment variation |
+| Automotive | solid single stage, metallic basecoat, pearl tri-coat, candy over metallic, matte wrap, flip, primer | flake size (50 µm – 24 mm, resolved per pixel), flake density, flake brightness, flake tilt, gloss, clear coat, orange peel, pigment variation |
 | Fabric | plain, twill / denim, satin, knitted rib, velvet | thread count, thread spread, fuzz, sheen, weave angle, thread variation |
 | Metal | brushed, hammered, cast and pitted, galvanised spangle | grain scale, pitting, relief, polish, lacquer, brush angle |
 | Plastic | injection moulded, pebbled grain, soft touch, polycarbonate | grain scale, grain density, grain depth, gloss, clear coat |
@@ -776,19 +776,64 @@ shallow undulation in height and a matching wobble in coat roughness, on a slide
 on the shelf, from Rosso corsa through hot rod metalflake to a midnight purple flip, and each one's pigment is the
 linear form of the swatch beside it rather than a guess.
 
-![Metallic basecoat, before and after](car-flake.png)
+![Metallic car paint, before and after](car-paint.png)
 
-**Flake is a facet, not a speck.** What makes a metallic panel flare as you walk past it is that each flake lies at
-its own angle, so the one catching the light is never the one that caught it a second ago. The flake field is laid out
-in the **world**, not in the unwrap — a flake is a physical thing, and a field laid out in UV changes size wherever the
-unwrap changes density, which is the clearest tell of a faked metallic. Each flake is then written into the height
-channel as a **ramp across its own width**, because the shading differentiates height into a normal and the derivative
-of a ramp is a tilt. The ramp's height is a real length — the flake's radius over what the height channel is worth end
-to end — so a coarse show flake and a fine factory metallic differ in how wide their facets are rather than in how
-steep, which is the right way round. Flake size is a slider in millimetres measured on the panel, and the honest limit
-is the sheet: a 1024 map on a two-metre object has texels about two millimetres across, and flake finer than a couple
-of texels cannot be held however truthful the number is. Real aluminium leaf is 25 µm; no baked texture can hold it,
-and the editor says so rather than pretending.
+**Flake is a facet under the coat, and no texture can hold one.** This was wrong until recently and the picture above
+is the correction. The leaf used to be composited into base colour, metalness and height like any other pattern, and
+two things follow from that which no amount of tuning fixes. The first is scale: aluminium leaf is fifteen to forty
+microns across, and a texel of a 2048 sheet wrapped round a car panel is most of a millimetre, so a baked flake is
+either a speck far below the texel — which the sheet resolves into fizzing noise — or a flake the size of a
+fingernail, which is glitter. The second is worse. A flake written into a map is **static**. It is the same speck from
+every angle, and the one thing a metallic panel does is change which flakes are alight as you walk past it. A map
+cannot do that, because a map does not know where the eye is.
+
+So the leaf moved out of the maps and into the shading, which is where every renderer that gets this right keeps it.
+Unreal's **Clear Coat** shading model takes two normals: the ordinary normal drives the top of the coat, and switching
+on the second exposes a **Clear Coat Bottom Normal** for the layer underneath — Epic's note on it says in as many
+words that it is there for "reflective flecks of car paint, which has different geometric or reflective surfaces than
+the top clear coat layer". Corona calls the same thing `NormalFlakes`; Substance ships it as a flake normal map. All
+three say a flake is a **tilt**, not a dot of paint, and a tilt is enough: perturb the normal under the coat and the
+specular lobe does the rest, because the flake that is alight is the one whose facet happens to bisect the eye and the
+light. Move the eye and a different set lights up. That is the whole of it, and it is why the two spheres in the
+bottom row of the picture are not the same sparkle while the two in the top row are.
+
+The field is a **3D cell lattice in world space**, so a flake is the same size wherever the unwrap is dense or sparse,
+and it does not swim across a seam or pole at the top of a sphere. The surface crosses one layer of cells; jitter and
+radius stay under a cell between them, which is what lets the eight nearest cells be the whole search. Inside a cell
+the flake is a **flat disc at its own angle**, because a leaf is a plate and a plate has one normal.
+
+**Nothing aliases on the way out, either.** A flake finer than a pixel cannot be drawn as a flake; drawing it anyway
+is what makes the fizzing that crawls when the camera moves. The lattice is therefore never allowed to go finer than
+the pixel footprint — below that the cell grows, each virtual flake stands in for the several real ones it swallowed,
+and a *sharpness* falls away from one. That sharpness is spent on the facet tilt, and what it takes is handed back as
+roughness, which is exactly right: a thousand tilted mirrors in one pixel **is** a rough metal. The measured result is
+that the fraction of the panel that is leaf stays at 0.41 across a thirty-two-fold change in the pixel footprint while
+the facets soften away — the paint sparkles up close, calms down as you pull back, and never fizzes.
+
+The maps still carry the far field, and they have to agree with the near one or the crossfade is a visible step. A
+metallic basecoat writes density × 0.6 × brightness into metalness — the mean coverage of the lattice, measured — and
+the shading pass takes exactly that share back out, leaves whatever continuous metal ground is left (a candy has a lot
+of one, a metallic has none), and puts the facets on top a pixel at a time. The average lands back on the number the
+map held, by construction.
+
+There is no sixteenth channel for any of this and there should not be: **the maps already say where the leaf is**. A
+metallic basecoat is the one place on a model that is both part metal and under a clear coat — chrome trim is metal
+with no coat, solid paint is coat with no metal — so the flake is gated on metalness times coat weight. A solid stripe
+masked over a metallic panel stops sparkling exactly where the stripe begins, without the shading pass knowing a mask
+exists. Which paint owns the sparkle is read off the stack each frame: the topmost automotive finish with something
+suspended in it hands the viewport its flake size, density, tilt, polish and colour, and paint with nothing in it
+hands over nothing at all, which switches the whole pass off.
+
+Mica follows from the same place. A platelet is a stack of thin films, so what it does with light depends on the angle
+it is lying at **and** on where the eye is; neither was in hand when the maps were written, and both are in hand here,
+so a pearl travels per flake per pixel. A candy's leaf is under the tint, so what you see of a flake is the ground
+through the colour — hand the pass bare aluminium and every sparkle comes back white, which washes the red out of the
+one paint whose whole purpose is depth of colour.
+
+Flake size is still a slider in millimetres measured on the panel, but the sheet is no longer the floor: it runs from
+50 µm to 24 mm, and the far end of that is hot rod show flake you can count.
+
+![Four automotive finishes](car-paint-shelf.png)
 
 ![Fourteen conductors](metals.png)
 
@@ -971,7 +1016,7 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `ReadingSolver.js` | One walk of the triangles per sample, every map accumulated inside it; bent and bevel normals, identity colours and the identity picture the viewport picks out of, padding. |
 | `SurfaceSolver.js` | Measuring the model: welded-mesh curvature, thickness, UV islands, and the rasterisation that puts every reading into texture space. |
 | `MaskSolver.js` | Solving a stack of generators into one sheet — the weathering recipes, the selections, and how entries combine. |
-| `FinishSpecification.js` | Procedural material families, their styles, named controls and the preset shelf. |
+| `FinishSpecification.js` | Procedural material families, their styles, named controls, the preset shelf, and the flake recipe a paint hands the shading pass. |
 | `LayerSpecification.js` | Layer, mask and decal records; sanitisers; project defaults and validation. |
 | `DecalSpecification.js` | Vector library, font archive, SVG/text rasterisation. |
 | `harness/DeviceHost.mjs` | A jsdom window with a recording WebGL2 device behind it, so the editor can be driven with no browser. |
@@ -984,7 +1029,7 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `SurfaceStructure.js` | Built-in surfaces, Wavefront import, tangents, bounds, occlusion, spatial index. |
 | `SceneStructure.js` | Object records, UDIM tiles, and the assembly that folds a scene into one surface. |
 | `OrbitProjection.js` | Damped orbit camera, framing, panning, picking rays. |
-| `ShadingGlsl.js` | Every shader stage and the export slot table. |
+| `ShadingGlsl.js` | Every shader stage, the flake field the paint resolves per pixel, and the export slot table. |
 | `ShadingIntegrator.js` | The WebGL2 device: targets, stamping, compositing, viewport and plane passes, readback. |
 | `StrokeProjection.js` | Brush state, stroke spacing, symmetry, placement frames. |
 | `StrokeSpecification.js` | How a mark goes down: freehand, line and gradient, the colour ramp and the two ways a stroke reads it, the pressure curves, the channel writes. |

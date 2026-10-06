@@ -553,9 +553,9 @@ MaterialLibrary.push(
             {
                 Name: "Metallic paint",
                 Kind: "finish",
-                Finish: { Family: "automotive", Style: "metallic", Flake: 2.4, Tilt: 0.65, Density: 0.5, Strength: 0.7 },
+                Finish: { Family: "automotive", Style: "metallic", Flake: 3, Tilt: 0.5, Density: 0.72, Strength: 0.8 },
                 // The finish decides what these end up as per texel; they are what the layer reads as before it does.
-                Channels: { base_color: [0.1, 0.19, 0.34], base_metalness: 0.2, specular_roughness: 0.14, coat_weight: 0.9 },
+                Channels: { base_color: [0.1, 0.19, 0.34], base_metalness: 0.34, specular_roughness: 0.14, coat_weight: 0.9 },
             },
         ],
     },

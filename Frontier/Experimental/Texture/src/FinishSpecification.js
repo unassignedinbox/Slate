@@ -42,7 +42,7 @@ export const FinishFamilies = [
         ],
         Controls: [
             Control("Scale", "Pigment scale", 0.1, 4, 0.01, "×", "How wide the drift in the pigment itself runs."),
-            Control("Flake", "Flake size", 0.4, 24, 0.1, "mm", "Measured on the panel, not in the unwrap. The sheet is the floor: flake finer than two texels cannot be held, whatever the number says."),
+            Control("Flake", "Flake size", 0.05, 24, 0.05, "mm", "Measured on the panel, not in the unwrap, and resolved per pixel rather than per texel — the sheet is no longer the floor. Below a pixel on screen the leaf merges into roughness instead of fizzing."),
             Control("Density", "Flake density", 0, 1, 0.01, "—", "How much of the base is flake rather than pigment."),
             Control("Strength", "Flake brightness", 0, 1, 0.01, "—"),
             Control("Tilt", "Flake tilt", 0, 1, 0.01, "—", "How far the flakes lie off the panel. Tilt is what makes a metallic flare as you walk past it."),
@@ -213,10 +213,10 @@ export const FinishShelf = [
         ColourA: [0.4735, 0.4969, 0.5149],
         ColourB: [0.8148, 0.8308, 0.8469],
         Scale: 1.0,
-        Flake: 4.0,
-        Tilt: 0.5,
-        Density: 0.3,
-        Strength: 0.5,
+        Flake: 3.0,
+        Tilt: 0.42,
+        Density: 0.8,
+        Strength: 0.85,
         Gloss: 0.95,
         Coat: 0.92,
         Angle: 0,
@@ -227,10 +227,10 @@ export const FinishShelf = [
         ColourA: [0.004, 0.0048, 0.006],
         ColourB: [0.8148, 0.8308, 0.8469],
         Scale: 1.1,
-        Flake: 3.0,
-        Tilt: 0.4,
-        Density: 0.22,
-        Strength: 0.42,
+        Flake: 2.6,
+        Tilt: 0.3,
+        Density: 0.6,
+        Strength: 0.6,
         Gloss: 0.98,
         Coat: 0.96,
         Angle: 0,
@@ -241,10 +241,10 @@ export const FinishShelf = [
         ColourA: [0.0052, 0.0194, 0.0685],
         ColourB: [0.8148, 0.8308, 0.8469],
         Scale: 0.9,
-        Flake: 6.0,
-        Tilt: 0.6,
-        Density: 0.28,
-        Strength: 0.5,
+        Flake: 4.0,
+        Tilt: 0.5,
+        Density: 0.72,
+        Strength: 0.8,
         Gloss: 0.95,
         Coat: 0.93,
         Angle: 0,
@@ -255,10 +255,10 @@ export const FinishShelf = [
         ColourA: [0.1946, 0.0052, 0.0144],
         ColourB: [1.0, 0.6939, 0.5271],
         Scale: 0.34,
-        Flake: 14.0,
-        Tilt: 0.95,
-        Density: 0.5,
-        Strength: 0.85,
+        Flake: 12.0,
+        Tilt: 0.9,
+        Density: 0.4,
+        Strength: 1.0,
         Gloss: 0.93,
         Coat: 0.95,
         Angle: 0,
@@ -269,10 +269,10 @@ export const FinishShelf = [
         ColourA: [0.855, 0.8714, 0.855],
         ColourB: [0.624, 0.7605, 0.8879],
         Scale: 1.0,
-        Flake: 5.0,
-        Tilt: 0.45,
-        Density: 0.34,
-        Strength: 0.6,
+        Flake: 3.6,
+        Tilt: 0.4,
+        Density: 0.62,
+        Strength: 0.68,
         Gloss: 0.96,
         Coat: 0.95,
         Angle: 0,
@@ -283,10 +283,10 @@ export const FinishShelf = [
         ColourA: [0.2016, 0.4969, 0.0232],
         ColourB: [0.8879, 0.7682, 0.1441],
         Scale: 0.95,
-        Flake: 5.5,
-        Tilt: 0.55,
-        Density: 0.32,
-        Strength: 0.66,
+        Flake: 4.0,
+        Tilt: 0.46,
+        Density: 0.6,
+        Strength: 0.72,
         Gloss: 0.95,
         Coat: 0.94,
         Angle: 0,
@@ -297,10 +297,10 @@ export const FinishShelf = [
         ColourA: [0.3663, 0.0, 0.0037],
         ColourB: [0.6867, 0.552, 0.4969],
         Scale: 1.0,
-        Flake: 5.5,
-        Tilt: 0.6,
-        Density: 0.3,
-        Strength: 0.5,
+        Flake: 4.0,
+        Tilt: 0.5,
+        Density: 0.62,
+        Strength: 0.6,
         Gloss: 0.97,
         Coat: 0.96,
         Angle: 0,
@@ -311,10 +311,10 @@ export const FinishShelf = [
         ColourA: [0.4342, 0.0, 0.0091],
         ColourB: [0.8148, 0.8308, 0.8469],
         Scale: 0.9,
-        Flake: 7.0,
-        Tilt: 0.7,
-        Density: 0.32,
-        Strength: 0.55,
+        Flake: 5.0,
+        Tilt: 0.55,
+        Density: 0.66,
+        Strength: 0.65,
         Gloss: 0.99,
         Coat: 1,
         Angle: 0,
@@ -325,10 +325,10 @@ export const FinishShelf = [
         ColourA: [0.7605, 0.0999, 0.0103],
         ColourB: [0.8714, 0.5776, 0.1022],
         Scale: 0.85,
-        Flake: 8.0,
-        Tilt: 0.72,
-        Density: 0.34,
-        Strength: 0.58,
+        Flake: 5.5,
+        Tilt: 0.58,
+        Density: 0.68,
+        Strength: 0.66,
         Gloss: 0.98,
         Coat: 1,
         Angle: 0,
@@ -339,10 +339,10 @@ export const FinishShelf = [
         ColourA: [0.0423, 0.0123, 0.107],
         ColourB: [0.0137, 0.159, 0.0685],
         Scale: 0.7,
-        Flake: 6.5,
-        Tilt: 0.66,
-        Density: 0.3,
-        Strength: 0.5,
+        Flake: 4.5,
+        Tilt: 0.6,
+        Density: 0.6,
+        Strength: 0.6,
         Gloss: 0.97,
         Coat: 0.96,
         Angle: 0,
@@ -576,10 +576,10 @@ export const FinishDefaults = () => ({
     ColourA: [0.4452, 0.4793, 0.5029],
     ColourB: [0.8069, 0.8324, 0.8469],
     Scale: 1.4,
-    Flake: 4,
-    Density: 0.46,
-    Strength: 0.62,
-    Tilt: 0.55,
+    Flake: 3.2,
+    Density: 0.72,
+    Strength: 0.8,
+    Tilt: 0.45,
     Gloss: 0.95,
     Coat: 0.9,
     Angle: 0,
@@ -619,7 +619,7 @@ export const SanitiseFinish = (Record) =>
         ColourA: Colour(Finish.ColourA, [0.5, 0.5, 0.5]),
         ColourB: Colour(Finish.ColourB, [0.8, 0.8, 0.8]),
         Scale: Clamp(Finish.Scale, 0.1, 4),
-        Flake: Clamp(Finish.Flake, 0.4, 24),
+        Flake: Clamp(Finish.Flake, 0.05, 24),
         Tilt: Clamp(Finish.Tilt, 0, 1),
         Density: Clamp(Finish.Density, 0, 1),
         Strength: Clamp(Finish.Strength, 0, 1),
@@ -655,4 +655,61 @@ export const FinishLabel = (Finish) =>
     const Family = FinishFamilyByIdentifier[Finish?.Family];
     const Style = Family?.Styles.find((Record) => Record.Identifier === Finish?.Style);
     return Style ? `${Family.Label} · ${Style.Label}` : "Material";
+};
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Flake, for the shading pass.
+//
+// 🔴 A flake is not a texel and cannot be stored as one. Aluminium leaf is tens of microns across and lies at its own
+//    angle, so the only honest place to evaluate it is per pixel, at shading time, where the eye and the lights are
+//    known — which is also the only place a facet can FLARE. This is what the viewport is handed each frame for the
+//    paint that is on top of the stack: everything the shading pass needs to grow the facets itself.
+//
+// Styles that carry something suspended in the basecoat answer; solid, matte and primer answer with nothing, which is
+// what switches the whole pass off.
+//--------------------------------------------------------------------------------------------------------------------------
+export const FlakeStyles = ["metallic", "pearl", "candy", "chameleon"];
+
+// 🔴 What colour a flake is, which is not always the colour of the leaf. A candy is a transparent tint laid over a
+//    metallic ground, so what you see of a flake is the ground SEEN THROUGH the colour — hand the shading pass the
+//    bare aluminium and every sparkle comes back white, which washes the red out of the one paint whose whole
+//    purpose is depth of colour. Beer's law, at the mid thickness the finish shader uses.
+const LeafColour = (Finish) =>
+{
+    const Ground = Array.isArray(Finish.ColourB) ? Finish.ColourB : [0.81, 0.83, 0.85];
+    const Pigment = Array.isArray(Finish.ColourA) ? Finish.ColourA : [0.5, 0.5, 0.5];
+    if (Finish.Style !== "candy") return Ground;
+    return Ground.map((Component, Which) => Component * Math.max(Pigment[Which], 0.004) ** 1.375);
+};
+
+export const FlakeFromFinish = (Finish) =>
+{
+    if (!Finish || Finish.Family !== "automotive") return null;
+    if (!FlakeStyles.includes(Finish.Style)) return null;
+    const Weight = Clamp(Finish.Strength, 0, 1);
+    const Density = Clamp(Finish.Density, 0, 1);
+    if (Weight <= 0.001 || Density <= 0.001) return null;
+    const Gloss = Clamp(Finish.Gloss, 0, 1);
+    // 🔴 How metallic one flake is, and it has to agree with what the finish baked or the near field and the far
+    //    field will not describe the same paint. A metallic basecoat writes density × 0.6 × brightness into
+    //    metalness and nothing else, so a flake there is worth all of it. Mica is not metal and the pearl branch
+    //    halves it; a candy's leaf is a fifth of a ground that is already metal; a flip is somewhere between. These
+    //    are the same fractions the automotive branch of the finish shader uses, written once more in one place so
+    //    the shading pass can take the leaf's share back out of the map it was given.
+    const Metal = Weight * ({ metallic: 1, pearl: 0.5, candy: 0.45, chameleon: 0.6 }[Finish.Style] ?? 1);
+    return {
+        Weight,
+        Metal,
+        Density,
+        Size: Clamp(Finish.Flake, 0.05, 24) * 0.001,                  // [m] the control is in millimetres on the panel
+        Tilt: Clamp(Finish.Tilt, 0, 1),
+        // Leaf is polished metal, far smoother than the pigment around it. A satin paint still has bright flakes; it
+        // is the clear coat over them that is dulled, which is a different number entirely.
+        Roughness: 0.03 + (1 - Gloss) * 0.22,
+        // Mica travels with the angle, aluminium does not. Candy sits over an aluminium ground, chameleon over a
+        // basecoat that is already travelling, so it only needs a little more from the leaf.
+        Travel: Finish.Style === "pearl" ? 1 : Finish.Style === "chameleon" ? 0.55 : 0,
+        Colour: LeafColour(Finish),
+        Seed: Clamp(Math.round(Finish.Seed), 0, 999),
+    };
 };

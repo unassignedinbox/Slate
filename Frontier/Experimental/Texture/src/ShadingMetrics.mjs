@@ -32,6 +32,7 @@ import {
     Chunks,
 } from "./ShadingGlsl.js";
 import { DisplayIndex, DisplayOrdering, DisplaySubject } from "./ChannelSpecification.js";
+import { FlakeFromFinish, CreateFinish } from "./FinishSpecification.js";
 import { MediaFromInstrument, PlainMedia } from "./MediaSolver.js";
 import { InstrumentByKey } from "./InstrumentSpecification.js";
 
@@ -533,6 +534,266 @@ test("the compositor can write a finish without touching the flat channel values
     assert.match(Chunks.Finish, /float PeelAmount = clamp\(Extra\.x/, "orange peel never reaches the finish shader");
     assert.match(CompositeFragment, /uniform vec4 uFinishExtra;/, "the extra finish uniform is not declared");
     assert.match(Chunks.Mask, /Kind == 3/, "the mask chunk has no colour branch");
+});
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Flake, ported.
+//
+// There is no GPU here, so the flake field is read twice: once as text, to hold the shader to the contract, and once as
+// this port, which is line-for-line LeafUnder from FlakeChunk. The port is what lets the interesting claims — the panel
+// keeps its metal at every distance, and a different set of flakes is alight from every direction — be measured rather
+// than asserted by eye.
+//--------------------------------------------------------------------------------------------------------------------------
+const Fraction = (Value) => Value - Math.floor(Value);
+const LeafOne = (X, Y, Z) => Fraction(Math.sin(X * 127.1 + Y * 311.7 + Z * 74.7) * 43758.5453123);
+const LeafThree = (X, Y, Z) => [
+    Fraction(Math.sin(X * 127.1 + Y * 311.7 + Z * 74.7) * 43758.5453123),
+    Fraction(Math.sin(X * 269.5 + Y * 183.3 + Z * 246.1) * 43758.5453123),
+    Fraction(Math.sin(X * 113.5 + Y * 271.9 + Z * 124.6) * 43758.5453123),
+];
+const Between = (A, B, T) => A + (B - A) * T;
+const Ease = (Low, High, Value) =>
+{
+    const Step = Math.min(1, Math.max(0, (Value - Low) / (High - Low)));
+    return Step * Step * (3 - 2 * Step);
+};
+const Across = (A, B) => [A[1] * B[2] - A[2] * B[1], A[2] * B[0] - A[0] * B[2], A[0] * B[1] - A[1] * B[0]];
+const Along = (A, B) => A[0] * B[0] + A[1] * B[1] + A[2] * B[2];
+const Unit = (Vector) =>
+{
+    const Length = Math.hypot(...Vector);
+    return Vector.map((Component) => Component / Length);
+};
+
+const LeafUnder = (Position, Normal, Size, Density, Tilt, Seed, Span) =>
+{
+    const Wanted = Math.max(Size, 2e-5);
+    const Cell = Math.max(Wanted, Span * 1.6);
+    const Leaf = { Normal, Cover: 0, Tone: 0, Sharp: Math.min(1, Wanted / Cell), Cell };
+    const Side = Unit(Math.abs(Normal[1]) < 0.9 ? Across(Normal, [0, 1, 0]) : Across(Normal, [1, 0, 0]));
+    const Other = Across(Normal, Side);
+    const Base = Position.map((Component) => Math.floor(Component / Cell - 0.5));
+    let Near = 1e9;
+    for (let X = 0; X < 2; X += 1)
+        for (let Y = 0; Y < 2; Y += 1)
+            for (let Z = 0; Z < 2; Z += 1)
+            {
+                const Which = [Base[0] + X, Base[1] + Y, Base[2] + Z];
+                const Seeded = (Factor) => LeafOne(Which[0] + Seed * Factor, Which[1] + Seed * Factor, Which[2] + Seed * Factor);
+                const Scattered = (Factor) => LeafThree(Which[0] + Seed * Factor, Which[1] + Seed * Factor, Which[2] + Seed * Factor);
+                if (Seeded(1.61) > Math.min(1, Math.max(0, Density))) continue;
+                const Jitter = Scattered(3.17);
+                const Delta = [0, 1, 2].map((Axis) => Position[Axis] - (Which[Axis] + 0.5 + (Jitter[Axis] - 0.5) * 0.4) * Cell);
+                if (Math.abs(Along(Delta, Normal)) > Cell * 0.5) continue;
+                const Reach = Math.hypot(Along(Delta, Side), Along(Delta, Other));
+                if (Reach >= Near) continue;
+                const Radius = Cell * Between(0.28, 0.58, Seeded(7.31));
+                const Edge = Math.min(Math.max(Span * 0.6, Radius * 0.1), Cell * 0.2);
+                if (Reach > Radius + Edge) continue;
+                Near = Reach;
+                const Lean = Scattered(13.7).map((Component) => Component - 0.5);
+                const Slant = 1.8 * Math.min(1, Math.max(0, Tilt));
+                Leaf.Normal = Unit([0, 1, 2].map((Axis) => Normal[Axis] + (Side[Axis] * Lean[0] + Other[Axis] * Lean[1]) * Slant));
+                Leaf.Cover = 1 - Ease(Radius - Edge, Radius + Edge, Reach);
+                Leaf.Tone = Seeded(23.9);
+            }
+    return Leaf;
+};
+
+// A patch of panel, measured the way a pixel would: the same forty cells wide however big a cell has become.
+const LeafPanel = (Visit, { Size = 0.001, Density = 0.8, Tilt = 0.5, Seed = 3, Span = 0, Steps = 220 } = {}) =>
+{
+    const Cell = Math.max(Size, Span * 1.6);
+    const Width = Cell * 40;
+    for (let Row = 0; Row < Steps; Row += 1)
+        for (let Column = 0; Column < Steps; Column += 1)
+        {
+            const Place = [(Column / Steps) * Width - 0.0137, (Row / Steps) * Width + 0.0219, 0];
+            Visit(LeafUnder(Place, [0, 0, 1], Size, Density, Tilt, Seed, Span));
+        }
+};
+
+test("a flake is a facet in the world, not a speck in the sheet", () =>
+{
+    // 🔴 The field takes a position and a normal and nothing else. If a texture coordinate ever reaches it the flakes
+    //    are back in the unwrap, where they change size with the UV density and swim across every seam.
+    assert.match(Chunks.Flake, /LeafSample LeafUnder\(vec3 Position, vec3 Normal/, "the flake field lost its world position");
+    assert.ok(!/vCoordinate|vec2 Coordinate/.test(Chunks.Flake), "the flake field can see the unwrap");
+    assert.match(Chunks.Flake, /Leaf\.Normal = normalize\(Normal \+ \(Side \* Lean\.x \+ Other \* Lean\.y\)/, "a flake is not a facet");
+    assert.match(Chunks.Flake, /float Cell = max\(Wanted, Span \* 1\.6\)/, "the lattice is allowed to go finer than a pixel");
+
+    // The finish pass must no longer bake any of it. A baked flake is the bug.
+    assert.ok(!Chunks.Finish.includes("FlakeAt("), "the finish still bakes a flake field into the channels");
+    assert.ok(!/Relief \* Strength/.test(Chunks.Finish), "the finish still writes flake relief into height");
+    assert.match(Chunks.Finish, /float Leaf = clamp\(Density \* 0\.6, 0\.0, 1\.0\) \* clamp\(Strength/, "the metal loading is not baked");
+    assert.match(Chunks.Finish, /float FlakeField\(/, "the galvanised spangle lost its field");
+
+    // Two normals, which is the whole shading model: the coat on the shading normal, everything under it on the facet.
+    for (const Name of ["uFlakeWeight", "uFlakeSize", "uFlakeDensity", "uFlakeTilt", "uFlakeRoughness", "uFlakeTravel", "uFlakeColour"])
+        assert.ok(SurfaceFragment.includes(`uniform `) && SurfaceFragment.includes(Name), `${Name} never reaches the shader`);
+    assert.match(SurfaceFragment, /vec3 BaseNormal = Normal;/, "there is no second normal to put the flakes on");
+    assert.match(SurfaceFragment, /Distribution = DistributionGgx\(BaseNdotH, Roughness\)/, "the base lobe ignores the facet");
+    assert.match(SurfaceFragment, /SampleEnvironment\(reflect\(-View, BaseNormal\), Roughness\)/, "the reflection ignores the facet");
+    assert.match(SurfaceFragment, /CoatDistribution = DistributionGgx\(NdotH, CoatRoughness\)/, "the coat was given the facet too");
+    assert.match(SurfaceFragment, /smoothstep\(0\.012, 0\.14, Metalness\)/, "the flake is not gated on metal under coat");
+    assert.match(SurfaceFragment, /clamp\(Coat, 0\.0, 1\.0\)/, "the flake is not gated on the clear coat");
+});
+
+test("the panel keeps the same metal at every distance, and only the facets soften", () =>
+{
+    // The handshake: what the finish bakes into metalness is density times 0.6, and what the per-pixel field actually
+    // covers has to be that same number, or the crossfade between near and far is a visible step in how metallic the
+    // paint is.
+    for (const Density of [0.2, 0.4, 0.6])
+    {
+        let Sum = 0;
+        let Taken = 0;
+        LeafPanel((Leaf) => { Sum += Leaf.Cover; Taken += 1; }, { Density });
+        const Measured = Sum / Taken;
+        const Promised = Density * 0.6;
+        assert.ok(
+            Math.abs(Measured - Promised) < Promised * 0.15,
+            `density ${Density} covers ${Measured.toFixed(3)} of the panel, the maps promise ${Promised.toFixed(3)}`,
+        );
+    }
+
+    // 📝 And the LOD claim, which is the one that stops the fizzing. As the pixel grows the lattice grows with it, so
+    //    a flake is never drawn smaller than the thing sampling it — yet the fraction of the panel that is leaf does
+    //    not move. Sharpness is spent, metal is not.
+    const Readings = [0, 0.000625, 0.00125, 0.0025, 0.005, 0.01].map((Span) =>
+    {
+        let Sum = 0;
+        let Taken = 0;
+        LeafPanel((Leaf) => { Sum += Leaf.Cover; Taken += 1; }, { Span });
+        const Sample = LeafUnder([0.003, 0.004, 0], [0, 0, 1], 0.001, 0.8, 0.5, 3, Span);
+        return { Span, Cover: Sum / Taken, Sharp: Sample.Sharp, Cell: Sample.Cell };
+    });
+    for (const Reading of Readings)
+    {
+        assert.ok(Reading.Cell >= Reading.Span * 1.6 - 1e-9, "the lattice went finer than the pixel that samples it");
+        assert.ok(
+            Math.abs(Reading.Cover - Readings[0].Cover) < 0.03,
+            `a ${(Reading.Span * 1000).toFixed(2)} mm pixel changed the metal fraction to ${Reading.Cover.toFixed(3)}`,
+        );
+    }
+    for (let Index = 1; Index < Readings.length; Index += 1)
+        assert.ok(Readings[Index].Sharp <= Readings[Index - 1].Sharp, "sharpness did not fall as the pixel grew");
+    assert.ok(Readings.at(-1).Sharp < 0.1, "a flake a tenth of a pixel wide is still being drawn as a flake");
+
+    // 🔴 And the same handshake one level up, in the units the shading pass actually works in. The map holds one
+    //    metalness for a basecoat that is a ground plus leaf; the pass takes the leaf's share out, puts the facets
+    //    back a pixel at a time, and the average has to land back on the number the map held. Measured for a candy,
+    //    because a candy is the case with a real metal ground under the leaf — a metallic has none.
+    for (const [Style, Share] of [["metallic", 1], ["pearl", 0.5], ["candy", 0.45]])
+    {
+        const Paint = FlakeFromFinish({ ...CreateFinish("gt-silver"), Style });
+        assert.equal(Paint.Metal, Paint.Weight * Share, `${Style} disagrees with the finish shader about its leaf`);
+        const Density = Paint.Density;
+        const Leaf = Density * 0.6 * Paint.Metal;
+        const Baked = Style === "candy" ? 0.55 + Leaf : Leaf;
+        const Ground = Math.max(Baked - Density * 0.6 * Paint.Metal, 0);
+        let Sum = 0;
+        let Taken = 0;
+        LeafPanel((Sample) => { Sum += Math.min(1, Ground + Sample.Cover * Paint.Metal); Taken += 1; }, { Density });
+        const Measured = Sum / Taken;
+        assert.ok(
+            Math.abs(Measured - Baked) < 0.06,
+            `${Style} reads ${Measured.toFixed(3)} metal up close and ${Baked.toFixed(3)} far away`,
+        );
+    }
+});
+
+test("a different set of flakes is alight from every direction", () =>
+{
+    // This is the complaint, measured. A facet answers to the half vector, so moving the eye lights a different set
+    // of flakes; a speck baked into colour and metalness answers to nothing, so it is the same speck forever.
+    const Light = Unit([0.35, 0.5, 0.8]);
+    const Eyes = [Unit([-0.45, 0.2, 0.87]), Unit([0.45, 0.2, 0.87])];
+    const Lobe = (NdotH, Roughness) =>
+    {
+        const Alpha = Math.max(Roughness * Roughness, 1e-4) ** 2;
+        const Denominator = NdotH * NdotH * (Alpha - 1) + 1;
+        return Alpha / Math.max(Math.PI * Denominator * Denominator, 1e-7);
+    };
+    const Picture = (Eye, Faceted) =>
+    {
+        const Half = Unit([0, 1, 2].map((Axis) => Light[Axis] + Eye[Axis]));
+        const Pixels = [];
+        LeafPanel((Leaf) =>
+            Pixels.push(
+                Faceted
+                    ? Leaf.Cover * Lobe(Math.max(Along(Leaf.Normal, Half), 0), 0.08)
+                    : Leaf.Cover * Leaf.Tone * Lobe(Math.max(Along([0, 0, 1], Half), 0), 0.08),
+            ), { Steps: 150 });
+        return Pixels;
+    };
+    const Agreement = (First, Second) =>
+    {
+        const Mean = (Values) => Values.reduce((Sum, Value) => Sum + Value, 0) / Values.length;
+        const MeanFirst = Mean(First);
+        const MeanSecond = Mean(Second);
+        const Spread = (Values, Middle) => Math.sqrt(Mean(Values.map((Value) => (Value - Middle) ** 2)));
+        const Covariance = Mean(First.map((Value, Index) => (Value - MeanFirst) * (Second[Index] - MeanSecond)));
+        const Brightest = (Values) =>
+            new Set(
+                Values.map((Value, Index) => [Value, Index])
+                    .sort((Left, Right) => Right[0] - Left[0])
+                    .slice(0, Math.floor(Values.length * 0.05))
+                    .filter(([Value]) => Value > 0)
+                    .map(([, Index]) => Index),
+            );
+        const Top = Brightest(First);
+        const Other_ = Brightest(Second);
+        let Shared = 0;
+        for (const Index of Top) if (Other_.has(Index)) Shared += 1;
+        return {
+            Correlation: Covariance / Math.max(Spread(First, MeanFirst) * Spread(Second, MeanSecond), 1e-12),
+            Overlap: Shared / Math.max(Top.size, 1),
+        };
+    };
+
+    const Facets = Agreement(Picture(Eyes[0], true), Picture(Eyes[1], true));
+    assert.ok(Facets.Correlation < 0.15, `the same flakes are alight from both eyes (correlation ${Facets.Correlation.toFixed(3)})`);
+    assert.ok(Facets.Overlap < 0.25, `${(Facets.Overlap * 100) | 0}% of the brightest flakes did not move with the eye`);
+
+    // The control, and the reason this had to change: a baked speck is perfectly correlated with itself from anywhere.
+    const Baked = Agreement(Picture(Eyes[0], false), Picture(Eyes[1], false));
+    assert.ok(Baked.Correlation > 0.99, "the baked control is not behaving like a baked speck");
+    assert.ok(Baked.Overlap > 0.9, "the baked control is not behaving like a baked speck");
+});
+
+test("the leaf in the paint on top is what the viewport is handed", () =>
+{
+    const { Integrator, Device } = Prepare();
+    const Project = DefaultProject();
+    const Camera = new OrbitProjection();
+    Camera.Advance(0.016);
+    const Options = {
+        Environment: Project.Environment,
+        Material: Project.Material,
+        Display: DisplayIndex("material"),
+        CheckerScale: 16,
+    };
+    const Reading = (Name) =>
+    {
+        const Call = [...Device.Calls].reverse().find((Entry) => /^uniform/.test(Entry.Name) && Entry.Arguments[0]?.Name === Name);
+        return Call ? Call.Arguments[1] : null;
+    };
+
+    Integrator.RenderViewport(Camera, Options);
+    assert.equal(Reading("uFlakeWeight"), 0, "paint with no leaf in it still switched the flake pass on");
+
+    const Leaf = FlakeFromFinish(CreateFinish("gt-silver"));
+    Integrator.RenderViewport(Camera, { ...Options, Flake: Leaf });
+    assert.equal(Reading("uFlakeWeight"), Leaf.Weight);
+    assert.equal(Reading("uFlakeMetal"), Leaf.Metal, "how metallic a flake is never reached the shader");
+    assert.equal(Reading("uFlakeSize"), Leaf.Size, "the size must arrive in metres");
+    assert.equal(Reading("uFlakeTilt"), Leaf.Tilt);
+    assert.deepEqual([...Reading("uFlakeColour")], Leaf.Colour);
+
+    // And back to nothing the moment the paint is taken off the stack.
+    Integrator.RenderViewport(Camera, Options);
+    assert.equal(Reading("uFlakeWeight"), 0, "the leaf outlived the paint that brought it");
 });
 
 test("the viewport and texture-space passes both draw", () =>

@@ -378,7 +378,7 @@ export class ShadingIntegrator
             Stamp: Link(Device, QuadVertex, StampFragment, ["Noise", "Media"]),
             Composite: Link(Device, QuadVertex, CompositeFragment, ["Noise", "Generator", "Finish", "Mask", "Blend"]),
             Mask: Link(Device, QuadVertex, MaskFragment, ["Noise", "Generator", "Mask"]),
-            Shade: Link(Device, SurfaceVertex, SurfaceFragment, ["Environment"]),
+            Shade: Link(Device, SurfaceVertex, SurfaceFragment, ["Flake", "Environment"]),
             Background: Link(Device, QuadVertex, BackgroundFragment, ["Environment"]),
             Plane: Link(Device, QuadVertex, PlaneFragment),
             Resolve: Link(Device, QuadVertex, ResolveFragment),
@@ -1419,8 +1419,9 @@ export class ShadingIntegrator
             Device.uniform3fv(Uniforms.get("uFinishColourB"), Finish.ColourB);
             Device.uniform4f(Uniforms.get("uFinishShape"), Finish.Scale * Scale, Finish.Density, Finish.Strength, Finish.Gloss);
             Device.uniform4f(Uniforms.get("uFinishTrim"), Finish.Coat, Finish.Angle, Finish.Variation, Finish.Seed);
-            // The height range travels with the finish: a flake's facet is a slope in millimetres, and the channel it
-            // is written into only means millimetres because the material says how many.
+            // Only the orange peel is read here now. Flake size, tilt and the height range travel with the finish for
+            // the exporter and for anything that reads a document back, but the leaf itself is resolved per pixel by
+            // the shading pass, which is handed its own copy of these numbers off the stack.
             Device.uniform4f(
                 Uniforms.get("uFinishExtra"),
                 Finish.Peel ?? 0.3,
@@ -1734,6 +1735,21 @@ export class ShadingIntegrator
         Device.uniform1f(Uniforms.get("uThinFilmWeight"), Material.thin_film_weight);
         Device.uniform1f(Uniforms.get("uThinFilmThickness"), Material.thin_film_thickness);
         Device.uniform1f(Uniforms.get("uThinFilmIor"), Material.thin_film_ior);
+
+        // 🔴 The leaf in the paint is not a surface constant and not a channel either — it is whatever paint is on
+        //    top of the stack, which is why it arrives with the frame rather than with the material. Nothing in the
+        //    stack means weight zero, and at weight zero the shading pass's two normals are the same vector.
+        const Flake = Options.Flake;
+        Device.uniform1f(Uniforms.get("uFlakeWeight"), Flake ? Flake.Weight : 0);
+        Device.uniform1f(Uniforms.get("uFlakeMetal"), Flake ? Flake.Metal : 0);
+        Device.uniform1f(Uniforms.get("uFlakeSize"), Flake ? Flake.Size : 0.001);
+        Device.uniform1f(Uniforms.get("uFlakeDensity"), Flake ? Flake.Density : 0);
+        Device.uniform1f(Uniforms.get("uFlakeTilt"), Flake ? Flake.Tilt : 0);
+        Device.uniform1f(Uniforms.get("uFlakeRoughness"), Flake ? Flake.Roughness : 0.1);
+        Device.uniform1f(Uniforms.get("uFlakeTravel"), Flake ? Flake.Travel : 0);
+        Device.uniform1f(Uniforms.get("uFlakeSeed"), Flake ? Flake.Seed : 0);
+        Device.uniform3fv(Uniforms.get("uFlakeColour"), Flake ? Flake.Colour : [1, 1, 1]);
+
         const Cursor = Options.Cursor;
         Device.uniform1f(Uniforms.get("uBrushVisible"), Cursor ? 1 : 0);
         Device.uniform3fv(Uniforms.get("uBrushCentre"), Cursor ? Cursor.Position : [0, 0, 0]);
