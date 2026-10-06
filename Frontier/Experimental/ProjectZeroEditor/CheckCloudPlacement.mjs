@@ -231,10 +231,10 @@ try {
     "Legacy imported cloud values are preserved until overridden; previously locked Clouds can be unlocked",
   );
   await Open("local-cloud");
-  assert.equal(await Page.locator("iframe").count(), 0);
+  assert.equal(await Page.locator("iframe").count(), 2);
   assert.equal(await Page.locator('[data-card="Cloud coverage"]').count(), 1);
   assert.equal(await Page.locator('[data-card="Local bounds"]').count(), 1);
-  Checks.push("Local Cloud coverage and bounds remain unchanged");
+  Checks.push("Local Cloud now shares both reference slices and retains its native coverage and bounds controls");
   await Page.setViewportSize({ width: 1024, height: 768 });
   await Open("clouds");
   assert(

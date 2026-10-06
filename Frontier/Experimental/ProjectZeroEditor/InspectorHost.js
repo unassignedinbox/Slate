@@ -68,12 +68,15 @@ function Trim() {
   const Custom = Sheet.querySelector(".mpanel");
   // Filter only the imported additions; the host's existing card list is independent.
   const LightCards = [
+    ".lp-source-column",
+    ".lp-control-column",
     ".lp-preview",
     ".mp-rail",
     ".lp-output",
     ".lp-shape",
     ".lp-transform",
     ".lp-participation",
+    ".lp-response",
   ];
   const Allowed = {
     ledlight: LightCards,
@@ -85,46 +88,11 @@ function Trim() {
         ? [".cl-cover"]
         : [".cl-hero", ".mp-rail", ".mp-duo"],
     fog: [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
-    pointlight: [
-      ".lp-preview",
-      ".mp-rail",
-      ".lp-output",
-      ".lp-shape",
-      ".lp-transform",
-      ".lp-participation",
-    ],
-    spotlight: [
-      ".lp-preview",
-      ".mp-rail",
-      ".lp-output",
-      ".lp-shape",
-      ".lp-transform",
-      ".lp-participation",
-    ],
-    ieslight: [
-      ".lp-preview",
-      ".mp-rail",
-      ".lp-output",
-      ".lp-shape",
-      ".lp-transform",
-      ".lp-participation",
-    ],
-    arealight: [
-      ".lp-preview",
-      ".mp-rail",
-      ".lp-output",
-      ".lp-shape",
-      ".lp-transform",
-      ".lp-participation",
-    ],
-    tubelight: [
-      ".lp-preview",
-      ".mp-rail",
-      ".lp-output",
-      ".lp-shape",
-      ".lp-transform",
-      ".lp-participation",
-    ],
+    pointlight: LightCards,
+    spotlight: LightCards,
+    ieslight: LightCards,
+    arealight: LightCards,
+    tubelight: LightCards,
   }[Kind];
   if (Allowed) {
     [...Custom.children].forEach((Child) => {
@@ -134,6 +102,15 @@ function Trim() {
       if (Child !== Custom && !Child.classList.contains("ident"))
         Child.remove();
     });
+  }
+  if (Kind === "clouds" && Active.HostPanel === "local-cloud") {
+    const Hero = Custom.querySelector(".cl-hero");
+    if (Hero) {
+      const Label = document.createElement("span");
+      Label.textContent = "LOCAL VOLUME · SCHEMATIC";
+      Label.className = "cl-local-domain";
+      Hero.append(Label);
+    }
   }
   Mount.dataset.referenceKind = Kind;
   if (
@@ -248,6 +225,7 @@ function Synchronize(Data) {
         Object.assign(Node.props, structuredClone(Presets.get(Row.Preset)));
       Nodes.set(Row.Id, Node);
     }
+    Node.HostPanel = Row.Panel;
     Node.name = Row.Name;
     Node.vis = !Data.Hidden[Row.Id];
     Node.open = !Data.Collapsed[Row.Id];
@@ -259,7 +237,10 @@ function Synchronize(Data) {
       Node.notes = Stored.Notes || "";
     }
     if (Row.Type === "clouds")
-      Object.assign(Node.props, CloudReference(Data.Values[Row.Id] || {}));
+      Object.assign(
+        Node.props,
+        CloudReference(Data.Values[Row.Id] || {}, Row.Panel),
+      );
     Node.kids = [];
   }
   const Present = new Set(Data.Rows.map((Row) => Row.Id));

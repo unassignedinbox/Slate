@@ -18,7 +18,7 @@ const Address =
   process.env.FRONTIER_EDITOR_URL || "http://127.0.0.1:4173/ProjectZeroEditor/";
 const Proof =
     process.env.FRONTIER_PROOF_FOLDER ||
-    path.join(Folder, "Screenshots/LightDesign/Lighting"),
+    path.join(Folder, "Screenshots/SharedCloudLighting/Lighting"),
   Checks = [],
   Errors = [],
   FontFailures = [];
@@ -71,9 +71,7 @@ async function Square(Frame) {
   assert(
     Reading.every(
       (Tile) =>
-        Tile.Radius === (Lighting ? "14px" : "6px") &&
-        Tile.Border === "0px" &&
-        !Tile.Overflow,
+        Tile.Radius === "6px" && Tile.Border === "0px" && !Tile.Overflow,
     ),
     JSON.stringify(Reading),
   );
@@ -116,7 +114,7 @@ try {
     const Frame = await Open(Id);
     await Frame.locator(".lp-preview").waitFor();
     await Square(Frame);
-    assert.equal(await Frame.locator(".mpanel>.lp-card").count(), 5);
+    assert.equal(await Frame.locator(".lighting-panel .lp-card").count(), 6);
     assert.equal(await Page.locator(".fracture-card").count(), 0);
     const Before = await Frame.locator(".lp-preview canvas").evaluate(
       (Canvas) => Canvas.toDataURL(),

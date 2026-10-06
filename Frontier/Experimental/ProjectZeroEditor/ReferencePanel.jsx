@@ -1,4 +1,4 @@
-import { LightNames } from "./LightSpecification.js";
+import { LightNames, LightIcons } from "./LightSpecification.js";
 import React, { useEffect, useRef, useState } from "react";
 
 export const ReferenceLights = [
@@ -18,7 +18,7 @@ export const ReferenceLights = [
   ReferencePreset: Name,
   ReferenceOnly: true,
   Panel: "light",
-  Icon: "light-" + ReferenceType,
+  Icon: LightIcons[ReferenceType],
   Parent: "lighting",
   Description: "Light authoring · HTML preview",
 }));
@@ -58,7 +58,8 @@ export function PrepareLightRows(Rows, Revision = 0) {
     Row.Panel === "light"
       ? {
           ...Row,
-          Icon: "light-" + (Row.ReferenceType || "arealight"),
+          Icon:
+            LightIcons[Row.ReferenceType || "arealight"] || "editor-area-light",
           Description: Row.ReferenceOnly
             ? (LightNames[Row.ReferenceType] || "Light") + " · HTML authoring"
             : Row.Description,
@@ -104,7 +105,9 @@ export function HasReferencePanel(Row) {
   if (Row.Panel === "group" || Row.Panel === "moon") return false;
   return (
     !!Row.ReferenceType ||
-    ["wind", "clouds", "height-fog", "sun", "light"].includes(Row.Panel)
+    ["wind", "clouds", "local-cloud", "height-fog", "sun", "light"].includes(
+      Row.Panel,
+    )
   );
 }
 
@@ -134,6 +137,7 @@ export default function ReferencePanel({
           Name: Row.Name,
           Parent: Row.Parent,
           Type: TypeOf(Row),
+          Panel: Row.Panel,
           Preset: Row.ReferencePreset,
         })),
         Values: State.Values,

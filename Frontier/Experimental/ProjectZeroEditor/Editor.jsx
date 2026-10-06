@@ -6,7 +6,7 @@ import {
   OpenFracture,
   ReadRecord as ReadFracture,
 } from "../FractureEditor/FractureSpecification.js";
-import { CloudProperties } from "./CloudSpecification.js";
+import { CloudProperties, CloudEdit } from "./CloudSpecification.js";
 import ReferencePanel, {
   EnsureReferenceLights,
   PrepareLightRows,
@@ -260,7 +260,10 @@ function App() {
       ...DefaultSettings,
       ...Saved.Settings,
     }),
-    [Wide, Expand] = useState(false),
+    [Wide, Expand] = useState(
+      () =>
+        new URLSearchParams(location.search).get("workspace") === "inspector",
+    ),
     [Name, RenameProject] = useState(Saved.Name || "Project-Zero"),
     [Rename, RenameRow] = useState(null),
     [Construct, OpenConstruct] = useState(false),
@@ -524,14 +527,21 @@ function App() {
       for (const Record of Accepted) {
         if (!HasReferencePanel(Known.get(Record.Id))) continue;
         const CloudChanges = {};
-        if (Known.get(Record.Id).Panel === "clouds") {
+        if (["clouds", "local-cloud"].includes(Known.get(Record.Id).Panel)) {
           for (const [Name, Key] of Object.entries(CloudProperties)) {
             if (
               Record.Properties[Key] !==
               Previous[Record.Id]?.ReferenceInspector?.Properties?.[Key]
             )
-              CloudChanges[Name] =
-                Record.Properties[Key] * (Name === "Density" ? 4 : 1);
+              Object.assign(
+                CloudChanges,
+                CloudEdit(
+                  Previous[Record.Id] || {},
+                  Name,
+                  Record.Properties[Key] * (Name === "Density" ? 4 : 1),
+                  Known.get(Record.Id).Panel,
+                ),
+              );
           }
         }
         Next[Record.Id] = {
@@ -1536,7 +1546,9 @@ function App() {
     </>
   );
   const ReferenceCards = (
-    Slice = Subject.Panel === "clouds" ? "summary" : "all",
+    Slice = ["clouds", "local-cloud"].includes(Subject.Panel)
+      ? "summary"
+      : "all",
   ) => (
     <ReferencePanel
       Subject={Subject}
@@ -1615,20 +1627,32 @@ function App() {
               AllValues={Values}
               AllHidden={Hidden}
               CloudCoverageCards={
-                Subject.Panel === "clouds" ? ReferenceCards("coverage") : null
+                ["clouds", "local-cloud"].includes(Subject.Panel)
+                  ? ReferenceCards("coverage")
+                  : null
               }
               ReferenceCards={
-                ["sun", "height-fog", "wind", "clouds", "light"].includes(
-                  Subject.Panel,
-                )
+                [
+                  "sun",
+                  "height-fog",
+                  "wind",
+                  "clouds",
+                  "local-cloud",
+                  "light",
+                ].includes(Subject.Panel)
                   ? ReferenceCards()
                   : null
               }
             />
           )}
-          {!["sun", "height-fog", "wind", "clouds", "light"].includes(
-            Subject.Panel,
-          ) &&
+          {![
+            "sun",
+            "height-fog",
+            "wind",
+            "clouds",
+            "local-cloud",
+            "light",
+          ].includes(Subject.Panel) &&
             HasReferencePanel(Subject) &&
             ReferenceCards()}
         </div>

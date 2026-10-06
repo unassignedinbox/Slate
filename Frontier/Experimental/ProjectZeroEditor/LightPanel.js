@@ -3,8 +3,8 @@
 //============================================================================================================================================
 // 📦 Type-specific browser light instruments with live emission and aperture illustrations.
 
-import { LightGlyphs } from "./LightSpecification.js";
-import { ProjectLight } from "./LightProjection.js";
+import { LightIcons } from "./LightSpecification.js";
+import { ProjectLight, ProjectResponse } from "./LightProjection.js";
 import { MountLightTransform } from "./EmitterPanel.jsx";
 import { el } from "./InspectorDepot/kit.js";
 const Clamp = (NumberValue, Minimum, Maximum) =>
@@ -168,7 +168,10 @@ export function LightPanel(Subject, Context) {
     "lp-preview",
   );
   const Glyph = el("span", "lp-source-icon");
-  Glyph.innerHTML = LightGlyphs[Style];
+  const SourceIcon = el("img");
+  SourceIcon.src = __LIGHT_ICONS__[LightIcons[Style]];
+  SourceIcon.alt = "";
+  Glyph.append(SourceIcon);
   Preview.querySelector("header").prepend(Glyph);
   const Primary = el("div", "lp-primary"),
     NumberPart = el("span", "lp-integer"),
@@ -188,6 +191,37 @@ export function LightPanel(Subject, Context) {
           : "Authored luminous flux",
   );
   Preview.append(Caption);
+  const Descriptor = el("div", "lp-descriptor");
+  Preview.append(Descriptor);
+  Bindings.push(() => {
+    Descriptor.textContent = Photometric
+      ? (Properties.profile || "Downlight") + " / synthetic polar study"
+      : Area
+        ? (Properties.aperture || "Rectangle") +
+          " / " +
+          Read("width", 2).toFixed(1) +
+          " × " +
+          Read("height", 1).toFixed(1) +
+          " m aperture"
+        : Strip
+          ? (Properties.routing || "Cove") +
+            " / " +
+            Read("length", 2.4).toFixed(1) +
+            " m run"
+          : Diode
+            ? Read("diameter", 40) +
+              " mm package / " +
+              Read("temperature", 4000) +
+              " K"
+            : Spot
+              ? Read("angle", 26) +
+                "° cone / " +
+                Math.round(Read("penumbra", 0.4) * 100) +
+                "% soft edge"
+              : Point
+                ? "Omnidirectional / decay " + Read("decay", 2).toFixed(1)
+                : Read("length", 1.5).toFixed(1) + " m linear emitter";
+  });
   Bindings.push(() => {
     const Parts = Flux()
       .toLocaleString("en-US", {
@@ -208,7 +242,7 @@ export function LightPanel(Subject, Context) {
         Tint,
         Flux,
       }),
-    180,
+    260,
   );
   Preview.append(
     el(
@@ -280,7 +314,7 @@ export function LightPanel(Subject, Context) {
   }
   const Output = Card(
     Diode ? "Driver & colour" : Strip ? "Output per metre" : "Source & colour",
-    "01",
+    "OUTPUT",
     "lp-output",
   );
   if (Diode) {
@@ -328,7 +362,7 @@ export function LightPanel(Subject, Context) {
             : Spot
               ? "Beam shaping"
               : "Emitter dimensions",
-    "02",
+    "OPTICS",
     "lp-shape",
   );
   const Choice = (Section, Key, Names) => {
@@ -401,11 +435,87 @@ export function LightPanel(Subject, Context) {
     Field(Shape, "radius", "Tube radius", 0.01, 1, 0.01, "m");
     Field(Shape, "distance", "Reach", 1, 120, 1, "m");
   }
+  const Response = Card(
+    Photometric
+      ? "Angular response"
+      : Area
+        ? "Aperture balance"
+        : Strip
+          ? "Electrical budget"
+          : Diode
+            ? "Conversion budget"
+            : Spot
+              ? "Beam section"
+              : Point
+                ? "Distance response"
+                : "Linear output",
+    "ANALYTICAL",
+    "lp-response",
+  );
+  const ResponseReading = el("div", "lp-response-reading"),
+    ResponseCaption = el("p", "lp-note");
+  Response.append(ResponseReading, ResponseCaption);
+  Bindings.push(() => {
+    ResponseReading.textContent = Photometric
+      ? Read("cone", 60) + "°"
+      : Area
+        ? Format(
+            Flux() /
+              Math.max(
+                0.01,
+                Read("width", 2) *
+                  Read("height", 1) *
+                  (Properties.aperture === "Disk" ? Math.PI / 4 : 1),
+              ),
+            0,
+          ) + " lm/m²"
+        : Strip
+          ? Format(
+              (Read("length", 2.4) * Read("wattsPerMetre", 14.4)) /
+                Math.max(1, Read("voltage", 24)),
+              2,
+            ) + " A"
+          : Diode
+            ? Format(Read("dimmer", 1) * 100) + " %"
+            : Spot
+              ? Format(
+                  2 * 5 * Math.tan((Read("angle", 26) * Math.PI) / 360),
+                  2,
+                ) + " m"
+              : Point
+                ? Format(Flux() / 5 ** Read("decay", 2), 2) + " lx"
+                : Format(Flux() / Math.max(0.1, Read("length", 1.5))) + " lm/m";
+    ResponseCaption.textContent = Photometric
+      ? "Normalized preset sections · not measured candela"
+      : Area
+        ? "Flux per aperture area · not surface luminance"
+        : Strip
+          ? "Connected watts ÷ supply volts · ideal full-load current"
+          : Diode
+            ? "Authored dimmer · estimated output ignores thermal losses"
+            : Spot
+              ? "Beam diameter on a perpendicular plane at 5 m"
+              : Point
+                ? "Authored decay at 5 m · free-space estimate"
+                : "Authored source flux per metre";
+  });
+  Canvas(
+    Response,
+    (Brush, Width, Height) =>
+      ProjectResponse(Brush, Width, Height, {
+        Style,
+        Read,
+        Properties,
+        Tint,
+        Flux,
+      }),
+    100,
+  );
   const Placement = el("div", "lp-card lp-transform");
   Host.append(Placement);
   const Transform = MountLightTransform(Placement, Subject, Context);
   Bindings.push(Transform.Refresh);
-  const Visibility = Card("Scene participation", "04", "lp-participation");
+  const Visibility = Card("Scene participation", "FLAGS", "lp-participation");
   Toggle(Visibility, "shadows", "Cast shadows");
   Toggle(
     Visibility,
@@ -424,6 +534,11 @@ export function LightPanel(Subject, Context) {
           ? "Show glow"
           : "Draw emitter",
   );
+  const SourceColumn = el("div", "lp-source-column"),
+    ControlColumn = el("div", "lp-control-column");
+  SourceColumn.append(Preview, Shape);
+  ControlColumn.append(Output, Rail, Response, Placement);
+  Host.replaceChildren(SourceColumn, ControlColumn, Visibility);
   function Refresh() {
     Bindings.forEach((Sync) => Sync());
     Charts.forEach((Render) => Render());

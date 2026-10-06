@@ -1,419 +1,561 @@
-//============================================================================================================================================
-//                                                            LIGHTPROJECTION.JS
-//============================================================================================================================================
-// 📦 Source-specific analytical light diagrams for browser authoring; not measured photometry.
-
+// Source studies are analytical authoring diagrams, not native rendering or measured photometry.
+const Clamp = (Number, Minimum, Maximum) =>
+  Math.max(Minimum, Math.min(Maximum, Number));
+function Polar(Profile, Angle, Cone, Section = 0) {
+  Angle *= 60 / Math.max(5, Cone);
+  if (Math.abs(Angle) > Math.PI / 2) return 0;
+  const Axis = Math.max(0, Math.cos(Angle));
+  if (Profile === "Batwing") return Math.abs(Math.sin(Angle * 2)) ** 1.4 * Axis;
+  if (Profile === "Wall wash")
+    return Math.max(0, Math.cos(Angle - 0.55)) ** (Section ? 3 : 5);
+  let Power =
+    Profile === "Fog Lamp"
+      ? 0.65
+      : Profile === "Parking Lamp"
+        ? 0.4
+        : (Profile === "High Beam" ? 240 : 130) / 60;
+  let Lobe = Axis ** Math.max(0.4, Power * (Section ? 0.65 : 1));
+  if (Profile.includes("Low Beam"))
+    Lobe *= Math.sin(Angle) > 0 ? (Profile.startsWith("SAE") ? 0.5 : 0.65) : 1;
+  return Lobe;
+}
 export function ProjectLight(
   Brush,
   Width,
   Height,
   { Style, Read, Properties, Tint, Flux },
 ) {
-  const Left = 20,
-    Right = Width - 18,
-    Top = 18,
-    Bottom = Height - 28,
-    Center = Width / 2;
   Brush.clearRect(0, 0, Width, Height);
+  Brush.save();
+  const Scale = Math.min(Width / 380, Height / 260);
+  Brush.translate((Width - 380 * Scale) / 2, (Height - 260 * Scale) / 2);
+  Brush.scale(Scale, Scale);
   Brush.lineWidth = 1;
-  Brush.font = "9px sans-serif";
   const Text = (
-    Label,
+    Caption,
     Horizontal,
     Vertical,
     Align = "left",
-    Colour = "#666b69",
+    Colour = "#89918d",
   ) => {
+    Brush.font = "10px sans-serif";
     Brush.fillStyle = Colour;
     Brush.textAlign = Align;
-    Brush.fillText(Label, Horizontal, Vertical);
+    Brush.fillText(Caption, Horizontal, Vertical);
   };
-  const Line = (Points, Colour = "#ffffff16", Dashed = false) => {
-    Brush.strokeStyle = Colour;
-    Brush.setLineDash(Dashed ? [3, 5] : []);
+  const Path = (Points, Stroke = "#ffffff30", Fill = null, Dash = false) => {
     Brush.beginPath();
     Points.forEach(([Horizontal, Vertical], Index) =>
       Index
         ? Brush.lineTo(Horizontal, Vertical)
         : Brush.moveTo(Horizontal, Vertical),
     );
+    if (Fill) {
+      Brush.closePath();
+      Brush.fillStyle = Fill;
+      Brush.fill();
+    }
+    Brush.strokeStyle = Stroke;
+    Brush.setLineDash(Dash ? [3, 5] : []);
     Brush.stroke();
     Brush.setLineDash([]);
   };
-  const Dot = (Horizontal, Vertical, Radius = 2, Colour = Tint(0.9)) => {
-    Brush.fillStyle = Colour;
+  const Circle = (
+    Horizontal,
+    Vertical,
+    Radius,
+    Stroke = "#ffffff20",
+    Fill = null,
+  ) => {
     Brush.beginPath();
     Brush.arc(Horizontal, Vertical, Radius, 0, Math.PI * 2);
-    Brush.fill();
+    if (Fill) {
+      Brush.fillStyle = Fill;
+      Brush.fill();
+    }
+    Brush.strokeStyle = Stroke;
+    Brush.stroke();
   };
-  const Guides = () => {
-    for (let Index = 0; Index < 4; Index++)
-      Line(
-        [
-          [Left, Top + (Index * (Bottom - Top)) / 3],
-          [Right, Top + (Index * (Bottom - Top)) / 3],
-        ],
-        "#ffffff0e",
-        true,
-      );
+  const Dimension = (Left, Right, Vertical, Caption) => {
+    Path([
+      [Left, Vertical - 4],
+      [Left, Vertical + 4],
+    ]);
+    Path([
+      [Right, Vertical - 4],
+      [Right, Vertical + 4],
+    ]);
+    Path(
+      [
+        [Left, Vertical],
+        [Right, Vertical],
+      ],
+      "#ffffff55",
+    );
+    Text(Caption, (Left + Right) / 2, Vertical + 17, "center");
   };
-  if (Style === "pointlight") {
-    Guides();
-    const Range = Read("distance", 30),
-      Decay = Read("decay", 2),
-      Strength = Math.min(1, Flux() / 60);
-    const Points = Array.from({ length: 90 }, (_, Index) => {
-      const Distance = Math.max(1.01, Range) ** (Index / 89);
-      return [
-        Left + (Index / 89) * (Right - Left),
-        Bottom -
-          (Bottom - Top) * Math.pow(Distance, -Decay) * (Flux() > 0 ? 1 : 0),
-      ];
-    });
-    const Fill = Brush.createLinearGradient(0, Top, 0, Bottom);
-    Fill.addColorStop(0, Tint(0.05 + 0.12 * Strength));
-    Fill.addColorStop(1, Tint(0));
-    Brush.fillStyle = Fill;
-    Brush.beginPath();
-    Brush.moveTo(Left, Bottom);
-    Points.forEach((Coordinate) => Brush.lineTo(...Coordinate));
-    Brush.lineTo(Right, Bottom);
-    Brush.closePath();
-    Brush.fill();
-    Line(Points, Tint(0.85));
-    [...new Set([5, 10, Range])]
-      .filter((Distance) => Distance <= Range)
-      .forEach((Distance) => {
-        const Horizontal =
-            Left +
-            (Math.log(Distance) / Math.log(Math.max(1.01, Range))) *
-              (Right - Left),
-          Vertical =
-            Bottom -
-            (Bottom - Top) * Math.pow(Distance, -Decay) * (Flux() > 0 ? 1 : 0);
-        if (Horizontal <= Right) {
-          Dot(Horizontal, Vertical);
-          Text(
-            (Flux() / Distance ** Decay).toFixed(2),
-            Horizontal,
-            Vertical - 10,
-            "center",
-            "#afb5ad",
-          );
-        }
-      });
-    Text("1 m", Left, Height - 8);
-    Text(Range + " m", Right, Height - 8, "right");
-    Text("EST. lx · LOG DISTANCE", Right, 13, "right");
-  } else if (Style === "spotlight") {
-    const Half = Math.min(
-        Width * 0.4,
-        Math.tan((Read("angle", 26) * Math.PI) / 360) * 150,
-      ),
-      Soft = Read("penumbra", 0.42),
-      Vertical = Bottom - 8;
-    Guides();
-    const Gradient = Brush.createLinearGradient(0, 25, 0, Vertical);
-    Gradient.addColorStop(0, Tint(0.04));
-    Gradient.addColorStop(1, Tint(0.28 * Math.min(1, Flux() / 120)));
-    Brush.fillStyle = Gradient;
-    Brush.beginPath();
-    Brush.moveTo(Center, 26);
-    Brush.lineTo(Center - Half, Vertical);
-    Brush.ellipse(Center, Vertical, Half, 12, 0, Math.PI, 0, true);
-    Brush.closePath();
-    Brush.fill();
-    Line(
-      [
-        [Center - Half, Vertical],
-        [Center, 26],
-        [Center + Half, Vertical],
-      ],
-      Tint(0.42),
-    );
-    Line(
-      [
-        [Center - Half * (1 - Soft), Vertical],
-        [Center, 26],
-        [Center + Half * (1 - Soft), Vertical],
-      ],
-      Tint(0.6),
-      true,
-    );
-    Brush.strokeStyle = Tint(0.75);
-    Brush.beginPath();
-    Brush.ellipse(Center, Vertical, Half, 12, 0, 0, Math.PI * 2);
-    Brush.stroke();
-    Brush.fillStyle = "#c4c9bf";
-    Brush.fillRect(Center - 10, 15, 20, 10);
-    Text("SOFT EDGE", Left, Height - 7);
-    Text(Math.round(Soft * 100) + "%", Right, Height - 7, "right");
-  } else if (Style === "ieslight") {
-    if (Properties.profile === "Custom .IES") {
-      Text("No IES samples loaded", Center, Height / 2, "center");
-      return;
-    }
-    const Radius = Math.min(Width * 0.39, Height * 0.43),
-      CenterY = Height * 0.43;
-    [1 / 3, 2 / 3, 1].forEach((Scale) => {
-      Brush.strokeStyle = "#ffffff15";
-      Brush.beginPath();
-      Brush.arc(Center, CenterY, Radius * Scale, 0, Math.PI * 2);
-      Brush.stroke();
-    });
-    Line(
-      [
-        [Center, 8],
-        [Center, Height - 15],
-      ],
-      "#ffffff20",
-      true,
-    );
-    Line(
-      [
-        [Center - Radius - 12, CenterY],
-        [Center + Radius + 12, CenterY],
-      ],
-      "#ffffff20",
-      true,
-    );
-    const Profile = Properties.profile || "Downlight",
-      Points = [];
-    for (let Index = 0; Index <= 180; Index++) {
-      const Angle = (Index / 180) * Math.PI * 2,
-        Pitch = (Read("cutoff", 0) * Math.PI) / 180,
-        Axis = Math.max(0, Math.cos(Angle)),
-        Lobe =
-          Profile === "Batwing"
-            ? Math.pow(Math.abs(Math.sin(Angle * 2)), 1.5) * Axis
-            : Profile === "Wall wash"
-              ? Math.max(0, Math.cos(Angle - 0.65)) ** 4
-              : Math.pow(
-                  Axis,
-                  Profile === "Fog Lamp"
-                    ? 0.65
-                    : Profile === "Parking Lamp"
-                      ? 0.45
-                      : Math.max(
-                          0.4,
-                          (Profile === "High Beam" ? 240 : 130) /
-                            Read("cone", 60),
-                        ),
-                );
-      const Shape = Profile.includes("Low Beam")
-        ? Lobe * (Math.sin(Angle) > 0 ? 0.62 : 1)
-        : Lobe;
-      Points.push([
-        Center + Math.sin(Angle + Pitch) * Radius * Shape,
-        CenterY + Math.cos(Angle + Pitch) * Radius * Shape,
-      ]);
-    }
-    Brush.fillStyle = Tint(
-      Math.min(0.18, (Flux() * Read("multiplier", 1)) / 16000),
-    );
-    Brush.beginPath();
-    Points.forEach((Coordinate, Column) =>
-      Column ? Brush.lineTo(...Coordinate) : Brush.moveTo(...Coordinate),
-    );
-    Brush.closePath();
-    Brush.fill();
-    Line(Points, Tint(0.85));
-    Text("90°", Left, CenterY + 3);
-    Text("90°", Right, CenterY + 3, "right");
-    Text("PRESET · NORMALIZED", Center, Height - 7, "center");
-  } else if (Style === "ledstrip") {
-    const Count = Math.round(Read("length", 2.4) * Read("ledsPerMetre", 60)),
-      Shown = Math.min(72, Math.max(2, Count));
-    const Route = Properties.routing || "Cove",
-      Points = Array.from({ length: Shown }, (_, Index) => {
-        const Fraction = Index / (Shown - 1);
-        if (Route === "Ring")
-          return [
-            Center + Math.cos(Fraction * Math.PI * 2) * Width * 0.33,
-            Height * 0.48 + Math.sin(Fraction * Math.PI * 2) * Height * 0.27,
-          ];
-        if (Route === "Cove")
-          return Fraction < 0.5
-            ? [Left + Fraction * 2 * (Right - Left) * 0.78, Top + 14]
-            : [
-                Left + (Right - Left) * 0.78,
-                Top + 14 + (Fraction - 0.5) * 2 * (Bottom - Top - 25),
-              ];
-        return [Left + Fraction * (Right - Left), Height * 0.5];
-      });
-    Brush.lineWidth = Properties.diffuser ? 12 : 9;
-    Line(Points, "#ffffff0b");
-    Brush.lineWidth = Properties.diffuser ? 7 : 1;
-    Line(Points, Tint(Properties.diffuser ? 0.18 : 0.2));
-    Brush.lineWidth = 1;
-    Points.forEach(([Horizontal, Vertical], Index) => {
-      Brush.shadowColor = Tint(0.6);
-      Brush.shadowBlur = Properties.diffuser ? 12 : 4;
-      Dot(
-        Horizontal,
-        Vertical,
-        Properties.diffuser ? 1.7 : 2,
-        Tint(0.2 + 0.75 * Read("dimmer", 1)),
-      );
-      Brush.shadowBlur = 0;
-    });
-    Text("+", Points[0][0] - 9, Points[0][1] + 4);
-    Text(Count + " LEDS · SCHEMATIC", Left, Height - 7);
-    Text(Read("length", 2.4).toFixed(1) + " m", Right, Height - 7, "right");
-  } else if (Style === "ledlight") {
-    const CenterY = Height * 0.48,
-      Size = 30 + Read("diameter", 40) * 0.13;
-    Brush.strokeStyle = "#ffffff24";
-    Brush.strokeRect(
-      Center - Size / 2 - 12,
-      CenterY - Size / 2 - 12,
-      Size + 24,
-      Size + 24,
-    );
-    for (let Column = 0; Column < 4; Column++) {
-      Line(
-        [
-          [Center - Size / 2 - 20, CenterY - Size / 2 + (Column * Size) / 3],
-          [Center - Size / 2 - 12, CenterY - Size / 2 + (Column * Size) / 3],
-        ],
-        "#a692614d",
-      );
-      Line(
-        [
-          [Center + Size / 2 + 12, CenterY - Size / 2 + (Column * Size) / 3],
-          [Center + Size / 2 + 20, CenterY - Size / 2 + (Column * Size) / 3],
-        ],
-        "#a692614d",
-      );
-    }
-    Brush.shadowColor = Tint(0.5);
-    Brush.shadowBlur = 22 * Read("dimmer", 1);
-    Brush.fillStyle = Tint(0.15 + 0.6 * Read("dimmer", 1));
-    Brush.fillRect(Center - Size / 2, CenterY - Size / 2, Size, Size);
-    Brush.shadowBlur = 0;
-    for (let Column = 0; Column < 3; Column++)
-      for (let Row = 0; Row < 3; Row++) {
-        Brush.strokeStyle = "#171b1680";
-        Brush.strokeRect(
-          Center - Size / 2 + 4 + (Column * Size) / 3,
-          CenterY - Size / 2 + 4 + (Row * Size) / 3,
-          Size / 3 - 8,
-          Size / 3 - 8,
-        );
-      }
-    Brush.strokeStyle = Tint(0.3);
-    Brush.beginPath();
-    Brush.arc(
-      Center,
-      CenterY,
-      Size * 1.2,
-      -Math.PI / 2 - (Read("angle", 120) * Math.PI) / 360,
-      -Math.PI / 2 + (Read("angle", 120) * Math.PI) / 360,
-    );
-    Brush.stroke();
-    Text(Read("diameter", 40) + " mm PACKAGE", Left, Height - 7);
-    Text(Read("angle", 120) + "°", Right, Height - 7, "right");
-  } else if (Style === "arealight") {
-    const ApertureWidth = Read("width", 2),
-      ApertureHeight = Read("height", 1),
-      Across = Math.min(
-        Width * 0.67,
-        110 * Math.sqrt(ApertureWidth / Math.max(0.1, ApertureHeight)),
-      ),
-      Depth = Math.min(
-        80,
-        65 * Math.sqrt(ApertureHeight / Math.max(0.1, ApertureWidth)),
-      ),
-      Vertical = Height * 0.45;
-    Brush.shadowColor = Tint(0.4);
-    Brush.shadowBlur = 18;
-    Brush.fillStyle = Tint(0.12 + 0.45 * Math.min(1, Flux() / 5000));
-    Brush.strokeStyle = Tint(0.7);
-    Brush.beginPath();
-    if (Properties.aperture === "Disk")
-      Brush.ellipse(Center, Vertical, Across / 2, Depth / 2, 0, 0, Math.PI * 2);
-    else {
-      Brush.moveTo(Center - Across / 2, Vertical - Depth / 2 + 8);
-      Brush.lineTo(Center + Across / 2, Vertical - Depth / 2 - 8);
-      Brush.lineTo(Center + Across / 2, Vertical + Depth / 2 - 8);
-      Brush.lineTo(Center - Across / 2, Vertical + Depth / 2 + 8);
-      Brush.closePath();
-    }
-    Brush.fill();
-    Brush.stroke();
-    Brush.shadowBlur = 0;
-    const Splay = Math.sin((Read("spread", 120) * Math.PI) / 360) * 22;
-    for (const Sign of [-1, 1])
-      Line(
-        [
-          [Center + Sign * Across * 0.3, Vertical + Depth / 2 + 4],
-          [Center + Sign * (Across * 0.3 + Splay), Vertical + Depth / 2 + 18],
-        ],
-        Tint(0.24),
-      );
-    Line(
-      [
-        [Center - Across / 2, Vertical + Depth / 2 + 23],
-        [Center + Across / 2, Vertical + Depth / 2 + 23],
-      ],
-      "#ffffff36",
-    );
-    Dot(Center - Across / 2, Vertical + Depth / 2 + 23, 1);
-    Dot(Center + Across / 2, Vertical + Depth / 2 + 23, 1);
-    Text(
-      ApertureWidth.toFixed(1) + " × " + ApertureHeight.toFixed(1) + " m",
-      Center,
-      Vertical + Depth / 2 + 38,
-      "center",
-    );
-    Text(
-      Properties.twoSided ? "TWO-SIDED" : "FRONT EMISSION",
-      Left,
-      Height - 7,
-    );
-    Text(Read("spread", 120) + "° SPREAD", Right, Height - 7, "right");
-  } else {
-    const Length = Math.min(Width * 0.78, 65 + Read("length", 1.5) * 27),
-      Radius = Math.min(13, 3 + Read("radius", 0.04) * 50),
-      Vertical = Height * 0.4;
-    Brush.fillStyle = Tint(0.08 + 0.45 * Math.min(1, Flux() / 3000));
-    Brush.shadowColor = Tint(0.55);
-    Brush.shadowBlur = 20;
-    Brush.beginPath();
-    Brush.roundRect(
-      Center - Length / 2,
-      Vertical - Radius,
-      Length,
-      Radius * 2,
+  const Glow = (Horizontal, Vertical, Radius, Opacity) => {
+    const Gradient = Brush.createRadialGradient(
+      Horizontal,
+      Vertical,
+      0,
+      Horizontal,
+      Vertical,
       Radius,
     );
-    Brush.fill();
-    Brush.shadowBlur = 0;
-    Brush.strokeStyle = Tint(0.8);
-    Brush.stroke();
-    for (let Column = 0; Column < 6; Column++) {
-      const Horizontal = Center - Length / 2 + (Column * Length) / 5;
-      Line(
-        [
-          [Horizontal, Vertical + Radius + 10],
-          [Horizontal, Vertical + Radius + 26],
-        ],
-        Tint(0.2),
-      );
-    }
-    Text(
-      Read("length", 1.5).toFixed(1) + " m",
-      Center,
-      Vertical + Radius + 45,
-      "center",
+    Gradient.addColorStop(0, Tint(Opacity));
+    Gradient.addColorStop(1, Tint(0));
+    Brush.fillStyle = Gradient;
+    Brush.fillRect(
+      Horizontal - Radius,
+      Vertical - Radius,
+      Radius * 2,
+      Radius * 2,
     );
-    Text(Read("distance", 30) + " m REACH", Left, Height - 7);
+  };
+  if (Style === "arealight") {
+    const Across = Clamp(
+        115 * Math.sqrt(Read("width", 2) / Read("height", 1)),
+        65,
+        230,
+      ),
+      Depth = Clamp(
+        52 * Math.sqrt(Read("height", 1) / Read("width", 2)),
+        24,
+        75,
+      ),
+      Spread = Math.sin((Read("spread", 120) * Math.PI) / 360) * 45;
+    const Corners = [
+      [190 - Across / 2, 66],
+      [190 + Across / 2, 36],
+      [190 + Across / 2 + Depth, 84],
+      [190 - Across / 2 + Depth, 114],
+    ];
+    const Floor = Corners.map(([Horizontal, Vertical]) => [
+      190 + (Horizontal - 190) * (1 + Spread / 120),
+      Vertical + 110,
+    ]);
+    Path([...Floor, Floor[0]], "#ffffff22", Tint(0.02));
+    for (let Index = 0; Index < 4; Index++)
+      Path([Corners[Index], Floor[Index]], Tint(0.15), null, true);
+    Path(
+      [Corners[0], Corners[1], Floor[1], Floor[0]],
+      "transparent",
+      Tint(0.025 + Math.min(0.08, Flux() / 80000)),
+    );
+    Glow(190, 95, 100, Math.min(0.1, Flux() / 60000));
+    if (Properties.aperture === "Disk") {
+      Brush.save();
+      Brush.translate(202, 76);
+      Brush.rotate(-0.16);
+      Brush.beginPath();
+      Brush.ellipse(0, 0, Across * 0.52, Depth * 0.65, 0, 0, Math.PI * 2);
+      Brush.fillStyle = Tint(0.2 + Math.min(0.55, Flux() / 12000));
+      Brush.fill();
+      Brush.strokeStyle = Tint(0.9);
+      Brush.stroke();
+      Brush.restore();
+    } else {
+      Path(Corners, Tint(0.85), Tint(0.2 + Math.min(0.55, Flux() / 12000)));
+      for (let Index = 1; Index < 5; Index++) {
+        const Fraction = Index / 5;
+        Path(
+          [
+            [Corners[0][0] + Across * Fraction, 66 - 30 * Fraction],
+            [Corners[3][0] + Across * Fraction, 114 - 30 * Fraction],
+          ],
+          Tint(0.15),
+        );
+      }
+    }
+    Dimension(
+      Corners[0][0],
+      Corners[1][0],
+      24,
+      Read("width", 2).toFixed(1) + " m",
+    );
+    Text(Read("height", 1).toFixed(1) + " m", Corners[2][0] + 8, 89);
+    Text(Properties.twoSided ? "BOTH FACES" : "FRONT FACE", 22, 246);
+    Text(Read("spread", 120) + "° SPREAD", 358, 246, "right");
+  } else if (Style === "ieslight") {
+    if (Properties.profile === "Custom .IES")
+      Text("No measured IES samples loaded", 190, 130, "center");
+    else {
+      const Radius = 96,
+        CenterY = 118,
+        Profile = Properties.profile || "Downlight";
+      for (const Fraction of [0.25, 0.5, 0.75, 1])
+        Circle(190, CenterY, Radius * Fraction);
+      for (let Index = 0; Index < 8; Index++) {
+        const Angle = (Index * Math.PI) / 4;
+        Path(
+          [
+            [190, CenterY],
+            [
+              190 + Math.sin(Angle) * Radius,
+              CenterY + Math.cos(Angle) * Radius,
+            ],
+          ],
+          "#ffffff14",
+          null,
+          true,
+        );
+      }
+      for (const Section of [1, 0]) {
+        const Points = [];
+        for (let Index = 0; Index <= 240; Index++) {
+          const Angle = (Index / 240) * Math.PI * 2,
+            Pitch = (Read("cutoff", 0) * Math.PI) / 180,
+            Lobe = Polar(Profile, Angle, Read("cone", 60), Section);
+          Points.push([
+            190 + Math.sin(Angle + Pitch) * Radius * Lobe,
+            CenterY + Math.cos(Angle + Pitch) * Radius * Lobe,
+          ]);
+        }
+        Path(
+          Points,
+          Section ? "#94b7ad" : Tint(0.95),
+          Section
+            ? "#94b7ad0b"
+            : Tint(Math.min(0.16, (Flux() * Read("multiplier", 1)) / 18000)),
+          !!Section,
+        );
+      }
+      Text("C0", 25, 24, "left", Tint(0.9));
+      Text("C90", 330, 24, "right", "#94b7ad");
+      Text("90°", 69, 122);
+      Text("90°", 312, 122, "right");
+      Text("0°", 190, 235, "center");
+      Text("NORMALIZED PRESET", 190, 254, "center");
+    }
+  } else if (Style === "ledlight") {
+    const Size = Clamp(100 + Read("diameter", 40) * 0.5, 102, 158),
+      Left = 190 - Size / 2,
+      Top = 126 - Size / 2;
+    Brush.fillStyle = "#303430";
+    Brush.strokeStyle = "#777d72";
+    Brush.beginPath();
+    Brush.roundRect(Left - 14, Top - 14, Size + 28, Size + 28, 9);
+    Brush.fill();
+    Brush.stroke();
+    for (const Sign of [-1, 1])
+      for (let Index = 0; Index < 5; Index++) {
+        Brush.fillStyle = "#857958";
+        Brush.fillRect(
+          190 + Sign * (Size / 2 + 20) - (Sign < 0 ? 8 : 0),
+          Top + 9 + (Index * (Size - 18)) / 4,
+          8,
+          3,
+        );
+      }
+    Glow(190, 126, 95, 0.22 * Read("dimmer", 1));
+    Brush.fillStyle = Tint(0.15 + 0.35 * Read("dimmer", 1));
+    Brush.fillRect(Left, Top, Size, Size);
+    for (let Column = 0; Column < 4; Column++)
+      for (let Row = 0; Row < 4; Row++) {
+        const Pitch = Size / 4;
+        Brush.fillStyle = Tint(0.15 + 0.65 * Read("dimmer", 1));
+        Brush.fillRect(
+          Left + Column * Pitch + 7,
+          Top + Row * Pitch + 7,
+          Pitch - 14,
+          Pitch - 14,
+        );
+      }
+    const Angle = (Read("angle", 120) * Math.PI) / 360;
+    Brush.beginPath();
+    Brush.arc(
+      190,
+      126,
+      Size * 0.79,
+      -Math.PI / 2 - Angle,
+      -Math.PI / 2 + Angle,
+    );
+    Brush.strokeStyle = Tint(0.55);
+    Brush.stroke();
+    for (const Sign of [-1, 1])
+      Circle(190 + Sign * (Size / 2 + 7), Top - 7, 2, "#999f92");
+    Dimension(Left, Left + Size, 225, Read("diameter", 40) + " mm PACKAGE");
+    Text(Read("angle", 120) + "° OPTIC", 190, 17, "center");
+  } else if (Style === "ledstrip") {
+    const Count = Math.round(Read("length", 2.4) * Read("ledsPerMetre", 60)),
+      Routing = Properties.routing || "Cove",
+      Samples = Math.min(64, Math.max(4, Count));
+    const Points = Array.from({ length: Samples }, (_, Index) => {
+      const Fraction = Index / (Samples - 1);
+      return Routing === "Ring"
+        ? [
+            190 + 112 * Math.cos(Fraction * Math.PI * 2),
+            123 + 76 * Math.sin(Fraction * Math.PI * 2),
+          ]
+        : Routing === "Cove"
+          ? Fraction < 0.62
+            ? [42 + (Fraction / 0.62) * 285, 67]
+            : [327, 67 + ((Fraction - 0.62) / 0.38) * 133]
+          : [40 + Fraction * 300, 123];
+    });
+    Brush.lineWidth = 18;
+    Path(Points, "#424238");
+    Brush.lineWidth = 12;
+    Path(Points, "#262a23");
+    Brush.lineWidth = 1;
+    if (Properties.diffuser) {
+      Brush.lineWidth = 10;
+      Brush.shadowColor = Tint(0.6);
+      Brush.shadowBlur = 14;
+      Path(Points, Tint(0.12 + 0.45 * Read("dimmer", 1)));
+      Brush.shadowBlur = 0;
+      Brush.lineWidth = 1;
+    } else
+      Points.forEach(([Horizontal, Vertical], Index) => {
+        Brush.fillStyle = Tint(0.12 + 0.7 * Read("dimmer", 1));
+        Brush.fillRect(Horizontal - 2.5, Vertical - 2.5, 5, 5);
+        if (Index % 8 === 0) {
+          Brush.strokeStyle = "#bcaa6555";
+          Brush.strokeRect(Horizontal - 4, Vertical - 5, 8, 10);
+        }
+      });
+    Text("+", Points[0][0] - 17, Points[0][1] - 4, "center", "#c4ac79");
+    Text("−", Points[0][0] - 17, Points[0][1] + 10, "center");
+    Dimension(
+      40,
+      340,
+      225,
+      Read("length", 2.4).toFixed(1) + " m RUN · " + Count + " EMITTERS",
+    );
+    Text(Read("voltage", 24) + " V DC", 20, 18);
     Text(
-      (Read("radius", 0.04) * 1000).toFixed(0) + " mm RADIUS",
-      Right,
-      Height - 7,
+      Properties.diffuser ? "OPAL DIFFUSER" : "EXPOSED PACKAGES",
+      360,
+      18,
       "right",
     );
+  } else if (Style === "spotlight") {
+    const Half = Clamp(
+        Math.tan((Read("angle", 26) * Math.PI) / 360) * 220,
+        12,
+        145,
+      ),
+      Soft = Read("penumbra", 0.4);
+    const Gradient = Brush.createLinearGradient(0, 50, 0, 215);
+    Gradient.addColorStop(0, Tint(0.015));
+    Gradient.addColorStop(1, Tint(0.06 + Math.min(0.2, Flux() / 1000)));
+    Path(
+      [
+        [190, 49],
+        [190 + Half, 211],
+        [190 - Half, 211],
+      ],
+      Tint(0.45),
+      Gradient,
+    );
+    Path(
+      [
+        [190 - Half * (1 - Soft), 211],
+        [190, 49],
+        [190 + Half * (1 - Soft), 211],
+      ],
+      Tint(0.65),
+      null,
+      true,
+    );
+    for (let Index = 1; Index <= 3; Index++) {
+      const Fraction = Index / 3;
+      Path(
+        [
+          [190 - Half * Fraction, 49 + 162 * Fraction],
+          [190 + Half * Fraction, 49 + 162 * Fraction],
+        ],
+        "#ffffff18",
+        null,
+        true,
+      );
+    }
+    Brush.fillStyle = "#454943";
+    Brush.beginPath();
+    Brush.roundRect(172, 22, 36, 24, 5);
+    Brush.fill();
+    Brush.strokeStyle = "#a5ab9e";
+    Brush.stroke();
+    Path(
+      [
+        [190, 49],
+        [190, 211],
+      ],
+      "#ffffff30",
+      null,
+      true,
+    );
+    Dimension(190 - Half, 190 + Half, 225, Read("angle", 26) + "° FULL CONE");
+    Text("PENUMBRA", 20, 16);
+    Text(Math.round(Soft * 100) + " %", 360, 16, "right");
+  } else if (Style === "pointlight") {
+    const Reach = Read("distance", 30),
+      Decay = Read("decay", 2);
+    for (let Index = 4; Index > 0; Index--) {
+      const Radius = Index * 24;
+      Circle(190, 123, Radius, "#ffffff1c");
+      Text(((Reach * Index) / 4).toFixed(0) + " m", 190 + Radius + 7, 123);
+    }
+    for (let Index = 0; Index < 12; Index++) {
+      const Angle = (Index * Math.PI) / 6;
+      Path(
+        [
+          [190 + Math.cos(Angle) * 25, 123 + Math.sin(Angle) * 25],
+          [190 + Math.cos(Angle) * 96, 123 + Math.sin(Angle) * 96],
+        ],
+        Tint(0.15),
+        null,
+        true,
+      );
+    }
+    Glow(190, 123, 80, Math.min(0.45, Flux() / 100));
+    Circle(190, 123, 6, Tint(0.9), Tint(0.65));
+    Text("OMNIDIRECTIONAL", 20, 18);
+    Text("DECAY " + Decay.toFixed(1), 360, 18, "right");
+    Text("Reach guides · free space", 190, 248, "center");
+  } else {
+    const Length = Clamp(160 + Read("length", 1.5) * 22, 165, 302),
+      Radius = Clamp(7 + Read("radius", 0.04) * 85, 7, 28),
+      Left = 190 - Length / 2;
+    const Gradient = Brush.createLinearGradient(
+      0,
+      104 - Radius,
+      0,
+      104 + Radius,
+    );
+    Gradient.addColorStop(0, Tint(0.1));
+    Gradient.addColorStop(0.45, Tint(0.2 + Math.min(0.7, Flux() / 5000)));
+    Gradient.addColorStop(1, Tint(0.15));
+    Brush.shadowColor = Tint(0.4);
+    Brush.shadowBlur = 20;
+    Brush.fillStyle = Gradient;
+    Brush.beginPath();
+    Brush.roundRect(Left, 104 - Radius, Length, Radius * 2, Radius);
+    Brush.fill();
+    Brush.shadowBlur = 0;
+    Brush.strokeStyle = Tint(0.7);
+    Brush.stroke();
+    for (const Horizontal of [Left + 7, Left + Length - 7])
+      Path(
+        [
+          [Horizontal, 104 - Radius],
+          [Horizontal, 104 + Radius],
+        ],
+        "#9ba598",
+      );
+    for (let Index = 0; Index < 9; Index++) {
+      const Horizontal = Left + (Length * Index) / 8;
+      Path(
+        [
+          [Horizontal, 104 + Radius + 10],
+          [Horizontal, 191],
+        ],
+        Tint(0.12),
+        null,
+        true,
+      );
+      Circle(Horizontal, 191, 1, Tint(0.25));
+    }
+    Dimension(
+      Left,
+      Left + Length,
+      221,
+      Read("length", 1.5).toFixed(1) + " m LENGTH",
+    );
+    Text((Read("radius", 0.04) * 1000).toFixed(0) + " mm RADIUS", 20, 18);
+    Text("RADIAL EMISSION", 360, 18, "right");
   }
+  Brush.restore();
+}
+export function ProjectResponse(
+  Brush,
+  Width,
+  Height,
+  { Style, Read, Properties, Tint, Flux },
+) {
+  Brush.clearRect(0, 0, Width, Height);
+  Brush.lineWidth = 1;
+  Brush.font = "9px sans-serif";
+  if (Style === "ieslight" && Properties.profile === "Custom .IES") {
+    Brush.fillStyle = "#929b8f";
+    Brush.fillText("No measured samples loaded", 8, Height / 2);
+    return;
+  }
+  const Left = 8,
+    Right = Width - 8,
+    Top = 10,
+    Bottom = Height - 18;
+  for (let Index = 0; Index < 3; Index++) {
+    const Vertical = Top + (Index * (Bottom - Top)) / 2;
+    Brush.beginPath();
+    Brush.setLineDash([2, 5]);
+    Brush.moveTo(Left, Vertical);
+    Brush.lineTo(Right, Vertical);
+    Brush.strokeStyle = "#ffffff17";
+    Brush.stroke();
+  }
+  Brush.setLineDash([]);
+  const BeamSection = (Fraction) => {
+    const Normalized =
+        Math.abs((Fraction - 0.5) * 180) / (Math.max(2, Read("angle", 26)) / 2),
+      Soft = Read("penumbra", 0.4);
+    return Normalized > 1
+      ? 0
+      : Normalized <= 1 - Soft
+        ? 1
+        : Math.max(0, (1 - Normalized) / Math.max(0.001, Soft));
+  };
+  const At = (Fraction) =>
+    Style === "pointlight"
+      ? 1 / (1 + Fraction * 9) ** Read("decay", 2)
+      : Style === "ieslight"
+        ? Polar(
+            Properties.profile || "Downlight",
+            (Fraction - 0.5) * Math.PI,
+            Read("cone", 60),
+          )
+        : Style === "spotlight"
+          ? BeamSection(Fraction)
+          : Style === "ledlight"
+            ? Fraction * Read("dimmer", 1)
+            : Style === "ledstrip"
+              ? Fraction
+              : Style === "arealight"
+                ? Math.cos((Fraction - 0.5) * Math.PI)
+                : 0.72;
+  Brush.beginPath();
+  for (let Index = 0; Index <= 80; Index++) {
+    const Fraction = Index / 80,
+      Horizontal = Left + Fraction * (Right - Left),
+      Vertical = Bottom - At(Fraction) * (Bottom - Top);
+    Index
+      ? Brush.lineTo(Horizontal, Vertical)
+      : Brush.moveTo(Horizontal, Vertical);
+  }
+  Brush.strokeStyle = Tint(0.8);
+  Brush.stroke();
+  Brush.fillStyle = "#828a82";
   Brush.textAlign = "left";
+  Brush.fillText(
+    Style === "pointlight"
+      ? "1 m"
+      : Style === "ieslight" || Style === "spotlight" || Style === "arealight"
+        ? "−90°"
+        : "0",
+    Left,
+    Height - 3,
+  );
+  Brush.textAlign = "right";
+  Brush.fillText(
+    Style === "pointlight"
+      ? "10 m"
+      : Style === "ieslight" || Style === "spotlight" || Style === "arealight"
+        ? "90°"
+        : Style === "ledstrip"
+          ? Read("length", 2.4) + " m"
+          : "100%",
+    Right,
+    Height - 3,
+  );
 }

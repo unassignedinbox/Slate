@@ -1,4 +1,4 @@
-import { CloudValue } from "./CloudSpecification.js";
+import { CloudEdit, CloudValue } from "./CloudSpecification.js";
 import CloudDeckPanel from "./CloudDeckPanel.jsx";
 import FogPanel from "./FogPanel.jsx";
 import FracturePanel from "./FracturePanel.jsx";
@@ -456,8 +456,8 @@ export function Inspector({
   const [MoonSlot, SelectMoon] = useState(0);
   const Prefix = Subject.Panel === "moon" ? "moon" + MoonSlot + ":" : "";
   const V = (Name) =>
-    (Subject.Panel === "clouds"
-      ? CloudValue(Values, Name)
+    (["clouds", "local-cloud"].includes(Subject.Panel)
+      ? CloudValue(Values, Name, Subject.Panel)
       : Values[Prefix + Name]) ??
     (Subject.Panel === "moon" && Name === "Preset"
       ? MoonSlot
@@ -467,6 +467,16 @@ export function Inspector({
           ? [0.52, 1.6, 1.2, 1.1][MoonSlot]
           : Sheet.find((Field) => Field.Label === Name)?.Default);
   const AssignProperty = (Name, Next) => {
+    if (
+      Subject.Panel === "local-cloud" &&
+      ["Base", "Thickness"].includes(Name)
+    ) {
+      for (const [Key, Numeric] of Object.entries(
+        CloudEdit(Values, Name, Next, Subject.Panel),
+      ))
+        Change(Key, Numeric);
+      return;
+    }
     Change(Prefix + Name, Next);
     if (Subject.Panel === "moon" && Name === "Preset")
       Change(Prefix + "Size", [0.52, 1.6, 1.2, 1.1, 2.4, 0.6][Next]);
@@ -1477,7 +1487,7 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment", Local ? "Local Cloud" : "Clouds")}
-        {!Local && Values.ReferenceInspector?.Locked && (
+        {Values.ReferenceInspector?.Locked && (
           <button
             onClick={() =>
               Change("ReferenceInspector", {
@@ -1489,101 +1499,72 @@ export function Inspector({
             Unlock editing
           </button>
         )}
-        {!Local && ReferenceCards}
-        {Local && (
-          <Card Title="Cloud settings" Height={165}>
-            {Tiles(["Enabled", "Follow Wind"])}
-          </Card>
-        )}
-        {!Local ? (
-          <section
-            className="cloud-coverage-replacement"
-            data-card="Cloud coverage"
-          >
-            {CloudCoverageCards}
-            {F("Coverage")}
-          </section>
-        ) : (
-          <Card Title="Cloud coverage" Height={430}>
-            <Metric Value={(V("Coverage") * 100).toFixed(0)} Unit="%" />
-            <CloudCoverage
-              coverage={V("Coverage") * 100}
-              thickness={Local ? 1 : V("Thickness") / 1000}
-            />
-            {F("Coverage")}
-            <p>Top-down density study · static preview</p>
-          </Card>
-        )}
+        {ReferenceCards}
+        <section
+          className="cloud-coverage-replacement"
+          data-card="Cloud coverage"
+        >
+          {CloudCoverageCards}
+          {F("Coverage")}
+        </section>
         <div className="card-grid">
-          <Card
-            Title={Local ? "Local bounds" : "Cloud base"}
-            Height={452}
-            GraphHandled={!Local}
-          >
-            {Local ? (
-              <>
-                <TransformPanel
-                  Values={Values}
-                  Change={Change}
-                  Compact
-                  Space="WORLD SPACE"
-                  Rows={[
-                    [
-                      "Centre",
-                      "m",
-                      Sheet.find((Field) => Field.Label === "Centre").Default,
-                      -100000,
-                      100000,
-                      1,
-                    ],
-                    [
-                      "Half Size",
-                      "m",
-                      Sheet.find((Field) => Field.Label === "Half Size")
-                        .Default,
-                      0.001,
-                      100000,
-                      1,
-                    ],
-                  ]}
-                />
-                <CloudBounds V={V} Change={AssignProperty} />
-              </>
-            ) : (
-              <>
-                <Metric
-                  Value={(V("Base") / 1000).toFixed(2)}
-                  Unit="km"
-                  Caption="World Z altitude · drag the base line"
-                />
-                <CloudDeckPanel V={V} Change={AssignProperty} />
-                {F("Base")}
-              </>
-            )}
+          <Card Title="Cloud base" Height={452} GraphHandled>
+            <Metric
+              Value={(V("Base") / 1000).toFixed(2)}
+              Unit="km"
+              Caption={
+                Local
+                  ? "Lower bound · centre Z − half height"
+                  : "World Z altitude · drag the base line"
+              }
+            />
+            <CloudDeckPanel V={V} Change={AssignProperty} Local={Local} />
+            {!Local && F("Base")}
           </Card>
-          <Card
-            Title={Local ? "Volume section" : "Layer thickness"}
-            Height={452}
-            GraphHandled
-          >
-            {Local ? (
-              <CloudSection V={V} Change={AssignProperty} Local />
-            ) : (
-              <>
-                <Metric
-                  Value={(V("Thickness") / 1000).toFixed(2)}
-                  Unit="km"
-                  Caption="Vertical development · density profile"
-                />
-                <CloudSection V={V} Change={AssignProperty} />
-                {F("Thickness")}
-              </>
-            )}
+          <Card Title="Layer thickness" Height={452} GraphHandled>
+            <Metric
+              Value={(V("Thickness") / 1000).toFixed(2)}
+              Unit="km"
+              Caption={
+                Local
+                  ? "Bounded depth · twice half height"
+                  : "Vertical development · density profile"
+              }
+            />
+            <CloudSection V={V} Change={AssignProperty} Local={Local} />
+            {!Local && F("Thickness")}
           </Card>
         </div>
-        {!Local && (
-          <Card Title="Cloud settings" Height={165}>
-            {Tiles(["Enabled", "Follow Wind"])}
+        <Card Title="Cloud settings" Height={165}>
+          {Tiles(["Enabled", "Follow Wind"])}
+        </Card>
+        {Local && (
+          <Card Title="Local bounds" Height={452}>
+            <TransformPanel
+              Values={Values}
+              Change={Change}
+              Compact
+              Space="WORLD SPACE"
+              Rows={[
+                [
+                  "Centre",
+                  "m",
+                  Sheet.find((Field) => Field.Label === "Centre").Default,
+                  -100000,
+                  100000,
+                  1,
+                ],
+                [
+                  "Half Size",
+                  "m",
+                  Sheet.find((Field) => Field.Label === "Half Size").Default,
+                  0.001,
+                  100000,
+                  1,
+                ],
+              ]}
+            />
+            <CloudBounds V={V} Change={AssignProperty} />
           </Card>
         )}
         <Card Title="Cloud body">

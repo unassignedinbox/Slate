@@ -11,7 +11,7 @@ const Require = createRequire(
 const { chromium } = Require("playwright");
 const Proof =
   process.env.FRONTIER_PROOF_FOLDER ||
-  path.join(Folder, "Screenshots/LightDesign");
+  path.join(Folder, "Screenshots/SharedCloudLighting/LightDesign");
 fs.mkdirSync(Proof, { recursive: true });
 const Browser = await chromium.launch({
   executablePath: process.env.FRONTIER_BROWSER_EXECUTABLE || "/tmp/chromium",
@@ -90,7 +90,7 @@ try {
   for (const Id of Sources) {
     await Ready(Id);
     assert.equal(await Frame().locator(".ident").count(), 0);
-    assert.equal(await Frame().locator(".lp-source-icon svg").count(), 1);
+    assert.equal(await Frame().locator(".lp-source-icon img").count(), 1);
     assert.equal(await Frame().locator(".lp-readings .mp-pill").count(), 2);
     assert.equal(
       await Frame().locator(".lp-transform .transform-card").count(),
@@ -126,7 +126,7 @@ try {
     if (Id === "reference-led-strip") await Capture("StripNarrow");
     Checks.push(
       Id +
-        ": own glyph and source diagram, strong numeric hierarchy, standard Transform and 240px layout",
+        ": library icon and source diagram, strong numeric hierarchy, standard Transform and 240px layout",
     );
   }
   assert.equal(new Set(Pictures).size, 7);
@@ -211,7 +211,7 @@ try {
   }
   assert.equal(new Set(Lobes).size, 5);
   assert(
-    (await Frame().locator(".lp-note").innerText()).includes(
+    (await Frame().locator(".lp-shape .lp-note").innerText()).includes(
       "IES file import pending",
     ),
   );

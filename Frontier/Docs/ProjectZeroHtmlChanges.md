@@ -2655,3 +2655,64 @@ for asynchronous stored Transform edits before injecting legacy scene fixtures. 
 receipts are under `ProjectZeroEditor/Screenshots/LightDesign/`; Fontshare request failures are recorded separately
 and the captures exercise fallback fonts. No native engine port, fracture algorithm, SDF generation or native light
 rendering is introduced by this change.
+
+## C051 — Shared Cloud cards, library icons and expanded light dashboards
+
+2026-10-06. Follow-up to the user's expanded-inspector screenshots and rejection of C050's stretched light cards.
+
+### Clouds and Local Cloud
+
+- Both inspectors now use the same header-first summary/map/statistics, Coverage histogram with native Coverage
+  input, Cloud base/deck and Layer thickness card designs. Removed Local Cloud's old standalone coverage visual.
+- Local Cloud keeps its original Centre, Half Size, body, enable and wind controls. Its deck base is derived from
+  `Centre Z − Half Size Z`; thickness is `2 × Half Size Z`. Moving its deck translates Centre Z rather than inventing
+  independent local Base/Thickness properties. Negative elevations and large bounds are supported. The pointer
+  gesture freezes both plotting span and lower datum until release.
+- The shared reference adapter now distinguishes global and local parameter defaults. Coverage and density use the
+  same mapping in both directions; each scene object retains independent values. The Local Cloud map explicitly says
+  **LOCAL VOLUME · SCHEMATIC**, rather than presenting the reference's fixed 12km swath as its authored dimensions.
+  These remain browser authoring studies, not native volumetric renders.
+
+### Existing icon library
+
+- Removed C050's hand-drawn light glyph collection. Source rows, Construct entries and light cards now reuse the SVG
+  assets already shipped in `Frontier/EngineContent/Icons/`; no new icon files or icon dependency were introduced.
+- Restored `editor-area-light` for Area Light and Softbox, including existing saved scenes. Point and spot use their
+  shipped editor icons. Other sources reuse the closest existing light assets; these are not newly invented symbols.
+- The standalone build embeds 161 library icons again, rather than C050's 168 library-plus-custom icons. Browser checks
+  compare each displayed light icon's data URI to the corresponding shipped asset and verify successful image decode.
+
+### Light cards
+
+- Rebuilt the expanded inspector as two compact, independently flowing columns: the source study and optical controls
+  on the left; output controls, readings, analytical response and standard Transform on the right. A docked inspector
+  returns to one ordered column. The large empty banner and isolated thumbnail shown in the user's screenshots are
+  replaced by bounded cards with controls and readings visible alongside the illustration.
+- Redrew the source studies: projected area aperture with dimensions and emission envelope; two-section IES polar
+  diagrams with labelled guides; LED package with contacts, emitter array and optic arc; LED ribbon with routing,
+  terminals and segment marks; spot cone with soft edge/cross-sections; point reach guides; and a dimensioned tube.
+  The diagrams are fitted without stretching their coordinate system across the full inspector width.
+- Added source-specific analytical cards: aperture flux/area, angular preset response, electrical current budget,
+  dimmer/conversion study, beam diameter at 5m, authored distance falloff and linear output. These are labeled estimates
+  or analytical studies, not measured/native telemetry. Disk aperture area uses the ellipse area factor. IES preset
+  curves remain synthetic; file import remains pending, and a stored Custom IES selection displays no measured samples.
+- Existing source controls, saved properties, Construct editing, standard Transform and locking remain. Statistic
+  tiles return to restrained borderless 6px corners. No Sun/Wind/Fog or native rendering redesign is included.
+- `?workspace=inspector` opens the expanded inspector directly for review; normal links retain the three-column view.
+
+### Verification
+
+Standalone build: **4.63 MiB**. **113 browser checks** pass with no application errors:
+`CheckSharedCards` 14, `CheckLightDesign` 21, `CheckLighting` 25, `CheckCloudPlacement` 15,
+`CheckReference` 28 and `CheckInspectorLayout` 10. The expanded-entry query also passed a separate browser smoke check.
+
+The new checks cover both Cloud layouts and bidirectional Coverage editing, local bounds-derived base/thickness,
+negative altitude and deck keyboard persistence, independent global/local records, exact library-icon reuse, and all
+nine reviewed light entries in expanded and 240px layouts. Expanded checks assert side-by-side placement and compact
+control/reading gaps, not merely absence of horizontal overflow. Existing suites retain light editing/locking/JSON
+round-trips, migration/deletion behavior, C049 global Cloud behavior, Wind/Fog arrangement and fracture/SDF authoring.
+Native control inventories are compared against C050 (`4068a2a`); pinned InspectorDepot hashes remain unchanged.
+
+Actual screenshots and receipts are in `ProjectZeroEditor/Screenshots/SharedCloudLighting/`, including the expanded
+Softbox/IES/LED views and both Cloud modes. Fontshare network failures remain separate from application errors;
+fallback fonts were exercised. No native engine, fracture algorithm, SDF generation or measured photometry is added.

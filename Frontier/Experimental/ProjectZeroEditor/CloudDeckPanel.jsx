@@ -1,12 +1,16 @@
 import React, { useRef, useEffect } from "react";
 // Adapts the ported InspectorDepot cloud-deck band to the native base/thickness range.
-export default function CloudDeckPanel({ V, Change }) {
+export default function CloudDeckPanel({ V, Change, Local = false }) {
   const Canvas = useRef(null),
     Domain = useRef(400),
-    DragDomain = useRef(null);
+    Bottom = useRef(0),
+    DragDomain = useRef(null),
+    DragBottom = useRef(null);
   const Base = V("Base"),
     Thickness = V("Thickness"),
     Density = Math.max(0, Math.min(1, V("Density") / 4));
+  const Minimum = Local ? -100000 - V("Thickness") / 2 : 100,
+    Maximum = Local ? 100000 - V("Thickness") / 2 : 12000;
   useEffect(() => {
     const Node = Canvas.current;
     const Paint = () => {
@@ -17,11 +21,21 @@ export default function CloudDeckPanel({ V, Change }) {
       Node.height = Height * Ratio;
       const Brush = Node.getContext("2d");
       Brush.setTransform(Ratio, 0, 0, Ratio, 0, 0);
+      Bottom.current =
+        DragBottom.current ??
+        (Local
+          ? Math.min(0, Math.floor((Base - Thickness * 0.25) / 100) * 100)
+          : 0);
       Domain.current =
         DragDomain.current ||
-        Math.max(400, Math.ceil(((Base + Thickness) * 1.25) / 500) * 500);
+        Math.max(
+          400,
+          Math.ceil(((Base - Bottom.current + Thickness) * 1.25) / 500) * 500,
+        );
       const Y = (Altitude) =>
-          Height - 18 - (Altitude / Domain.current) * (Height - 48),
+          Height -
+          18 -
+          ((Altitude - Bottom.current) / Domain.current) * (Height - 48),
         Datum = Y(Base),
         Depth = (Thickness / Domain.current) * (Height - 48);
       Brush.fillStyle = "#060708";
@@ -39,7 +53,7 @@ export default function CloudDeckPanel({ V, Change }) {
       }
       Brush.font = "8px sans-serif";
       for (let Index = 0; Index <= 4; Index++) {
-        const Altitude = (Domain.current * Index) / 4,
+        const Altitude = Bottom.current + (Domain.current * Index) / 4,
           Vertical = Y(Altitude);
         Brush.strokeStyle = "#ffffff12";
         Brush.beginPath();
@@ -48,7 +62,7 @@ export default function CloudDeckPanel({ V, Change }) {
         Brush.stroke();
         Brush.fillStyle = "#8b9299";
         Brush.fillText(
-          Index ? Math.round(Altitude) + " m" : "DATUM",
+          Altitude ? Math.round(Altitude) + " m" : "DATUM",
           6,
           Vertical - 3,
         );
@@ -67,15 +81,16 @@ export default function CloudDeckPanel({ V, Change }) {
     Observer.observe(Node);
     Paint();
     return () => Observer.disconnect();
-  }, [Base, Thickness, Density]);
+  }, [Base, Thickness, Density, Local]);
   const Move = (Event) => {
     if (!Canvas.current.hasPointerCapture(Event.pointerId)) return;
     const Bounds = Canvas.current.getBoundingClientRect();
     const Altitude =
       ((Bounds.height - 18 - (Event.clientY - Bounds.top)) /
         (Bounds.height - 48)) *
-      Domain.current;
-    Change("Base", Math.round(Math.max(100, Math.min(12000, Altitude))));
+        Domain.current +
+      Bottom.current;
+    Change("Base", Math.round(Math.max(Minimum, Math.min(Maximum, Altitude))));
   };
   return (
     <canvas
@@ -83,8 +98,8 @@ export default function CloudDeckPanel({ V, Change }) {
       className="cloud-deck-visual"
       role="slider"
       aria-label="Cloud deck base altitude"
-      aria-valuemin={100}
-      aria-valuemax={12000}
+      aria-valuemin={Minimum}
+      aria-valuemax={Maximum}
       aria-valuenow={Base}
       tabIndex={0}
       style={{
@@ -97,6 +112,7 @@ export default function CloudDeckPanel({ V, Change }) {
       }}
       onPointerDown={(Event) => {
         DragDomain.current = Domain.current;
+        DragBottom.current = Bottom.current;
         Event.currentTarget.setPointerCapture(Event.pointerId);
         Move(Event);
       }}
@@ -104,9 +120,11 @@ export default function CloudDeckPanel({ V, Change }) {
       onPointerUp={(Event) => {
         Event.currentTarget.releasePointerCapture(Event.pointerId);
         DragDomain.current = null;
+        DragBottom.current = null;
       }}
       onPointerCancel={() => {
         DragDomain.current = null;
+        DragBottom.current = null;
       }}
       onKeyDown={(Event) => {
         if (["ArrowUp", "ArrowDown"].includes(Event.key)) {
@@ -114,8 +132,8 @@ export default function CloudDeckPanel({ V, Change }) {
           Change(
             "Base",
             Math.max(
-              100,
-              Math.min(12000, Base + (Event.key === "ArrowUp" ? 10 : -10)),
+              Minimum,
+              Math.min(Maximum, Base + (Event.key === "ArrowUp" ? 10 : -10)),
             ),
           );
         }

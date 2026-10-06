@@ -1,4 +1,4 @@
-import { LightGlyphs } from "./LightSpecification.js";
+import { LightIcons } from "./LightSpecification.js";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -55,9 +55,6 @@ for (const File of fs
       .readFileSync(path.join(Frontier, "EngineContent/Icons", File))
       .toString("base64");
 }
-for (const [Type, Svg] of Object.entries(LightGlyphs))
-  Assets.Icons["light-" + Type] =
-    "data:image/svg+xml;base64," + Buffer.from(Svg).toString("base64");
 const Vectors = fs.readFileSync(
   path.join(Frontier, "Engine/DisplayPresentation/VectorCodec.cpp"),
   "utf8",
@@ -84,7 +81,14 @@ const Fonts = ["Light", "Regular"]
 const ReferenceOutput = await build({
   entryPoints: [path.join(Folder, "InspectorHost.js")],
   nodePaths: [path.join(Folder, "../FrontierEditor/node_modules")],
-  define: { "process.env.NODE_ENV": '"production"' },
+  define: {
+    "process.env.NODE_ENV": '"production"',
+    __LIGHT_ICONS__: JSON.stringify(
+      Object.fromEntries(
+        Object.values(LightIcons).map((Name) => [Name, Assets.Icons[Name]]),
+      ),
+    ),
+  },
   bundle: true,
   write: false,
   minify: true,

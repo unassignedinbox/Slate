@@ -233,16 +233,26 @@ try {
     ],
   ]) {
     const Frame = await Open(Id);
-    assert.deepEqual(
-      await Frame.locator(".mpanel > *").evaluateAll(
-        (Nodes, Selectors) =>
-          Nodes.map((Node, Index) =>
-            Node.matches(Selectors[Index] || ".missing"),
-          ),
-        Selectors,
-      ),
-      Selectors.map(() => true),
-    );
+    if (Selectors.includes(".lp-preview")) {
+      for (const Selector of [...Selectors, ".lp-response"])
+        assert.equal(await Frame.locator(Selector).count(), 1);
+      assert.equal(await Frame.locator(".lighting-panel .lp-card").count(), 6);
+      assert.equal(
+        await Frame.locator(".lp-source-column,.lp-control-column").count(),
+        2,
+      );
+    } else {
+      assert.deepEqual(
+        await Frame.locator(".mpanel > *").evaluateAll(
+          (Nodes, Selectors) =>
+            Nodes.map((Node, Index) =>
+              Node.matches(Selectors[Index] || ".missing"),
+            ),
+          Selectors,
+        ),
+        Selectors.map(() => true),
+      );
+    }
     assert.equal(await Frame.locator(".sheet > .pcard").count(), 0);
     assert.equal(
       await Frame.evaluate(
