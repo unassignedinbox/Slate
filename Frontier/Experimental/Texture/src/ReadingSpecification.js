@@ -349,15 +349,32 @@ export const SanitiseReading = (Candidate = {}) =>
     };
 };
 
-// What the order will cost, near enough to put in front of somebody before they press the button. The ray passes are
-// per vertex and the rest is per texel per sample, which is why a big sheet at sixteen samples is the slow one.
+// How far apart the traced points are allowed to get. Occlusion, bent normals and thickness are all integrals over
+// the hemisphere above a point, and all three are smooth: they are worth measuring densely enough to follow the
+// model's shape and no denser. So the rays are fired on a lattice of at most this many points across, whatever the
+// sheet's resolution, and the texels between them are reconstructed from their neighbours.
+//
+// 🔴 This is what stops the ray cost from following the SHEET. Doubling the resolution of a bake quadruples the
+//    number of texels but does not add one triangle to the model, and firing four times as many rays at the same
+//    unchanged shape buys four times the samples of a signal that was already smooth. A 2048² bake traces exactly
+//    as many rays as a 512² one and simply reconstructs them further.
+export const TraceLimit = 256;
+
+// What the order will cost, near enough to put in front of somebody before they press the button: a raster pass per
+// antialiasing sample, a fixed lattice of rays, and a little for the size of the model behind both.
 export const ReadingEstimate = (Order, Triangles = 0) => {
     const Texels = Order.Size * Order.Size;
     const Lattice = Math.max(1, Math.round(Math.sqrt(Order.Samples)) ** 2);
     const Maps = Order.Wanted.map((Identifier) => ReadingByIdentifier[Identifier]).filter(Boolean);
     const Channels = Maps.reduce((Sum, Entry) => Sum + Entry.Channels, 0);
     const Rayed = Maps.some((Entry) => Entry.Rays);
-    const Seconds = (Texels * Lattice * Math.max(1, Channels)) / 4.2e8 + (Rayed ? (Triangles * Order.Rays) / 9e6 : 0);
+    // Four fifths of the lattice lands on the model on a well packed sheet, and the thickness rays on top of the
+    // occlusion ones come to about another third again.
+    const Traced = Math.min(Texels, TraceLimit * TraceLimit) * 0.8;
+    const Seconds =
+        (Texels * Lattice * (Math.max(1, Channels) + 4)) / 1.3e7 +
+        (Rayed ? (Traced * Order.Rays * 1.3) / 3.5e5 : 0) +
+        Triangles / 2.4e5;
     return {
         Lattice,
         Channels,

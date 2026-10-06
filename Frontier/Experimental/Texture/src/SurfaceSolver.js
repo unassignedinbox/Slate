@@ -233,6 +233,21 @@ export const MeasureSurface = (Surface, Options = {}) =>
         Sheets.Altitude[Texel] = Clamp((Sheets.Position[Texel * 3 + 1] - Lowest) / Span, 0, 1);
     });
 
+    // 🔴 Hand this an index and it traces, which is the only way the occlusion and cavity generators ever see a
+    //    crease they can draw dirt in. Without one it falls back to whatever the vertices were told, and a mask
+    //    built on vertex occlusion is a mask with the triangles showing through it.
+    if (Options.Index)
+    {
+        const Seen = MeasureVisibility(Surface, Options.Index, Sheets, {
+            Rays: Options.Rays || 16,
+            Resolution: Options.Resolution || 192,
+        });
+        Sheets.Occlusion = Seen.Occlusion;
+        Sheets.Thickness = Seen.Thickness;
+        Sheets.Bent = Seen.Bent;
+        Sheets.Traced = Seen.Shot;
+    }
+
     return Sheets;
 };
 
@@ -509,4 +524,318 @@ export const MeasureBevelNormals = (Surface, Width = 0.05) =>
         Bevel[Vertex * 3 + 2] = SumZ / Length;
     }
     return Bevel;
+};
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Visibility — occlusion, bent normals and thickness, traced from the texel instead of from the vertex.
+//
+// Every one of these three is an integral over the hemisphere above a point, and until now the point was a VERTEX.
+// The sheet then got those vertex answers smeared across it by the rasteriser's barycentrics, which is Gouraud
+// shading an ambient occlusion map: a 15,000-vertex shader ball carries about as much occlusion detail as a 122×122
+// image, so a 512×512 bake spent 99% of its texels interpolating between answers it did not have. That is what the
+// triangle facets in the occlusion map were. There is no filter that fixes it, because the detail was never measured.
+//
+// So the rays start at the texel. Not at every texel — occlusion is a low-frequency signal and a sheet is as big as
+// the painter wants it to be, so the trace runs on a lattice of one texel in `Stride` and the rest is reconstructed
+// from it. The cost then follows the MODEL rather than the sheet: a 2048² bake traces exactly as many rays as a
+// 512² one and simply reconstructs them further.
+//
+// 🔴 The reconstruction is a joint bilateral gather, not a blur. A traced neighbour only counts for a texel if it
+//    sits on the same island, faces the same way and is actually nearby in WORLD space. Two texels can be adjacent on
+//    the sheet and be on opposite sides of a wall; blurring the first into the second is how ambient occlusion leaks
+//    through solid geometry, and it looks exactly like the facets it replaced.
+//--------------------------------------------------------------------------------------------------------------------------
+export const MeasureVisibility = (Surface, Index, Sheets, Options = {}) =>
+{
+    const Size = Sheets.Size;
+    const Texels = Size * Size;
+    const Rays = Math.max(4, Math.round(Options.Rays ?? 24));
+    const Budget = Math.max(32, Math.round(Options.Resolution ?? 256));
+    const Stride = Math.max(1, Math.ceil(Size / Budget));
+    const Announce = Options.Progress || (() => {});
+
+    const Radius = (Surface.Bounds && Surface.Bounds.Radius) || 1;
+    // Two reaches, because the two questions are different ones. Occlusion asks what is nearby and stops at one
+    // and two fifths of the model; thickness asks how far it is to the other side and has to be able to cross it.
+    const Reach = Radius * 1.4;
+    const Through = Radius * 2;
+    // 🔴 The bias is a fraction of the MODEL, not a constant. A fixed 1e-3 is a tenth of a millimetre on a metre-wide
+    //    model and a third of the whole thing on a centimetre-wide one, where every ray starts outside the surface it
+    //    was meant to leave and the occlusion map comes back blank.
+    const Lift = Math.max(1e-7, Radius * 2e-4);
+    // 🔴 Thickness rays start a hair under the surface, and the hair has to be a hair. The old sink was two
+    //    thousandths of the model, which is outside anything thinner than four — a blade, the lip of a plinth —
+    //    and a ray that starts outside the solid escapes and reports it as infinitely thick. The rays point inward
+    //    anyway, so it is the t-bias and not the origin that keeps them off the triangle they left.
+    const Sink = Lift;
+    const GoldenAngle = Math.PI * (3 - Math.sqrt(5));
+
+    const Filled = Sheets.Filled;
+    const Spots = Sheets.Position;
+    const Facing = Sheets.Normal;
+    const Island = Sheets.Island || new Int32Array(Texels);
+
+    const Occlusion = new Float32Array(Texels).fill(1);
+    const Bent = new Float32Array(Texels * 3);
+    const Thickness = new Float32Array(Texels).fill(1);
+    const Traced = new Uint8Array(Texels);
+    const Sunk = new Uint8Array(Texels);
+
+    // How much of the world one texel covers, measured rather than assumed: the sheet's scale depends entirely on how
+    // the model was unwrapped, and the bilateral weights downstream are all in world units.
+    let Span = 0;
+    let Spans = 0;
+    for (let Y = 0; Y < Size; Y += 1)
+    {
+        for (let X = 0; X < Size - 1; X += 1)
+        {
+            const Here = Y * Size + X;
+            const Next = Here + 1;
+            if (!Filled[Here] || !Filled[Next] || Island[Here] !== Island[Next]) continue;
+            Span += Math.hypot(
+                Spots[Next * 3] - Spots[Here * 3],
+                Spots[Next * 3 + 1] - Spots[Here * 3 + 1],
+                Spots[Next * 3 + 2] - Spots[Here * 3 + 2]);
+            Spans += 1;
+        }
+    }
+    Span = Spans ? Span / Spans : Radius / Size;
+    if (!(Span > 0)) Span = Radius / Size;
+
+    // One texel's worth of rays. Returns nothing; writes straight into the sheets.
+    const Shoot = (Texel, Thick) =>
+    {
+        const PX = Spots[Texel * 3];
+        const PY = Spots[Texel * 3 + 1];
+        const PZ = Spots[Texel * 3 + 2];
+        const NX = Facing[Texel * 3];
+        const NY = Facing[Texel * 3 + 1];
+        const NZ = Facing[Texel * 3 + 2];
+        // A frame on the texel's own normal. The branch keeps the cross product away from its degenerate axis.
+        const AX = Math.abs(NX) < 0.9 ? 1 : 0;
+        const AY = Math.abs(NX) < 0.9 ? 0 : 1;
+        let TX = NY * 0 - NZ * AY;
+        let TY = NZ * AX - NX * 0;
+        let TZ = NX * AY - NY * AX;
+        const TL = Math.hypot(TX, TY, TZ) || 1;
+        TX /= TL; TY /= TL; TZ /= TL;
+        const BX = NY * TZ - NZ * TY;
+        const BY = NZ * TX - NX * TZ;
+        const BZ = NX * TY - NY * TX;
+
+        // 🔴 Every texel gets its own rotation and its own jitter. One shared ray set is a fixed pattern, and a fixed
+        //    pattern in an occlusion map is not noise the eye forgives — it is banding, which is what the eye looks for.
+        const Shuffle = Math.sin(Texel * 12.9898 + 78.233) * 43758.5453;
+        const Spin = (Shuffle - Math.floor(Shuffle)) * Math.PI * 2;
+        const Wobble = Math.sin(Texel * 39.3468 + 11.135) * 24634.6345;
+        const Jitter = Wobble - Math.floor(Wobble);
+
+        let Open = 0;
+        let SumX = 0;
+        let SumY = 0;
+        let SumZ = 0;
+        const OX = PX + NX * Lift;
+        const OY = PY + NY * Lift;
+        const OZ = PZ + NZ * Lift;
+        for (let Ray = 0; Ray < Rays; Ray += 1)
+        {
+            // Stratified cosine hemisphere. The radius is stratified over the ray index so the samples cannot clump,
+            // and the angle is the golden one so consecutive rays never line up.
+            const Fraction = (Ray + Jitter) / Rays;
+            const Sine = Math.sqrt(Fraction);
+            const Cosine = Math.sqrt(1 - Fraction);
+            const Angle = Ray * GoldenAngle + Spin;
+            const Across = Math.cos(Angle) * Sine;
+            const Along = Math.sin(Angle) * Sine;
+            const DX = TX * Across + BX * Along + NX * Cosine;
+            const DY = TY * Across + BY * Along + NY * Cosine;
+            const DZ = TZ * Across + BZ * Along + NZ * Cosine;
+            if (Index.Blocked(OX, OY, OZ, DX, DY, DZ, Reach)) continue;
+            Open += 1;
+            SumX += DX;
+            SumY += DY;
+            SumZ += DZ;
+        }
+        Occlusion[Texel] = Open / Rays;
+        const Length = Math.hypot(SumX, SumY, SumZ);
+        if (Length < 1e-6)
+        {
+            Bent[Texel * 3] = NX;
+            Bent[Texel * 3 + 1] = NY;
+            Bent[Texel * 3 + 2] = NZ;
+        }
+        else
+        {
+            Bent[Texel * 3] = SumX / Length;
+            Bent[Texel * 3 + 1] = SumY / Length;
+            Bent[Texel * 3 + 2] = SumZ / Length;
+        }
+        Traced[Texel] = 1;
+        if (!Thick) return;
+
+        // Thickness looks the other way, from just under the surface, and wants the distance rather than a yes or no.
+        const Inside = Math.max(4, Rays >> 1);
+        const UX = PX - NX * Sink;
+        const UY = PY - NY * Sink;
+        const UZ = PZ - NZ * Sink;
+        let Total = 0;
+        for (let Ray = 0; Ray < Inside; Ray += 1)
+        {
+            const Fraction = ((Ray + Jitter) / Inside) * 0.72;
+            const Sine = Math.sqrt(Fraction);
+            const Cosine = Math.sqrt(1 - Fraction);
+            const Angle = Ray * GoldenAngle + Spin;
+            const Across = Math.cos(Angle) * Sine;
+            const Along = Math.sin(Angle) * Sine;
+            const DX = TX * Across + BX * Along - NX * Cosine;
+            const DY = TY * Across + BY * Along - NY * Cosine;
+            const DZ = TZ * Across + BZ * Along - NZ * Cosine;
+            const Hit = Index.Travel(UX, UY, UZ, DX, DY, DZ, Through, true, Lift);
+            Total += Number.isFinite(Hit) ? Clamp(Hit / Through, 0, 1) : 1;
+        }
+        Thickness[Texel] = Total / Inside;
+        Sunk[Texel] = 1;
+    };
+
+    // 🔴 Thickness is traced on half the lattice of the other two. It is the smoothest of the three by a wide margin —
+    //    it is the distance to the far side of a solid — and it is the only one that cannot stop at the first hit,
+    //    so it is both the cheapest to reconstruct and the dearest to measure. Trace it a quarter as often.
+    const Half = Stride >> 1;
+    const Deep = Stride * 2;
+    let Shot = 0;
+    for (let Y = Half; Y < Size; Y += Stride)
+    {
+        // 🔴 The thickness lattice is every other point of the occlusion lattice, which means it has to be measured
+        //    off the same origin. Centring it independently puts it on texels the outer loop never visits, and then
+        //    nothing is traced at all and every texel falls through to the slow path — a four-second bake becomes
+        //    thirty-one, which is exactly what happened the first time this was written.
+        const Thick = (Y - Half) % Deep === 0;
+        for (let X = Half; X < Size; X += Stride)
+        {
+            const Texel = Y * Size + X;
+            if (!Filled[Texel]) continue;
+            Shoot(Texel, Thick && (X - Half) % Deep === 0);
+            Shot += 1;
+        }
+        Announce(Y / Size);
+    }
+
+    // The reconstruction. Each filled texel gathers from the lattice points around it, weighted by how much of the
+    // same surface they are standing on. Traced texels are gathered too, which is what turns twenty-four rays of
+    // Monte Carlo noise into a clean number — the gather is averaging around a hundred rays by the time it is done.
+    const Resolve = (Values, Width, Mark, Step, Offset, Rings) =>
+    {
+        const Output = new Float32Array(Values.length);
+        const Sigma = Span * Step * 2;
+        const Falloff = 1 / (Sigma * Sigma);
+        const Missing = [];
+        for (let Y = 0; Y < Size; Y += 1)
+        {
+            for (let X = 0; X < Size; X += 1)
+            {
+                const Texel = Y * Size + X;
+                if (!Filled[Texel]) continue;
+                const PX = Spots[Texel * 3];
+                const PY = Spots[Texel * 3 + 1];
+                const PZ = Spots[Texel * 3 + 2];
+                const NX = Facing[Texel * 3];
+                const NY = Facing[Texel * 3 + 1];
+                const NZ = Facing[Texel * 3 + 2];
+                const Home = Island[Texel];
+                // Walk the lattice itself rather than the texels between it — the lattice is where the answers are.
+                const BaseX = Offset + Math.round((X - Offset) / Step) * Step;
+                const BaseY = Offset + Math.round((Y - Offset) / Step) * Step;
+                let Weight = 0;
+                let SumA = 0;
+                let SumB = 0;
+                let SumC = 0;
+                for (let Down = -Rings; Down <= Rings; Down += 1)
+                {
+                    const AtY = BaseY + Down * Step;
+                    if (AtY < 0 || AtY >= Size) continue;
+                    for (let Over = -Rings; Over <= Rings; Over += 1)
+                    {
+                        const AtX = BaseX + Over * Step;
+                        if (AtX < 0 || AtX >= Size) continue;
+                        const Other = AtY * Size + AtX;
+                        if (!Mark[Other]) continue;
+                        // 🔴 Island first. Two texels can be neighbours on the sheet and on opposite sides of the
+                        //    model; the only thing stopping occlusion from leaking through a wall is this line.
+                        if (Island[Other] !== Home) continue;
+                        const Agree = NX * Facing[Other * 3] + NY * Facing[Other * 3 + 1] + NZ * Facing[Other * 3 + 2];
+                        if (Agree <= 0.1) continue;
+                        const DX = Spots[Other * 3] - PX;
+                        const DY = Spots[Other * 3 + 1] - PY;
+                        const DZ = Spots[Other * 3 + 2] - PZ;
+                        const Away = (DX * DX + DY * DY + DZ * DZ) * Falloff;
+                        if (Away > 9) continue;
+                        const Share = Math.exp(-Away) * Agree * Agree * Agree;
+                        Weight += Share;
+                        SumA += Values[Other * Width] * Share;
+                        if (Width === 3)
+                        {
+                            SumB += Values[Other * Width + 1] * Share;
+                            SumC += Values[Other * Width + 2] * Share;
+                        }
+                    }
+                }
+                if (Weight <= 1e-9)
+                {
+                    Missing.push(Texel);
+                    continue;
+                }
+                Output[Texel * Width] = SumA / Weight;
+                if (Width === 3)
+                {
+                    Output[Texel * Width + 1] = SumB / Weight;
+                    Output[Texel * Width + 2] = SumC / Weight;
+                }
+            }
+        }
+        return { Output, Missing };
+    };
+
+    // 🔴 A texel the lattice cannot reach is traced outright rather than guessed at. An island one texel wide, a
+    //    sliver at the edge of a shell, a face steep enough that none of its neighbours agree with it — the gather
+    //    finds nothing for any of them, and a nothing written into an occlusion map is a black hole on the model.
+    const Missed = new Set();
+    const First = Resolve(Occlusion, 1, Traced, Stride, Half, 3);
+    for (const Texel of First.Missing) Missed.add(Texel);
+    const Second = Resolve(Thickness, 1, Sunk, Deep, Half, 3);
+    for (const Texel of Second.Missing) Missed.add(Texel);
+    for (const Texel of Missed)
+    {
+        if (!Traced[Texel] || !Sunk[Texel]) Shoot(Texel, true);
+        First.Output[Texel] = Occlusion[Texel];
+        Second.Output[Texel] = Thickness[Texel];
+        Shot += 1;
+    }
+    const Third = Resolve(Bent, 3, Traced, Stride, Half, 3);
+    for (const Texel of Third.Missing)
+    {
+        Third.Output[Texel * 3] = Facing[Texel * 3];
+        Third.Output[Texel * 3 + 1] = Facing[Texel * 3 + 1];
+        Third.Output[Texel * 3 + 2] = Facing[Texel * 3 + 2];
+    }
+    for (let Texel = 0; Texel < Texels; Texel += 1)
+    {
+        if (!Filled[Texel]) continue;
+        const Length = Math.hypot(Third.Output[Texel * 3], Third.Output[Texel * 3 + 1], Third.Output[Texel * 3 + 2]);
+        if (Length < 1e-6) continue;
+        Third.Output[Texel * 3] /= Length;
+        Third.Output[Texel * 3 + 1] /= Length;
+        Third.Output[Texel * 3 + 2] /= Length;
+    }
+    Announce(1);
+
+    return {
+        Occlusion: First.Output,
+        Thickness: Second.Output,
+        Bent: Third.Output,
+        Traced,
+        Stride,
+        Span,
+        Shot,
+        Rays,
+    };
 };

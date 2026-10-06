@@ -15,17 +15,15 @@
 //    texel whose weights cancel is left to the padding pass rather than divided by nothing.
 //============================================================================================================================================
 
-import { BakeOcclusion } from "./SurfaceStructure.js";
 import {
-    MeasureBentNormals,
     MeasureBevelNormals,
     MeasureCurvature,
     MeasureIslands,
-    MeasureThickness,
+    MeasureVisibility,
     RasteriseSurface,
     SheetSize,
 } from "./SurfaceSolver.js";
-import { ReadingByIdentifier, SampleOffsets, SanitiseReading } from "./ReadingSpecification.js";
+import { ReadingByIdentifier, SampleOffsets, SanitiseReading, TraceLimit } from "./ReadingSpecification.js";
 
 const Clamp = (Value, Low, High) => Math.min(High, Math.max(Low, Number.isFinite(Value) ? Value : Low));
 
@@ -116,15 +114,7 @@ export const SolveReadings = (Surface, Index, Candidate = {}, Progress = null) =
     //----------------------------------------------------------------------------------------------------------------------
     Say(0.02, "Welding the mesh and reading its curvature");
     const Bend = MeasureCurvature(Surface);
-    const Rayed = Asked.has("occlusion") || Asked.has("bent");
-    if (Rayed && Index)
-    {
-        Say(0.08, `Casting ${Order.Rays} occlusion rays a vertex`);
-        BakeOcclusion(Surface, Index, Order.Rays);
-    }
-    const Bent = Asked.has("bent") ? (Say(0.26, "Bending the normals towards the sky"), MeasureBentNormals(Surface, Index, Order.Rays)) : null;
-    const Thickness = Asked.has("thickness") ? (Say(0.42, "Measuring how much is behind each point"), MeasureThickness(Surface, Index, Math.max(6, Order.Rays >> 1))) : null;
-    const Bevel = Asked.has("bevel") ? (Say(0.52, "Rounding the edges without moving them"), MeasureBevelNormals(Surface, Order.Width)) : null;
+    const Bevel = Asked.has("bevel") ? (Say(0.08, "Rounding the edges without moving them"), MeasureBevelNormals(Surface, Order.Width)) : null;
 
     //----------------------------------------------------------------------------------------------------------------------
     // What the triangles know: which part of the scene each one belongs to, which way it faces flat, and how much
@@ -224,12 +214,70 @@ export const SolveReadings = (Surface, Index, Candidate = {}, Progress = null) =
     const Worldly = Order.Space === "world";
 
     //----------------------------------------------------------------------------------------------------------------------
+    // The record the generators read, and the thing the rays are fired from. It gets a pass of its own.
+    //
+    // 🔴 This used to ride along on the first antialiasing sample, and the first antialiasing sample is a CORNER of
+    //    the sample lattice, not the middle of the texel — about two thirds of a texel off in both axes. Everything
+    //    downstream that asks the sheet what is under a texel was being answered about somewhere else, and on a
+    //    seam or an object boundary that is a different triangle, a different object and a different answer.
+    //----------------------------------------------------------------------------------------------------------------------
+    Say(0.12, "Finding the surface under every texel");
+    RasteriseSurface(Surface, { Size, Offset: [0, 0] }, (Texel, Triangle, W0, W1, W2, IA, IB, IC) =>
+    {
+        const PX = Surface.Positions[IA * 3] * W0 + Surface.Positions[IB * 3] * W1 + Surface.Positions[IC * 3] * W2;
+        const PY = Surface.Positions[IA * 3 + 1] * W0 + Surface.Positions[IB * 3 + 1] * W1 + Surface.Positions[IC * 3 + 1] * W2;
+        const PZ = Surface.Positions[IA * 3 + 2] * W0 + Surface.Positions[IB * 3 + 2] * W1 + Surface.Positions[IC * 3 + 2] * W2;
+        let NX = Surface.Normals[IA * 3] * W0 + Surface.Normals[IB * 3] * W1 + Surface.Normals[IC * 3] * W2;
+        let NY = Surface.Normals[IA * 3 + 1] * W0 + Surface.Normals[IB * 3 + 1] * W1 + Surface.Normals[IC * 3 + 1] * W2;
+        let NZ = Surface.Normals[IA * 3 + 2] * W0 + Surface.Normals[IB * 3 + 2] * W1 + Surface.Normals[IC * 3 + 2] * W2;
+        const Unit = Math.hypot(NX, NY, NZ) || 1;
+        NX /= Unit;
+        NY /= Unit;
+        NZ /= Unit;
+        Sheets.Filled[Texel] = 1;
+        Sheets.Face[Texel] = Triangle;
+        Sheets.Owner[Texel] = Owner[Triangle];
+        Sheets.Tile[Texel] = Tile[Triangle];
+        Sheets.Island[Texel] = Island[Triangle];
+        Sheets.Position[Texel * 3] = PX;
+        Sheets.Position[Texel * 3 + 1] = PY;
+        Sheets.Position[Texel * 3 + 2] = PZ;
+        Sheets.Normal[Texel * 3] = NX;
+        Sheets.Normal[Texel * 3 + 1] = NY;
+        Sheets.Normal[Texel * 3 + 2] = NZ;
+        Sheets.Curvature[Texel] = Bend[IA] * W0 + Bend[IB] * W1 + Bend[IC] * W2;
+        Sheets.Altitude[Texel] = Clamp((PY - Lowest) / Span, 0, 1);
+    });
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // The rays, fired from the texels the pass above just found.
+    //----------------------------------------------------------------------------------------------------------------------
+    let Bent = null;
+    let Visible = null;
+    if (Index)
+    {
+        Say(0.18, `Tracing ${Order.Rays} rays a texel`);
+        Visible = MeasureVisibility(Surface, Index, Sheets, {
+            Rays: Order.Rays,
+            Resolution: TraceLimit,
+            Progress: (Fraction) => Say(0.18 + Fraction * 0.4, `Tracing ${Order.Rays} rays a texel`),
+        });
+        Sheets.Occlusion = Visible.Occlusion;
+        Sheets.Thickness = Visible.Thickness;
+        Sheets.Bent = Visible.Bent;
+        Bent = Visible.Bent;
+    }
+    // Nothing to trace against. A bent normal that cannot see anything is the normal it already had, which is what
+    // the per-vertex pass used to say too — a black direction map is not an honest answer, it is a missing one.
+    else Bent = Sheets.Normal;
+
+    //----------------------------------------------------------------------------------------------------------------------
     // One pass per sample. Everything inside is per texel, so it is written flat and without allocation: a closure
     // that builds three vectors per texel turns a two-second bake into a thirty-second one.
     //----------------------------------------------------------------------------------------------------------------------
     for (const [Pass, Offset] of Offsets.entries())
     {
-        Say(0.6 + (0.35 * Pass) / Offsets.length, `Sample ${Pass + 1} of ${Offsets.length}`);
+        Say(0.62 + (0.32 * Pass) / Offsets.length, `Sample ${Pass + 1} of ${Offsets.length}`);
         RasteriseSurface(Surface, { Size, Offset: [Offset.X, Offset.Y] }, (Texel, Triangle, W0, W1, W2, IA, IB, IC) =>
         {
             const Weight = Offset.Weight;
@@ -315,20 +363,14 @@ export const SolveReadings = (Surface, Index, Candidate = {}, Progress = null) =
                     Bevel[IA * 3 + 1] * W0 + Bevel[IB * 3 + 1] * W1 + Bevel[IC * 3 + 1] * W2,
                     Bevel[IA * 3 + 2] * W0 + Bevel[IB * 3 + 2] * W1 + Bevel[IC * 3 + 2] * W2,
                 );
-            if (Bent)
-                LayDirection(
-                    "bent",
-                    Bent[IA * 3] * W0 + Bent[IB * 3] * W1 + Bent[IC * 3] * W2,
-                    Bent[IA * 3 + 1] * W0 + Bent[IB * 3 + 1] * W1 + Bent[IC * 3 + 1] * W2,
-                    Bent[IA * 3 + 2] * W0 + Bent[IB * 3 + 2] * W1 + Bent[IC * 3 + 2] * W2,
-                );
+            // 🔴 Read at the texel, not interpolated from the corners — but written through LayDirection, which
+            //    is inside this callback because the tangent frame it has to be rotated into is this triangle's.
+            if (Bent) LayDirection("bent", Bent[Texel * 3], Bent[Texel * 3 + 1], Bent[Texel * 3 + 2]);
             LayDirection("face", Flat[Triangle * 3], Flat[Triangle * 3 + 1], Flat[Triangle * 3 + 2]);
 
-            const Shade = Surface.Occlusion
-                ? Surface.Occlusion[IA] * W0 + Surface.Occlusion[IB] * W1 + Surface.Occlusion[IC] * W2
-                : 1;
+            const Shade = Sheets.Occlusion[Texel];
             const Curve = Bend[IA] * W0 + Bend[IB] * W1 + Bend[IC] * W2;
-            const Deep = Thickness ? Thickness[IA] * W0 + Thickness[IB] * W1 + Thickness[IC] * W2 : 1;
+            const Deep = Sheets.Thickness[Texel];
             const High = Clamp((PY - Lowest) / Span, 0, 1);
             LayValue("occlusion", Shade);
             LayValue("thickness", Deep);
@@ -359,27 +401,6 @@ export const SolveReadings = (Surface, Index, Candidate = {}, Progress = null) =
                 Lay("identity", Colour[0], Colour[1], Colour[2]);
             }
 
-            // 🔴 The record the generators read takes the sample nearest the texel's centre — the first one, because
-            //    the lattice is laid out from the middle. An ID interpolated between two objects is an ID of
-            //    neither, and a face index averaged with its neighbour names a triangle somewhere else entirely.
-            if (!Pass)
-            {
-                Sheets.Filled[Texel] = 1;
-                Sheets.Face[Texel] = Triangle;
-                Sheets.Owner[Texel] = Owner[Triangle];
-                Sheets.Tile[Texel] = Tile[Triangle];
-                Sheets.Island[Texel] = Island[Triangle];
-                Sheets.Position[Texel * 3] = PX;
-                Sheets.Position[Texel * 3 + 1] = PY;
-                Sheets.Position[Texel * 3 + 2] = PZ;
-                Sheets.Normal[Texel * 3] = NX;
-                Sheets.Normal[Texel * 3 + 1] = NY;
-                Sheets.Normal[Texel * 3 + 2] = NZ;
-                Sheets.Occlusion[Texel] = Shade;
-                Sheets.Thickness[Texel] = Deep;
-                Sheets.Curvature[Texel] = Curve;
-                Sheets.Altitude[Texel] = High;
-            }
         });
     }
 
@@ -456,6 +477,9 @@ export const SolveReadings = (Surface, Index, Candidate = {}, Progress = null) =
             Objects: Owners.length,
             Filled: Landed,
             Occupancy: Landed / Texels,
+            Traced: Visible ? Visible.Shot : 0,
+            Stride: Visible ? Visible.Stride : 0,
+            Rays: Visible ? Visible.Shot * Visible.Rays : 0,
         },
     };
 };

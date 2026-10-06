@@ -24,7 +24,7 @@ import {
     SanitiseReading,
 } from "./ReadingSpecification.js";
 import { Dilate, IdentityColour, IdentityImage, SolveReadings } from "./ReadingSolver.js";
-import { MeasureBentNormals, MeasureBevelNormals, MeasureSurface } from "./SurfaceSolver.js";
+import { MeasureBentNormals, MeasureBevelNormals, MeasureSurface, MeasureVisibility } from "./SurfaceSolver.js";
 
 const Scene = () =>
     AssembleScene([
@@ -376,4 +376,165 @@ test("the estimate grows with everything that makes a bake slower", () =>
     assert.ok(ReadingEstimate({ ...Order, Samples: 16 }, 10000).Seconds > Base.Seconds);
     assert.ok(ReadingEstimate(Order, 40000).Seconds > Base.Seconds, "more triangles, more rays, more time");
     assert.ok(ReadingEstimate({ ...Order, Size: 1024 }, 10000).Megabytes > Base.Megabytes);
+});
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Visibility. Occlusion, bent normals and thickness used to be answered at the vertices and smeared across the sheet
+// by the rasteriser, which is Gouraud shading an occlusion map: a fifteen-thousand-vertex model carries about as much
+// detail as a 122×122 image, and every texel of a 512² bake between those vertices was an interpolation of answers
+// nobody had measured. The triangles showed. These are the checks that say they no longer do.
+//--------------------------------------------------------------------------------------------------------------------------
+const Patch = (Surface, Size, Place) =>
+{
+    const Texels = Size * Size;
+    const Sheets = {
+        Size,
+        Filled: new Uint8Array(Texels).fill(1),
+        Position: new Float32Array(Texels * 3),
+        Normal: new Float32Array(Texels * 3),
+        Island: new Int32Array(Texels),
+        Bounds: Surface.Bounds,
+    };
+    for (let Y = 0; Y < Size; Y += 1)
+        for (let X = 0; X < Size; X += 1)
+        {
+            const Texel = Y * Size + X;
+            const { Position, Normal, Island } = Place(X, Y);
+            Sheets.Position.set(Position, Texel * 3);
+            Sheets.Normal.set(Normal, Texel * 3);
+            Sheets.Island[Texel] = Island || 0;
+        }
+    return Sheets;
+};
+
+test("occlusion is measured where the texel is, not where its triangle's corners are", () =>
+{
+    const Surface = AssembleScene([
+        CreateObject({ Identifier: "floor", Name: "Floor", Kind: "plane", Subdivision: 0, Tile: 1001 }),
+        CreateObject({ Identifier: "ball", Name: "Ball", Kind: "sphere", Subdivision: 2, Scale: 0.25, Tile: 1002, Offset: [0, 0.3, 0] }),
+    ]);
+    const Index = new SurfaceIndex(Surface);
+    const Size = 64;
+    const Sheets = Patch(Surface, Size, (X, Y) => ({
+        Position: [(X / (Size - 1)) * 1.2 - 0.6, 0, (Y / (Size - 1)) * 1.2 - 0.6],
+        Normal: [0, 1, 0],
+    }));
+    const Seen = MeasureVisibility(Surface, Index, Sheets, { Rays: 24, Resolution: Size });
+    assert.equal(Seen.Stride, 1, "a sheet inside the trace limit is traced at every texel");
+
+    // The same integral again, at the same points, with a ray set twenty times larger and laid out differently.
+    // 🔴 This is the point of the whole exercise: twenty-four rays a texel plus the reconstruction has to agree
+    //    with five hundred rays a texel, or the map is noise wearing an answer's clothes.
+    const Truth = (Texel) =>
+    {
+        const PX = Sheets.Position[Texel * 3];
+        const PZ = Sheets.Position[Texel * 3 + 2];
+        let Open = 0;
+        for (let Ray = 0; Ray < 512; Ray += 1)
+        {
+            const Fraction = (Ray + 0.5) / 512;
+            const Sine = Math.sqrt(Fraction);
+            const Angle = Ray * 2.399963229728653 + 0.7;
+            if (!Index.Blocked(PX, 1e-4, PZ, Math.cos(Angle) * Sine, Math.sqrt(1 - Fraction), Math.sin(Angle) * Sine, 4)) Open += 1;
+        }
+        return Open / 512;
+    };
+    let Total = 0;
+    let Worst = 0;
+    let Count = 0;
+    for (let Y = 2; Y < Size - 2; Y += 5)
+        for (let X = 2; X < Size - 2; X += 5)
+        {
+            const Texel = Y * Size + X;
+            const Apart = Math.abs(Truth(Texel) - Seen.Occlusion[Texel]);
+            Total += Apart;
+            Worst = Math.max(Worst, Apart);
+            Count += 1;
+        }
+    assert.ok(Total / Count < 0.02, `the measured occlusion is off by ${(Total / Count).toFixed(4)} on average`);
+    assert.ok(Worst < 0.06, `the worst texel is off by ${Worst.toFixed(4)}`);
+
+    // And it is a shadow, not a wash: dark under the ball, open at the corner, with the bent normal still a unit
+    // direction everywhere.
+    const Under = Seen.Occlusion[(Size / 2) * Size + Size / 2];
+    const Away = Seen.Occlusion[2 * Size + 2];
+    assert.ok(Away - Under > 0.3, `the contact shadow is only ${(Away - Under).toFixed(3)} deep`);
+    for (let Texel = 0; Texel < Size * Size; Texel += 1)
+    {
+        const Length = Math.hypot(Seen.Bent[Texel * 3], Seen.Bent[Texel * 3 + 1], Seen.Bent[Texel * 3 + 2]);
+        assert.ok(Math.abs(Length - 1) < 1e-3, `a bent normal came back ${Length.toFixed(4)} long`);
+        assert.ok(Seen.Occlusion[Texel] >= 0 && Seen.Occlusion[Texel] <= 1 && Seen.Thickness[Texel] >= 0);
+    }
+});
+
+test("the reconstruction never reaches through a wall to a texel that is only a sheet neighbour", () =>
+{
+    // A pea sealed inside a shell. The pea sees nothing at all, the outside of the shell sees everything, and on the
+    // sheet they are laid down side by side — which is what a UV layout does all day.
+    const Surface = AssembleScene([
+        CreateObject({ Identifier: "shell", Name: "Shell", Kind: "sphere", Subdivision: 3, Scale: 3, Tile: 1001 }),
+        CreateObject({ Identifier: "pea", Name: "Pea", Kind: "sphere", Subdivision: 2, Scale: 0.4, Tile: 1002 }),
+    ]);
+    const Index = new SurfaceIndex(Surface);
+    const Size = 64;
+    const Half = Size / 2;
+    const Lay = (X, Y) =>
+    {
+        const Sealed = X < Half;
+        const Across = ((Sealed ? X : X - Half) / (Half - 1)) * 1.2 - 0.6;
+        const Down = (Y / (Size - 1)) * 1.2 - 0.6;
+        const Length = Math.hypot(Across, Down, 1);
+        const Normal = [Across / Length, Down / Length, 1 / Length];
+        const Radius = Sealed ? 0.4 : 3;
+        return { Position: Normal.map((Part) => Part * Radius), Normal, Island: Sealed ? 0 : 1 };
+    };
+    const Sheets = Patch(Surface, Size, Lay);
+    const Column = (Seen, X) =>
+    {
+        let Sum = 0;
+        for (let Y = 4; Y < Size - 4; Y += 1) Sum += Seen.Occlusion[Y * Size + X];
+        return Sum / (Size - 8);
+    };
+    const Seen = MeasureVisibility(Surface, Index, Sheets, { Rays: 24, Resolution: Size });
+    assert.ok(Column(Seen, Half - 1) < 0.02, `the last sealed column read ${Column(Seen, Half - 1).toFixed(4)}`);
+    assert.ok(Column(Seen, Half) > 0.98, `the first open column read ${Column(Seen, Half).toFixed(4)}`);
+
+    // 🔴 Now take the island guard away and leave only the world-distance one. The step has to stay exactly as
+    //    sharp, because a UV seam is not always an island boundary and the geometry is what decides.
+    Sheets.Island.fill(0);
+    const Loose = MeasureVisibility(Surface, Index, Sheets, { Rays: 24, Resolution: Size });
+    assert.ok(Column(Loose, Half - 1) < 0.02, `without the island guard the last sealed column read ${Column(Loose, Half - 1).toFixed(4)}`);
+    assert.ok(Column(Loose, Half) > 0.98, `without the island guard the first open column read ${Column(Loose, Half).toFixed(4)}`);
+});
+
+test("the rays follow the model, not the resolution of the sheet", () =>
+{
+    const Surface = Scene();
+    const Index = new SurfaceIndex(Surface);
+    const Order = { Samples: 1, Rays: 6, Padding: 0, Wanted: ["occlusion"] };
+    const Small = SolveReadings(Surface, Index, { ...Order, Size: 256 });
+    const Large = SolveReadings(Surface, Index, { ...Order, Size: 512 });
+    assert.equal(Small.Statistics.Stride, 1);
+    assert.equal(Large.Statistics.Stride, 2);
+    assert.ok(Large.Statistics.Filled > Small.Statistics.Filled * 3.5, "four times the sheet is four times the texels");
+    const Ratio = Large.Statistics.Rays / Small.Statistics.Rays;
+    assert.ok(Ratio > 0.9 && Ratio < 1.1, `quadrupling the sheet changed the ray count by ${((Ratio - 1) * 100).toFixed(0)}%`);
+});
+
+test("what the sheet records does not move when the antialiasing does", () =>
+{
+    // The record the generators read is a pass of its own now. It used to ride along on the first antialiasing
+    // sample, which is a CORNER of the sample lattice — so changing the sample count moved every identity, every
+    // position and every normal in the record by two thirds of a texel.
+    const Surface = Scene();
+    const Index = new SurfaceIndex(Surface);
+    const Order = { Size: 96, Rays: 6, Padding: 0, Wanted: ["coverage"] };
+    const One = SolveReadings(Surface, Index, { ...Order, Samples: 1 }).Sheets;
+    const Nine = SolveReadings(Surface, Index, { ...Order, Samples: 9 }).Sheets;
+    assert.deepEqual([...One.Face], [...Nine.Face], "the triangle under a texel is the triangle under a texel");
+    assert.deepEqual([...One.Owner], [...Nine.Owner]);
+    assert.deepEqual([...One.Island], [...Nine.Island]);
+    assert.deepEqual([...One.Filled], [...Nine.Filled]);
+    for (let Texel = 0; Texel < 96 * 96; Texel += 1)
+        assert.ok(Math.abs(One.Position[Texel * 3] - Nine.Position[Texel * 3]) < 1e-6);
 });

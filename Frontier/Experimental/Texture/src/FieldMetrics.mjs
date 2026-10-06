@@ -157,7 +157,7 @@ test("every generator in the catalogue solves to a number between nought and one
     const Surface = BuildSurface("cube", 1);
     const Index = new SurfaceIndex(Surface);
     BakeOcclusion(Surface, Index, 6);
-    const Sheets = MeasureSurface(Surface, { Size: 48, Thickness: MeasureThickness(Surface, Index, 4) });
+    const Sheets = MeasureSurface(Surface, { Size: 48, Index, Rays: 8 });
     for (const Entry of GeneratorOrdering)
     {
         const Solved = SolveMask([DefaultEntry(Entry.Identifier, { Combine: "overwrite", Marks: [0, 1, 2] })], Sheets, { Size: 48 });
@@ -244,7 +244,7 @@ test("a vertex map can be promoted to a mask", () =>
     const Surface = BuildSurface("sphere", 1);
     const Index = new SurfaceIndex(Surface);
     BakeOcclusion(Surface, Index, 6);
-    const Sheets = MeasureSurface(Surface, { Size: 64, Thickness: MeasureThickness(Surface, Index, 4) });
+    const Sheets = MeasureSurface(Surface, { Size: 64, Index, Rays: 8 });
     for (const Map of VertexMaps)
     {
         const Solved = SolveMask([DefaultEntry("vertex", { Choice: Map.Identifier, Combine: "overwrite" })], Sheets, { Size: 64 });
@@ -257,7 +257,7 @@ test("the weathering recipes land where their story says they do", () =>
     const Surface = BuildSurface("cube", 2);
     const Index = new SurfaceIndex(Surface);
     BakeOcclusion(Surface, Index, 10);
-    const Sheets = MeasureSurface(Surface, { Size: 128, Thickness: MeasureThickness(Surface, Index, 6) });
+    const Sheets = MeasureSurface(Surface, { Size: 128, Index, Rays: 10 });
     const Solve = (Kind) => SolveMask([DefaultEntry(Kind, { Combine: "overwrite" })], Sheets, { Size: 128 });
 
     // Dust is on what faces up. Measured against the sheet's own record of which way each texel points.

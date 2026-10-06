@@ -127,7 +127,7 @@ import {
     NormaliseGenerator,
     VertexMaps,
 } from "./GeneratorSpecification.js";
-import { MeasureSurface, MeasureThickness, SheetSize } from "./SurfaceSolver.js";
+import { MeasureSurface, SheetSize } from "./SurfaceSolver.js";
 import {
     FilterKinds,
     IdentityKinds,
@@ -853,11 +853,11 @@ export class TexturePanel
         if (!Surface) return null;
         if (Announce) this.SetStatus("Measuring the surface", "busy");
         const Started = performance.now();
-        // Occlusion is the one reading the viewport already wanted, so it may well be here; the rest is ours.
+        // The viewport wants occlusion on the vertices for its own shading, so it may well already be here. The
+        // sheet's own occlusion is a different thing entirely and is traced from the texels below.
         if (!Surface.Occlusion) BakeOcclusion(Surface, this.Index, 16);
-        const Thickness = MeasureThickness(Surface, this.Index, 10);
         this.Measuring = true;
-        this.Sheets = MeasureSurface(Surface, { Size: this.SheetResolution, Thickness });
+        this.Sheets = MeasureSurface(Surface, { Size: this.SheetResolution, Index: this.Index, Rays: 16 });
         this.SheetEdition = this.SurfaceEdition;
         this.MeasureMilliseconds = Math.round(performance.now() - Started);
         this.SheetMarks.clear();

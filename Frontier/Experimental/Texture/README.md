@@ -183,8 +183,34 @@ is not in the list, because somebody will spend an afternoon deciding it is thei
 **One walk of the triangles answers all of them.** The expensive part of a bake is not the arithmetic, it is finding
 out which triangle a texel belongs to and with what weights — and that answer is the same whether it is being asked for
 a normal or for an occlusion. So the rasterisation happens once per antialiasing sample and every requested map is
-accumulated inside it. The per-vertex work happens before any of it and happens once, which is why doubling the sheet
-costs nothing in ray time.
+accumulated inside it.
+
+**The rays start at the texel.** Occlusion, the bent normal and thickness are all integrals over the hemisphere above a
+point, and for a long time that point was a *vertex*: the rays were fired at the corners of the triangles and the
+rasteriser smeared the answers across the sheet with its barycentrics. That is Gouraud shading an occlusion map. A
+shader ball has 14,916 vertices, which is about as much detail as a 122×122 image, so a 512² bake spent 99% of its
+texels interpolating between answers nobody had measured — and the triangles showed, in flat facets and long straight
+creases that followed the tessellation instead of the shape. No filter fixes that, because the detail was never there.
+`bake-traced.png` is the same sheet, the same ray count and the same bake time, before and after.
+
+Tracing every texel instead is the obvious answer and the wrong one: a 2048² sheet does not have a 2048² model behind
+it, and sixteen times the rays at the same unchanged shape buys sixteen times the samples of a signal that was already
+smooth. So the rays go out on a **lattice of at most 256 points across**, whatever the sheet's resolution, and the
+texels in between are reconstructed from their neighbours. The ray cost then follows the *model* rather than the
+*sheet* — a 2048² bake traces exactly as many rays as a 512² one.
+
+**The reconstruction is a joint bilateral gather, not a blur.** A traced neighbour only counts for a texel if it is on
+the same island, facing the same way and genuinely nearby in **world** space. Two texels can be touching on the sheet
+and be on opposite sides of a wall; without that test the occlusion of one leaks into the other, and leaked occlusion
+looks exactly like the facets it replaced. It denoises as it fills: each texel is averaging something like a hundred
+rays by the time it is done, which is why twenty-four rays a texel land within **0.004** of a 512-ray reference.
+
+Three things fell out of writing it down. The record the generators read — which triangle, which object, which island,
+what position and normal — used to ride along on the **first antialiasing sample**, and the first antialiasing sample
+is a *corner* of the sample lattice, about two thirds of a texel off in both axes; it has a centre pass of its own now,
+and no longer moves when the sample count changes. The ray bias is a fraction of the model rather than a fixed
+thousandth, which on a centimetre-wide model was a third of the whole thing. And the tracer itself was rewritten
+against flat typed arrays with an any-hit early return, which is what paid for the extra rays.
 
 **Antialiasing, with the filter you choose.** A bake is a point sample of a surface through a grid of texels, and a
 point sample of an edge is a staircase. One to thirty-six samples a texel, reconstructed through **box, tent, Gaussian,
@@ -199,9 +225,10 @@ Mitchell, Catmull-Rom or Blackman-Harris**. Two details make the choice worth ha
 Below nine samples the kernel is clamped to the texel whatever the filter says, because four samples spread over two
 and a half texels is not antialiasing, it is noise — with Mitchell they can all land on the curve's own zero.
 
-**Bent normals and the bevel node.** The bent normal is the average of the occlusion rays that got away: on a flat wall
-it is the normal, in a corner it leans out of it, and a point that sees nothing keeps the normal it had rather than
-normalising a zero into a NaN. The bevel normal is Blender's idea — rounding an edge in the shading without rounding it
+**Bent normals and the bevel node.** The bent normal is the average of that texel's own occlusion rays that got away —
+the same rays, so the two maps can never disagree about what the texel can see. On a flat wall it is the normal, in a
+corner it leans out of it, and a point that sees nothing keeps the normal it had rather than normalising a zero into a
+NaN. The bevel normal is Blender's idea — rounding an edge in the shading without rounding it
 in the geometry — done by averaging the normal field over a sphere of the bevel's width. It is gathered **by position**,
 because a hard corner is duplicated once per face and averaging along the index buffer would average a face with itself.
 A cylinder's cap meets its wall at ninety degrees and comes back at forty-five, which is the whole of what a bevel is.
@@ -274,6 +301,12 @@ and tile each texel belongs to, the face it came from — none of it exists unti
 tenths of a second rather than milliseconds. So it is done once, held against the surface it was taken from, and dropped
 the moment that surface changes. Dropping a generator that needs it onto a layer measures the model rather than asking;
 the section says what it found, and offers to take it again.
+
+**The live measurement traces, exactly as the bake does.** It would be a strange editor that showed you a clean
+occlusion mask in the bake dialog and a faceted one on the layer you are actually painting, so the measurement behind
+the generators fires the same per-texel rays on the same lattice — sixteen a texel at 256 across. It is not a
+concession either: it replaced a per-vertex occlusion pass and a per-vertex thickness pass, and on a shader ball it
+runs in **1.3 s against the 2.1 s** those two took between them.
 
 **The live curvature pass reads a radius, not a mesh.**
 

@@ -571,7 +571,160 @@ export class SurfaceIndex
         this.NodeLeft = [];
         this.NodeStart = [];
         this.NodeCount = [];
+        this.NodeAxis = [];
         this.Build(0, Count);
+        this.Flatten();
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // 🔴 The same tree again, flat. Raycast() is asked for a hit a few times a second — once per click — and it can
+    //    afford arrays of arrays and a vector of objects per triangle. A bake asks for millions, and at that rate the
+    //    allocations ARE the cost: the first per-texel occlusion pass spent more time in the collector than in the
+    //    arithmetic. So the nodes are re-laid as six floats in one buffer, the triangles as nine, and Blocked() below
+    //    walks them with nothing but numbers and a preallocated stack.
+    //----------------------------------------------------------------------------------------------------------------------
+    Flatten()
+    {
+        const Nodes = this.NodeLeft.length;
+        const Surface = this.Surface;
+        this.Slabs = new Float32Array(Nodes * 6);
+        this.Left = new Int32Array(Nodes);
+        this.First = new Int32Array(Nodes);
+        this.Held = new Int32Array(Nodes);
+        this.Axis = new Int32Array(Nodes);
+        for (let Node = 0; Node < Nodes; Node += 1)
+        {
+            for (let Axis = 0; Axis < 3; Axis += 1)
+            {
+                this.Slabs[Node * 6 + Axis] = this.NodeMinimum[Node][Axis];
+                this.Slabs[Node * 6 + 3 + Axis] = this.NodeMaximum[Node][Axis];
+            }
+            this.Left[Node] = this.NodeLeft[Node];
+            this.First[Node] = this.NodeStart[Node];
+            this.Held[Node] = this.NodeCount[Node];
+            this.Axis[Node] = this.NodeAxis[Node];
+        }
+        // Corner A and the two edges, so a triangle test is nine reads from one cache line rather than nine
+        // scattered lookups through the index buffer.
+        const Triangles = Surface.Indices.length / 3;
+        this.Corners = new Float32Array(Triangles * 9);
+        for (let Triangle = 0; Triangle < Triangles; Triangle += 1)
+        {
+            const A = Surface.Indices[Triangle * 3] * 3;
+            const B = Surface.Indices[Triangle * 3 + 1] * 3;
+            const C = Surface.Indices[Triangle * 3 + 2] * 3;
+            for (let Axis = 0; Axis < 3; Axis += 1)
+            {
+                this.Corners[Triangle * 9 + Axis] = Surface.Positions[A + Axis];
+                this.Corners[Triangle * 9 + 3 + Axis] = Surface.Positions[B + Axis] - Surface.Positions[A + Axis];
+                this.Corners[Triangle * 9 + 6 + Axis] = Surface.Positions[C + Axis] - Surface.Positions[A + Axis];
+            }
+        }
+        this.Visiting = new Int32Array(Math.max(64, Nodes));
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // One ray, scalars in, a distance out. `Nearest` false stops at the first thing in the way, which is all an
+    // occlusion ray ever wanted to know; true keeps looking, which is what a thickness ray needs. Infinity means the
+    // ray left without touching anything.
+    //----------------------------------------------------------------------------------------------------------------------
+    Travel(OX, OY, OZ, DX, DY, DZ, Limit, Nearest, Bias = 1e-5)
+    {
+        const Slabs = this.Slabs;
+        const Corners = this.Corners;
+        const Order = this.Order;
+        const Stack = this.Visiting;
+        const IX = 1 / (DX || 1e-9);
+        const IY = 1 / (DY || 1e-9);
+        const IZ = 1 / (DZ || 1e-9);
+        let Closest = Limit;
+        let Depth = 1;
+        Stack[0] = 0;
+        while (Depth > 0)
+        {
+            Depth -= 1;
+            const Node = Stack[Depth];
+            const At = Node * 6;
+            let Near = 0;
+            let Far = Closest;
+            let Low = (Slabs[At] - OX) * IX;
+            let High = (Slabs[At + 3] - OX) * IX;
+            if (Low > High) { const Swap = Low; Low = High; High = Swap; }
+            if (Low > Near) Near = Low;
+            if (High < Far) Far = High;
+            Low = (Slabs[At + 1] - OY) * IY;
+            High = (Slabs[At + 4] - OY) * IY;
+            if (Low > High) { const Swap = Low; Low = High; High = Swap; }
+            if (Low > Near) Near = Low;
+            if (High < Far) Far = High;
+            Low = (Slabs[At + 2] - OZ) * IZ;
+            High = (Slabs[At + 5] - OZ) * IZ;
+            if (Low > High) { const Swap = Low; Low = High; High = Swap; }
+            if (Low > Near) Near = Low;
+            if (High < Far) Far = High;
+            if (Far < Near) continue;
+
+            const Count = this.Held[Node];
+            if (Count === 0)
+            {
+                if (Depth + 2 > Stack.length) continue;
+                // Front to back. The children were split along one axis, so the sign of the ray along that axis says
+                // which of them the ray reaches first — and reaching the near one first is what lets a nearest query
+                // shrink its own limit before it ever looks at the far one.
+                const Split = this.Axis[Node];
+                const Ahead = (Split === 0 ? DX : Split === 1 ? DY : DZ) >= 0;
+                const Soonest = Ahead ? Node + 1 : this.Left[Node];
+                const Later = Ahead ? this.Left[Node] : Node + 1;
+                Stack[Depth] = Later;
+                Depth += 1;
+                Stack[Depth] = Soonest;
+                Depth += 1;
+                continue;
+            }
+            const Start = this.First[Node];
+            for (let Offset = 0; Offset < Count; Offset += 1)
+            {
+                const Triangle = Order[Start + Offset] * 9;
+                const AX = Corners[Triangle];
+                const AY = Corners[Triangle + 1];
+                const AZ = Corners[Triangle + 2];
+                const E1X = Corners[Triangle + 3];
+                const E1Y = Corners[Triangle + 4];
+                const E1Z = Corners[Triangle + 5];
+                const E2X = Corners[Triangle + 6];
+                const E2Y = Corners[Triangle + 7];
+                const E2Z = Corners[Triangle + 8];
+                const PX = DY * E2Z - DZ * E2Y;
+                const PY = DZ * E2X - DX * E2Z;
+                const PZ = DX * E2Y - DY * E2X;
+                const Determinant = E1X * PX + E1Y * PY + E1Z * PZ;
+                if (Determinant > -1e-12 && Determinant < 1e-12) continue;
+                const Inverse = 1 / Determinant;
+                const TX = OX - AX;
+                const TY = OY - AY;
+                const TZ = OZ - AZ;
+                const U = (TX * PX + TY * PY + TZ * PZ) * Inverse;
+                if (U < -1e-6 || U > 1.000001) continue;
+                const QX = TY * E1Z - TZ * E1Y;
+                const QY = TZ * E1X - TX * E1Z;
+                const QZ = TX * E1Y - TY * E1X;
+                const V = (DX * QX + DY * QY + DZ * QZ) * Inverse;
+                if (V < -1e-6 || U + V > 1.000001) continue;
+                const Distance = (E2X * QX + E2Y * QY + E2Z * QZ) * Inverse;
+                if (Distance <= Bias || Distance >= Closest) continue;
+                if (!Nearest) return Distance;
+                Closest = Distance;
+            }
+        }
+        return Closest >= Limit ? Infinity : Closest;
+    }
+
+    // Is there anything at all between here and there. 🔴 The early return in Travel is the whole point: an
+    // occlusion ray that finds a wall two millimetres away has no business walking the rest of the tree to find out
+    // whether something further off is nearer, and nine out of ten of a bake's rays are this question.
+    Blocked(OX, OY, OZ, DX, DY, DZ, Limit, Bias = 1e-5)
+    {
+        return this.Travel(OX, OY, OZ, DX, DY, DZ, Limit, false, Bias) !== Infinity;
     }
 
     Build(Start, Count)
@@ -593,6 +746,10 @@ export class SurfaceIndex
         }
         this.NodeMinimum.push(Minimum);
         this.NodeMaximum.push(Maximum);
+        this.NodeAxis.push(0);
+        // Four, measured rather than guessed. Eight to a leaf halves the node count and doubles the triangle tests,
+        // and on a shader ball under a million rays the two came out within noise of each other — so the smaller
+        // leaf stays, because the rays that matter are the ones that miss and those only pay for the walk.
         if (Count <= 4) return NodeIndex;
         let Axis = 0;
         let Widest = -1;
@@ -610,6 +767,7 @@ export class SurfaceIndex
         this.Order.set(Slice, Start);
         const Half = Count >> 1;
         this.NodeCount[NodeIndex] = 0;
+        this.NodeAxis[NodeIndex] = Axis;
         this.Build(Start, Half);
         const Right = this.Build(Start + Half, Count - Half);
         this.NodeLeft[NodeIndex] = Right;
