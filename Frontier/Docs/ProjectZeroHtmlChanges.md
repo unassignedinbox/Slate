@@ -2944,3 +2944,86 @@ fracture algorithm, SDF computation, source-property schema or Construct behavio
   density/falloff/scatter readout, explicit LIVE/PREVIEW state and physical transmission at 120 m. Display exposure remains
   readable for dense fog and while disabled, while numeric labels retain physical values.
 - Atmospheric Fog, Local Fog and non-Fog inspectors remain unchanged.
+
+## C064 — Fog card correction and shared native-editor handoff (2026-10-06)
+
+**Documentation-only checkpoint. No HTML, JavaScript, CSS, renderer or C++ source is changed by C064.**
+This section records the required correction for the later C++ editor implementation and supersedes the visual direction
+in C062 where it conflicts with C063/C064.
+
+### Current approved Height Fog structure
+
+- Preserve one authoritative Height Fog property set: **Enabled, Density, Falloff Height, Sun Scatter and Colour**.
+  Every Height Fog control and visual must read/write that same set; do not persist iframe/reference duplicates.
+- Preserve the existing card arrangement. The richer imported **Visibility** treatment replaces the generic native
+  Visibility graph. **Beam Chamber remains an inset inside Medium**, below Density, Falloff Height and Sun Scatter;
+  it must not become a standalone card.
+- Preserve the C063 interactive **Density with altitude** profile. It is an altitude/extinction profile, not a copy of
+  Atmospheric Fog's spectral-transmission treatment. Its horizontal domain is altitude (0–3 km), its vertical domain is
+  extinction density (0–0.2 m⁻¹), and dragging its authored point edits the existing Density and Falloff Height values.
+  It must not introduce probe fields, secondary density state or another falloff value.
+- Keep model readouts truthful: datum density, density at one falloff height, density at twice falloff height, physical
+  transmission at 120 m and the physical two-percent visibility range are derived outputs, not editable duplicate state.
+
+### Required background correction
+
+- Correct the **Beam Chamber** and **Density with altitude** surfaces so they belong to the same property-card family as
+  Medium and the other inspector cards. Remove the disconnected near-black/black-box appearance.
+- Use the editor's normal card surface (`#191919` in the HTML reference, or the corresponding native theme token) for
+  the card/inset background. Plot/canvas rendering should be transparent or inherit that surface rather than painting an
+  independent `#070809`/`#08090a` rectangle. Retain only subtle dividers/grid lines and the existing rounded geometry.
+- Do not add another outer card or stack multiple dark shells. The Beam Chamber remains a nested inset in Medium; Density
+  with altitude remains its existing technical card. The visual hierarchy must come from spacing, fine borders and text,
+  not a substantially darker rectangle.
+
+### Required Beam Chamber legibility and response
+
+- The current Beam Chamber is too faint. Increase the minimum authored-preview exposure, beam-core contrast and scatter-
+  cone visibility so the chamber remains immediately legible at the dense Height Fog values shown in review
+  (`Density 0.1437 m⁻¹`, `Falloff Height 904 m`, `Sun Scatter 1.33`, white colour) and across the supported range.
+- Disabled Height Fog must show an explicit **PREVIEW**, not an apparently broken blank chamber. Enabled Height Fog must
+  show **LIVE**. Preview exposure is a presentation aid only; it must not be reported as physical transmission.
+- Preserve the physical model and truthful labels. Density and Falloff Height determine extinction in the representative
+  25 m layer; Sun Scatter clearly changes cone width/spread; Colour clearly changes beam tint; Enabled changes LIVE versus
+  PREVIEW participation. The physical two-percent range marker and uncompressed 120 m transmission remain visible.
+- Separate display exposure from physical values. A bounded exposure curve may keep dense fog readable, but changing each
+  canonical property must produce an obvious visual response. Avoid a single dim line, source dot or imperceptible fade.
+- The native implementation should test at least disabled/dense, enabled/dense, enabled/thin and non-white-colour states.
+  Visual tests must verify meaningful pixel/geometry changes for all five canonical Height Fog properties, while numeric
+  assertions independently verify the physical readouts.
+
+### Apply the same corrected cards to all Fog entities
+
+- After correcting Height Fog, update **Atmospheric Fog** and **Local Fog** to use the same card components, surface tokens,
+  spacing, rounded inset treatment, status language and Beam Chamber legibility. Reuse one implementation; do not create
+  three lookalike card families or copy independent control state.
+- Keep the common ordering and ownership: header/identity, Fog Settings, Visibility, Medium with nested Beam Chamber,
+  model-specific technical visual, Colour, Wind Binding, then any existing bake/export section at the bottom.
+- Keep model semantics distinct while sharing presentation:
+  - **Height Fog:** Density + Falloff Height drive altitude extinction; Sun Scatter drives beam spread; the technical card
+    is the interactive altitude-density profile.
+  - **Atmospheric Fog:** Density + Start Distance drive distance extinction; Mie Blend drives beam spread; retain its
+    model-specific spectral-transmission technical content rather than relabelling the Height profile.
+  - **Local Fog:** Density + Coverage/bounds drive local extinction; Anisotropy drives beam spread; retain editable local
+    bounds and the model-specific bounded-volume technical content.
+- Visibility, Medium, Beam Chamber and technical visuals for each entity must consume that entity's one canonical property
+  set. Shared components must not cause Height, Atmospheric and Local Fog values to overwrite one another.
+- Preserve useful entity-specific outliner values and units, Notes behavior, existing persistence, Height's imported
+  Visibility replacement and Local Fog bounds. Do not change Clouds, Local Clouds or any non-Fog inspector as part of
+  this correction.
+
+### C++ editor conversion requirements
+
+- Port behavior and information architecture, not browser implementation details. Use native theme tokens, native widgets,
+  existing Fog owners and renderer-facing properties; do not embed the HTML iframe/state bridge in C++.
+- Treat native scene properties as authoritative and calculate graph samples/readouts on demand with bounded iteration and
+  no large automatic arrays. Dragging the altitude profile writes the native Density and Falloff Height properties through
+  the normal undo/transaction path.
+- The Beam Chamber may use exposure compression for its illustration, but physical transmission/range labels must be
+  calculated from the uncompressed model. Label authored preview versus runtime participation explicitly.
+- Verify expanded and narrow inspector widths, card background parity, clipping, scrolling and bottom-section ordering.
+  Regression coverage must confirm Atmospheric Fog and Local Fog retain their distinct calculations and Local Fog retains
+  its bounds after the shared-card migration.
+
+**C064 status:** requirements recorded for implementation. The requested card/background/rollout correction is not claimed
+as implemented by this documentation-only checkpoint.
