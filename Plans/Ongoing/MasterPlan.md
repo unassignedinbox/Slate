@@ -166,3 +166,19 @@ Executed result for this step: the loaded full-vehicle production SDF case passe
 captured, but its GI-off comparison timed out at 2,700 seconds, so the overall workflow did not pass. Independent
 loaded-image comparison gives RGB RMS 3.5992988/255 across 58,325 changed pixels. This closes the loaded-scene
 production-shader readback gap, not the interactive native-window, continuous GPU update or full-material gates.
+
+C047 (2026-10-06): the user explicitly reaffirmed **HTML-first** rather than native fracture/SDF integration or a
+browser SDF-computation prototype. Baked fracture now authors an optional per-piece SDF request at 32³/64³/128³,
+planned R16F. It persists/synchronizes/exports without changing the triangle-geometry signature. Successful browser
+bakes report geometry ready / SDF pending; exports explicitly set `Generated:false`. Concave/imported geometry
+records can author controls, but unsupported execution remains refused. No actual SDF or arbitrary mesh importer
+has been added. Square metric tiles and complete type-specific light authoring cards accompany this review; original
+native cards and pinned source depots remain intact. The new 22 lighting/SDF-authoring checks, existing 22 fracture
+browser checks, 168 geometry cases and main inspector regression pass. See C047 and its captures in
+`Frontier/Docs/ProjectZeroHtmlChanges.md`.
+
+After explicit native approval, each genuinely separated fragment needs its own SDF bounds, object-to-grid transform,
+validated signed distances, storage/budget policy and geometry-revision invalidation. GPU component labeling/flood-fill
+is conditional on a voxel connectivity workflow, not mandatory when the fracture algorithm already supplies closed,
+separate pieces. Native runtime geometry, concave decomposition, collision/support integration and complete
+serialization remain open gates; an HTML checkbox does not close them.

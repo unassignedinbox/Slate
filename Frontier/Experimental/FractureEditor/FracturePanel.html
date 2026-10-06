@@ -236,6 +236,29 @@
               <p id="mode-description">
                 Generate geometry on demand from this object's recipe.
               </p>
+              <div id="sdf-authoring" class="sdf-authoring" hidden>
+                <label class="sdf-request"
+                  ><span>Bake SDF per piece</span
+                  ><input
+                    type="checkbox"
+                    id="piece-sdf"
+                    aria-label="Bake SDF per piece"
+                /></label>
+                <label class="field" id="sdf-resolution-field" hidden
+                  ><span>Resolution per piece</span
+                  ><select
+                    id="sdf-resolution"
+                    aria-label="SDF resolution per piece"
+                  >
+                    <option value="32">32³ · R16F</option>
+                    <option value="64">64³ · R16F</option>
+                    <option value="128">128³ · R16F</option>
+                  </select></label
+                >
+                <p id="sdf-pending" hidden>
+                  Authoring setting only · SDF generation pending.
+                </p>
+              </div>
               <div class="bake-receipt">
                 <span id="bake-dot"></span>
                 <div>

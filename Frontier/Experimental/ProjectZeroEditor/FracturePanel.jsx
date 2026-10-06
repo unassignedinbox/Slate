@@ -79,14 +79,60 @@ export default function FracturePanel({ Subject, Values, Change, Expand }) {
               : "Reuse stored geometry for this object."}{" "}
             {Settings.Mode === "baked"
               ? Ready
-                ? "Browser bake ready."
+                ? Settings.PieceSdf
+                  ? "Browser geometry ready. SDF pending."
+                  : "Browser bake ready."
                 : "Open the editor to bake or refresh geometry."
               : ""}
           </p>
+          {Settings.Mode === "baked" && (
+            <div className="fracture-sdf">
+              <label className="switch-row">
+                <span>Bake SDF per piece</span>
+                <button
+                  className={"toggle " + (Settings.PieceSdf ? "on" : "")}
+                  role="switch"
+                  aria-label="Bake SDF per piece"
+                  aria-checked={Settings.PieceSdf}
+                  onClick={() => Assign("PieceSdf", !Settings.PieceSdf)}
+                >
+                  <i />
+                </button>
+              </label>
+              {Settings.PieceSdf && (
+                <>
+                  <label className="field">
+                    <span>Resolution per piece</span>
+                    <select
+                      aria-label="SDF resolution per piece"
+                      value={Settings.SdfResolution}
+                      onChange={(Event) =>
+                        Assign("SdfResolution", Number(Event.target.value))
+                      }
+                    >
+                      {[32, 64, 128].map((Resolution) => (
+                        <option key={Resolution} value={Resolution}>
+                          {Resolution}³ · R16F
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p>SDF authoring setting · generation pending.</p>
+                </>
+              )}
+            </div>
+          )}
           <button className="fracture-open" disabled={!Expand} onClick={Expand}>
             Edit {Subject.Name} fracture <span>↗</span>
           </button>
-          {!Supported && <p>Concave geometry requires decomposition.</p>}
+          {!Supported && (
+            <p>
+              Fracture settings are available.{" "}
+              {Owner.Primitive === "torus"
+                ? "Concave preview needs decomposition."
+                : "Source geometry preview is pending."}
+            </p>
+          )}
         </>
       )}
     </section>

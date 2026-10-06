@@ -2445,3 +2445,66 @@ Verification: both standalone builds succeed. The fracture browser check passes 
 absence of the removed blocks, both new graphics and their response to the two sizing controls, plus the existing
 per-object bake/replay and ownership checks. Actual 1366 × 720 captures are `Captures/FractureCard.png` and
 `Captures/QualityCard.png`; the standard desktop and narrow captures are refreshed by the same browser check.
+
+## C047 — Square statistics, complete light cards and per-piece SDF authoring
+
+2026-10-06. The user explicitly selected **HTML-first** for this pass. No native fracture, SDF generation or C++
+inspector port is included.
+
+### Statistics and Light-category cards
+
+- Sun, Wind, Height Fog and the five light types use square-cornered statistic tiles. Their metric rails use two
+  columns, wrapping rather than ellipsizing values. Card shells and slider tracks retain the existing dark theme.
+  These changes are scoped to the requested inspector types; Cloud/Moon/Folder styling is not changed.
+- Owned `LightPanel.js`/`.css` instruments replace the incomplete imported light stubs at the host adapter boundary.
+  The pinned `InspectorDepot` files remain unchanged. The original native Area Light controls remain alongside the
+  new cards, including their original intensity units; native lux and authored luminous flux are not equated.
+- Point: radial emission, intensity, estimated falloff, reach and decay. Spot: cone/pool illustration, full cone angle,
+  penumbra and aim. IES/automotive: illustrative distribution profiles, colour temperature, multiplier, field angle,
+  cut-off and range. Area/softbox: aperture, width/height, spread and two-sided emission. Tube: linear emitter,
+  length, radius, temperature and reach. All types include tint, placement and participation settings; applicable
+  types include a target, and tube includes rotation. Placement has an X/Z schematic.
+- Number-entry pills and sliders use scoped copies of the main editor's control styling. Properties use the existing
+  inspector bus and browser persistence, including locking. Blank/unfinished number entries restore the saved value
+  on blur; negative positions and cut-off can be entered. No new engine-light binding is claimed.
+- Diagrams are explicitly schematic, not photometric validation. Automotive presets do **not** load measured IES
+  data, certify ECE/SAE compliance or simulate shadows; custom IES import remains pending. Participation flags are
+  authored settings, not proof of native lighting execution.
+
+### Geometry-object fracture and requested SDFs
+
+All geometry records retain the Enable → Dynamic/Baked → expand workflow, including concave and imported scene
+entries. The main card now distinguishes unavailable imported-source previews from concave decomposition needs.
+The expanded editor continues to refuse unsupported execution rather than generating a replacement box. This is
+not an arbitrary-mesh importer or a newly implemented concave fracture solver.
+
+Baked mode adds **Bake SDF per piece** with **32³ / 64³ / 128³**, planned R16F, per-fragment resolution. The request
+and resolution persist per object, synchronize between the main and expanded editors, and travel in recipe exports.
+They are deliberately excluded from the browser geometry signature, so changing an SDF request does not invalidate
+otherwise-current triangle fragments. Existing signatures and stored geometry remain compatible.
+
+When requested, the button says **Bake geometry** and a successful triangle bake reads **Geometry ready · SDF
+pending**. Export explicitly records `Sdf.Requested`, `PerFragment`, `Resolution`, `Format` and **`Generated:false`**;
+there are no distance samples or native-compatible artifacts. The setting is not a working browser SDF bake.
+
+### Executed checks and captures
+
+- Both standalone HTML builds succeed.
+- `CheckLighting.mjs`: **22 checks**, no application errors. Covers seven light entries, live diagrams, square
+  readings, reload persistence, tint, IES presets, negative cut-off, aim, sidedness, shadow flags, locking, incomplete
+  number input, a 240px light inspector, Sun/Wind/Fog cards, all five scene primitive entries plus an imported geometry
+  record, SDF normalization, main/expanded synchronization, real triangle bake and truthful ungenerated-SDF export.
+- Existing `CheckReference.mjs` regression passes with `Errors: []`, retaining the native control inventories,
+  accepted Wind order/composite, Sun/Fog arrangement, Folder and Cloud behavior. Pinned inspector hashes match.
+- Fracture `CheckGeometry.mjs`: **168** cases plus plane/scaling/determinism/refusal checks still pass.
+  `CheckBrowser.mjs`: **22** existing per-object bake/replay/ownership/layout checks still pass. The fracture source
+  depot remains hash-pinned and unchanged.
+- Actual browser captures and the new receipt are in `ProjectZeroEditor/Screenshots/Lighting/`, including each light
+  type, environment tiles, the main SDF request and expanded geometry-ready/SDF-pending status. External Fontshare
+  requests fail in the sandbox and are separately recorded; these captures use fallback fonts.
+
+Native follow-up remains gated on approval: real geometry ownership/import/decomposition, runtime fracture and
+contacts/supports, individual fragment SDF generation with independent bounds/transforms and valid distance/sign
+samples, and native serialization/invalidation. GPU flood-fill/component labeling can identify disconnected voxel
+components when that representation is used; it is not a universal prerequisite for fracture or for baking already
+separated pieces.

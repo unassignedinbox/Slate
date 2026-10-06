@@ -87,8 +87,10 @@ function Assign(Key, NumberValue) {
   Settings = Normalize({ ...Settings, [Key]: NumberValue });
   Sequence++;
   Persist();
-  Result = null;
-  DisplaySource();
+  if (!["PieceSdf", "SdfResolution"].includes(Key)) {
+    Result = null;
+    DisplaySource();
+  }
   Refresh();
 }
 function Slider(Target, Key, Label, Minimum, Maximum, Step, Unit) {
@@ -214,10 +216,19 @@ function Refresh() {
     Settings.Mode === "dynamic"
       ? "Generate geometry on demand from this object’s recipe."
       : "Use the stored fragment geometry—no fracture generation during replay.";
+  ById("sdf-authoring").hidden = Settings.Mode !== "baked";
+  ById("piece-sdf").checked = Settings.PieceSdf;
+  ById("piece-sdf").disabled = Busy || !Settings.Enabled;
+  ById("sdf-resolution").value = Settings.SdfResolution;
+  ById("sdf-resolution").disabled = Busy || !Settings.Enabled;
+  ById("sdf-resolution-field").hidden = !Settings.PieceSdf;
+  ById("sdf-pending").hidden = !Settings.PieceSdf;
   ById("fracture").textContent =
     Settings.Mode === "dynamic" ? "Fracture object" : "Show baked fracture";
   ById("bake-status").textContent = Ready()
-    ? "Baked · ready"
+    ? Settings.PieceSdf
+      ? "Geometry ready · SDF pending"
+      : "Baked · ready"
     : Receipt
       ? "Bake is stale"
       : "Not baked";
@@ -233,7 +244,11 @@ function Refresh() {
     : Receipt
       ? "#aa795a"
       : "#555";
-  ById("bake").textContent = Receipt ? "Rebake object" : "Bake object";
+  ById("bake").textContent = Settings.PieceSdf
+    ? "Bake geometry"
+    : Receipt
+      ? "Rebake object"
+      : "Bake object";
   if (Root) {
     const Extent = Bounds(Root),
       Metrics = Result || Validate(Root);
@@ -648,6 +663,10 @@ ById("clear-bake").onclick = async () => {
     Refresh();
   }
 };
+ById("piece-sdf").onchange = (Event) =>
+  Assign("PieceSdf", Event.target.checked);
+ById("sdf-resolution").onchange = (Event) =>
+  Assign("SdfResolution", Number(Event.target.value));
 function ExportRecord() {
   return {
     Format: "Frontier.Fracture.Html.v2",
@@ -655,6 +674,13 @@ function ExportRecord() {
     Settings,
     Signature: Signature(Owner, Settings),
     Geometry: Ready() ? Receipt.Parts : null,
+    Sdf: {
+      Requested: Settings.Mode === "baked" && Settings.PieceSdf,
+      PerFragment: true,
+      Resolution: Settings.SdfResolution,
+      Format: "R16F",
+      Generated: false,
+    },
     NativeCompatible: false,
   };
 }

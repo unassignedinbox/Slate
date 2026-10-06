@@ -1,0 +1,311 @@
+/* Statistic tiles, not switches or slider tracks, have square corners. */
+#ReferenceMount:is(
+    [data-reference-kind="sun"],
+    [data-reference-kind="wind"],
+    [data-reference-kind="fog"],
+    [data-reference-kind="pointlight"],
+    [data-reference-kind="spotlight"],
+    [data-reference-kind="ieslight"],
+    [data-reference-kind="arealight"],
+    [data-reference-kind="tubelight"]
+  )
+  .mp-pill,
+#ReferenceMount:is(
+    [data-reference-kind="sun"],
+    [data-reference-kind="wind"],
+    [data-reference-kind="fog"],
+    [data-reference-kind="pointlight"],
+    [data-reference-kind="spotlight"],
+    [data-reference-kind="ieslight"],
+    [data-reference-kind="arealight"],
+    [data-reference-kind="tubelight"]
+  )
+  .mp-stat {
+  border-radius: 0;
+}
+#ReferenceMount:is(
+    [data-reference-kind="sun"],
+    [data-reference-kind="wind"],
+    [data-reference-kind="fog"],
+    [data-reference-kind="pointlight"],
+    [data-reference-kind="spotlight"],
+    [data-reference-kind="ieslight"],
+    [data-reference-kind="arealight"],
+    [data-reference-kind="tubelight"]
+  )
+  .mp-rail {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+#ReferenceMount:is(
+    [data-reference-kind="sun"],
+    [data-reference-kind="wind"],
+    [data-reference-kind="fog"],
+    [data-reference-kind="pointlight"],
+    [data-reference-kind="spotlight"],
+    [data-reference-kind="ieslight"],
+    [data-reference-kind="arealight"],
+    [data-reference-kind="tubelight"]
+  )
+  .mp-pill {
+  padding: 11px 12px;
+  min-height: 62px;
+  gap: 5px;
+  background: #191919;
+}
+#ReferenceMount:is(
+    [data-reference-kind="sun"],
+    [data-reference-kind="wind"],
+    [data-reference-kind="fog"],
+    [data-reference-kind="pointlight"],
+    [data-reference-kind="spotlight"],
+    [data-reference-kind="ieslight"],
+    [data-reference-kind="arealight"],
+    [data-reference-kind="tubelight"]
+  )
+  .mp-pill
+  .v {
+  font-size: 18px;
+  letter-spacing: -0.35px;
+  line-height: 1.25;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+#ReferenceMount:is(
+    [data-reference-kind="sun"],
+    [data-reference-kind="wind"],
+    [data-reference-kind="fog"],
+    [data-reference-kind="pointlight"],
+    [data-reference-kind="spotlight"],
+    [data-reference-kind="ieslight"],
+    [data-reference-kind="arealight"],
+    [data-reference-kind="tubelight"]
+  )
+  .mp-pill
+  .k {
+  font-size: 8px;
+  letter-spacing: 1.05px;
+}
+.lighting-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lighting-panel .lp-card {
+  padding: 17px 15px;
+  border-radius: 18px;
+  background: #191919;
+  border: 1px solid #ffffff0c;
+  min-width: 0;
+  overflow: hidden;
+}
+.lp-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+.lp-card h3 {
+  font-size: 14px;
+  font-weight: 500;
+  color: #dedede;
+  margin: 0;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.lp-card > header > span {
+  font-size: 8px;
+  color: #6e7470;
+  letter-spacing: 0.5px;
+  text-align: right;
+}
+.lp-card .lp-canvas {
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+}
+.lighting-panel .lp-preview {
+  padding: 15px 12px 12px;
+}
+.lighting-panel .lp-readings {
+  margin: 0;
+}
+.lighting-panel .field {
+  margin: 17px 0;
+}
+.lighting-panel .field > span {
+  font-size: 10px;
+  color: #999;
+  margin-bottom: 9px;
+}
+.lighting-panel input {
+  color: #ddd;
+  font: inherit;
+  box-sizing: border-box;
+}
+.lp-profiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.lp-profiles button {
+  padding: 9px 6px;
+  border: 1px solid #ffffff0a;
+  border-radius: 4px;
+  background: #242424;
+  color: #909590;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.lp-profiles button[aria-pressed="true"] {
+  background: #363e37;
+  border-color: #788578;
+  color: #eef0eb;
+}
+.lp-profiles button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.lp-colour {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+  color: #999;
+  margin-top: 17px;
+}
+.lp-colour > span {
+  flex: 1;
+}
+.lp-colour input {
+  width: 30px;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.lp-colour output {
+  font-size: 9px;
+  color: #7d827e;
+  font-variant-numeric: tabular-nums;
+}
+.lp-note {
+  font-size: 9px;
+  color: #6e756f;
+  line-height: 1.5;
+  margin: 12px 0;
+}
+.lp-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #999;
+  margin: 15px 0;
+  gap: 12px;
+}
+.lp-switch {
+  padding: 2px;
+  width: 38px;
+  height: 21px;
+  border: 0;
+  border-radius: 24px;
+  background: #3c3c3c;
+  cursor: pointer;
+  flex: none;
+}
+.lp-switch i {
+  display: block;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #ddd;
+}
+.lp-switch[aria-checked="true"] {
+  background: #32c763;
+}
+.lp-switch[aria-checked="true"] i {
+  transform: translateX(17px);
+}
+.lp-switch:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.lp-vector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 16px;
+}
+.lp-vector > span {
+  grid-column: 1/-1;
+  font-size: 10px;
+  color: #909590;
+  margin-bottom: 3px;
+}
+.lp-vector label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 5px;
+  background: #101010;
+  border: 1px solid #ffffff0a;
+  border-radius: 4px;
+  min-width: 0;
+}
+.lp-vector small {
+  font-size: 9px;
+  color: #68746b;
+}
+.lp-vector input {
+  width: 100%;
+  min-width: 0;
+  font-size: 10px !important;
+  text-align: center;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.lighting-panel input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.lighting-panel input::-webkit-inner-spin-button {
+  appearance: none;
+}
+.lighting-panel :focus-visible {
+  outline: 1px solid #a9bcad;
+  outline-offset: 3px;
+}
+/* The pinned reference also uses .field for its search box; do not inherit that pill. */
+.lighting-panel .field {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  flex: initial;
+}
+.lighting-panel .field input[type="range"] {
+  height: 26px;
+  background: linear-gradient(
+    90deg,
+    #454545 0 var(--fill, 50%),
+    #242424 var(--fill, 50%) 100%
+  );
+  border-radius: 30px;
+  padding: 0;
+}
+.lighting-panel .split-value input {
+  background: #000;
+  width: 58px;
+  font-size: 11px;
+  flex: none;
+}

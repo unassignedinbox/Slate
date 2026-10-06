@@ -16,7 +16,7 @@ export const ReferenceLights = [
   Panel: "light",
   Icon: "editor-area-light",
   Parent: "lighting",
-  Description: "Copied reference light inspector · HTML only",
+  Description: "Light authoring · HTML preview",
 }));
 
 export function EnsureReferenceLights(Rows) {

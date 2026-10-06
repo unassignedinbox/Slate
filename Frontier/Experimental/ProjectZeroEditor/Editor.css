@@ -2903,3 +2903,15 @@ img {
   line-height: 1.7;
   color: #767676;
 }
+
+.fracture-sdf {
+  border-top: 1px solid #ffffff0a;
+  padding-top: 4px;
+  margin-top: 16px;
+}
+.fracture-sdf .field > select {
+  font-size: 11px;
+  padding: 9px;
+  border-radius: 4px;
+  color: #b4bcb6;
+}

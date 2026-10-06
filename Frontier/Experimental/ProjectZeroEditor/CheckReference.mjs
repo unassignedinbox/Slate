@@ -154,13 +154,83 @@ try {
       "height-fog",
       [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
     ],
-    ["reference-rim-point", [".mp-rail", ".mp-duo", ".li-photo"]],
-    ["reference-fill-point", [".mp-rail", ".mp-duo", ".li-photo"]],
-    ["reference-key-spot", [".mp-rail", ".mp-duo", ".li-photo"]],
-    ["reference-ece-low-beam", [".mp-rail"]],
-    ["reference-softbox", [".mp-rail"]],
-    ["reference-studio-tube", [".mp-rail"]],
-    ["light", [".mp-rail"]],
+    [
+      "reference-rim-point",
+      [
+        ".lp-preview",
+        ".mp-rail",
+        ".lp-output",
+        ".lp-shape",
+        ".lp-placement",
+        ".lp-participation",
+      ],
+    ],
+    [
+      "reference-fill-point",
+      [
+        ".lp-preview",
+        ".mp-rail",
+        ".lp-output",
+        ".lp-shape",
+        ".lp-placement",
+        ".lp-participation",
+      ],
+    ],
+    [
+      "reference-key-spot",
+      [
+        ".lp-preview",
+        ".mp-rail",
+        ".lp-output",
+        ".lp-shape",
+        ".lp-placement",
+        ".lp-participation",
+      ],
+    ],
+    [
+      "reference-ece-low-beam",
+      [
+        ".lp-preview",
+        ".mp-rail",
+        ".lp-output",
+        ".lp-shape",
+        ".lp-placement",
+        ".lp-participation",
+      ],
+    ],
+    [
+      "reference-softbox",
+      [
+        ".lp-preview",
+        ".mp-rail",
+        ".lp-output",
+        ".lp-shape",
+        ".lp-placement",
+        ".lp-participation",
+      ],
+    ],
+    [
+      "reference-studio-tube",
+      [
+        ".lp-preview",
+        ".mp-rail",
+        ".lp-output",
+        ".lp-shape",
+        ".lp-placement",
+        ".lp-participation",
+      ],
+    ],
+    [
+      "light",
+      [
+        ".lp-preview",
+        ".mp-rail",
+        ".lp-output",
+        ".lp-shape",
+        ".lp-placement",
+        ".lp-participation",
+      ],
+    ],
   ]) {
     const Frame = await Open(Id);
     assert.deepEqual(

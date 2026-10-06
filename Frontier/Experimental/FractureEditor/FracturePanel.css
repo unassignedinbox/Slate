@@ -847,3 +847,25 @@ h2 {
     font-size: 9px;
   }
 }
+
+.sdf-authoring {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #ffffff0b;
+}
+.sdf-request {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #a9afab;
+}
+.sdf-request input {
+  accent-color: #9fb8a6;
+  width: 16px;
+  height: 16px;
+}
+.sdf-authoring p {
+  font-size: 9px;
+  color: #858f88;
+}

@@ -24,10 +24,6 @@
     "1024 px and 390 px layouts have no horizontal overflow",
     "Missing owners and concave torus geometry are refused without substituting a box / convex hull"
   ],
-  "FontFailures": [
-    "Failed to load resource: net::ERR_CONNECTION_CLOSED",
-    "Failed to load resource: net::ERR_CONNECTION_CLOSED",
-    "Failed to load resource: net::ERR_CONNECTION_CLOSED"
-  ],
+  "FontFailures": [],
   "Errors": []
 }

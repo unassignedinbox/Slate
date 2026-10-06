@@ -96,10 +96,34 @@ const ReferenceScript = ReferenceOutput.outputFiles[0].text.replaceAll(
 const ReferenceHash = createHash("sha256")
   .update(ReferenceScript)
   .digest("base64");
+const MainControlStyle = fs.readFileSync(
+  path.join(Folder, "Editor.css"),
+  "utf8",
+);
+const LightControlSelectors = new Set([
+  'input[type="range"]',
+  'input[type="range"]::-webkit-slider-thumb',
+  'input[type="range"]::-moz-range-thumb',
+  'input[type="range"]:disabled',
+  ".field",
+  ".field > span",
+  ".field > select",
+  ".slider-pill",
+  ".split-value",
+  ".split-value input",
+  ".split-value small",
+  ".slider-pill > input",
+]);
+const LightControls = [...MainControlStyle.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+  .filter((Match) => LightControlSelectors.has(Match[1].trim()))
+  .map((Match) => `.lighting-panel ${Match[1].trim()} {${Match[2]}}`)
+  .join("\n");
 Assets.ReferenceInspector = `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${ReferenceHash}'; style-src 'unsafe-inline'; font-src https://cdn.fontshare.com; img-src data:; base-uri 'none'">
 <style>${fs.readFileSync(path.join(Folder, "InspectorDepot/Fontshare.css"), "utf8")}
 ${ReferenceStyle}
+${LightControls}
+${fs.readFileSync(path.join(Folder, "LightPanel.css"), "utf8")}
 #ReferenceMount[data-reference-kind="wind"]{padding:0;}
 @media(max-width:320px){#ReferenceMount[data-reference-kind="wind"] .mp-rail{grid-template-columns:repeat(2,minmax(0,1fr));}}
 .wf-trace .wf-specs{gap:12px;}

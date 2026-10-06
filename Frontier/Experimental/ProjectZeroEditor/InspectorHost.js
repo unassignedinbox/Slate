@@ -1,4 +1,16 @@
 // Browser-only adapter around the pinned, unmodified reference inspector modules.
+import { LightPanel } from "./LightPanel.js";
+import { CUSTOM_PANELS } from "./InspectorDepot/panels/index.js";
+
+for (const Type of [
+  "pointlight",
+  "spotlight",
+  "ieslight",
+  "arealight",
+  "tubelight",
+])
+  CUSTOM_PANELS[Type] = { ...CUSTOM_PANELS[Type], build: LightPanel };
+
 import { buildSheet } from "./InspectorDepot/inspector.js";
 import { makeNode, flat, TYPES } from "./InspectorDepot/world.js";
 import { bus } from "./InspectorDepot/bus.js";
@@ -43,11 +55,46 @@ function Trim() {
     wind: [".wf-trace", ".mp-rail", ".mp-duo"],
     clouds: [".cl-hero", ".mp-rail", ".mp-duo", ".cl-cover", ".cl-layer"],
     fog: [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
-    pointlight: [".mp-rail", ".mp-duo", ".li-photo"],
-    spotlight: [".mp-rail", ".mp-duo", ".li-photo"],
-    ieslight: [".mp-rail"],
-    arealight: [".mp-rail"],
-    tubelight: [".mp-rail"],
+    pointlight: [
+      ".lp-preview",
+      ".mp-rail",
+      ".lp-output",
+      ".lp-shape",
+      ".lp-placement",
+      ".lp-participation",
+    ],
+    spotlight: [
+      ".lp-preview",
+      ".mp-rail",
+      ".lp-output",
+      ".lp-shape",
+      ".lp-placement",
+      ".lp-participation",
+    ],
+    ieslight: [
+      ".lp-preview",
+      ".mp-rail",
+      ".lp-output",
+      ".lp-shape",
+      ".lp-placement",
+      ".lp-participation",
+    ],
+    arealight: [
+      ".lp-preview",
+      ".mp-rail",
+      ".lp-output",
+      ".lp-shape",
+      ".lp-placement",
+      ".lp-participation",
+    ],
+    tubelight: [
+      ".lp-preview",
+      ".mp-rail",
+      ".lp-output",
+      ".lp-shape",
+      ".lp-placement",
+      ".lp-participation",
+    ],
   }[Kind];
   if (Allowed) {
     [...Custom.children].forEach((Child) => {

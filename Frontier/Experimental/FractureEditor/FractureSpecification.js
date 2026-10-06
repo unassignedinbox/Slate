@@ -8,6 +8,8 @@ export const Prefix = "Frontier.Fracture.v2:";
 export const Defaults = {
   Enabled: false,
   Mode: "dynamic",
+  PieceSdf: false,
+  SdfResolution: 64,
   Material: "concrete",
   Energy: 2500,
   Seed: 42,
@@ -40,6 +42,10 @@ export function Normalize(Input = {}) {
     ...Defaults,
     EditedAt: Number.isFinite(Input.EditedAt) ? Input.EditedAt : 0,
     Enabled: Input.Enabled === true,
+    PieceSdf: Input.PieceSdf === true,
+    SdfResolution: [32, 64, 128].includes(Number(Input.SdfResolution))
+      ? Number(Input.SdfResolution)
+      : 64,
     Mode: Input.Mode === "baked" ? "baked" : "dynamic",
     Material: Object.hasOwn(MaterialNames, Input.Material)
       ? Input.Material
@@ -71,7 +77,8 @@ export function Describe(Subject, Values = {}) {
   };
 }
 export function Signature(Owner, Settings) {
-  const { Enabled, Mode, Baked, EditedAt, ...Recipe } = Normalize(Settings);
+  const { Enabled, Mode, Baked, EditedAt, PieceSdf, SdfResolution, ...Recipe } =
+    Normalize(Settings);
   return JSON.stringify({
     Revision: 2,
     Primitive: Owner.Primitive,
