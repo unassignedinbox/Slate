@@ -2424,3 +2424,50 @@ test("a stroke hands each segment the one before it", () =>
     const Second = Projection.Begin(At(1, 1), { Time: 48 });
     assert.deepEqual(Second.Before, [0, 0, 0, 0]);
 });
+
+test("the preview frames the instrument rather than a fixed number of centimetres", async () =>
+{
+    // StrokeSetting reads four numbers off the card and touches nothing else, so it can be asked directly.
+    const { InstrumentPanel } = await import("./InstrumentPanel.js");
+    const Framing = (Key, Centimetres) =>
+    {
+        const Type = InstrumentByKey[Key];
+        const Card = Object.create(InstrumentPanel.prototype);
+        const Media = MediaFromInstrument(Type, { ...Type.Settings, Size: Centimetres });
+        Card.ReadMedia = () => Media;
+        Card.ReadWidth = () => Centimetres;
+        Card.ReadHardness = () => 0.5;
+        Card.ReadStrength = () => 0.8;
+        Card.ReadInk = () => [0.8, 0.4, 0.2];
+        const Setting = Card.StrokeSetting();
+        return {
+            ...Setting,
+            Travel: 440 * Setting.Metres,                       // how far the strip walks, in metres
+            Loads: (440 * Setting.Metres) / Media.Reach,        // and how much of a load of paint that is
+            Tooth: Media.Tooth * Setting.Metres,                // the paper, in cycles per pixel
+        };
+    };
+
+    // A small head used to be drawn as a four-pixel wire over eight loads of paint: a stub, and then an empty strip.
+    const Small = Framing("brush-round", 2);
+    assert.ok(Small.Reach >= 8, `a 2 cm sable is ${Small.Reach.toFixed(1)}px across and shows no hairs`);
+    assert.ok(Small.Loads < 4, `the strip walks ${Small.Loads.toFixed(1)} loads of paint and is empty for most of it`);
+
+    // And the head still answers the size slider, which framing by the load alone would have stopped it doing.
+    const Large = Framing("brush-round", 12);
+    assert.ok(Large.Reach > Small.Reach * 1.8, `12 cm (${Large.Reach.toFixed(1)}px) reads much like 2 cm (${Small.Reach.toFixed(1)}px)`);
+    assert.ok(Framing("brush-round", 30).Reach > Large.Reach, "the largest heads stopped growing");
+
+    // A tooth finer than the pixels is not a tooth. Where the head has the room, the paper is kept legible.
+    const Pencil = Framing("pencil-graphite", 2);
+    assert.ok(Pencil.Tooth <= 0.46, `the pencil's paper is ${Pencil.Tooth.toFixed(2)} cycles a pixel, which is noise`);
+
+    // Nothing is allowed to outgrow the strip it is drawn on, and one metre is one number across the whole preview.
+    for (const Key of ["brush-round", "brush-flat", "pencil-graphite", "pen-fineliner", "marker-broad", "dry-chalk", "wax-crayon"])
+        for (const Centimetres of [0.4, 0.6, 2, 6, 12, 30, 60])
+        {
+            const Framed = Framing(Key, Centimetres);
+            assert.ok(Framed.Reach >= 3.5 && Framed.Reach <= 28, `${Key} at ${Centimetres}cm is ${Framed.Reach}px`);
+            assert.ok(Math.abs(Framed.Metres * Framed.Reach - Math.min(Math.max(Centimetres / 100, 0.004), 0.6)) < 1e-12, `${Key} reads the strip at two scales`);
+        }
+});

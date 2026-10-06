@@ -511,6 +511,18 @@ actually belongs to, at the flow it was asked for — the same reading the ribbo
 Strokes are lighter for it, and they no longer darken where the hand slowed down. Both are the point: that is what the
 scratchpad was always showing.
 
+**A preview has to choose a zoom.** Drawing the strip at a fixed number of pixels to the centimetre is the honest
+choice and it falls apart at the small end: a 2 cm sable is four pixels of wire laid over two metres of travel, which
+is eight times further than that head carries paint, so the ribbon is a stub and then an empty strip — and the hairs
+it exists to show are thinner than a pixel. Framing the strip as one load of paint instead fixes the stub and breaks
+the size, because a medium's reach is measured from the head and the two cancel: the preview stops answering the size
+slider at all. So the zoom is the mean of the two, with the paper setting a floor under it, since a tooth finer than
+the pixels is not a tooth but noise. The head still grows with the size, every size shows the character of the mark,
+and past the choice of zoom one metre is one number across the whole preview — the tooth, the hairs and the distance
+the paint lasts are all read at the same scale.
+
+![The same three instruments at 2 cm, framed before and after](ribbon-framing.png)
+
 **An instrument is a preset.** A filbert is 0.46 hard and spaced a tenth of its width because that is what a filbert
 is, so the brush pod shows its flow, hardness, spacing and jitter greyed out rather than offering them — the card is
 where an instrument is tuned, and tuning one there marks it as altered and hands the raw sliders straight back. Size

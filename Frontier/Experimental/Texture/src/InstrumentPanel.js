@@ -25,6 +25,9 @@ const Clamp = (Value, Low, High) => Math.min(High, Math.max(Low, Value));
 
 // Paper. The test sheet is opaque on purpose: paint on glass tells you nothing about paint.
 const PadPaper = [244, 241, 234, 255];
+// How long the preview's window is, in pixels. The ribbon is drawn this wide, and the pad's scribbles are about this
+// long, so one number frames both: the two previews of one instrument have to be the same preview.
+const RibbonSpan = 440;
 
 const FloodSheet = (Sheet, Colour) =>
 {
@@ -394,16 +397,33 @@ export class InstrumentPanel
         const Media = this.Media;
         if (!Media) return null;
         const Centimetres = Clamp(this.ReadWidth(), 0.4, 60);
-        const Reach = Clamp(Centimetres * 2.4, 3.5, 40);
+        const Size = Clamp(Centimetres / 100, 0.004, 0.6);
+        // 🔴 A preview has to choose a zoom, and neither obvious choice survives the instruments.
+        //
+        //    A fixed number of pixels to the centimetre is the honest one, and it draws a 2 cm sable as a four-pixel
+        //    wire over two metres of travel — eight times further than that head carries paint. The strip is a stub
+        //    and then nothing, and the hairs it was drawn to show are thinner than a pixel.
+        //
+        //    Framing the strip as one load of paint fixes the stub and breaks the size: a medium's reach is measured
+        //    from the head, so size cancels out of the ratio and the preview stops answering the size slider at all.
+        //
+        //    So the zoom is the mean of the two. The head grows with the size and every size still shows the mark's
+        //    character, with the paper setting a floor under it: a tooth finer than the pixels is not a tooth, it is
+        //    noise. Past that the metre is one number across the whole preview, as it was before.
+        const Window = (Media.Reach * 1.15) / RibbonSpan;
+        const Loaded = Window > 0 ? Size / Window : Centimetres * 2.4;
+        const Legible = Media.Tooth > 0 ? Math.min((Size * Media.Tooth) / 0.45, 24) : 0;
+        const Paced = Math.sqrt(Clamp(Centimetres * 2.4, 2, 120) * Clamp(Loaded, 2, 120));
+        const Reach = Clamp(Math.max(Paced, Legible), 3.5, 28);
         return {
             Media,
             Reach,
             Extent: MediaExtent(Media),
             Hardness: Clamp(this.ReadHardness(), 0, 1),
             Strength: Clamp(this.ReadStrength(), 0.02, 1),
-            // The preview is drawn at the brush's real size, so a metre of surface and a pixel of preview are related
-            // by one number — and the paper's tooth comes out the size it will actually be under the brush.
-            Metres: Clamp(Centimetres / 100, 0.004, 0.6) / Reach,
+            // One metre of surface and one pixel of preview are related by this and nothing else, so the paper's
+            // tooth, the hairs of the head and the distance the paint lasts are all read at the same scale.
+            Metres: Size / Reach,
             Ink: this.ReadInk().map((Part) => Clamp(Part, 0, 1) * 255),
         };
     }
