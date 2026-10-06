@@ -1,3 +1,12 @@
+import PatternMaterialPreview from "./PatternMaterialPreview.jsx";
+import { resolvePatternBase } from "./patternSurface.js";
+import {
+  movePatternLayer,
+  resizePatternLayer,
+  rotatePatternLayer,
+  reflectPatternLayer,
+  radialPatternLayers,
+} from "./patternTransforms.js";
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   X,
@@ -16,6 +25,7 @@ import {
 } from "lucide-react";
 import {
   patternStarter,
+  patternStarterNames,
   generatePatternLayout,
   patternLayer,
   patternSVG,
@@ -28,6 +38,13 @@ import { rasterPatternSVG, patternImage } from "./patternRuntime.js";
 import { leatherSourceSVG } from "./leatherSource.js";
 import "./patternEditor.css";
 
+// The starter artwork is immutable; do not rebuild eight SVG documents on
+// every pointer move or each background library-thumbnail notification.
+const starterPreviews = patternStarterNames.map((name) => ({
+  name,
+  src: `data:image/svg+xml,${encodeURIComponent(patternSVG(patternStarter(name)))}`,
+}));
+
 function patternDownload(text, name, type) {
   const a = document.createElement("a"),
     url = URL.createObjectURL(new Blob([text], { type }));
@@ -36,10 +53,34 @@ function patternDownload(text, name, type) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-export default function PatternEditor({ initial, onClose, onApply }) {
+export default function PatternEditor({
+  initial,
+  currentMaterial,
+  currentShape,
+  onClose,
+  onApply,
+}) {
   const [doc, setDoc] = useState(() =>
-    initial ? validatePattern(initial) : patternStarter(),
+    initial
+      ? validatePattern(initial)
+      : patternStarter(
+          patternStarterNames.find(
+            (name) =>
+              name.toLowerCase().replaceAll(" ", "-") ===
+              new URLSearchParams(window.location.search).get("pattern"),
+          ),
+        ),
   );
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  const [mode, setMode] = useState(() =>
+      new URLSearchParams(window.location.search).get("view") === "3d"
+        ? "material"
+        : "design",
+    ),
+    [grid, setGrid] = useState(0),
+    [aspect, setAspect] = useState(false),
+    [ring, setRing] = useState({ count: 6, radius: 160 });
   const [generator, setGenerator] = useState({
     seed: 17,
     style: "geometric",
@@ -75,6 +116,10 @@ export default function PatternEditor({ initial, onClose, onApply }) {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [base, setBase] = useState("current");
+  const previewTarget = useMemo(
+    () => resolvePatternBase(currentMaterial, base),
+    [currentMaterial, base],
+  );
   const [past, setPast] = useState([]),
     [future, setFuture] = useState([]);
   const drag = useRef(null),
@@ -85,12 +130,16 @@ export default function PatternEditor({ initial, onClose, onApply }) {
   function commit(next) {
     try {
       const valid = validatePattern(next);
-      setPast((p) => [...p.slice(-31), doc]);
+      const previous = docRef.current;
+      docRef.current = valid;
+      setPast((p) => [...p.slice(-31), previous]);
       setFuture([]);
       setDoc(valid);
       setError("");
+      return true;
     } catch (e) {
       setError(e.message);
+      return false;
     }
   }
   const update = (v) => commit({ ...doc, ...v });
@@ -114,8 +163,14 @@ export default function PatternEditor({ initial, onClose, onApply }) {
     setSelection(0);
   };
   function add(kind, extra = {}) {
-    commit({ ...doc, layers: [...doc.layers, patternLayer(kind, extra)] });
-    setSelection(doc.layers.length);
+    const current = docRef.current;
+    if (
+      commit({
+        ...current,
+        layers: [...current.layers, patternLayer(kind, extra)],
+      })
+    )
+      setSelection(current.layers.length);
   }
   const preview = useMemo(
     () =>
@@ -197,7 +252,13 @@ export default function PatternEditor({ initial, onClose, onApply }) {
   }
   function down(e) {
     const p = pointer(e);
+    e.currentTarget.focus();
     e.currentTarget.setPointerCapture(e.pointerId);
+    const handle = e.target.getAttribute("data-handle");
+    if (handle && l) {
+      drag.current = { doc, index: selection, start: p, handle };
+      return;
+    }
     if (tool === "pen") {
       if (doc.layers.length >= 64) {
         setError("A pattern supports up to 64 layers.");
@@ -233,6 +294,21 @@ export default function PatternEditor({ initial, onClose, onApply }) {
     const d = drag.current;
     if (!d) return;
     const p = pointer(e);
+    if (d.handle) {
+      const original = d.doc.layers[d.index],
+        next =
+          d.handle === "size"
+            ? resizePatternLayer(original, p, {
+                grid,
+                aspect: aspect || e.shiftKey,
+              })
+            : rotatePatternLayer(original, d.start, p, e.shiftKey || !!grid);
+      setDoc({
+        ...d.doc,
+        layers: d.doc.layers.map((l, i) => (i === d.index ? next : l)),
+      });
+      return;
+    }
     if (tool === "pen") {
       if (d.points.length > 400) return;
       d.points.push(p);
@@ -260,15 +336,16 @@ export default function PatternEditor({ initial, onClose, onApply }) {
         ...d.doc,
         layers: d.doc.layers.map((l, i) =>
           i === d.index
-            ? { ...l, x: l.x + p[0] - d.start[0], y: l.y + p[1] - d.start[1] }
+            ? movePatternLayer(l, [p[0] - d.start[0], p[1] - d.start[1]], grid)
             : l,
         ),
       });
     }
   }
   function up() {
-    if (!drag.current) return;
-    setPast((p) => [...p.slice(-31), drag.current.doc]);
+    const completed = drag.current;
+    if (!completed) return;
+    setPast((p) => [...p.slice(-31), completed.doc]);
     setFuture([]);
     drag.current = null;
   }
@@ -302,6 +379,36 @@ export default function PatternEditor({ initial, onClose, onApply }) {
       aria-label="Pattern studio"
       onKeyDown={(e) => {
         if (e.key === "Escape") onClose();
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+          e.preventDefault();
+          e.stopPropagation();
+          patternDownload(
+            JSON.stringify(doc, null, 2),
+            "pattern.json",
+            "application/json",
+          );
+        }
+        if (e.target.matches(".pe-canvas") && l) {
+          const step = (grid || 1) * (e.shiftKey ? 10 : 1),
+            delta = {
+              ArrowLeft: [-step, 0],
+              ArrowRight: [step, 0],
+              ArrowUp: [0, -step],
+              ArrowDown: [0, step],
+            }[e.key];
+          if (delta) {
+            e.preventDefault();
+            layer(movePatternLayer(l, delta, grid));
+          }
+          if (e.key === "Delete" || e.key === "Backspace") {
+            e.preventDefault();
+            commit({
+              ...doc,
+              layers: doc.layers.filter((_, i) => i !== selection),
+            });
+            setSelection(Math.max(0, selection - 1));
+          }
+        }
         if ((e.ctrlKey || e.metaKey) && e.key === "z") {
           e.preventDefault();
           e.shiftKey ? redo() : undo();
@@ -349,13 +456,7 @@ export default function PatternEditor({ initial, onClose, onApply }) {
         <aside className="pe-library">
           <span className="pe-kicker">START WITH A STRUCTURE</span>
           <div className="pe-starters">
-            {[
-              "Diamond weave",
-              "Painted blossoms",
-              "Cube lattice",
-              "Inlaid tile",
-              "Blank",
-            ].map((name) => (
+            {starterPreviews.map(({ name, src }) => (
               <button
                 key={name}
                 onClick={() => {
@@ -363,10 +464,7 @@ export default function PatternEditor({ initial, onClose, onApply }) {
                   setSelection(0);
                 }}
               >
-                <img
-                  src={`data:image/svg+xml,${encodeURIComponent(patternSVG(patternStarter(name)))}`}
-                  alt=""
-                />
+                <img src={src} alt="" />
                 <span>{name}</span>
               </button>
             ))}
@@ -518,6 +616,23 @@ export default function PatternEditor({ initial, onClose, onApply }) {
           </div>
         </aside>
         <main className="pe-workspace">
+          <div className="pe-mode-switch" role="group" aria-label="Editor view">
+            <button
+              aria-pressed={mode === "design"}
+              onClick={() => setMode("design")}
+            >
+              Design tile
+            </button>
+            <button
+              aria-pressed={mode === "material"}
+              onClick={() => setMode("material")}
+            >
+              3D material
+            </button>
+            <span>
+              Same shader as the workspace · updates after editing pauses
+            </span>
+          </div>
           <div className="pe-canvas-heading">
             <div>
               <span className="pe-kicker">SEAMLESS TILE / 512 UNITS</span>
@@ -527,7 +642,10 @@ export default function PatternEditor({ initial, onClose, onApply }) {
                 onChange={(e) => update({ name: e.target.value })}
               />
             </div>
-            <div className="pe-tools">
+            <div
+              className="pe-tools"
+              style={{ visibility: mode === "design" ? "visible" : "hidden" }}
+            >
               <button
                 className={tool === "move" ? "selected" : ""}
                 onClick={() => setTool("move")}
@@ -544,52 +662,143 @@ export default function PatternEditor({ initial, onClose, onApply }) {
               </button>
             </div>
           </div>
-          <div className="pe-canvas-wrap">
-            <svg
-              className="pe-canvas"
-              viewBox="0 0 512 512"
-              aria-label="Pattern design canvas"
-              onPointerDown={down}
-              onPointerMove={motion}
-              onPointerUp={up}
-              onPointerCancel={up}
-            >
-              <rect
-                width="512"
-                height="512"
-                fill={doc.background}
-                opacity={doc.backgroundOpacity}
-              />
-              {doc.layers.map(
-                (p, i) =>
-                  p.visible && (
-                    <g
-                      key={i}
-                      data-layer={i}
-                      opacity={p.opacity}
-                      transform={`translate(${p.x} ${p.y}) rotate(${p.rotation}) scale(${p.width / 100} ${p.height / 100}) translate(-50 -50)`}
-                      dangerouslySetInnerHTML={{
-                        __html: patternShape(p, p.color),
-                      }}
-                    />
-                  ),
-              )}
-              {l && (
-                <rect
-                  pointerEvents="none"
-                  x={l.x - l.width / 2}
-                  y={l.y - l.height / 2}
-                  width={l.width}
-                  height={l.height}
-                  fill="none"
-                  stroke="#aee3a5"
-                  strokeWidth="1.5"
-                  strokeDasharray="5 4"
-                  transform={`rotate(${l.rotation} ${l.x} ${l.y})`}
-                />
-              )}
-            </svg>
-          </div>
+          {mode === "material" ? (
+            <PatternMaterialPreview
+              doc={doc}
+              target={previewTarget}
+              initialShape={base === "current" ? currentShape : undefined}
+            />
+          ) : (
+            <>
+              <div className="pe-layout-tools">
+                <label>
+                  Snap
+                  <select
+                    aria-label="Grid snapping"
+                    value={grid}
+                    onChange={(e) => setGrid(+e.target.value)}
+                  >
+                    <option value="0">Off</option>
+                    <option value="8">8 units</option>
+                    <option value="16">16 units</option>
+                    <option value="32">32 units</option>
+                  </select>
+                </label>
+                <label className="pe-check">
+                  <input
+                    type="checkbox"
+                    checked={aspect}
+                    onChange={(e) => setAspect(e.target.checked)}
+                  />{" "}
+                  Keep aspect ratio
+                </label>
+                <small>
+                  Drag corner to resize · circle to rotate · Shift constrains
+                </small>
+              </div>
+              <div className="pe-canvas-wrap">
+                <svg
+                  className="pe-canvas"
+                  tabIndex={0}
+                  role="group"
+                  viewBox="0 0 512 512"
+                  aria-label="Pattern design canvas"
+                  onPointerDown={down}
+                  onPointerMove={motion}
+                  onPointerUp={up}
+                  onPointerCancel={up}
+                >
+                  <rect
+                    width="512"
+                    height="512"
+                    fill={doc.background}
+                    opacity={doc.backgroundOpacity}
+                  />
+                  {grid > 0 && (
+                    <>
+                      <defs>
+                        <pattern
+                          id="editor-grid"
+                          width={grid}
+                          height={grid}
+                          patternUnits="userSpaceOnUse"
+                        >
+                          <path
+                            d={`M${grid} 0H0V${grid}`}
+                            fill="none"
+                            stroke="#667c73"
+                            strokeWidth=".5"
+                            opacity=".4"
+                          />
+                        </pattern>
+                      </defs>
+                      <rect
+                        width="512"
+                        height="512"
+                        fill="url(#editor-grid)"
+                        pointerEvents="none"
+                      />
+                    </>
+                  )}
+                  {doc.layers.map(
+                    (p, i) =>
+                      p.visible && (
+                        <g
+                          key={i}
+                          data-layer={i}
+                          opacity={p.opacity}
+                          transform={`translate(${p.x} ${p.y}) rotate(${p.rotation}) scale(${(p.width / 100) * (p.flipX ? -1 : 1)} ${(p.height / 100) * (p.flipY ? -1 : 1)}) translate(-50 -50)`}
+                          dangerouslySetInnerHTML={{
+                            __html: patternShape(p, p.color),
+                          }}
+                        />
+                      ),
+                  )}
+                  {l && (
+                    <g transform={`rotate(${l.rotation} ${l.x} ${l.y})`}>
+                      <rect
+                        pointerEvents="none"
+                        x={l.x - l.width / 2}
+                        y={l.y - l.height / 2}
+                        width={l.width}
+                        height={l.height}
+                        fill="none"
+                        stroke="#aee3a5"
+                        strokeWidth="1.5"
+                        strokeDasharray="5 4"
+                      />
+                      <path
+                        pointerEvents="none"
+                        d={`M${l.x} ${l.y - l.height / 2}v-20`}
+                        stroke="#aee3a5"
+                      />
+                      <circle
+                        data-handle="rotate"
+                        aria-label="Rotate selected motif"
+                        cx={l.x}
+                        cy={l.y - l.height / 2 - 24}
+                        r="6"
+                        fill="#c4e2b5"
+                        stroke="#23372a"
+                        style={{ cursor: "grab" }}
+                      />
+                      <rect
+                        data-handle="size"
+                        aria-label="Resize selected motif"
+                        x={l.x + l.width / 2 - 6}
+                        y={l.y + l.height / 2 - 6}
+                        width="12"
+                        height="12"
+                        fill="#c4e2b5"
+                        stroke="#23372a"
+                        style={{ cursor: "nwse-resize" }}
+                      />
+                    </g>
+                  )}
+                </svg>
+              </div>
+            </>
+          )}
           <div className="pe-repeat-heading">
             <span>02 — Repeat inspection</span>
             <small>
@@ -804,6 +1013,78 @@ export default function PatternEditor({ initial, onClose, onApply }) {
                   />
                 </label>
               )}
+              <div className="pe-section">
+                <h3>Arrange & reflect</h3>
+                <div className="pe-shapes">
+                  <button onClick={() => layer({ x: 256 })}>Center X</button>
+                  <button onClick={() => layer({ y: 256 })}>Center Y</button>
+                  <button
+                    aria-pressed={l.flipX}
+                    onClick={() => layer({ flipX: !l.flipX })}
+                  >
+                    Flip X
+                  </button>
+                  <button
+                    aria-pressed={l.flipY}
+                    onClick={() => layer({ flipY: !l.flipY })}
+                  >
+                    Flip Y
+                  </button>
+                  <button
+                    onClick={() => add(l.kind, reflectPatternLayer(l, "x"))}
+                  >
+                    Reflect copy X
+                  </button>
+                  <button
+                    onClick={() => add(l.kind, reflectPatternLayer(l, "y"))}
+                  >
+                    Reflect copy Y
+                  </button>
+                </div>
+                <div className="pe-grid">
+                  <label>
+                    Copies
+                    <input
+                      aria-label="Radial copies"
+                      type="number"
+                      min="2"
+                      max="12"
+                      value={ring.count}
+                      onChange={(e) =>
+                        setRing({ ...ring, count: +e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Radius
+                    <input
+                      aria-label="Radial radius"
+                      type="number"
+                      min="0"
+                      max="256"
+                      value={ring.radius}
+                      onChange={(e) =>
+                        setRing({ ...ring, radius: +e.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+                <button
+                  className="pe-wide"
+                  onClick={() =>
+                    commit({
+                      ...doc,
+                      layers: doc.layers.flatMap((p, i) =>
+                        i === selection
+                          ? radialPatternLayers(p, ring.count, ring.radius)
+                          : [p],
+                      ),
+                    })
+                  }
+                >
+                  Arrange in a ring
+                </button>
+              </div>
               <label className="pe-check">
                 <input
                   type="checkbox"

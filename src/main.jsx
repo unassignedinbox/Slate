@@ -1,3 +1,8 @@
+import {
+  resolvePatternBase,
+  composePatternMaterial,
+  patternPreviewShape,
+} from "./patternSurface.js";
 import patternImportSource from "./patternImport.js?raw";
 import PatternEditor from "./PatternEditor.jsx";
 import patternDocumentSource from "./patternDocument.js?raw";
@@ -327,43 +332,15 @@ function App() {
       {modal === "pattern" && (
         <PatternEditor
           initial={params.pattern}
+          currentMaterial={params}
+          currentShape={shape}
           onClose={() => setModal(null)}
           onApply={(pattern, base) => {
-            const target =
-              base === "pottery"
-                ? normalizeMaterial({
-                    id: "glazed-pottery",
-                    name: "Glazed Porcelain",
-                    category: "Ceramic",
-                    label: "CONTINUOUS CERAMIC GLAZE",
-                    type: 22,
-                    recipeId: "pottery",
-                    potterySurface: true,
-                    color: "#eee9df",
-                    roughness: 0.18,
-                    coat: 0.85,
-                    coatRoughness: 0.12,
-                  })
-                : base === "current"
-                  ? params
-                  : materials.find((m) => m.id === base) || params;
-            setParams({
-              ...target,
-              pattern,
-              name:
-                pattern.name + " · " + (target.patternBaseName || target.name),
-              patternBaseName: target.patternBaseName || target.name,
-              id: target.id,
-            });
+            const target = resolvePatternBase(params, base);
+            setParams(composePatternMaterial(target, pattern));
             if (base !== "current") {
               setSelected(target);
-              setShape(
-                base === "pottery"
-                  ? "Teapot"
-                  : target.category === "Fabric"
-                    ? "Draped cloth"
-                    : "Panel",
-              );
+              setShape(patternPreviewShape(target));
             }
             setModal(null);
             notify("Pattern applied. Save as a preset to keep this material.");
@@ -449,7 +426,7 @@ function App() {
           <span>Automotive essentials</span>
           <ChevronRight size={13} />
           <strong>Material explorer</strong>
-          <span className="version-badge">v7.0</span>
+          <span className="version-badge">v7.1</span>
         </div>
         <div className="project-actions">
           <span className="saved-state">
@@ -609,7 +586,7 @@ function App() {
             params={params}
             shape={shape}
             environment={environment}
-            rotate={rotate}
+            rotate={modal !== "pattern" && rotate}
             wireframe={wireframe}
             resetToken={resetToken}
             zoom={zoom}

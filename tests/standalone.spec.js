@@ -321,6 +321,18 @@ test("standalone page renders, edits and exports without external assets", async
   await page
     .getByRole("button", { name: "Assign this finish to all motifs" })
     .click();
+  await page.getByRole("button", { name: "3D material", exact: true }).click();
+  const editorPreview = page.getByRole("region", {
+    name: "Pattern material preview",
+  });
+  await expect(
+    editorPreview.getByRole("status", { name: "Material preview status" }),
+  ).toContainText("Live material · ready");
+  await expect(editorPreview.locator("canvas")).toHaveAttribute(
+    "data-material-ready",
+    "true",
+  );
+  await page.getByLabel("Pattern preview zoom").fill("160");
   await page
     .getByRole("button", { name: "Apply to material", exact: false })
     .click();
@@ -348,6 +360,29 @@ test("standalone page renders, edits and exports without external assets", async
     await page
       .getByRole("button", { name: "Pattern studio", exact: true })
       .click();
+    await page
+      .getByRole("button", { name: "Medallion rug", exact: true })
+      .click();
+    await page
+      .getByLabel("Pattern base material")
+      .selectOption("natural-cotton");
+    await page
+      .getByRole("button", { name: "3D material", exact: true })
+      .click();
+    await expect(
+      page.getByRole("status", { name: "Material preview status" }),
+    ).toContainText("Live material · ready");
+    await page.getByLabel("Pattern preview object").selectOption("Panel");
+    await expect(
+      page.getByRole("status", { name: "Material preview status" }),
+    ).toContainText("Live material · ready");
+    await page.getByLabel("Pattern preview zoom").fill("220");
+    await page.evaluate(
+      () =>
+        new Promise((r) =>
+          requestAnimationFrame(() => requestAnimationFrame(r)),
+        ),
+    );
     await page.screenshot({ path: ".playwright/final-pattern-editor.png" });
   }
   expect(unexpectedRequests).toEqual([]);

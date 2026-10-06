@@ -1,11 +1,25 @@
-# Pattern studio — v7
+# Pattern studio — v7.1
 
 This is a **hybrid vector/procedural material workflow**, not the previous zero-input-map claim. Existing paint, scratch and botanical families remain analytic. All five leather presets now share one generated SVG height atlas; pattern documents can contain vector shapes, sanitized SVG groups and embedded user images. No reference photographs are shipped as leather maps.
+
+## New in v7.1: compose and inspect together
+
+- **Design tile / 3D material** switches the center pane between the vector artboard and the actual workspace shader. Color, relief and finish edits update the material after a 450 ms editing pause. This is a second live renderer, not a screenshot or a different approximation.
+- Preview on a panel, draped cloth, leather swatch, shader ball, cube, sphere or teapot. Lighting, orbit, a 60–800% zoom slider, Fit and Inspect detail are available. Preview view settings are local; **Apply to material** commits the material, not the inspection camera.
+- **Banded geometry**, **Medallion rug** and **Graduated lattice** add original editable compositions to the existing four starters. The rug uses layered wool relief; it still does not generate individual strand geometry.
+- On the design artboard, drag the corner handle to resize and the round handle to rotate. Shift constrains resizing to the original aspect ratio or rotation to 15-degree steps. **Keep aspect ratio** applies to corner dragging; exact numeric dimensions can still be entered independently.
+- Optional **8 / 16 / 32-unit snapping** applies to dragging and keyboard nudges. Focus the artboard and use arrow keys; Shift moves ten steps. Delete removes the selected motif. Ctrl/Cmd+S exports the pattern document without triggering the underlying workspace's save modal.
+- Center, flip, create reflected copies, or replace a selected motif with **2–12 radial copies**. All operations retain finish assignments and obey the existing 64-layer document limit. Undo/redo includes pointer gestures.
+- Reflection now handles rotated motifs correctly in mirrored repeats. Horizontal/vertical flip flags travel through JSON, SVG, live rendering and map baking.
+- Source rasters are reused when changing only naming, overall rotation, mapping or repeat count. Static starter thumbnails are generated once, and the underlying workspace's auto-rotation pauses while the editor is open.
+- Fixed a drag/freehand completion race that could read a cleared drag reference and blank the editor. Late image imports now append to the current document instead of an earlier edit snapshot.
+
+A shareable example uses `?material=natural-cotton&studio=pattern&pattern=medallion-rug&view=3d`. Starter names use lower-case hyphenated slugs; unknown names fall back to Diamond weave. This is not an arbitrary document encoded into the URL.
 
 ## Design a surface
 
 1. Open **Pattern studio** in the top navigation. `?studio=pattern` opens it directly.
-2. Choose **Diamond weave**, **Painted blossoms**, **Cube lattice**, **Inlaid tile**, or a blank document. These are original geometric/floral starters inspired by the supplied references, not reproductions of a named cultural textile tradition.
+2. Choose **Diamond weave**, **Painted blossoms**, **Cube lattice**, **Inlaid tile**, **Banded geometry**, **Medallion rug**, **Graduated lattice**, or a blank document. These are original geometric/floral starters inspired by the supplied references, not reproductions of a named cultural textile tradition.
 3. Alternatively, choose a generator style, seed and motif count, then **Generate pattern**. The generated layout is editable like a hand-built one.
 4. Add rectangles, ellipses, diamonds, triangles, flowers or SVG paths. Drag to position, draw a freehand path, or edit coordinates, size, rotation, opacity and path commands. Duplicate, reorder, hide and delete motifs; undo/redo retains up to 32 edits.
 5. Use the repeat inspection strip to check **straight**, **half-drop** or **mirrored** layouts. Motifs crossing boundaries are wrapped, rather than cropped and restarted. Half-drop exports a 1024 × 512 supertile; mirror exports 1024 × 1024. The canonical design tile is 512 × 512 units.

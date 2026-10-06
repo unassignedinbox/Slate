@@ -109,7 +109,15 @@ export function attachSurfaceSources(material, p) {
     resources.push(hide);
   }
   if (doc) {
-    pattern = acquirePatternTextures(JSON.stringify(doc), async () => {
+    // Naming, orientation, repeat count and mapping are metadata/uniforms, not
+    // raster content. Reuse the same source maps while these are edited live.
+    const sourceKey = JSON.stringify({
+      background: doc.background,
+      backgroundOpacity: doc.backgroundOpacity,
+      repeat: doc.repeat,
+      layers: doc.layers.map(({ name, id, ...surface }) => surface),
+    });
+    pattern = acquirePatternTextures(sourceKey, async () => {
       const [w, h] = patternDimensions(doc),
         scale = 2;
       const [color, params, finish] = await Promise.all(
