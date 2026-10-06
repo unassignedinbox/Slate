@@ -13,9 +13,9 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-**[Open v6.3 — Cognac Leather](https://raw.githack.com/unassignedinbox/Slate/c81e5f0ffeae19ff0cae5439b1c801244f46db03/site/index.html?material=cognac-leather)** · **[Crocodile Belly Leather](https://raw.githack.com/unassignedinbox/Slate/c81e5f0ffeae19ff0cae5439b1c801244f46db03/site/index.html?material=crocodile-belly-leather)**
+**[Open v7 — Pattern Studio](https://raw.githack.com/unassignedinbox/Slate/6a8ab668e1a4b12485f854796f8616fb157ec5aa/site/index.html?material=natural-cotton&studio=pattern)** · **[Leather](https://raw.githack.com/unassignedinbox/Slate/6a8ab668e1a4b12485f854796f8616fb157ec5aa/site/index.html?material=cognac-leather)**
 
-Choose **Open the page** if GitHack shows its notice. Eleven targeted leather, scratch, botanical, bounds/shader and standalone tests passed. Publication verification matched all 1,553,707 bytes (SHA-256 `0d9eb04a7410ef599ce67a0e5b55543d14b2238b549ce790a506092c4d6606d8`). This verifies the GitHub artifact, not hosted-browser execution or visual realism. Run `npm run verify:published` to repeat verification.
+Choose **Open the page** if GitHack shows its notice. Thirteen targeted pattern, leather, scratch, botanical, bounds and standalone tests passed. Publication verification matched all 1,634,053 bytes (SHA-256 `bb386bb2cd8e504c4a66184841684b02f803afbf751faabfe43985ab2b40ebf0`). This verifies the GitHub artifact, not hosted-browser execution or visual realism. Run `npm run verify:published` to repeat verification.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
