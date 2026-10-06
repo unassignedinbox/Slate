@@ -526,10 +526,10 @@ the paint lasts are all read at the same scale.
 **An instrument is a preset.** A filbert is 0.46 hard and spaced a tenth of its width because that is what a filbert
 is, so the brush pod shows its flow, hardness, spacing and jitter greyed out rather than offering them — the card is
 where an instrument is tuned, and tuning one there marks it as altered and hands the raw sliders straight back. Size
-and colour stay live whatever is in hand, and a size set with the brackets, the wheel or the radial drag is written
-back into the instrument, so tuning anything else afterwards cannot snap the head back to the size the library shipped
-and the medium's reach — which is measured from the head — follows the hand instead of belonging to a brush nobody is
-holding. Picking an instrument up re-reads the pod as well as the card: they are one brush seen twice, and a pod left
+and colour stay live whatever is in hand, and the size has one door however it was asked for — the brackets, a wheel
+with Alt down, the pod, the card, or the hand holding S and dragging. All of them write it back into the instrument,
+so tuning anything else afterwards cannot snap the head back to the size the library shipped, and the medium's reach
+— which is measured from the head — follows the hand instead of belonging to a brush nobody is holding. Picking an instrument up re-reads the pod as well as the card: they are one brush seen twice, and a pod left
 showing the last instrument's numbers is a pod that pushes them back the moment anything is touched.
 
 **Objects and UDIM tiles.** A document holds a scene, not a single mesh. The outliner above the stack lists every

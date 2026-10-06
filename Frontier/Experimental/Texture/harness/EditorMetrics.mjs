@@ -461,6 +461,17 @@ await Settle(Window, 2);
 Check("the size survives the instrument being tuned", Math.abs(Panel.Projection.Brush.Radius - 0.05) < 1e-9, String(Panel.Projection.Brush.Radius));
 Check("and the medium's reach is measured from the head in hand", Panel.Projection.Brush.Media.Reach < 1.3, String(Panel.Projection.Brush.Media.Reach));
 
+// The pod's own size slider is the same door: it used to configure the brush straight, leaving the instrument and
+// its medium behind.
+const Head = Slider("Radius");
+Head.value = "0.03";
+Head.dispatchEvent(new Window.Event("input", { bubbles: true }));
+await Settle(Window, 2);
+Check("the pod's size reaches the instrument", Math.abs(Panel.Instrument.Settings.Size - 3) < 1e-9, String(Panel.Instrument.Settings.Size));
+Check("and the brush with it", Math.abs(Panel.Projection.Brush.Radius - 0.03) < 1e-9, String(Panel.Projection.Brush.Radius));
+Panel.TuneInstrument("Wetness", 40);
+Check("so tuning the instrument cannot take it back", Math.abs(Panel.Projection.Brush.Radius - 0.03) < 1e-9, String(Panel.Projection.Brush.Radius));
+
 // Altering the medium by hand is what hands the raw sliders back.
 Panel.SetMedia({ Bristles: 30 });
 await Settle(Window, 2);

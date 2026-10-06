@@ -5044,7 +5044,11 @@ export class TexturePanel
             {
                 const Key = Control.dataset.brush;
                 const Value = Number(Event.target.value);
-                this.Projection.Configure({ [Key]: Value });
+                // 🔴 The size has one door and this is not it. Configured straight onto the brush it never reached
+                //    the instrument, so the card went on showing the size the library shipped and the medium went on
+                //    reaching as far as that head would have.
+                if (Key === "Radius") this.SetRadius(Value);
+                else this.Projection.Configure({ [Key]: Value });
                 const Display = Select(`[data-brush-readout="${Key}"]`);
                 if (Display) Display.textContent = BrushReadout(Key, Value);
                 this.SyncPodSummary();
