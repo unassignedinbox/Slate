@@ -1,4 +1,4 @@
-# Alloy 06 — 100+ Procedural Materials
+# Alloy 06.1 — 100+ Procedural Materials
 
 A real-time procedural material editor built with React, Vite and Three.js. All surface detail is procedural: **no bitmap material maps, external HDRIs, or downloaded 3D assets**. The charcoal interface uses rounded panels and desaturated accents. Fonts are self-hosted.
 
@@ -13,9 +13,7 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-**[Launch Alloy 06 — Scratches study](https://raw.githack.com/unassignedinbox/Slate/d98e14d7ada53f447891b66a16fe3d4b09ec9fe0/site/index.html?material=scratches)**
-
-Choose **Open the page** if GitHack shows its external-content notice. This immutable link opens the isolated scratch study directly. The same page includes the full 100+ library. The development suite passed 13 tests; the standalone test passed with all 114 unique previews, module export and an actual bake ZIP. Publication verification matched the exact 1,502,612-byte GitHub artifact (SHA-256 `ee1255ff72db67ad8fb33f3034e3dac7b14e9edee92b4208dc6b7fd6e02e54ff`); this is not a claim of hosted-browser testing.
+Run `npm run verify:published` for the current immutable GitHack URL. Append `?material=crocodile-belly-leather` or `?material=broadleaf-green` to open a study directly. Choose **Open the page** if GitHack shows its external-content notice.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
@@ -35,7 +33,7 @@ Use the SHA containing the built page, not the source-only initial commit. An im
 
 ## Material-aware inspector
 
-**114 procedural presets** across 16 categories. The library is open-ended, not a count target. Presets share purpose-built shader families; this is not a claim of 100 unrelated BRDF models or measured industrial finishes.
+**123 procedural presets** across 16 categories. The library is open-ended, not a count target. Presets share purpose-built shader families; this is not a claim of 100 unrelated BRDF models or measured industrial finishes.
 
 | Category                 |     Count | Examples                                                                                                                                                     |
 | ------------------------ | --------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -43,7 +41,7 @@ Use the SHA containing the built page, not the source-only initial commit. An im
 | Metal                    |        23 | Aluminium, 24K/18K/14K gold, rose/white gold, copper, maraging/cast/stainless steel, iron/rust, chromium, bronze, brass, nickel, titanium, zinc, silver, tin |
 | Plastic                  |        17 | PVC-U/PVC-P, PP, HDPE/LDPE, PET/PBT, PTFE, POM, PA6, glass-filled PA66, PC, PMMA, PEEK; three existing polymers                                              |
 | Fabric                   |        19 | Nine weave constructions, indigo/raw/washed/black denim, two jersey knits, cotton, linen, wool, silk, satin, suede, velvet, carbon composite                 |
-| Leather                  |         4 | Cognac, nappa and two bull-grain hides                                                                                                                       |
+| Leather                  |         5 | Nappa, cognac, bull-grain hides and crocodile-style belly leather                                                                                            |
 | Clay                     |         4 | Terracotta, wet potter’s clay, kaolin, sculpting clay                                                                                                        |
 | Wax                      |         4 | Beeswax, paraffin, soy, sealing wax                                                                                                                          |
 | Skin                     |         6 | Pigment variants with pores, undertone and bounded wrap-scattering controls                                                                                  |
@@ -52,7 +50,7 @@ Use the SHA containing the built page, not the source-only initial commit. An im
 | Ceramic / Rubber / Glass | 3 / 1 / 1 | Carbon ceramic, two glazed-tile constructions, performance rubber, crystal glass                                                                             |
 | Stone                    |         4 | Two granites and two marbles                                                                                                                                 |
 | Wall                     |         3 | Cast concrete, board-form concrete, lime stucco                                                                                                              |
-| Nature                   |         3 | Green/autumn leaf cards and meadow grass blades                                                                                                              |
+| Nature                   |        11 | Mesh leaves, grass blade, rose/lily petals, apple/citrus/berry skins, cactus epidermis and plant stem                                                        |
 
 **Interpretation:** “PPT” was treated as PP (polypropylene); PET and PBT are also included. Alloy/polymer grades and skin/wax optics are representative visual approximations, not certified spectral or mechanical data. Gold variants, steels, bronze and brass are correctly treated as alloys rather than all being described as pure metals.
 
@@ -103,11 +101,11 @@ All three foundational constructions—**plain, twill and satin**—plus basket,
 - **Porcelain / zellige tiles:** glazed faces, rounded edge relief and recessed matte grout. Grout changes base color, height, roughness and clearcoat coverage together.
 - **Granite / marble:** irregular quartz/feldspar/mica grain fields; multiscale warped veins. These are procedural stone studies, not scans of named commercial slabs.
 - **Concrete / stucco:** cement mottling, aggregate, air voids, board-form marks and raised plaster grain.
-- **Leaves / grass:** UV-card silhouettes with generated coverage, leaf venation, tapered curved blades and normal relief. No alpha texture input. Preview cutout shadows are disabled rather than drawing incorrect rectangular shadows. No plant geometry or wind simulation is implied.
+- **Leaves / grass:** now full opaque UV surfaces for existing meshes, with shaped mesh previews. The older cutout kernels remain only for saved v6 type-27/28 recipes; the current catalogue no longer uses them.
 - **LED matrix:** recessed housings, rounded lens domes, emitter dies, small bond wires, contact pads and PCB traces. The contacts have their own metalness; lenses have their own roughness/coat response. Emission stays separate from the hardware.
 - **Pure metals:** only **Tooling scale** was removed from the uncoated-metal inspector. Metal polish and surface tooth are unchanged; internal scale values remain compatible with existing presets.
 
-### Scratches: isolated for approval
+### Scratches: dedicated study
 
 **Scratches** is a dedicated material—not a toggle applied to other metals. It searches neighboring seeded cells for finite line/arc segments, allowing cuts to cross cell boundaries. Occupancy, length, width, depth, direction and curvature vary independently. Tapered endpoints prevent endless stripes; a negative groove profile and small raised lips alter surface normals, while roughness broadens inside the cut. Derivative-aware filtering reduces subpixel sparkle. The density-zero setting is an exact bypass.
 
@@ -115,13 +113,35 @@ Use **Panel** for the clearest assessment, orbit the light reflection, then use 
 
 Shader variants now compile the material-family ID as a constant, so drivers can eliminate unrelated kernels. Programs are retained through the thumbnail batch for reuse. Progress still reports real completed previews, not a fictitious GPU percentage.
 
+## Leather and mesh-ready botany (v6.1)
+
+**Regular leather no longer uses outlined cellular islands as its main grain.** It combines warped, overlapping folds, intermittent cross-creases and fine pores, retaining the existing patina and physical finish controls. **Crocodile Belly Leather** is a separate surface: variable-size rounded scutes, wandering row boundaries, softer creased joints and a second scale of hide grain. Both are analytic approximations, not scans or reproductions of a particular hide.
+
+### Mapping onto your existing plant geometry
+
+| Surface                          | Required UV convention                            | Detail                                                                                                |
+| -------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Leaf                             | U across width, midrib at U=.5; V=0 stem, V=1 tip | Tapered midrib, asymmetric secondary veins, tertiary detail, subtle epidermal cells and pigment aging |
+| Grass blade                      | U across **one blade**, V root to tip             | Parallel ribs, central ridge, tip gradient and fine cells                                             |
+| Rose / lily petal                | U across **one petal**, V throat to tip           | Two-color gradient, delicate striations, microscopic cells, optional basal speckling                  |
+| Apple / orange / strawberry skin | U wraps body, V pole to pole                      | Blush/lenticels, recessed citrus oil glands, or seeds in recessed pockets                             |
+| Cactus / stem                    | U around body, V along growth axis                | Waxy cells and areoles, or longitudinal fibers, cork maturity and lenticels                           |
+
+The catalogue's plant materials and their six baked maps are **full opaque surfaces—not silhouettes, cutouts, packed atlases or collections of stamped leaves**. Map one UV island per organ into the unit square, or reuse that square for repeated organs. Arbitrary existing UV layouts will not automatically align a midrib or petal base. Fruit pore sampling wraps around U; this does not imply every material tiles in both axes. Cactus **Rib columns** should match your actual mesh. The preview cactus adjusts its real rib geometry to that control, but the material export does not deform your model or generate spines.
+
+Choose **Leaf**, **Grass blade**, **Petal**, **Stem** or **Cactus** in the preview selector. These are actual generated silhouettes, not masked planes. Leaf/petal normals and soft curvature are geometric; epidermal and vein detail remains procedural shader relief. Fruit skins use a sphere preview. Preview geometry is not included in the material-module export.
+
+**Realism boundary:** species-specific venation, complex UV layouts, full plant subsurface transport, cactus spines and separate fruit-seed geometry are not inferred by these shaders. Fine cellular detail is intended for close inspection; it is filtered at distance. The 8-bit height channel may not retain the tiniest relief, while the normal map preserves more of its shading effect. Use higher-resolution bakes for close-ups.
+
+**Scratch revision:** density now spans 0–4 candidate cuts per cell, with a denser default field; curvature now spans 0–0.7. Four seeded layers and a 5×5 neighbor search preserve long curved cuts across cell boundaries. Each cut has independently signed bow and mild asymmetry, not merely a rotated straight line. Density zero still bypasses all cuts. This remains a dedicated material, not a global toggle.
+
 ## Macro inspection
 
 - **10–10,000% optical zoom:** mouse wheel, pinch, buttons or logarithmic slider.
 - **Macro** jumps to 800%; double-click a visible point to inspect it closely.
 - Drag to orbit; right-drag or shift-drag to pan. **Fit** or **R** restores framing.
 - Optical zoom keeps the camera outside the surface.
-- Nine preview assets: grooved shader ball, frozen draped cloth, rounded cube, torus knot, perforated brake rotor, smooth sphere, flat panel, hollow pipe and foliage card. Solar/paper/LED presets select the panel; golf-ball covers select the sphere.
+- Fourteen preview assets: grooved shader ball, frozen draped cloth, rounded cube, torus knot, perforated brake rotor, smooth sphere, flat panel, hollow pipe, legacy foliage card, leaf, grass blade, flower petal, stem and ribbed cactus. Solar/paper/LED presets select the panel; golf-ball covers select the sphere.
 - Four studio-light setups, auto rotation, wireframe and focus mode.
 
 ## Frozen cloth asset
@@ -152,7 +172,7 @@ The library compiles and renders incrementally. Its progress bar counts **comple
 
 ## Baking procedural surface channels
 
-Choose **Export material → Bake procedural maps**. Select a 256, 512, 1024 or 2048 square resolution and a physical patch width of 1–1,000 mm. The shader is evaluated on a flat XY patch using **the same surface kernels as the viewport**. The six-channel ZIP contains (leaf/grass coverage is preserved in PNG alpha):
+Choose **Export material → Bake procedural maps**. Select a 256, 512, 1024 or 2048 square resolution and a physical patch width of 1–1,000 mm. The shader is evaluated on a flat XY patch using **the same surface kernels as the viewport**. The six-channel ZIP contains (mesh-oriented plant maps are fully opaque; legacy card recipes retain their alpha):
 
 - `base-color.png` and `emission.png`: sRGB encoded; emission intensity is recorded separately.
 - `roughness.png` and `metalness.png`: linear, unlit scalar channels.
@@ -162,7 +182,7 @@ Choose **Export material → Bake procedural maps**. Select a 256, 512, 1024 or 
 
 The source materials use **zero input bitmap maps**. Baked maps are generated outputs, not texture inputs used to produce the material. The baker has real per-channel progress, cancellation between GPU passes, and resource cleanup.
 
-**Limits:** leaf and grass patterns use normalized UV cards; the default 100 mm bake captures their full unit-domain card. Other patch widths crop/extend that domain rather than unwrapping a plant mesh. This is a planar material swatch, not an unwrap/UV bake of the selected mesh. Seamless tiling is not guaranteed. Height has 8-bit precision and clips to the documented range. Clearcoat, transmission, sheen, anisotropy, scattering and angle-dependent iridescence remain shader/recipe properties; static maps alone cannot reproduce the full appearance. No studio lighting or ambient occlusion is baked into base color.
+**Limits:** botanical mesh materials always cover UV0 from 0 to 1 regardless of patch width. Width changes the physical scale of relief/normal generation; choose a width matching your asset. These are ready-to-map organ surfaces, not an unwrap or rebake of imported geometry. Other materials use a planar material swatch. Seamless tiling is not guaranteed. Height has 8-bit precision and clips to the documented range. Clearcoat, transmission, sheen, anisotropy, scattering and angle-dependent iridescence remain shader/recipe properties; static maps alone cannot reproduce the full appearance. No studio lighting or ambient occlusion is baked into base color.
 
 ## Tests
 
@@ -171,7 +191,7 @@ npx playwright install chromium
 npm test
 ```
 
-The 13-test development suite covers the growing catalogue, all material families, progress notifications, ZIP/PNG contents and channel values, bake cancellation, bounded recipe mappings, context-relevant inspector controls, all nine live weave patterns, independent yarn colors, thin-film uniforms and live iridescence, frozen geometry, height-aware wear, local persistence, JSON/JavaScript/PNG exports, macro zoom, extended ranges, color ramps and mobile layouts. Use `PLAYWRIGHT_EXECUTABLE_PATH` for an existing Chromium executable; software-rendering launch flags are included.
+The development suite covers the growing catalogue, all material families, progress notifications, ZIP/PNG contents and channel values, bake cancellation, bounded recipe mappings, context-relevant inspector controls, all nine live weave patterns, independent yarn colors, thin-film uniforms and live iridescence, frozen geometry, height-aware wear, local persistence, JSON/JavaScript/PNG exports, macro zoom, extended ranges, color ramps and mobile layouts. Use `PLAYWRIGHT_EXECUTABLE_PATH` for an existing Chromium executable; software-rendering launch flags are included.
 
 ### Standalone and publication checks
 

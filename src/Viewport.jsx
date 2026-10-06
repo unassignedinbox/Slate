@@ -1,3 +1,4 @@
+import { createBotanicalGeometry } from "./botanicalGeometry.js";
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { createDrapedClothGeometry, clothSupport } from "./clothGeometry";
@@ -76,6 +77,15 @@ export async function renderThumbnails(
   camera.position.set(0, 1.1, 5.7);
   camera.lookAt(0, 0, 0);
   const geometry = createBallGeometry();
+  const plantGeometries = {
+    31: createBotanicalGeometry("Leaf"),
+    32: createBotanicalGeometry("Grass blade"),
+    33: createBotanicalGeometry("Petal"),
+    34: new THREE.SphereGeometry(1.35, 64, 48),
+    35: createBotanicalGeometry("Cactus"),
+    cactus8: createBotanicalGeometry("Cactus", 8),
+    36: createBotanicalGeometry("Stem"),
+  };
   const mesh = new THREE.Mesh(geometry);
   mesh.rotation.z = -0.3;
   scene.add(mesh);
@@ -101,6 +111,10 @@ export async function renderThumbnails(
       });
       await new Promise((resolve) => setTimeout(resolve, 24));
       if (signal?.aborted) break;
+      mesh.geometry =
+        p.type === 35 && p.plantRibs === 8
+          ? plantGeometries.cactus8
+          : plantGeometries[p.type] || geometry;
       mesh.material = createMaterial(p);
       retainedMaterials.push(mesh.material);
       {
@@ -121,6 +135,7 @@ export async function renderThumbnails(
   } finally {
     retainedMaterials.forEach((material) => material.dispose());
     geometry.dispose();
+    Object.values(plantGeometries).forEach((g) => g.dispose());
     env.dispose();
     renderer.dispose();
     renderer.forceContextLoss();
@@ -507,6 +522,10 @@ export default function Viewport({
       e.specimen.position.set(0, 0, 0);
     }
     e.specimen.castShadow = shape !== "Foliage card";
+    if (["Leaf", "Grass blade", "Petal", "Stem", "Cactus"].includes(shape)) {
+      e.specimen.geometry = createBotanicalGeometry(shape, params.plantRibs);
+      e.specimen.rotation.y = -0.1;
+    }
     if (shape === "Foliage card") {
       e.specimen.geometry = new THREE.PlaneGeometry(2.5, 2.5, 1, 1);
       e.specimen.position.y = 1.5;
@@ -577,7 +596,7 @@ export default function Viewport({
       e.specimen.rotation.x = 0.06;
       e.specimen.position.y = 1.68;
     }
-  }, [shape]);
+  }, [shape, params.plantRibs]);
   useEffect(() => {
     const e = engine.current;
     if (!e) return;

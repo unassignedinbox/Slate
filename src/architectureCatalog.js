@@ -115,25 +115,29 @@ export function architectureCatalog() {
     description:
       "A coarse, layered plaster grain with raised peaks and dry diffuse reflections.",
   });
-  add("Broadleaf Green", "Nature", 27, "leaf", "#355d28", {
+  add("Broadleaf Green", "Nature", 31, "leafSurface", "#355d28", {
     secondaryColor: "#829548",
+    tertiaryColor: "#8c8a38",
+    colorGradient: 0.18,
     roughness: 0.48,
     detailScale: 10,
     leafAspect: 0.4,
     grain: 0.65,
     description:
-      "Procedural leaf outline, midrib and branching veins. UV card; no input alpha map.",
+      "Full UV leaf surface: branching veins, epidermal cells and mottled pigment. For real leaf meshes, not an atlas.",
   });
-  add("Autumn Leaf", "Nature", 27, "leaf", "#985527", {
+  add("Autumn Leaf", "Nature", 31, "leafSurface", "#985527", {
     secondaryColor: "#c3a24a",
+    tertiaryColor: "#c78b37",
+    colorGradient: 0.75,
     roughness: 0.6,
     detailScale: 12,
     leafAspect: 0.32,
     grain: 0.5,
     description:
-      "Mottled autumn pigment with a tapered outline and branching vein relief.",
+      "Whole-leaf autumn pigment, branching veins and fine epidermis. No cutout; use your mesh silhouette.",
   });
-  add("Meadow Grass Blades", "Nature", 28, "grass", "#335b27", {
+  add("Meadow Grass Blades", "Nature", 32, "grassSurface", "#335b27", {
     secondaryColor: "#849348",
     roughness: 0.78,
     detailScale: 13,
@@ -141,18 +145,18 @@ export function architectureCatalog() {
     bladeLean: 0.45,
     grain: 0.7,
     description:
-      "Layered tapered blade cutouts, curved centerlines and rolled normals. UV card.",
+      "One grass-blade surface with longitudinal ribs, tip gradient and fine epidermal detail. No atlas.",
   });
   add("Scratches", "Technical", 29, "scratches", "#b9bec0", {
     metalness: 1,
     roughness: 0.23,
-    scratchScale: 3.5,
-    scratchDensity: 0.62,
+    scratchScale: 6,
+    scratchDensity: 2.6,
     scratchLength: 1.15,
-    scratchWidth: 0.012,
+    scratchWidth: 0.01,
     scratchDepth: 0.0018,
     scratchSpread: 0.8,
-    scratchBend: 0.04,
+    scratchBend: 0.42,
     weaveAngle: 25,
     description:
       "Isolated scratch study: finite tapered cuts, irregular lengths, tiny raised lips and real groove normals. Not enabled on other metals.",

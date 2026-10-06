@@ -47,7 +47,7 @@ test("architectural families, isolated scratches and the pure-metal inspector", 
   }
 });
 
-test("finite scratch grooves, seed variation, LED contacts and foliage alpha actually bake", async ({
+test("finite scratch grooves, seed variation, LED contacts and full-surface foliage actually bake", async ({
   page,
 }) => {
   test.setTimeout(600000);
@@ -166,7 +166,7 @@ test("finite scratch grooves, seed variation, LED contacts and foliage alpha act
   expect(stats.led.lo).toBe(0);
   expect(stats.led.hi).toBeGreaterThan(200);
   for (const name of ["leaf", "grass"]) {
-    expect(stats[name].alphaLo).toBe(0);
+    expect(stats[name].alphaLo).toBe(255);
     expect(stats[name].alphaHi).toBe(255);
   }
   // Distinct uniforms remain correct with shared program caching.

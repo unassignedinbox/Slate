@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { botanicalCatalog } from "./botanicalCatalog.js";
+import { botanicalGLSL, botanicalColor } from "./botanicalKernels.js";
 import { boundMaterial } from "./materialProfiles.js";
 import { expandedCatalog } from "./catalogExpansion.js";
 import { architectureCatalog } from "./architectureCatalog.js";
@@ -743,6 +745,7 @@ export const materials = [
   },
   ...expandedCatalog(),
   ...architectureCatalog(),
+  ...botanicalCatalog(),
 ].map(normalizeMaterial);
 
 export function normalizeMaterial(input) {
@@ -778,6 +781,13 @@ export function normalizeMaterial(input) {
     scratchDepth: 0.0018,
     scratchSpread: 0.8,
     scratchBend: 0.04,
+    veinRelief: 0.65,
+    cellScale: 120,
+    cellRelief: 0.5,
+    colorGradient: 0.65,
+    spotDensity: 0.4,
+    skinMode: 0,
+    plantRibs: 10,
     lensDome: 0.7,
     packageDepth: 0.6,
     secondaryColor: "#afa38d",
@@ -927,6 +937,13 @@ export function createMaterial(input) {
   m.userData.params = p;
   m.onBeforeCompile = (shader) => {
     const values = {
+      uVeinRelief: p.veinRelief,
+      uCellScale: p.cellScale,
+      uCellRelief: p.cellRelief,
+      uColorGradient: p.colorGradient,
+      uSpotDensity: p.spotDensity,
+      uSkinMode: p.skinMode,
+      uPlantRibs: p.plantRibs,
       uTertiary: new THREE.Color(p.tertiaryColor),
       uRibDepth: p.ribDepth,
       uGroutWidth: p.groutWidth,
@@ -1027,7 +1044,7 @@ export function createMaterial(input) {
       varying vec3 vProcPosition;
       varying vec3 vProcNormal;
       varying vec2 vProcUv;
-      #define uType ${Math.max(0, Math.min(29, Math.floor(Number(p.type) || 0)))}
+      #define uType ${Math.max(0, Math.min(36, Math.floor(Number(p.type) || 0)))}
       uniform int uColorCount, uColorMode, uFabricMode, uFlakeLayers, uCloth, uWeave;
       uniform float uFlakeLayerDepth,uWearSoftness,uWornRoughness;
       uniform float uFlakes,uFlakeFrequency,uFlakeRoughMin,uFlakeRoughMax,uFlakeMetalMin,uFlakeMetalMax,uFlakeTilt;
@@ -1107,6 +1124,7 @@ export function createMaterial(input) {
       float flakeMask=0.,flakeRandom=.5,flakeResolved=1.,surfaceHeight=0.,peelHeight=0.,wearMask=0.;
       ${extendedSurfaceGLSL()}
       ${architecturalGLSL()}
+${botanicalGLSL()}
       vec3 flakeTint=vec3(0.);
       vec2 yarnUV=vec2(0.);
       float yarnDirection=0.;
@@ -1191,11 +1209,10 @@ export function createMaterial(input) {
       }else if(uType>=8 && uType<=11){
         float micro=noise3(pp*uScale)+.3*noise3(pp*uScale*2.7);
         if(uType==11){
-          vec3 warped=pp*uScale+vec3(noise3(pp*uScale*.37),noise3(pp*uScale*.37+13.1),noise3(pp*uScale*.37+24.7))*.7;
-          vec4 hide=cellular3(warped,71.3);
-          float crease=smoothstep(.005,.15,hide.x);
-          micro=pow(crease,.7)*.94+noise3(pp*uScale*8.)*.12;
-          diffuseColor.rgb*=mix(.77,1.04,crease)*(.94+.09*hide.z);
+          vec3 hide=hideGrain(pp);
+          micro=hide.x;
+          diffuseColor.rgb*=1.-hide.y*.14-hide.z*.075;
+
         }
         float patchNoise=noise3(pp*5.3)+.28*noise3(pp*11.7);
         float transition=mix(.035,.32,uWearSoftness);
@@ -1214,6 +1231,7 @@ export function createMaterial(input) {
       }
       ${extendedSurfaceColor()}
       ${architecturalColor()}
+${botanicalColor()}
     `,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -1227,6 +1245,8 @@ export function createMaterial(input) {
       if(uType==17)roughnessFactor=mix(roughnessFactor,.22,contactMask);
       if(uType==20)roughnessFactor=mix(mix(roughnessFactor,.08,ledLens),.22,ledContact);
       if(uType==22)roughnessFactor=mix(roughnessFactor,.93,groutMask);
+      if(uType==30)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.22),bioJoint);
+      if(uType==34 || uType==35)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.24),bioPore);
       if(uType==29)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.3),scratchMask);
     `,
     );
@@ -1258,7 +1278,7 @@ export function createMaterial(input) {
       `
       #include <clearcoat_normal_fragment_maps>
       #ifdef USE_CLEARCOAT
-        clearcoatNormal=reliefNormal(peelHeight+((uType==20 || uType==22)?surfaceHeight:0.),clearcoatNormal,-vViewPosition);
+        clearcoatNormal=reliefNormal(peelHeight+((uType==20 || uType==22 || uType==30 || uType>=31)?surfaceHeight:0.),clearcoatNormal,-vViewPosition);
       #endif
     `,
     );
@@ -1323,7 +1343,7 @@ export function createMaterial(input) {
     m.userData.shader = shader;
   };
   m.customProgramCacheKey = () =>
-    `alloy-procedural-v6-${p.type}-${p.bakeMode > 0}`;
+    `alloy-procedural-v6.1-${p.type}-${p.bakeMode > 0}`;
   return m;
 }
 

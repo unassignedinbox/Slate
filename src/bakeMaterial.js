@@ -31,7 +31,7 @@ export async function bakeMaterial(
   const heightRange =
     params.type === 21
       ? 0.12
-      : params.type === 22
+      : params.type === 22 || params.type === 30
         ? 0.05
         : params.type === 18
           ? 0.08
@@ -124,9 +124,16 @@ export async function bakeMaterial(
       material: params,
       resolution,
       domain: {
-        projection: "flat XY patch",
+        projection:
+          params.type >= 31 && params.type <= 36
+            ? "full normalized UV0 surface (U: 0–1, V: 0–1)"
+            : "flat XY patch",
+        uvConvention:
+          params.type >= 31 && params.type <= 36
+            ? "Leaf/blade/petal: U across width, V base to tip, midrib U=.5. Fruit/cactus/stem: U around body, V along length. No silhouette alpha; not an atlas."
+            : null,
         alpha:
-          "RGBA coverage for procedural leaf and grass cutouts; no alpha input texture",
+          "Opaque coverage for mesh-surface materials; legacy types 27/28 retain cutout coverage. No alpha input texture",
         origin: [0, 0, 0],
         widthMM,
         sceneUnitsPerMM: 0.01,
@@ -153,7 +160,9 @@ export async function bakeMaterial(
         },
       },
       limitations: [
-        "This is a planar material patch, not an asset UV bake. Seamless tiling is not guaranteed.",
+        params.type >= 31 && params.type <= 36
+          ? "This is one full UV0 organ surface, not an atlas or an unwrap of your mesh. U crosses the leaf/blade/petal, V runs base to tip; midrib U=.5. For fruit/cactus/stem, U wraps the body and V runs along its length. Match your mesh UVs. All six channels are opaque. Width controls the physical scale of normal/height relief, not the number of leaves."
+          : "This is a planar material patch, not an asset UV bake. Seamless tiling is not guaranteed.",
         "Clearcoat, transmission, sheen, anisotropy, skin/wax scattering and iridescence remain recipe/shader properties. Static maps cannot reproduce all view-dependent appearance.",
         "Height is 8-bit and clamped to the documented range. It is not geometry or a precision displacement bake.",
         "Use linear/non-color sampling for roughness, metalness, normals and height. Do not apply sRGB decoding to data channels.",

@@ -413,7 +413,8 @@ const recipes = {
   },
   leather: {
     title: "Automotive leather",
-    caption: "Supple hide, raised grain and a restrained protective finish.",
+    caption:
+      "Overlapping folded grain, intermittent crease branches and fine pores—not a field of outlined cells.",
     fixed: { metalness: 0, ior: 1.48, coatIor: 1.5 },
     colors: [{ ...baseColor, label: "Leather dye" }],
     controls: [
@@ -790,7 +791,7 @@ Object.assign(recipes, {
     colors: [{ key: "color", label: "Test metal" }],
     controls: [
       rough("Test surface Roughness", 0.12, 0.65),
-      macro("density", "Scratch density", [target("scratchDensity", 0, 1)]),
+      macro("density", "Scratch density", [target("scratchDensity", 0, 4)]),
       macro("length", "Scratch length", [target("scratchLength", 0.1, 1.65)]),
       macro("width", "Scratch width", [target("scratchWidth", 0.002, 0.035)]),
       macro("depth", "Scratch depth", [target("scratchDepth", 0, 0.006)]),
@@ -803,7 +804,7 @@ Object.assign(recipes, {
       macro(
         "bend",
         "Scratch curvature",
-        [target("scratchBend", 0, 0.12)],
+        [target("scratchBend", 0, 0.7)],
         "detail",
       ),
       direct(
@@ -829,6 +830,202 @@ Object.assign(recipes, {
         false,
         1,
       ),
+    ],
+  },
+});
+
+// Mesh-oriented organ materials: UV0, no cutouts and no atlas generation.
+const plantSeed = direct(
+  "surfaceSeed",
+  "Pattern seed",
+  0,
+  9999,
+  "detail",
+  "",
+  false,
+  false,
+  1,
+);
+const cells = [
+  macro("cells", "Cell relief", [target("cellRelief", 0, 1)], "detail"),
+  direct("cellScale", "Cell frequency", 20, 400, "detail", "×", true),
+];
+const plantFixed = {
+  metalness: 0,
+  ior: 1.45,
+  coatIor: 1.45,
+  anisotropy: 0,
+  translucency: 0,
+};
+const plantColors = [
+  { key: "color", label: "Surface pigment" },
+  { key: "secondaryColor", label: "Secondary pigment" },
+  { key: "tertiaryColor", label: "Detail pigment" },
+];
+const fruitControls = [
+  rough("Skin Roughness", 0.2, 0.75),
+  macro("relief", "Skin relief", [target("grain", 0, 1.3)]),
+  macro("wax", "Wax gloss", [
+    target("coat", 0, 0.35),
+    target("coatRoughness", 0.3, 0.12),
+  ]),
+  direct("detailScale", "Pore / seed frequency", 8, 160, "detail", "×", true),
+  plantSeed,
+];
+Object.assign(recipes, {
+  crocodile: {
+    title: "Crocodile-style leather",
+    caption:
+      "Domed, irregular belly scutes; recessed soft joints and fine hide grain. A procedural study, not a scan.",
+    fixed: { metalness: 0, ior: 1.48, sheen: 0.12 },
+    colors: [
+      { key: "color", label: "Scale dye" },
+      { key: "secondaryColor", label: "Scale variation" },
+      { key: "tertiaryColor", label: "Crease dye" },
+    ],
+    controls: [
+      rough("Leather Roughness", 0.25, 0.8),
+      macro("relief", "Scale relief", [target("grain", 0.1, 1.3)]),
+      macro("joints", "Crease width", [target("groutWidth", 0.018, 0.09)]),
+      macro("finish", "Finish gloss", [
+        target("coat", 0, 0.4),
+        target("coatRoughness", 0.3, 0.12),
+      ]),
+      scale("detailScale", "Scale frequency"),
+      plantSeed,
+    ],
+  },
+  leafSurface: {
+    title: "Leaf · mesh surface",
+    caption:
+      "Full UV surface, not an atlas. U=.5 is the midrib; V=0 is the stem and V=1 the tip. Veins and microscopic epidermal cells; no alpha cutout.",
+    fixed: { ...plantFixed, coat: 0.12, sheen: 0.15 },
+    colors: [
+      { key: "color", label: "Leaf pigment" },
+      { key: "secondaryColor", label: "Vein pigment" },
+      { key: "tertiaryColor", label: "Aging pigment" },
+    ],
+    controls: [
+      rough("Leaf Roughness", 0.25, 0.8),
+      macro("veins", "Vein relief", [target("veinRelief", 0, 1.5)]),
+      macro("age", "Pigment aging", [target("colorGradient", 0, 1)]),
+      direct("detailScale", "Vein pairs", 5, 20, "detail", "", false, false, 1),
+      ...cells,
+      plantSeed,
+    ],
+  },
+  grassSurface: {
+    title: "Grass blade · mesh surface",
+    caption:
+      "One complete blade surface. U crosses its width, V runs root to tip. Longitudinal ribs and fine cells, no repeated blade silhouettes.",
+    fixed: { ...plantFixed, coat: 0.06, sheen: 0.2 },
+    colors: [
+      { key: "color", label: "Base pigment" },
+      { key: "secondaryColor", label: "Tip pigment" },
+    ],
+    controls: [
+      rough("Grass Roughness", 0.4, 0.9),
+      macro("veins", "Rib relief", [target("veinRelief", 0, 1.5)]),
+      macro("gradient", "Tip gradient", [target("colorGradient", 0, 1)]),
+      direct("plantRibs", "Rib count", 3, 20, "detail", "", false, false, 1),
+      ...cells,
+      plantSeed,
+    ],
+  },
+  petalSurface: {
+    title: "Flower petal · mesh surface",
+    caption:
+      "V runs from the flower throat to the petal tip. Basal/tip gradient, delicate striations, epidermal cells and optional spots. No atlas or cutout.",
+    fixed: { ...plantFixed, coat: 0.04, sheen: 0.3, sheenRoughness: 0.7 },
+    colors: [
+      { key: "color", label: "Petal tip" },
+      { key: "secondaryColor", label: "Petal base / throat" },
+      { key: "tertiaryColor", label: "Spot pigment" },
+    ],
+    controls: [
+      rough("Petal Roughness", 0.4, 0.85),
+      macro("gradient", "Gradient reach", [target("colorGradient", 0.15, 1)]),
+      macro("veins", "Striation relief", [target("veinRelief", 0, 1.5)]),
+      macro("spots", "Basal speckles", [target("spotDensity", 0, 1)]),
+      ...cells,
+      plantSeed,
+    ],
+  },
+  fruitSurface: {
+    title: "Apple / waxed fruit skin",
+    caption:
+      "Blush, lenticels and a waxed epidermis. U wraps around the fruit; V runs pole to pole. Full surface, not fruit silhouettes.",
+    fixed: { ...plantFixed, sheen: 0, skinMode: 0 },
+    colors: plantColors,
+    controls: [
+      ...fruitControls,
+      macro("gradient", "Blush variation", [target("colorGradient", 0, 1)]),
+      macro("spots", "Lenticel coverage", [target("spotDensity", 0, 1)]),
+    ],
+  },
+  citrusSurface: {
+    title: "Citrus peel",
+    caption:
+      "Rounded oil-gland recesses in a finely pebbled peel. Full UV surface; U wraps around the fruit.",
+    fixed: { ...plantFixed, sheen: 0, skinMode: 1 },
+    colors: [{ key: "color", label: "Peel pigment" }],
+    controls: fruitControls,
+  },
+  berrySurface: {
+    title: "Strawberry skin",
+    caption:
+      "Analytic seed pockets with small raised seed centers. Normal/height relief, not separate seed meshes. U wraps the fruit.",
+    fixed: { ...plantFixed, sheen: 0, skinMode: 2 },
+    colors: [
+      { key: "color", label: "Berry pigment" },
+      { key: "secondaryColor", label: "Seed pigment" },
+    ],
+    controls: fruitControls,
+  },
+  cactusSurface: {
+    title: "Cactus · mesh epidermis",
+    caption:
+      "Apply to your cactus geometry. U wraps the body; V follows growth. Align rib columns to your mesh; areoles are relief only, not spines.",
+    fixed: { ...plantFixed, coat: 0.07, sheen: 0 },
+    colors: [
+      { key: "color", label: "Epidermis" },
+      { key: "secondaryColor", label: "Wax bloom" },
+      { key: "tertiaryColor", label: "Areole / cork" },
+    ],
+    controls: [
+      rough("Cactus Roughness", 0.3, 0.85),
+      macro("wax", "Wax bloom", [target("colorGradient", 0, 1)]),
+      macro("veins", "Surface relief", [target("veinRelief", 0, 1.5)]),
+      direct("plantRibs", "Rib columns", 4, 24, "detail", "", false, false, 1),
+      direct(
+        "detailScale",
+        "Areole rows",
+        4,
+        40,
+        "detail",
+        "",
+        false,
+        false,
+        1,
+      ),
+      ...cells,
+      plantSeed,
+    ],
+  },
+  stemSurface: {
+    title: "Living plant stem",
+    caption:
+      "Longitudinal fibers, young epidermis, cork pigment and lenticels. U wraps the stem; V follows its length. Full surface with no cutout.",
+    fixed: { ...plantFixed, coat: 0.04, sheen: 0.1 },
+    colors: plantColors,
+    controls: [
+      rough("Stem Roughness", 0.4, 0.9),
+      macro("cork", "Cork maturity", [target("colorGradient", 0, 1)]),
+      macro("veins", "Fiber relief", [target("veinRelief", 0, 1.5)]),
+      macro("spots", "Lenticel coverage", [target("spotDensity", 0, 1)]),
+      direct("detailScale", "Fiber frequency", 5, 90, "detail", "×", true),
+      ...cells,
+      plantSeed,
     ],
   },
 });
@@ -880,6 +1077,13 @@ export function materialFamily(p) {
       27: "leaf",
       28: "grass",
       29: "scratches",
+      30: "crocodile",
+      31: "leafSurface",
+      32: "grassSurface",
+      33: "petalSurface",
+      34: "fruitSurface",
+      35: "cactusSurface",
+      36: "stemSurface",
     }[p.type] || "paint"
   );
 }

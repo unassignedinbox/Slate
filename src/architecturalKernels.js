@@ -16,10 +16,10 @@ export function architecturalGLSL() {
    if(uScratchDensity<=0.)return vec3(0.);
    uv*=uScratchScale;vec2 cell=floor(uv);float coverage=0.,height=0.,rimTotal=0.;
    float aa=max(length(fwidth(uv))*.4,.00015);
-   for(int layer=0;layer<2;layer++)for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+   for(int layer=0;layer<4;layer++)for(int y=-2;y<=2;y++)for(int x=-2;x<=2;x++){
      vec2 id=cell+vec2(float(x),float(y));float layerSeed=float(layer)*113.7+uSurfaceSeed;
      float r=hash31(vec3(id,layerSeed));
-     if(r<uScratchDensity){
+     if(r<uScratchDensity*.25){
        float a=hash31(vec3(id+17.3,layerSeed+3.)),b=hash31(vec3(id+39.7,layerSeed+11.));
        vec2 center=id+.08+.84*vec2(a,b);
        float angle=uWeaveAngle+(hash31(vec3(id+81.2,layerSeed))-.5)*3.14159265*uScratchSpread;
@@ -28,7 +28,8 @@ export function architecturalGLSL() {
        float len=uScratchLength*mix(.18,1.,a*a);
        float t=dot(delta,direction)/max(len,.001)+.5;
        float along=clamp(t,0.,1.);
-       float bow=sin(along*3.14159265)*uScratchBend*(b-.5)*2.;
+       float bend=uScratchBend*(b-.5)*2.*len/max(uScratchLength,.001);
+       float bow=(sin(along*3.14159265)+.2*sin(along*6.2831853+a*2.)*sin(along*3.14159265))*bend;
        float distanceToCut=abs(dot(delta,side)-bow);
        float taper=smoothstep(0.,.12,t)*(1.-smoothstep(.84,1.,t));
        float width=uScratchWidth*mix(.35,1.4,hash31(vec3(id-31.1,layerSeed)))*(.2+.8*sqrt(taper));

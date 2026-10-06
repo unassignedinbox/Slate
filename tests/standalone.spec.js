@@ -152,6 +152,34 @@ test("standalone page renders, edits and exports without external assets", async
   } finally {
     material.dispose();
   }
+  await page
+    .getByRole("button", { name: "Apply Broadleaf Green", exact: true })
+    .click();
+  await frame(page);
+  const leafSource = await downloadText(page, /Three.js procedural shader/);
+  const leafFactory = leafSource
+    .replace(/import \* as THREE from ['"]three['"];?/, "")
+    .replace(/export const preset/, "const preset")
+    .replace(/export function /g, "function ")
+    .replace(
+      /export default createMaterial\(preset\);/,
+      "return createMaterial(preset);",
+    );
+  const leafMaterial = new Function("THREE", leafFactory)(THREE);
+  try {
+    const shader = {
+      uniforms: {},
+      vertexShader: THREE.ShaderLib.physical.vertexShader,
+      fragmentShader: THREE.ShaderLib.physical.fragmentShader,
+    };
+    leafMaterial.onBeforeCompile(shader);
+    expect(shader.fragmentShader).toContain("#define uType 31");
+    expect(shader.fragmentShader).toContain("bioCell");
+    expect(shader.uniforms.uCellScale.value).toBeGreaterThan(20);
+    expect(leafMaterial.alphaMap).toBeNull();
+  } finally {
+    leafMaterial.dispose();
+  }
   await page.getByRole("button", { name: /Export material/ }).click();
   await page.getByRole("button", { name: /Bake procedural maps/ }).click();
   await page.getByLabel("Bake resolution").selectOption("256");
@@ -167,6 +195,9 @@ test("standalone page renders, edits and exports without external assets", async
   expect(JSON.parse(strFromU8(maps["material.json"])).schema).toBe(
     "alloy.surface-bake.v1",
   );
+  expect(
+    JSON.parse(strFromU8(maps["material.json"])).domain.projection,
+  ).toContain("UV0");
   expect(Buffer.from(maps["normal.png"]).subarray(1, 4).toString()).toBe("PNG");
   await page.getByRole("button", { name: "Close dialog" }).click();
   if (process.env.ALLOY_CAPTURE === "1") {
