@@ -16,6 +16,9 @@ add_executable(FrontierNativeProof
     Engine/Editor/OutlinerPanel.cpp
     Engine/Editor/ViewportPanel.cpp
     Engine/Editor/InspectorPanel.cpp
+    Engine/Editor/ConstructWorld.cpp
+    Engine/Editor/LightInspectorPanel.cpp
+    Engine/Editor/PostProcessInspectorPanel.cpp
     Engine/Editor/SolidArcInspectorPanel.cpp
     Engine/Editor/TyreInspectorPanel.cpp
     Engine/Editor/ShadeTick.cpp
