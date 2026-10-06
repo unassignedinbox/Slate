@@ -3081,3 +3081,110 @@ as implemented by this documentation-only checkpoint.
   Local use their own extinction models and 400 m diagnostic range.
 - Existing model values, units and limits still come from `NativePanels.json`; no slider range was invented or changed.
   Height's canonical-value cleanup remains in place for older saved/imported scenes.
+
+## C068 — proposed native Fog-card conversion and Light components (plan only, 2026-10-06)
+
+**Planning checkpoint only. C068 does not claim that the C++ editor, scene schema, renderer or creation menus have been
+changed. Implementation must be reviewed against this plan before being described as complete.**
+
+### Entity relationship decision
+
+Atmospheric Fog, Height Fog and Local Fog remain independent sibling scene entities under Environment/Fog. Atmospheric
+Fog is **not** made a child component of Atmosphere, and Height Fog is not embedded in Atmosphere either. Atmospheric Fog
+consumes the selected atmosphere medium's Rayleigh/Mie coefficients, so its inspector should expose an **Atmosphere
+source** reference/readout, but ownership and lifetime remain separate. This avoids deleting Fog when an Atmosphere is
+replaced, permits Fog to be disabled independently, and supports scenes with multiple atmosphere assets. A Fog collection
+folder may group the rows visually without changing component ownership.
+
+### Native Fog inspector: cards to retain, replace, add and remove
+
+The source of truth is the coordinated C067 HTML layout plus the real property ranges/groups built in
+`CelestialSequence.cpp`; the implementation target is `FogInspectorPanel.cpp`.
+
+| Action | Native card/component | Planned result |
+|---|---|---|
+| Retain and share | Fog settings | Same card shell for all models. Height/Atmospheric: Enabled. Local: Enabled + Follow Wind. |
+| Replace presentation, retain model | Visibility through fog | One shared interactive native card for all three. One UI-session Distance probe; analytic Fog samples fixed world Z = 2 m. No persisted Probe altitude property. |
+| Retain and share | Medium | Same card and control renderer; labels/ranges come from the selected native sheet, never a second hard-coded property model. |
+| Add inside Medium | Beam Chamber | Shared native drawing. Height maps Sun Scatter/Colour and a 25 m layer; Atmospheric maps Mie Blend; Local maps Anisotropy. LIVE/PREVIEW is explicit and physical labels remain uncompressed. |
+| Replace | Height technical card | Rename to **Height and tint**; interactive altitude-density profile edits native Density/Falloff Height through the normal transaction path, with native Colour in the same card. |
+| Replace | Atmospheric technical card | **Spectral transmission** becomes an interactive wavelength study driven by native Density/Mie Blend and the shared Distance probe; include Atmosphere source/coefficient readouts. |
+| Retain | Local bounds | Keep Centre and Half Size controls and the bounded-volume drawing; use the same outer card geometry as the other technical cards. |
+| Move/rebuild | Wind binding | Stop drawing raw `RecordWindBindingControls` before the custom panel. Render one normal **Wind binding** card at the bottom from the existing Own Wind/Wind Source properties. |
+| Remove as standalone | Neutral-light reference | Fold any useful neutral-target swatch/readout into the model-specific technical card; do not keep an extra card that exists in only the native menu. |
+| Remove | Per-model card shells and duplicate probes | One shared Fog card renderer with model descriptors; no Height/Aerial/Local lookalike implementations and no duplicated scene state. |
+
+Native Fog order will be: header/identity → Fog settings → Visibility through fog → two-column Medium + model technical
+card (stacked when narrow) → Wind binding. Expanded and narrow layouts must preserve that order.
+
+### Native Light component architecture
+
+The current native state is not sufficient for the HTML Light inspectors: `PunctualLuminaireRecord` stores only
+Directional/Point/Spot records and is explicitly not consumed by the lighting kernel; the generic editor sheet exposes
+Intensity/Colour plus a read-only Direction; and the viewport Point/Spot/Area creation menu entries are no-ops. The plan
+will not present those paths as working Light components until persistence, writeback and renderer ownership are real.
+
+Add one persistent **LightComponent** schema with shared fields (enabled, type, colour mode/value, output, range, shadow
+policy, transform and optional distribution/profile reference) and type-specific payloads. Use a type/distribution enum,
+not one C++ class per marketing preset:
+
+- Core native types: **Point**, **Spot**, **Directional**, **Rectangle/Area**, **Tube**, and **Strip**.
+- Optional distribution: uniform, IES profile, or automotive low-beam profile.
+- HTML names become creation presets over those components:
+  - Key Spot → Spot;
+  - Rim Point and Fill Point → Point;
+  - ECE Low Beam → Spot + automotive distribution;
+  - Softbox → Rectangle/Area;
+  - Studio Tube → Tube;
+  - LED Emitter → compact Point/Area preset;
+  - LED Strip → Strip with one horizontal direction;
+  - IES Downlight → Spot + IES profile.
+- Imported KHR punctual lights adapt to the same component schema rather than maintaining a second inspector model.
+
+Creation commands must replace the no-op Viewport menu items, create a real component and outliner row, select it, and
+support save/reload. Presets remain data/defaults; selecting a preset must not switch to a separate inspector code path.
+
+### Shared native Light inspector cards
+
+The native inspector will use one `EditorSheetAppearance::Light` route and one Light card family. Type descriptors decide
+which rows are present; all common cards remain visually identical.
+
+| Order | Card | Controls/content | Action relative to current native editor |
+|---:|---|---|---|
+| 1 | Main light visual/data | Existing approved type-specific source drawing plus real output/type/position summary. No copied identity strip. | Add dedicated native card; replace generic-only presentation. |
+| 2 | Statistics | Real component type, output unit, range, dimensions/profile and world XYZ. | Add; no synthetic renderer telemetry. |
+| 3 | Quick controls | Enabled, Cast Shadows and only other genuinely wired booleans. | Add shared card. |
+| 4 | Transform | Standard native Position/Rotation/Scale controls and transaction/undo behavior. | Replace read-only Direction-only treatment; reuse standard Transform. |
+| 5 | Source & response | Colour/temperature mode, output, range/falloff and type dimensions in one card with the approved data-oriented response study. | Replace separate/duplicated source, colour and distance-response sections. |
+| 6 | Distribution | Spot cone/penumbra, IES/profile selection, automotive cutoff, or area/tube/strip emission shape as applicable. Omit when not applicable. | Add conditional shared card, not preset-specific cards. |
+| 7 | Dynamics | Existing real flicker/pulse controls only when backed by component state; otherwise omit the card. | Do not add decorative controls. |
+| 8 | Baking/export | Existing real bake/export actions and honest unsupported states. | Move/keep at inspector bottom. |
+
+The Area Light card keeps the corrected area-source drawing and standard Transform. LED Strip remains one horizontal
+emission direction. Point/Spot use cd, directional/illuminance paths use lx, and authored source-flux panels use lm only
+where the underlying component actually stores lumens; unit conversion must not be implied by relabelling.
+
+### Implementation sequence
+
+1. Freeze the native property/schema contract and migration for existing punctual/emissive scene data.
+2. Refactor `FogInspectorPanel.cpp` around shared card helpers/model descriptors; move Wind binding and add the shared Beam
+   Chamber without changing Fog equations.
+3. Add the Light component record, stable IDs, scene serialization, outliner rows, selection, creation commands and native
+   sheet/writeback path.
+4. Add the shared native Light inspector and type-conditional cards. Presets create configured core components.
+5. Connect runtime lighting incrementally. Point/Spot/Directional may be called live only after the renderer consumes the
+   edited records. Area/Tube/Strip/IES/ECE paths must show an explicit authoring/unsupported state until their actual
+   renderer path exists; no fake preview may be reported as scene lighting.
+6. Add undo/redo and save/reload verification for every editable field and create/delete operation.
+7. Run native Linux and Windows/MSVC builds, existing renderer/editor regression suites, low-stack checks, expanded/narrow
+   ImGui captures, and interaction tests using submitted ImGui items. Verify Fog equations and model independence, Light
+   units, preset-to-core mappings, card order, clipping, scrolling and baking-last placement.
+
+### Completion gates
+
+- All three native Fog inspectors have identical card shells/order and only model-appropriate controls.
+- Fog edits reach the existing real CPU/GPU Fog owners; preview exposure never changes physical readouts.
+- Every Light row owns or adapts to a real persistent component; no creation menu entry is a no-op.
+- Every displayed Light control writes through and survives save/reload; unsupported renderer features are labelled.
+- Existing Atmosphere remains an independent source entity; Fog references it without ownership coupling.
+- No changes to Clouds, materials, fracture, GI or unrelated inspectors are included in this conversion.
