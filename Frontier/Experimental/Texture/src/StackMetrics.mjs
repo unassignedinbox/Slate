@@ -255,12 +255,23 @@ test("generators normalise unknown input without losing their controls", () =>
 {
     const Generator = NormaliseGenerator({ Kind: "nonsense", Scale: 1e9, Seed: "x" });
     assert.ok(GeneratorIndex(Generator.Kind) >= 0);
-    for (const [Name, Control] of Object.entries(GeneratorControls))
+    // Each generator answers for the controls IT names. The catalogue stopped being one shape of record when the
+    // readings arrived — spread means something to dust and nothing at all to a checker.
+    for (const Entry of GeneratorOrdering)
     {
-        assert.ok(Number.isFinite(Generator[Name]), `${Name} is not finite`);
-        assert.ok(Generator[Name] >= Control.Minimum && Generator[Name] <= Control.Maximum, `${Name} escaped its range`);
+        const Normalised = NormaliseGenerator({ Kind: Entry.Identifier, Scale: 1e9, Seed: "x", Spread: -4, Axis: 99 });
+        for (const Name of Entry.Controls)
+        {
+            const Control = GeneratorControls[Name];
+            assert.ok(Control, `${Entry.Identifier} asks for a control that does not exist: ${Name}`);
+            assert.ok(Number.isFinite(Normalised[Name]), `${Entry.Identifier}.${Name} is not finite`);
+            assert.ok(
+                Normalised[Name] >= Control.Minimum && Normalised[Name] <= Control.Maximum,
+                `${Entry.Identifier}.${Name} escaped its range`,
+            );
+        }
+        assert.deepEqual(Object.keys(DefaultGenerator(Entry.Identifier)).sort(), Object.keys(Normalised).sort());
     }
-    assert.deepEqual(Object.keys(DefaultGenerator("cells")).sort(), Object.keys(Generator).sort());
 });
 
 test("a conductor carries both ends of its Fresnel, and a preset keeps them", () =>

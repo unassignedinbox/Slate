@@ -5604,3 +5604,234 @@ details.channel-control > summary code {
   font-size: 10px;
   color: #6f6f6f;
 }
+
+/*--------------------------------------------------------------------------------------------------------------------------
+  The generator stack on a mask. The catalogue reads as a shelf of marks rather than a dropdown of words, because what a
+  generator is — a crease, a gap between two walls, one triangle out of a sheet of them — is a picture before it is a
+  name, and the names are nearly all two syllables of jargon. The stack under it is the layer list again at half scale.
+--------------------------------------------------------------------------------------------------------------------------*/
+.field-shelf {
+  display: grid;
+  gap: 11px;
+  padding: 2px 0 12px;
+}
+
+.field-family-name {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7a7a7a;
+  margin-bottom: 7px;
+}
+
+.field-family-name em {
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 10.5px;
+  color: #595959;
+}
+
+.field-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: 6px;
+}
+
+.field-chip {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  padding: 9px 4px 7px;
+  border-radius: 13px;
+  background: #151515;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 300;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.field-chip svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.field-chip:hover {
+  background: var(--card);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+.field-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.field-stack {
+  display: grid;
+  gap: 5px;
+  padding-bottom: 11px;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: 13px;
+  background: #151515;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.field-row:hover {
+  background: #191919;
+}
+
+.field-row.selected {
+  background: var(--card);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.field-row.muted {
+  opacity: 0.45;
+}
+
+.field-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  background: #0e0e0e;
+  color: var(--text);
+  flex: 0 0 auto;
+}
+
+.field-mark svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.field-name {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.field-name em {
+  font-style: normal;
+  font-size: 10px;
+  color: #6f6f6f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-row .field-buttons {
+  margin-left: auto;
+  display: flex;
+  gap: 1px;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.field-row:hover .field-buttons,
+.field-row.selected .field-buttons {
+  opacity: 1;
+}
+
+.field-row .icon-button {
+  width: 24px;
+  height: 24px;
+}
+
+.field-row .icon-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.field-empty {
+  margin: 0 0 11px;
+  padding: 13px;
+  border-radius: 14px;
+  background: #121212;
+  border: 1px dashed rgba(255, 255, 255, 0.09);
+  font-size: 10.5px;
+  line-height: 1.7;
+  color: #6f6f6f;
+}
+
+.field-measure {
+  margin-bottom: 11px;
+  padding: 11px 12px 3px;
+  border-radius: 14px;
+  background: rgba(52, 199, 89, 0.07);
+  border: 1px solid rgba(52, 199, 89, 0.22);
+}
+
+.field-measure p {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.7;
+  color: #b9d9c1;
+}
+
+.field-editor {
+  padding: 12px 12px 4px;
+  border-radius: 16px;
+  background: #121212;
+  border: 1px solid var(--line);
+}
+
+.field-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.field-editor-head svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.field-pick {
+  margin: 2px 0 4px;
+}
+
+/* Picking faces is a mode, and a mode that changes what a click does has to say so under the cursor. */
+#viewport.picking-faces canvas {
+  cursor: crosshair;
+}

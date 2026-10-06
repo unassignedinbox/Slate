@@ -509,5 +509,72 @@ Check("sealing twice seals nothing", (Panel.SealStroke(), Headings.at(-1)?.Cap =
 Panel.Integrator.Stamp = Stamped;
 Panel.Projection.End();
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Generators on the mask. The catalogue is drawn as a shelf of marks, the stack under it behaves like the layer list,
+// and the readings that need the model measured say so rather than quietly drawing nothing.
+//--------------------------------------------------------------------------------------------------------------------------
+Panel.AddLayer("stroke");
+const Shaped = Panel.ActiveLayer;
+Panel.RenderInspector();
+Check("the inspector offers a generator section", !!Find('[data-group="Mask generators"]'));
+Check("and it opens with the catalogue, not a dropdown", All(".field-chip").length >= 20, String(All(".field-chip").length));
+Check("grouped into families", All(".field-family").length === 4, String(All(".field-family").length));
+Check("every chip wears a mark of its own", All(".field-chip svg").length === All(".field-chip").length);
+Check("nothing is on the stack to begin with", !All(".field-row").length && !!Find(".field-empty"));
+
+const Add = (Kind) => Press(Find(`.field-chip[data-argument="${Kind}"]`));
+Add("fbm");
+Check("picking one off the shelf puts it on the stack", Shaped.Mask.Generators.length === 1, String(Shaped.Mask.Generators.length));
+Check("and gives the layer the mask it needs to do anything", Shaped.Mask.Kind === "stroke", Shaped.Mask.Kind);
+Check("the first one replaces rather than multiplies into nothing", Shaped.Mask.Generators[0].Combine === "overwrite");
+Check("a row is drawn for it", All(".field-row").length === 1);
+Check("it is the one being edited", !!Find(".field-row.selected") && !!Find(".field-editor"));
+Check("noise alone never asks for the model", !Find(".field-measure"));
+Check("and the sheet it solved went up to the device", !!Panel.Integrator.LayerImages.get(Shaped.Identifier)?.Sheet);
+
+Add("dust");
+Check("a second generator stacks on top", Shaped.Mask.Generators.length === 2);
+Check("and multiplies into what is under it", Shaped.Mask.Generators[1].Combine === "multiply");
+Check("dust reads the model, so the model gets measured", !!Panel.Measured, String(Panel.MeasureMilliseconds));
+Check("the measurement names its islands", Panel.Measured.Islands > 0, String(Panel.Measured.Islands));
+Check("and the faces it was taken from", Panel.Measured.Triangles === Panel.SurfaceRecord.Indices.length / 3);
+Check("the section says what it measured", (Find('[data-group="Mask generators"]').textContent || "").includes("island"));
+
+const Solved = Panel.SolveLayerSheet(Shaped);
+Check("the solved sheet is the size it says", Solved.Size === Panel.SheetResolution && Solved.Values.length === Solved.Size ** 2);
+Check("and is not one flat value", new Set([...Solved.Values].map((Value) => Math.round(Value * 32))).size > 3);
+
+Press(Find('.field-row .icon-button[data-action="field-visible"]'));
+Check("an eye on a row takes it out of the solve", Shaped.Mask.Generators[0].Enabled === false);
+Press(Find('.field-row .icon-button[data-action="field-visible"]'));
+Check("and puts it back", Shaped.Mask.Generators[0].Enabled === true);
+
+const Order = Shaped.Mask.Generators.map((Entry) => Entry.Kind).join(",");
+Press(All('.field-row .icon-button[data-action="field-lower"]')[0]);
+Check("a generator can be moved down the stack", Shaped.Mask.Generators.map((Entry) => Entry.Kind).join(",") !== Order);
+Press(All('.field-row .icon-button[data-action="field-raise"]')[1]);
+Check("and back up", Shaped.Mask.Generators.map((Entry) => Entry.Kind).join(",") === Order);
+
+// Selections. A face mask is the one generator that cannot be set up from the inspector alone.
+Add("faces");
+Check("a face selection asks for faces rather than sliders", !!Find(".field-pick"));
+Press(Find('[data-action="field-pick"]'));
+Check("picking is a mode the viewport goes into", Panel.PickingFaces && Find("#viewport").classList.contains("picking-faces"));
+const Middle = { button: 0, clientX: 480, clientY: 270, shiftKey: false };
+Panel.PickFaceAt({ ...Middle, shiftKey: false });
+const Picker = Shaped.Mask.Generators.find((Entry) => Entry.Kind === "faces");
+Check("a click on the model picks the face under it", Picker.Marks.length === 1, JSON.stringify(Picker.Marks));
+Panel.PickFaceAt({ ...Middle, shiftKey: true });
+Check("and shift takes it away again", Picker.Marks.length === 0);
+Type("Escape");
+Check("Escape leaves the mode", !Panel.PickingFaces);
+
+const Stacked = Shaped.Mask.Generators.length;
+Press(Find('.field-row .icon-button[data-action="field-remove"]'));
+Check("a generator can be taken off the stack", Shaped.Mask.Generators.length === Stacked - 1);
+while (Shaped.Mask.Generators.length) Press(Find('.field-row .icon-button[data-action="field-remove"]'));
+Check("emptying the stack drops the sheet", !Panel.Integrator.LayerImages.get(Shaped.Identifier)?.Sheet);
+Check("and the empty note comes back", !!Find(".field-empty"));
+
 Report();
 process.exit(process.exitCode || 0);

@@ -112,7 +112,18 @@ import {
     FinishLabel,
     CreateFinish,
 } from "./FinishSpecification.js";
-import { GeneratorOrdering, GeneratorByIdentifier, GeneratorControls, NormaliseGenerator } from "./GeneratorSpecification.js";
+import {
+    GeneratorOrdering,
+    GeneratorByIdentifier,
+    GeneratorControls,
+    GeneratorFamilies,
+    GeneratorFamily,
+    GeneratorNeedsSurface,
+    NormaliseGenerator,
+    VertexMaps,
+} from "./GeneratorSpecification.js";
+import { MeasureSurface, MeasureThickness, SheetSize } from "./SurfaceSolver.js";
+import { CombineModes, DefaultEntry, MissingMeasurements, NormaliseEntry, SheetImage, SolveMask } from "./MaskSolver.js";
 import {
     CreateLayer,
     CloneLayer,
@@ -224,6 +235,21 @@ const GlyphPaths = {
     dynamics: '<circle cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2 4.3 4.3 0 0 1 0-8.6 4.3 4.3 0 0 0 0-8.6Z"/>',
     height: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M3.5 13h17M3.5 16h17"/>',
     ramp: '<path d="M3 18h18M3 18 21 6"/><path d="M8 18v-4m5 4V9.5"/>',
+    // The generator catalogue. Each one is a picture of what the generator is a reading of, not of a dialog box:
+    // a cavity is a groove, thickness is the gap between two walls, faces is one triangle out of a sheet of them.
+    cells: '<path d="m3 10 4-6 6 2 1 6-5 4-6-2Z"/><path d="m13 6 7 1 1 7-7-2Z"/><path d="m9 16 5 4 7-1"/>',
+    scratch: '<path d="M4 19 13 4m-5 16L20 6m-16 1 3-4m6 17 6-8"/>',
+    weave: '<path d="M3 7c3 0 3 4 6 4s3-4 6-4 3 4 6 4M3 15c3 0 3 4 6 4s3-4 6-4 3 4 6 4"/>',
+    wood: '<path d="M3 21c0-10 4-18 9-18s9 8 9 18"/><path d="M7.5 21c0-7 2-13 4.5-13s4.5 6 4.5 13"/><path d="M11 21c0-4 .4-7 1-7s1 3 1 7"/>',
+    edge: '<path d="M3 21V9a6 6 0 0 1 6-6h12"/><path d="M8 21v-9a4 4 0 0 1 4-4h9" opacity="0.45"/>',
+    cavity: '<path d="M2 4v5l10 11L22 9V4"/><path d="M12 20v-6" opacity="0.45"/>',
+    occlusion: '<circle cx="12" cy="9.5" r="6"/><ellipse cx="12" cy="19" rx="8.5" ry="2.2"/>',
+    thickness: '<path d="M5 3v18M19 3v18"/><path d="M8.5 12h7m-7 0 2.4-2.4M8.5 12l2.4 2.4M15.5 12l-2.4-2.4M15.5 12l-2.4 2.4"/>',
+    axis: '<path d="M12 12V3m0 9-8 4.6M12 12l8 4.6"/><path d="m9.6 5.6 2.4-2.6 2.4 2.6"/>',
+    dust: '<path d="M3 21h18" opacity="0.45"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="12" cy="4" r="1" fill="currentColor"/><circle cx="18" cy="7" r="1" fill="currentColor"/><circle cx="9" cy="11" r="1" fill="currentColor"/><circle cx="15.5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="16" r="1" fill="currentColor"/><circle cx="19" cy="17" r="1" fill="currentColor"/><circle cx="12" cy="18" r="1" fill="currentColor"/>',
+    drip: '<path d="M6 3v10m6-10v14m6-14v8"/><circle cx="6" cy="15" r="1.7"/><circle cx="12" cy="19" r="1.7"/><circle cx="18" cy="13" r="1.7"/>',
+    facet: '<path d="M3 19 12 4l9 15Z"/><path d="M12 4v15M3 19h18" opacity="0.45"/>',
+    vertex: '<path d="M5 18 12 5l7 13Z" opacity="0.4"/><circle cx="5" cy="18" r="1.8"/><circle cx="12" cy="5" r="1.8"/><circle cx="19" cy="18" r="1.8"/>',
 };
 
 const Icon = (Name) =>
@@ -537,6 +563,20 @@ export class TexturePanel
         this.BrowserQuery = "";
         this.BrowserOpen = ["materials"];
         this.PickingMaskColour = false;
+        // What has been read off the model, and which model it was read off. A quarter of the document's resolution is
+        // plenty for weathering — the readings are smooth things and the sheet is filtered on the way up — and it is the
+        // difference between measuring in a blink and measuring in four seconds.
+        this.Sheets = null;
+        this.SheetResolution = 256;
+        this.SheetEdition = 0;
+        this.SurfaceEdition = 0;
+        this.MeasureMilliseconds = 0;
+        this.SolveMilliseconds = 0;
+        this.SheetTimer = 0;
+        this.Measuring = false;
+        // The entry of the stack whose controls are showing, and whether clicking the model is picking faces for it.
+        this.FieldSelection = "";
+        this.PickingFaces = false;
         this.ToolBefore = "";
         this.Isolated = false;
         this.ScopedStack = false;
@@ -701,6 +741,8 @@ export class TexturePanel
         this.SetStatus(Objects.length === 1 ? `Building ${Objects[0].Kind}` : `Building ${Objects.length} objects`, "busy");
         this.SurfaceRecord = AssembleScene(Objects, this.ImportedSurface);
         this.WireSignature = "";
+        // Every reading taken from the last surface is about a model that no longer exists.
+        this.SurfaceEdition = (this.SurfaceEdition || 0) + 1;
         this.Index = new SurfaceIndex(this.SurfaceRecord);
         this.Integrator.SetSurface(this.SurfaceRecord);
         this.RenderObjects();
@@ -709,6 +751,82 @@ export class TexturePanel
         this.InvalidateDecals();
         this.Recomposite();
         this.UpdateStatusBar();
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Measuring the surface. Half of the generators are not patterns at all — they are readings of the model: how it
+    // curves, how buried a crease is, how much material stands behind a wall, which faces a click landed on. None of
+    // those readings exist until somebody takes them, and taking them is seconds rather than milliseconds, so they are
+    // taken once, held against the surface they were taken from, and dropped the moment it changes.
+    //----------------------------------------------------------------------------------------------------------------------
+    get Measured()
+    {
+        return this.SheetEdition && this.SheetEdition === this.SurfaceEdition ? this.Sheets : null;
+    }
+
+    MeasureModel(Announce = true)
+    {
+        const Surface = this.SurfaceRecord;
+        if (!Surface) return null;
+        if (Announce) this.SetStatus("Measuring the surface", "busy");
+        const Started = performance.now();
+        // Occlusion is the one reading the viewport already wanted, so it may well be here; the rest is ours.
+        if (!Surface.Occlusion) BakeOcclusion(Surface, this.Index, 16);
+        const Thickness = MeasureThickness(Surface, this.Index, 10);
+        this.Measuring = true;
+        this.Sheets = MeasureSurface(Surface, { Size: this.SheetResolution, Thickness });
+        this.SheetEdition = this.SurfaceEdition;
+        this.MeasureMilliseconds = Math.round(performance.now() - Started);
+        this.Measuring = false;
+        for (const Layer of this.Layers) this.SolveLayerSheet(Layer, false);
+        this.Recomposite();
+        this.SetStatus("Ready", "ready");
+        if (Announce)
+        {
+            this.RenderInspector();
+            this.Notify(
+                `Surface measured in ${this.MeasureMilliseconds} ms — ${this.Sheets.Triangles} faces, ` +
+                    `${this.Sheets.Islands} UV island${this.Sheets.Islands === 1 ? "" : "s"}.`,
+            );
+        }
+        return this.Sheets;
+    }
+
+    // One layer's generator stack, solved into the sheet the shader multiplies into its mask. A stack with nothing in
+    // it has no sheet at all, which is how the cost stays at nothing for the layers that never open the section.
+    SolveLayerSheet(Layer, Recomposite = true)
+    {
+        if (!Layer || !this.Integrator?.Ready) return null;
+        const Entries = (Layer.Mask?.Generators || []).filter((Entry) => Entry.Enabled !== false);
+        if (!Entries.length)
+        {
+            this.Integrator.ClearMaskSheet(Layer.Identifier);
+            if (Recomposite) this.Recomposite();
+            return null;
+        }
+        // A reading that has never been taken would come back flat, which looks like a generator that does not work.
+        // Taking it here means dropping a dust generator on a layer measures the model without being asked twice.
+        if (!this.Measuring && !this.Measured && Entries.some((Entry) => GeneratorNeedsSurface(Entry.Kind)))
+            this.MeasureModel(false);
+        const Started = performance.now();
+        const Solved = SolveMask(Entries, this.Measured, { Size: this.SheetResolution });
+        this.Integrator.SetMaskSheet(Layer, SheetImage(Solved), Solved.Size);
+        this.SolveMilliseconds = Math.round(performance.now() - Started);
+        if (Recomposite) this.Recomposite();
+        return Solved;
+    }
+
+    // Dragging a weight is forty solves a second if it is taken literally, so the drags coalesce and the drop lands.
+    ScheduleSheet(Layer)
+    {
+        const Wanted = Layer || this.ActiveLayer;
+        if (!Wanted) return;
+        if (this.SheetTimer) clearTimeout(this.SheetTimer);
+        this.SheetTimer = setTimeout(() =>
+        {
+            this.SheetTimer = 0;
+            this.SolveLayerSheet(Wanted);
+        }, 60);
     }
 
     ScheduleOcclusion()
@@ -3410,6 +3528,9 @@ export class TexturePanel
             return;
         }
 
+        // Picking faces outranks every tool, including the camera: it is a mode, it says so on the cursor, and a click
+        // that was meant for the model while it is on must not come out as a stroke.
+        if (this.PickingFaces && Event.button === 0 && this.PickFaceAt(Event)) return;
         const [DeviceX, DeviceY] = this.DeviceCoordinates(Event);
         const Hit = this.Projection.Resolve(this.Index, this.Camera, DeviceX, DeviceY);
         if (!Hit)
@@ -7656,6 +7777,16 @@ export class TexturePanel
             if (Committed || Path === "Finish.Family" || Path === "Finish.Style") this.RenderInspector();
             return;
         }
+        // A control on a generator means the sheet is now wrong. Solving is tens of milliseconds, which is too much to
+        // do forty times a second but nothing at all once the thumb comes off the slider, so the drags coalesce.
+        if (Path.startsWith("Mask.Generators"))
+        {
+            if (Committed) this.SolveLayerSheet(this.ActiveLayer);
+            else this.ScheduleSheet(this.ActiveLayer);
+            this.RenderStack();
+            if (Committed) this.RenderInspector();
+            return;
+        }
         if (Path.startsWith("Generator.Kind") || Path.startsWith("Mask."))
         {
             if (Path === "Generator.Kind")
@@ -7717,6 +7848,19 @@ export class TexturePanel
             case "mark-raise":
             case "mark-lower":
                 this.MarkAction(Action, Argument);
+                break;
+            case "field-add":
+            case "field-select":
+            case "field-visible":
+            case "field-raise":
+            case "field-lower":
+            case "field-remove":
+            case "field-pick":
+            case "field-pick-clear":
+                this.FieldAction(Action, Argument);
+                break;
+            case "measure-surface":
+                this.MeasureModel(true);
                 break;
             case "add-object":
                 this.AddObject("cube");
@@ -8235,6 +8379,9 @@ export class TexturePanel
                            ])}`,
             }),
         );
+        // The generator stack shapes whatever mask the layer has, so it comes straight after it — and it is offered
+        // even when there is no mask yet, because adding dust is a perfectly good reason to want one.
+        Sections.push(this.GeneratorStackSection(Layer));
         return Sections.join("");
     }
 
@@ -8485,6 +8632,300 @@ export class TexturePanel
             </summary>
             <div class="channel-body">${Control}</div>
         </details>`;
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // The generator stack on a mask. Substance's generators are the part of it people actually miss, and the reason is
+    // that they are not patterns — they are the model, read back: dust lands where the surface faces the sky and nothing
+    // is above it, wear comes off the edges that stand proud, grime collects where a crease is buried. The catalogue here
+    // is that idea taken further than the basic set: the readings, the four weathering recipes built out of them, and a
+    // set of selections — by object, by UDIM tile, by UV island, by picked face, by vertex colour — that mask by what a
+    // part of the model IS rather than by where it is in the texture.
+    //----------------------------------------------------------------------------------------------------------------------
+    GeneratorStackSection(Layer)
+    {
+        const Entries = Layer.Mask.Generators || [];
+        const Live = Entries.filter((Entry) => Entry.Enabled !== false);
+        const Measured = this.Measured;
+        const Wanting = MissingMeasurements(Live, Measured);
+        const Chosen = Entries.findIndex((Entry) => Entry.Identifier === this.FieldSelection);
+        const Body = [
+            `<p class="property-hint">Generators drive the mask from the model itself. They stack: each one meets what is
+                under it by its own mode, and the result multiplies into the mask above.</p>`,
+            this.GeneratorShelf(),
+            Entries.length
+                ? `<div class="field-stack">${Entries.map((Entry, Index) => this.GeneratorRow(Entry, Index, Entries.length)).join("")}</div>`
+                : `<p class="field-empty">Nothing on the stack. Pick a generator above — dust and edge wear are the two
+                    that sell a surface, and both want the model measured first.</p>`,
+            Wanting.length
+                ? `<div class="field-measure">
+                     <p>${Escape(Wanting.join(", "))} ${Wanting.length === 1 ? "reads" : "read"} the model, and the model has not
+                        been measured on this shape yet.</p>
+                     ${ActionRow([{ Action: "measure-surface", Label: "Measure the surface", Glyph: "focus" }])}
+                   </div>`
+                : Measured
+                  ? `<p class="property-hint">Measured at ${Measured.Size}² · ${Measured.Triangles.toLocaleString()} faces ·
+                      ${Measured.Islands} island${Measured.Islands === 1 ? "" : "s"} ·
+                      ${Measured.Tiles.length} tile${Measured.Tiles.length === 1 ? "" : "s"}
+                      ${this.MeasureMilliseconds ? `· ${this.MeasureMilliseconds} ms` : ""}
+                      ${ActionRow([{ Action: "measure-surface", Label: "Measure again", Glyph: "rotate" }])}</p>`
+                  : "",
+            Chosen >= 0 ? this.GeneratorEntryBody(Entries[Chosen], Chosen) : "",
+        ];
+        return Group({
+            Title: "Mask generators",
+            Badge: Entries.length ? `${Live.length}/${Entries.length}` : "NONE",
+            Open: Entries.length > 0,
+            Body: Body.join(""),
+        });
+    }
+
+    // The catalogue, by family. Icon-led because the name of a generator is never the thing you recognise it by.
+    GeneratorShelf()
+    {
+        return `<div class="field-shelf">
+            ${GeneratorFamilies.map(
+                (Family) => `
+                <div class="field-family">
+                    <span class="field-family-name">${Escape(Family.Label)}<em>${Escape(Family.Hint || "")}</em></span>
+                    <div class="field-chips">
+                        ${GeneratorOrdering.filter((Entry) => GeneratorFamily(Entry.Identifier) === Family.Identifier)
+                            .map(
+                                (Entry) => `
+                            <button class="field-chip" data-action="field-add" data-argument="${Entry.Identifier}"
+                                    title="${Escape(Entry.Hint || Entry.Label)}">
+                                ${Icon(Entry.Glyph)}<span>${Escape(Entry.Label)}</span>
+                            </button>`,
+                            )
+                            .join("")}
+                    </div>
+                </div>`,
+            ).join("")}
+        </div>`;
+    }
+
+    // One entry of the stack. The row is the whole of it at a glance — what it is, how it joins, how much of it there
+    // is — and the controls for the one being edited open underneath the list rather than inside the row.
+    GeneratorRow(Entry, Index, Count)
+    {
+        const Specification = GeneratorByIdentifier[Entry.Kind] || GeneratorByIdentifier.fbm;
+        const Mode = CombineModes.find((Candidate) => Candidate.Identifier === Entry.Combine) || CombineModes[0];
+        const Selected = Entry.Identifier === this.FieldSelection;
+        return `
+        <div class="field-row ${Selected ? "selected" : ""} ${Entry.Enabled === false ? "muted" : ""}"
+             data-action="field-select" data-argument="${Entry.Identifier}">
+            <span class="field-mark">${Icon(Specification.Glyph)}</span>
+            <span class="field-name">${Escape(Specification.Label)}<em>${Escape(Mode.Label)} · ${Math.round((Entry.Weight ?? 1) * 100)}%</em></span>
+            <div class="field-buttons">
+                <button class="icon-button" data-action="field-visible" data-argument="${Entry.Identifier}"
+                        title="${Entry.Enabled === false ? "Show" : "Hide"}">${Icon(Entry.Enabled === false ? "hidden" : "eye")}</button>
+                <button class="icon-button" data-action="field-raise" data-argument="${Entry.Identifier}"
+                        ${Index === 0 ? "disabled" : ""} title="Move up">${Icon("up")}</button>
+                <button class="icon-button" data-action="field-lower" data-argument="${Entry.Identifier}"
+                        ${Index === Count - 1 ? "disabled" : ""} title="Move down">${Icon("down")}</button>
+                <button class="icon-button" data-action="field-remove" data-argument="${Entry.Identifier}"
+                        title="Remove">${Icon("trash")}</button>
+            </div>
+        </div>`;
+    }
+
+    // The controls for one entry: how it joins the stack, how much of it, then whatever the generator itself asks for.
+    GeneratorEntryBody(Entry, Index)
+    {
+        const Specification = GeneratorByIdentifier[Entry.Kind] || GeneratorByIdentifier.fbm;
+        const Prefix = `Mask.Generators.${Index}`;
+        const Rows = (Specification.Controls || []).map((Name) =>
+        {
+            const Control = GeneratorControls[Name];
+            return SliderRow({
+                Label: Control.Label,
+                Path: `${Prefix}.${Name}`,
+                Value: Entry[Name],
+                Minimum: Control.Minimum,
+                Maximum: Control.Maximum,
+                Step: Control.Step,
+                Unit: Control.Unit,
+            });
+        });
+        return `
+        <div class="field-editor">
+            <div class="field-editor-head">${Icon(Specification.Glyph)}<span>${Escape(Specification.Label)}</span></div>
+            <p class="property-hint">${Escape(Specification.Hint)}</p>
+            ${SelectRow({
+                Label: "Combine",
+                Path: `${Prefix}.Combine`,
+                Value: Entry.Combine,
+                Options: CombineModes.map((Mode) => ({ Value: Mode.Identifier, Label: Mode.Label })),
+                Hint: "How this one meets what is under it on the stack.",
+            })}
+            ${SliderRow({ Label: "Weight", Path: `${Prefix}.Weight`, Value: Entry.Weight, Minimum: 0, Maximum: 1, Step: 0.01, Unit: "—" })}
+            ${this.GeneratorChoice(Entry, Prefix)}
+            ${Rows.join("")}
+            ${ToggleRow({ Label: "Invert", Path: `${Prefix}.Invert`, Value: Entry.Invert })}
+        </div>`;
+    }
+
+    // What a selection generator needs beyond its sliders: which object, which tile, which island, which faces, which
+    // vertex map. The face picker is the only one that cannot be a dropdown, so it is a mode the viewport goes into.
+    GeneratorChoice(Entry, Prefix)
+    {
+        const Sheets = this.Measured;
+        if (Entry.Kind === "object")
+        {
+            const Options = [{ Value: "", Label: "Every object" }].concat(
+                (Sheets?.Owners || this.SceneObjects.map((Object, Index) => ({ Identifier: Object.Identifier, Name: Object.Name, Index }))).map(
+                    (Owner) => ({ Value: String(Owner.Index), Label: Owner.Name }),
+                ),
+            );
+            return SelectRow({ Label: "Object", Path: `${Prefix}.Choice`, Value: String(Entry.Choice ?? ""), Options });
+        }
+        if (Entry.Kind === "tile")
+        {
+            const Tiles = Sheets?.Tiles?.length ? Sheets.Tiles : [...new Set(this.SceneObjects.map((Object) => Object.Tile))].sort();
+            return SelectRow({
+                Label: "UDIM tile",
+                Path: `${Prefix}.Choice`,
+                Value: String(Entry.Choice ?? ""),
+                Options: Tiles.map((Tile) => ({ Value: String(Tile), Label: `${1001 + Tile}` })),
+            });
+        }
+        if (Entry.Kind === "island")
+        {
+            const Count = Sheets?.Islands || 0;
+            if (!Count) return `<p class="property-hint">Measure the surface to list its UV islands.</p>`;
+            return SelectRow({
+                Label: "UV island",
+                Path: `${Prefix}.Choice`,
+                Value: String(Entry.Choice ?? "0"),
+                Options: Array.from({ length: Count }, (Ignored, Index) => ({ Value: String(Index), Label: `Island ${Index + 1}` })),
+            });
+        }
+        if (Entry.Kind === "vertex")
+        {
+            return SelectRow({
+                Label: "Vertex map",
+                Path: `${Prefix}.Choice`,
+                Value: String(Entry.Choice || "occlusion"),
+                Options: VertexMaps.map((Map) => ({ Value: Map.Identifier, Label: Map.Label })),
+            });
+        }
+        if (Entry.Kind === "faces")
+        {
+            const Picked = Entry.Marks?.length || 0;
+            return `
+            <div class="field-pick">
+                <p class="property-hint">${Picked ? `${Picked} face${Picked === 1 ? "" : "s"} picked.` : "No faces picked yet."}
+                    With picking on, clicking the model adds a face and shift-clicking takes one away.</p>
+                ${ActionRow([
+                    { Action: "field-pick", Label: this.PickingFaces ? "Stop picking" : "Pick faces", Glyph: "picker" },
+                    { Action: "field-pick-clear", Label: "Clear", Glyph: "close" },
+                ])}
+            </div>`;
+        }
+        return "";
+    }
+
+    // Everything the generator stack can be asked to do. Each one ends the same way: the stack is solved again, the
+    // sheet goes up, the surface redraws — there is no apply button anywhere in this app and there is not going to be.
+    FieldAction(Action, Argument)
+    {
+        const Layer = this.ActiveLayer;
+        if (!Layer) return;
+        const Entries = Layer.Mask.Generators || (Layer.Mask.Generators = []);
+        const At = Entries.findIndex((Entry) => Entry.Identifier === Argument);
+        if (Action === "field-add")
+        {
+            const Entry = NormaliseEntry(DefaultEntry(Argument));
+            // The first thing on a stack has nothing under it to multiply into, so it replaces rather than darkens.
+            if (!Entries.length) Entry.Combine = "overwrite";
+            Entries.push(Entry);
+            this.FieldSelection = Entry.Identifier;
+            // A generator on a layer with no mask is a generator doing nothing, so the mask it needs comes with it.
+            if (Layer.Mask.Kind === "none")
+            {
+                Layer.Mask.Kind = "stroke";
+                this.Integrator.EnsureMask(Layer);
+                this.Integrator.FloodLayer(Layer, "mask", [1, 1, 1], 1);
+            }
+            this.AfterFieldChange(`${Entry.Label} added to ${Layer.Name}.`);
+            return;
+        }
+        if (At < 0 && Action !== "field-pick" && Action !== "field-pick-clear") return;
+        if (Action === "field-select")
+        {
+            this.FieldSelection = this.FieldSelection === Argument ? "" : Argument;
+            if (this.PickingFaces && Entries[At]?.Kind !== "faces") this.SetFacePicking(false);
+            this.RenderInspector();
+            return;
+        }
+        if (Action === "field-visible") Entries[At].Enabled = Entries[At].Enabled === false;
+        if (Action === "field-remove")
+        {
+            const [Gone] = Entries.splice(At, 1);
+            if (this.FieldSelection === Gone.Identifier) this.FieldSelection = "";
+            if (this.PickingFaces && Gone.Kind === "faces") this.SetFacePicking(false);
+        }
+        if (Action === "field-raise" && At > 0) Entries.splice(At - 1, 0, ...Entries.splice(At, 1));
+        if (Action === "field-lower" && At < Entries.length - 1) Entries.splice(At + 1, 0, ...Entries.splice(At, 1));
+        if (Action === "field-pick")
+        {
+            this.SetFacePicking(!this.PickingFaces, Argument);
+            return;
+        }
+        if (Action === "field-pick-clear")
+        {
+            const Entry = Entries.find((Candidate) => Candidate.Identifier === this.FieldSelection);
+            if (Entry) Entry.Marks = [];
+        }
+        this.AfterFieldChange("");
+    }
+
+    AfterFieldChange(Note)
+    {
+        const Layer = this.ActiveLayer;
+        this.MarkDirty();
+        this.SolveLayerSheet(Layer);
+        this.RenderStack();
+        this.RenderInspector();
+        if (Note) this.Notify(Note);
+    }
+
+    // Picking faces is a mode the viewport goes into rather than a tool, because it has to be available while a brush
+    // is in hand — the point of it is to mask off the part of the model you are about to paint.
+    SetFacePicking(On, Argument = "")
+    {
+        this.PickingFaces = Boolean(On);
+        if (Argument) this.FieldSelection = Argument;
+        if (this.PickingFaces && !this.Measured) this.MeasureModel(false);
+        Select("#viewport")?.classList.toggle("picking-faces", this.PickingFaces);
+        this.RenderInspector();
+        this.Notify(
+            this.PickingFaces
+                ? "Picking faces — click the model to add one, shift-click to take it away, Escape when you are done."
+                : "Face picking off.",
+        );
+    }
+
+    // A click on the model while picking. The face index comes back from the same raycast the brush uses, so what is
+    // picked is exactly what is under the cursor rather than the nearest vertex to it.
+    PickFaceAt(Event)
+    {
+        const Layer = this.ActiveLayer;
+        const Entry = (Layer?.Mask?.Generators || []).find((Candidate) => Candidate.Identifier === this.FieldSelection);
+        if (!Entry || Entry.Kind !== "faces") return false;
+        const [DeviceX, DeviceY] = this.DeviceCoordinates(Event);
+        const Hit = this.Projection.Resolve(this.Index, this.Camera, DeviceX, DeviceY);
+        if (!Hit || !(Hit.Triangle >= 0))
+        {
+            this.Notify("Nothing under the cursor to pick.");
+            return true;
+        }
+        const Marks = new Set(Entry.Marks || []);
+        if (Event.shiftKey) Marks.delete(Hit.Triangle);
+        else Marks.add(Hit.Triangle);
+        Entry.Marks = [...Marks];
+        this.AfterFieldChange("");
+        return true;
     }
 
     GeneratorBody(Prefix, Generator)
@@ -9311,6 +9752,7 @@ export class TexturePanel
             {
                 this.EndSizing();
                 this.ShowPopover("", false);
+                if (this.PickingFaces) this.SetFacePicking(false);
             }
             const Tabbing = Event.key === "Tab" || Event.code === "Tab";
             if (Tabbing && !Event.ctrlKey && !Event.metaKey && !Event.altKey && !document.querySelector("dialog[open]"))
@@ -9642,6 +10084,8 @@ export class TexturePanel
             ["Layers composited", String(Statistics.Layers)],
             ["Triangles", Statistics.Triangles.toLocaleString()],
             ["Occlusion bake", this.OcclusionMilliseconds ? `${this.OcclusionMilliseconds} ms` : "—"],
+            ["Surface measure", this.MeasureMilliseconds ? `${this.MeasureMilliseconds} ms` : "—"],
+            ["Generator solve", this.SolveMilliseconds ? `${this.SolveMilliseconds} ms` : "—"],
             ["Revision bytes", `${this.Revisions.Megabytes.toFixed(1)} MB`],
         ];
         Select("#diagnostic-values").innerHTML = Entries.map(

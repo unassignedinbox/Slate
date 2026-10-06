@@ -15,6 +15,7 @@ import {
     BlendOrdering,
 } from "./ChannelSpecification.js";
 import { DefaultGenerator, NormaliseGenerator } from "./GeneratorSpecification.js";
+import { NormaliseEntry } from "./MaskSolver.js";
 import { DefaultRampStops, SortRampStops, DecalFitIdentifiers } from "./StrokeSpecification.js";
 import { FinishDefaults, SanitiseFinish, FinishBadge } from "./FinishSpecification.js";
 import { CreateObject, SanitiseObject, FirstTile } from "./SceneStructure.js";
@@ -172,6 +173,9 @@ export const CreateMark = (Decal, Overrides = {}) =>
 export const MaskDefaults = () => ({
     Kind: "none",
     Invert: false,
+    // The stack the mask is shaped by: dust over edge wear over a selection of faces, each joined to what is under
+    // it by a mode and a weight. Empty is the common case and costs nothing — the sheet is only solved when it is not.
+    Generators: [],
     Generator: DefaultGenerator("fbm"),
     Colour: [0.82, 0.12, 0.14],     // the key a colour mask selects from the stack beneath the layer
     Tolerance: 0.25,
@@ -541,6 +545,7 @@ export const SanitiseLayer = (Candidate) =>
             Colour: SanitiseColour(Candidate.Mask.Colour, [0.82, 0.12, 0.14]),
             Tolerance: Clamp(Candidate.Mask.Tolerance ?? 0.25, 0, 1),
             Softness: Clamp(Candidate.Mask.Softness ?? 0.12, 0, 1),
+            Generators: Array.isArray(Candidate.Mask.Generators) ? Candidate.Mask.Generators.map(NormaliseEntry) : [],
         };
     // A layer whose mask was left in hand comes back with the mask in hand; one without a mask can only be its content.
     Layer.Target = Candidate.Target === "mask" && Layer.Mask.Kind !== "none" ? "mask" : "coverage";

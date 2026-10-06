@@ -492,13 +492,18 @@ float ColourMask(vec3 Lower, vec3 Key, float Tolerance, float Softness)
 
 float SampleMask(
     int Kind, float Painted, vec2 Coordinate, vec3 Position, vec3 Normal, vec4 Field,
-    int FieldKind, vec4 A, vec4 B, vec3 Lower, vec3 Key, float Tolerance, float Softness, float Invert)
+    int FieldKind, vec4 A, vec4 B, vec3 Lower, vec3 Key, float Tolerance, float Softness, float Invert,
+    float Sheet, float Sheeted)
 {
     float Mask = 1.0;
     if (Kind == 1) Mask = Painted;
     else if (Kind == 2)
         Mask = SampleGenerator(FieldKind, Coordinate, Position, Normal, Field, A.x, int(A.y), A.z, A.w, B.x, B.y, B.z, B.w);
     else if (Kind == 3) Mask = ColourMask(Lower, Key, Tolerance, Softness);
+    // The generator stack arrives already solved, as one sheet: dust over wear over a selection of faces, each
+    // joined to the one beneath it on the way in. Here it only has to meet the mask it is shaping, and a mask
+    // shaped by two things at once is the product of them — a stack with nothing in it is white and changes nothing.
+    Mask *= mix(1.0, Sheet, Sheeted);
     return mix(Mask, 1.0 - Mask, Invert);
 }`;
 
@@ -1298,6 +1303,8 @@ uniform float uMaskInvert;
 uniform vec3 uMaskColour;
 uniform float uMaskTolerance;
 uniform float uMaskSoftness;
+uniform sampler2D uMaskSheet;   // the generator stack, already solved into texture space
+uniform float uMaskSheeted;     // 1 when that stack has anything in it
 
 uniform int uFinishFamily;
 uniform int uFinishStyle;
@@ -1433,7 +1440,8 @@ void main()
     if (uMaskKind > 0)
         Coverage *= SampleMask(
             uMaskKind, texture(uMaskMap, vCoordinate).a, vCoordinate, Position, Normal, Field,
-            uMaskField, uMaskA, uMaskB, Lower0.rgb, uMaskColour, uMaskTolerance, uMaskSoftness, uMaskInvert);
+            uMaskField, uMaskA, uMaskB, Lower0.rgb, uMaskColour, uMaskTolerance, uMaskSoftness, uMaskInvert,
+            texture(uMaskSheet, vCoordinate).r, uMaskSheeted);
 
     // A layer scoped to one object only touches that object's tile of the sheet.
     if (uScope.w > 0.5)
@@ -1490,6 +1498,8 @@ uniform float uMaskInvert;
 uniform vec3 uMaskColour;
 uniform float uMaskTolerance;
 uniform float uMaskSoftness;
+uniform sampler2D uMaskSheet;   // the generator stack, already solved into texture space
+uniform float uMaskSheeted;     // 1 when that stack has anything in it
 
 out vec4 oMask;
 
@@ -1502,7 +1512,8 @@ void main()
     float Mask = SampleMask(
         uMaskKind, texture(uMaskMap, vCoordinate).a, vCoordinate, Position, Normal, Field,
         uMaskField, uMaskA, uMaskB, texture(uLower0, vCoordinate).rgb,
-        uMaskColour, uMaskTolerance, uMaskSoftness, uMaskInvert);
+        uMaskColour, uMaskTolerance, uMaskSoftness, uMaskInvert,
+        texture(uMaskSheet, vCoordinate).r, uMaskSheeted);
     oMask = vec4(vec3(Mask), Mask);
 }`;
 

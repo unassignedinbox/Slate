@@ -812,7 +812,7 @@ export class ShadingIntegrator
         const Device = this.Device;
         const Record = this.LayerImages.get(Identifier);
         if (!Record) return;
-        for (const Slot of ["Coverage", ...PaintedSlots, "Mask", "Decal"]) if (Record[Slot]) Device.deleteTexture(Record[Slot]);
+        for (const Slot of ["Coverage", ...PaintedSlots, "Mask", "Decal", "Sheet"]) if (Record[Slot]) Device.deleteTexture(Record[Slot]);
         for (const Slot of ["Coverage", ...PaintedSlots, "Mask"])
             if (Record[`${Slot}Target`]) Device.deleteFramebuffer(Record[`${Slot}Target`]);
         if (Record.PaintTarget) Device.deleteFramebuffer(Record.PaintTarget);
@@ -861,6 +861,43 @@ export class ShadingIntegrator
         Device.bindTexture(Device.TEXTURE_2D, null);
         Record.Decal = Image;
         return Image;
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // The solved generator stack. The measurements a generator reads — how the surface curves, how buried a crease is,
+    // which faces were picked — are known on the processor and nowhere near the card, so the stack is solved there and
+    // arrives here as one finished sheet. Uploading it is the whole of the integrator's part in it.
+    //----------------------------------------------------------------------------------------------------------------------
+    SetMaskSheet(Layer, Pixels, Size)
+    {
+        const Device = this.Device;
+        const Record = this.LayerRecord(Layer);
+        if (!Pixels || !Size)
+        {
+            this.ClearMaskSheet(Layer.Identifier);
+            return null;
+        }
+        if (!Record.Sheet) Record.Sheet = Device.createTexture();
+        Device.bindTexture(Device.TEXTURE_2D, Record.Sheet);
+        Device.pixelStorei(Device.UNPACK_FLIP_Y_WEBGL, false);
+        Device.pixelStorei(Device.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        Device.texImage2D(Device.TEXTURE_2D, 0, Device.RGBA8, Size, Size, 0, Device.RGBA, Device.UNSIGNED_BYTE, Pixels);
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MIN_FILTER, Device.LINEAR);
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MAG_FILTER, Device.LINEAR);
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_WRAP_S, Device.CLAMP_TO_EDGE);
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_WRAP_T, Device.CLAMP_TO_EDGE);
+        Device.bindTexture(Device.TEXTURE_2D, null);
+        Record.SheetSize = Size;
+        return Record.Sheet;
+    }
+
+    ClearMaskSheet(Identifier)
+    {
+        const Record = this.LayerImages.get(Identifier);
+        if (!Record || !Record.Sheet) return;
+        this.Device.deleteTexture(Record.Sheet);
+        Record.Sheet = null;
+        Record.SheetSize = 0;
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -1220,6 +1257,7 @@ export class ShadingIntegrator
             this.BindImage(Program, "uSurfacingMap", Record.Surfacing || this.BlankImage(), 10);
             this.BindImage(Program, "uCoatingMap", Record.Coating || this.BlankImage(), 11);
             this.BindImage(Program, "uRadianceMap", Record.Radiance || this.BlankImage(), 12);
+            this.BindImage(Program, "uMaskSheet", Record.Sheet || this.WhiteImage(), 13);
             this.UploadLayerUniforms(Program, Layer, Material, Mark, Painted);
             Device.drawArrays(Device.TRIANGLES, 0, 3);
             const Swap = Source;
@@ -1298,6 +1336,7 @@ export class ShadingIntegrator
         Device.uniform3fv(Uniforms.get("uMaskColour"), Mask.Colour || [0.82, 0.12, 0.14]);
         Device.uniform1f(Uniforms.get("uMaskTolerance"), Mask.Tolerance ?? 0.25);
         Device.uniform1f(Uniforms.get("uMaskSoftness"), Mask.Softness ?? 0.12);
+        Device.uniform1f(Uniforms.get("uMaskSheeted"), this.LayerImages.get(Layer.Identifier)?.Sheet ? 1 : 0);
 
         const Finish = Layer.Finish;
         if (Finish)
@@ -1370,6 +1409,7 @@ export class ShadingIntegrator
         this.BindImage(Program, "uPositionMap", this.BakeTarget.Images[0], 2);
         this.BindImage(Program, "uNormalMap", this.BakeTarget.Images[1], 3);
         this.BindImage(Program, "uFieldMap", this.FieldTarget.Images[0], 4);
+        this.BindImage(Program, "uMaskSheet", Record.Sheet || this.WhiteImage(), 5);
         const Uniforms = Program.Uniforms;
         const Mask = Layer.Mask;
         const Scale = Material?.texture_scale ?? 1;
@@ -1387,6 +1427,7 @@ export class ShadingIntegrator
         Device.uniform3fv(Uniforms.get("uMaskColour"), Mask.Colour || [0.82, 0.12, 0.14]);
         Device.uniform1f(Uniforms.get("uMaskTolerance"), Mask.Tolerance ?? 0.25);
         Device.uniform1f(Uniforms.get("uMaskSoftness"), Mask.Softness ?? 0.12);
+        Device.uniform1f(Uniforms.get("uMaskSheeted"), this.LayerImages.get(Layer.Identifier)?.Sheet ? 1 : 0);
         Device.drawArrays(Device.TRIANGLES, 0, 3);
         Device.bindVertexArray(null);
         Device.bindFramebuffer(Device.FRAMEBUFFER, null);
