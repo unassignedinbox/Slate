@@ -1684,7 +1684,7 @@ export function Inspector({
               {Aerial ? (
                 <FogSpectrum V={V} Change={AssignProperty} />
               ) : (
-                <HeightFogVisual V={V} />
+                <HeightFogVisual V={V} Change={AssignProperty} />
               )}
               {Height && F("Colour")}
             </Card>

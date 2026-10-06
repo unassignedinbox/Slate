@@ -188,15 +188,18 @@ export function fogPanel(node, ctx) {
 
   function paintChamber() {
     const [g, w, h] = sizeCanvas(chamberCv, 74); g.clearRect(0, 0, w, h); g.fillStyle = '#070809'; g.fillRect(0, 0, w, h);
-    const cy = h / 2, col = rgb(C()), strength = S(), layerDensity = atHeight(D(), H(), 25), active = P.enabled !== false, preview = active ? 1 : .55;
-    for (let x = 0; x < w; x += 2) {
-      const t = x / w, physical = transmission(layerDensity, t * 120), display = .2 + .8 * Math.pow(physical, .15), spread = 3 + t * t * (12 + strength * 22), a = preview * (.06 + strength * .16) * display;
+    const cy = h / 2, col = rgb(C()), strength = S(), layerDensity = atHeight(D(), H(), 25), active = P.enabled !== false, preview = active ? 1 : .62, range = sightRange(layerDensity), rangeX = 12 + clamp(range / 120, 0, 1) * (w - 24), endSpread = 8 + strength * 16;
+    g.strokeStyle = 'rgba(255,255,255,.07)'; g.setLineDash([2, 5]);
+    [cy - 24, cy, cy + 24].forEach(y => { g.beginPath(); g.moveTo(12, y); g.lineTo(w - 12, y); g.stroke(); }); g.setLineDash([]);
+    for (let x = 12; x < w - 10; x += 2) {
+      const t = (x - 12) / Math.max(1, w - 24), physical = transmission(layerDensity, t * 120), display = .2 + .8 * Math.pow(physical, .15), spread = 3 + t * t * (12 + strength * 22), a = preview * (.06 + strength * .16) * display;
       const grd = g.createLinearGradient(0, cy - spread, 0, cy + spread); grd.addColorStop(0, rgba(col, 0)); grd.addColorStop(.5, rgba(col, a)); grd.addColorStop(1, rgba(col, 0)); g.fillStyle = grd; g.fillRect(x, cy - spread, 2.1, spread * 2);
       g.fillStyle = rgba(col, preview * (.14 + physical * .46)); g.fillRect(x, cy - .9, 2.1, 1.8);
     }
-    g.fillStyle = `rgba(255,247,220,${active ? .95 : .55})`; g.beginPath(); g.arc(10, cy, 4, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = 'rgba(255,255,255,.13)'; g.beginPath(); g.moveTo(10, cy); g.lineTo(w - 8, cy); g.stroke();
-    g.fillStyle = 'rgba(255,255,255,.3)'; g.font = '8px ui-sans-serif,system-ui'; g.textAlign = 'left'; g.fillText(`${active ? 'LIVE' : 'PREVIEW'} · SUN · 25 m LAYER`, 7, 10); g.textAlign = 'right'; g.fillText(`${(transmission(layerDensity, 120) * 100).toFixed(0)}% PHYSICAL AT 120 m`, w - 7, h - 6);
+    g.strokeStyle = rgba(col, preview * .28); g.beginPath(); g.moveTo(12, cy); g.lineTo(w - 12, cy - endSpread); g.moveTo(12, cy); g.lineTo(w - 12, cy + endSpread); g.stroke();
+    g.strokeStyle = 'rgba(239,110,110,.62)'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(rangeX, 20); g.lineTo(rangeX, h - 18); g.stroke(); g.setLineDash([]);
+    g.fillStyle = `rgba(255,247,220,${active ? .95 : .62})`; g.beginPath(); g.arc(12, cy, 4, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.36)'; g.font = '8px ui-sans-serif,system-ui'; g.textAlign = 'left'; g.fillText(`${active ? 'LIVE' : 'PREVIEW'} · 25 m LAYER`, 8, 11); g.fillText(`D ${D().toFixed(4)} · H ${H().toFixed(0)} m · S ${strength.toFixed(2)}`, 8, h - 5); g.textAlign = 'right'; g.fillText(`2% · ${range >= 1000 ? (range / 1000).toFixed(1) + ' km' : range.toFixed(0) + ' m'}`, w - 8, 11); g.fillText(`${(transmission(layerDensity, 120) * 100).toFixed(0)}% PHYSICAL AT 120 m`, w - 8, h - 5);
   }
 
   function paintAll() {

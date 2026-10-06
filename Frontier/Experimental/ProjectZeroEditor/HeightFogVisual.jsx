@@ -1,88 +1,118 @@
 import React, { useId } from "react";
 
-export default function HeightFogVisual({ V }) {
+const Clamp = (Value, Minimum, Maximum) =>
+  Math.max(Minimum, Math.min(Maximum, Value));
+
+export default function HeightFogVisual({ V, Change }) {
   const Id = useId().replaceAll(":", ""),
     Enabled = !!V("Enabled"),
     Density = Math.max(0, Number(V("Density")) || 0),
     Falloff = Math.max(10, Number(V("Falloff Height")) || 400),
-    Scatter = Math.max(0, Number(V("Sun Scatter")) || 0),
     Colour = V("Colour") || "#ffffff",
     At = (Altitude) => Density * Math.exp(-Altitude / Falloff),
-    Strength = Math.min(1, Density / 0.2),
-    Preview = Enabled ? 1 : 0.68,
-    FalloffY = 169 - Math.min(1, Falloff / 3000) * 124;
+    Left = 34,
+    Right = 286,
+    Top = 20,
+    Bottom = 174,
+    X = (Altitude) => Left + (Altitude / 3000) * (Right - Left),
+    Y = (Value) => Bottom - (Value / 0.2) * (Bottom - Top),
+    Profile = Array.from({ length: 61 }, (_, Index) => {
+      const Altitude = Index * 50;
+      return [X(Altitude), Y(At(Altitude))];
+    }),
+    Path = Profile.map(([Px, Py], Index) =>
+      `${Index ? "L" : "M"}${Px.toFixed(2)} ${Py.toFixed(2)}`,
+    ).join(" "),
+    FillPath = `${Path} L${Right} ${Bottom} L${Left} ${Bottom} Z`,
+    PointX = X(Falloff),
+    PointY = Y(At(Falloff));
+
+  const Edit = (Event) => {
+    const Bounds = Event.currentTarget.getBoundingClientRect(),
+      Px = ((Event.clientX - Bounds.left) / Bounds.width) * 300,
+      Py = ((Event.clientY - Bounds.top) / Bounds.height) * 210,
+      NextFalloff = Math.round(
+        10 + (Clamp(Px, Left, Right) - Left) / (Right - Left) * 2990,
+      ),
+      NextDensity = +(
+        ((Bottom - Clamp(Py, Top, Bottom)) / (Bottom - Top)) *
+        0.2
+      ).toFixed(4);
+    Change("Falloff Height", NextFalloff);
+    Change("Density", NextDensity);
+  };
 
   return (
     <div className="height-density-visual" data-enabled={Enabled}>
       <div className="height-density-status">
         <span>
-          <i /> {Enabled ? "Live medium" : "Authored preview"}
+          <i /> {Enabled ? "Live density profile" : "Authored preview"}
         </span>
         <strong>{Falloff.toLocaleString("en-US")} m falloff</strong>
       </div>
+      <div className="height-density-metric">
+        <strong>{Density.toFixed(4)}</strong>
+        <span>m⁻¹ datum density</span>
+      </div>
       <svg
-        viewBox="0 0 300 220"
+        viewBox="0 0 300 210"
         role="img"
-        aria-label="Height fog density volume"
+        aria-label="Interactive Height Fog density profile"
         preserveAspectRatio="none"
+        tabIndex="0"
+        onPointerDown={(Event) => {
+          Event.currentTarget.setPointerCapture(Event.pointerId);
+          Edit(Event);
+        }}
+        onPointerMove={(Event) => {
+          if (Event.currentTarget.hasPointerCapture(Event.pointerId)) Edit(Event);
+        }}
+        onPointerUp={(Event) =>
+          Event.currentTarget.releasePointerCapture(Event.pointerId)
+        }
       >
         <defs>
-          <linearGradient id={Id + "air"} x2="0" y2="1">
-            <stop stopColor="#11151a" />
-            <stop offset=".64" stopColor="#0b0d10" />
-            <stop offset="1" stopColor="#060708" />
+          <linearGradient id={Id + "area"} x2="0" y2="1">
+            <stop stopColor={Colour} stopOpacity={Enabled ? ".42" : ".28"} />
+            <stop offset="1" stopColor={Colour} stopOpacity=".025" />
           </linearGradient>
-          <linearGradient id={Id + "volume"} x2="0" y2="1">
-            <stop stopColor={Colour} stopOpacity={0.025 * Preview} />
-            <stop offset=".48" stopColor={Colour} stopOpacity={(0.09 + Strength * 0.1) * Preview} />
-            <stop offset="1" stopColor={Colour} stopOpacity={(0.22 + Strength * 0.35) * Preview} />
-          </linearGradient>
-          <linearGradient id={Id + "beam"} x1="0" x2="1">
-            <stop stopColor="#fff6d6" stopOpacity={0.9 * Preview} />
-            <stop offset=".38" stopColor={Colour} stopOpacity={(0.26 + Scatter * 0.12) * Preview} />
-            <stop offset="1" stopColor={Colour} stopOpacity="0" />
-          </linearGradient>
-          <filter id={Id + "soft"} x="-25%" y="-35%" width="150%" height="170%">
-            <feGaussianBlur stdDeviation="7" />
-          </filter>
-          <clipPath id={Id + "clip"}>
-            <path d="M58 31H229L249 47V178H78L58 162Z" />
-          </clipPath>
         </defs>
-
-        <rect width="300" height="220" rx="12" fill={`url(#${Id}air)`} />
-        <path d="M25 184L224 184L283 207H66Z" fill="#ffffff05" stroke="#ffffff12" />
-        <path d="M58 31H229L249 47V178H78L58 162Z" fill={`url(#${Id}volume)`} />
-
-        <g clipPath={`url(#${Id}clip)`} filter={`url(#${Id}soft)`}>
-          <ellipse cx="148" cy="165" rx="122" ry="28" fill={Colour} opacity={(0.16 + Strength * 0.42) * Preview} />
-          <ellipse cx="175" cy="142" rx="100" ry="23" fill={Colour} opacity={(0.11 + Strength * 0.3) * Preview} />
-          <ellipse cx="128" cy="116" rx="78" ry="18" fill={Colour} opacity={(0.07 + Strength * 0.2) * Preview} />
-          <ellipse cx="187" cy="88" rx="58" ry="15" fill={Colour} opacity={(0.035 + Strength * 0.11) * Preview} />
-          <ellipse cx="132" cy="58" rx="42" ry="12" fill={Colour} opacity={(0.018 + Strength * 0.055) * Preview} />
-        </g>
-
-        <g fill={Colour} opacity={0.2 * Preview}>
-          {Array.from({ length: 24 }, (_, Index) => (
-            <circle
-              key={Index}
-              cx={76 + ((Index * 43) % 158)}
-              cy={48 + ((Index * 29) % 116)}
-              r={0.8 + (Index % 3) * 0.45}
-              opacity={0.25 + ((Index * 7) % 10) / 14}
+        <rect width="300" height="210" rx="12" fill="#0a0c0e" />
+        {[0, 0.05, 0.1, 0.15, 0.2].map((Value) => (
+          <g key={Value}>
+            <path
+              d={`M${Left} ${Y(Value)}H${Right}`}
+              stroke="#ffffff12"
+              strokeDasharray={Value ? "2 5" : undefined}
             />
-          ))}
-        </g>
-
-        <path d="M58 31H229L249 47V178H78L58 162ZM229 31V162L249 178M58 162H229L249 178" fill="none" stroke="#cbd2d526" />
-        <path d={`M61 ${FalloffY}L232 ${FalloffY}L247 ${FalloffY + 10}L76 ${FalloffY + 10}Z`} fill={Colour} opacity=".08" stroke="#ffffff70" strokeDasharray="4 4" />
-        <path d="M18 151H252" stroke={`url(#${Id}beam)`} strokeWidth={3 + Scatter * 1.8} />
-        <circle cx="18" cy="151" r="4" fill="#fff4d2" opacity={Preview} />
-
-        <path d="M267 171V46M261 54L267 43L273 54" fill="none" stroke="#ffffff58" />
-        <text x="274" y="108" transform="rotate(-90 274 108)" textAnchor="middle">ALTITUDE</text>
-        <text x="69" y="203">DATUM · {Density.toFixed(4)} m⁻¹</text>
-        <text x="238" y={Math.max(19, FalloffY - 6)} textAnchor="end">37% DENSITY · {Falloff.toFixed(0)} m</text>
+            <text x={Left - 6} y={Y(Value) + 3} textAnchor="end">
+              {Value.toFixed(Value ? 2 : 0)}
+            </text>
+          </g>
+        ))}
+        {[0, 1000, 2000, 3000].map((Altitude) => (
+          <g key={Altitude}>
+            <path
+              d={`M${X(Altitude)} ${Top}V${Bottom}`}
+              stroke="#ffffff0b"
+            />
+            <text x={X(Altitude)} y="193" textAnchor={Altitude === 0 ? "start" : Altitude === 3000 ? "end" : "middle"}>
+              {Altitude ? `${Altitude / 1000} km` : "0 m"}
+            </text>
+          </g>
+        ))}
+        <path d={FillPath} fill={`url(#${Id}area)`} />
+        <path d={Path} fill="none" stroke={Colour} strokeWidth="1.7" />
+        <path
+          d={`M${PointX} ${Top}V${Bottom}`}
+          stroke="#ffffff6b"
+          strokeDasharray="4 4"
+        />
+        <circle cx={PointX} cy={PointY} r="5" fill={Colour} stroke="#111315" strokeWidth="2" />
+        <text x={Math.min(Right - 4, PointX + 8)} y={Math.max(14, PointY - 9)} textAnchor={PointX > 230 ? "end" : "start"}>
+          37% · {Falloff.toFixed(0)} m
+        </text>
+        <text x={Left} y="207">DRAG POINT · DENSITY / FALLOFF</text>
       </svg>
       <div className="height-density-readings">
         <span>
@@ -95,8 +125,8 @@ export default function HeightFogVisual({ V }) {
         </span>
       </div>
       <p>
-        Layered volume preview · the same Medium density, falloff, scatter, colour
-        and enabled values drive this chamber.
+        Drag the profile point to author the same Density and Falloff Height values
+        used by Medium, Visibility and Beam Chamber.
       </p>
     </div>
   );

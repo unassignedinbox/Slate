@@ -56,11 +56,22 @@ try {
   await Beam.locator(".fg-chamber").waitFor();
   assert.equal(await Beam.locator(".fg-chamber").count(), 1);
   assert.equal(await Beam.locator(".fg-vis").count(), 0);
-  assert.equal(await Page.getByRole("img", { name: "Height fog density volume" }).count(), 1);
+  const DensityProfile = Page.getByRole("img", {
+    name: "Interactive Height Fog density profile",
+  });
+  assert.equal(await DensityProfile.count(), 1);
   assert.equal(await Page.getByLabel("Fog probe altitude").count(), 0);
   assert.equal(await Page.getByLabel("Fog probe distance").count(), 0);
+  const DensityBeforeProfile = await Page.getByLabel("Density value").inputValue(),
+    FalloffBeforeProfile = await Page.getByLabel("Falloff Height value").inputValue();
+  await DensityProfile.click({ position: { x: 190, y: 75 } });
+  assert.notEqual(await Page.getByLabel("Density value").inputValue(), DensityBeforeProfile);
+  assert.notEqual(
+    await Page.getByLabel("Falloff Height value").inputValue(),
+    FalloffBeforeProfile,
+  );
   Checks.push(
-    "Height Fog uses the retained rich Visibility visual, a non-graph density volume, and Beam Chamber in Medium",
+    "Height Fog retains rich Visibility, adds an interactive altitude-density profile, and keeps Beam Chamber in Medium",
   );
 
   const BeamCanvas = Beam.locator(".fg-chamber canvas"),

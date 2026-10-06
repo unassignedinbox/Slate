@@ -2932,3 +2932,15 @@ fracture algorithm, SDF computation, source-property schema or Construct behavio
   volume, soft altitude layers, suspended particles, a light shaft, a falloff plane and an altitude direction cue. It uses
   the existing shared Height Fog variables and remains readable in disabled preview state.
 - No controls, variables or cards were added. Atmospheric Fog, Local Fog and all non-Fog inspectors are unchanged.
+
+## C063 — interactive altitude-density profile and explicit Beam response (2026-10-06)
+
+- Height Fog only: replaced the C062 volume illustration with a dedicated interactive altitude-density profile. It is not
+  a copy of Spectral transmission: the horizontal domain is altitude (0–3 km), the vertical domain is extinction density
+  (0–0.2 m⁻¹), and its exponential profile follows Height Fog's density/falloff model.
+- Dragging the profile point edits the existing Density and Falloff Height properties directly. No probe values or duplicate
+  controls were introduced; Medium, Visibility, the altitude profile and Beam Chamber continue to share one property set.
+- Clarified Beam Chamber within its retained Medium-card footprint. It now shows a readable scatter cone, center beam, physical 2% range marker,
+  density/falloff/scatter readout, explicit LIVE/PREVIEW state and physical transmission at 120 m. Display exposure remains
+  readable for dense fog and while disabled, while numeric labels retain physical values.
+- Atmospheric Fog, Local Fog and non-Fog inspectors remain unchanged.
