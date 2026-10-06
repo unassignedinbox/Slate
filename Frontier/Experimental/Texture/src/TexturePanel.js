@@ -2285,6 +2285,37 @@ export class TexturePanel
             );
     }
 
+    //----------------------------------------------------------------------------------------------------------------------
+    // 🔴 ONE record, two consumers. The preview that says where the artwork would land and the burn that puts it there
+    //    read the same numbers out of this, because the moment they each named their own the two stopped agreeing: the
+    //    preview invented a depth limit out of the decal's WIDTH and let anything inside a right angle of the normal
+    //    through, so a projector that the burn clipped to the face under the pointer smeared the artwork down the stand
+    //    and around the far side of the ball. Measured on the shader ball at the default 0.55 m size, the preview lit
+    //    1423 vertices where the burn lit 447, and 612 of them were more than a footprint away from the hit against the
+    //    burn's 34. Everything the gate needs lives here; nothing downstream is allowed to make a number up.
+    //----------------------------------------------------------------------------------------------------------------------
+    PlacementRecord(Layer, Frame, Template = null)
+    {
+        const Chosen = Template || this.ActiveMark || Layer.Decal;
+        const Transform = Chosen.Transform;
+        const Target = this.Projection.Brush.Target;
+        return {
+            Layer: Layer.Identifier,
+            Position: Frame.Position,
+            Normal: Frame.Normal,
+            Tangent: Frame.Tangent,
+            Rotation: Transform.Rotation,
+            Size: [Transform.Size, Transform.Size / Math.max(Transform.Aspect, 0.05)],
+            Depth: Transform.Depth,
+            // The widest angle between the surface and the decal, as the cosine both shaders compare against.
+            Facing: Math.cos((Transform.AngleLimit * Math.PI) / 180),
+            Softness: Chosen.Softness,
+            // A mask holds no colour, so the artwork is flattened to the value of the decal's own tint.
+            Tint: Target === "mask" ? this.MaskInk(Chosen.Tint) : Chosen.Tint,
+            Colorise: Target === "mask" ? true : Chosen.Colorise,
+        };
+    }
+
     // The decal in hand, shown where it would land before the click that commits it.
     NotePlacement(Hit)
     {
@@ -2295,18 +2326,7 @@ export class TexturePanel
             return;
         }
         const Frame = StrokeProjection.PlacementFrame(Hit, this.ViewReference());
-        const Template = this.ActiveMark || Layer.Decal;
-        const Transform = Template.Transform;
-        this.Placement = {
-            Layer: Layer.Identifier,
-            Position: Frame.Position,
-            Normal: Frame.Normal,
-            Tangent: Frame.Tangent,
-            Rotation: Transform.Rotation,
-            Size: [Transform.Size, Transform.Size / Math.max(Transform.Aspect, 0.05)],
-            Tint: Template.Tint,
-            Colorise: Template.Colorise,
-        };
+        this.Placement = this.PlacementRecord(Layer, Frame);
     }
 
     // Off the mesh there is nothing to draw the ring on, so a dashed outline follows the pointer instead.
@@ -5129,34 +5149,23 @@ export class TexturePanel
     // paintable over, and carried by the same undo as a stroke. The mask takes it just as happily as the content.
     BurnDecal(Layer, Frame)
     {
-        const Decal = Layer.Decal;
-        const Template = this.ActiveMark || Decal;
+        const Template = this.ActiveMark || Layer.Decal;
         const Transform = Template.Transform;
         const Target = this.Projection.Brush.Target;
-        const Record = {
-            Layer: Layer.Identifier,
-            Position: Frame.Position,
-            Normal: Frame.Normal,
-            Tangent: Frame.Tangent,
-            Rotation: Transform.Rotation,
-            Size: [Transform.Size, Transform.Size / Math.max(Transform.Aspect, 0.05)],
-            Depth: Transform.Depth,
-            Softness: Template.Softness,
-            // A mask holds no colour, so the artwork is flattened to the value of the decal's own tint.
-            Colorise: Target === "mask" ? true : Template.Colorise,
-        };
+        // The very record the preview was drawn from, so what lands is what was shown.
+        const Record = this.PlacementRecord(Layer, Frame, Template);
         const Options = {
             Target,
             Mode: "decal",
             Decal: Record,
-            Colour: Target === "mask" ? this.MaskInk(Template.Tint) : Template.Tint,
+            Colour: Record.Tint,
             Start: Frame.Position,
             End: Frame.Position,
             Normal: Frame.Normal,
             Radius: Transform.Size,
             Hardness: 1,
             Flow: 1,
-            FacingLimit: Math.cos((Transform.AngleLimit * Math.PI) / 180),
+            FacingLimit: Record.Facing,
             Jitter: 0,
             Erase: this.Tool === "eraser",
         };

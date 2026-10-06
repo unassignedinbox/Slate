@@ -1780,6 +1780,10 @@ export class ShadingIntegrator
         Device.uniform2fv(Uniforms.get("uPlaceSize"), Place?.Size || [0.2, 0.2]);
         Device.uniform3fv(Uniforms.get("uPlaceTint"), Place?.Tint || [1, 1, 1]);
         Device.uniform1f(Uniforms.get("uPlaceColorise"), Place?.Colorise ? 1 : 0);
+        // The same three numbers the burn is given, so the preview clips where the burn clips.
+        Device.uniform1f(Uniforms.get("uPlaceDepth"), Place?.Depth ?? 0.45);
+        Device.uniform1f(Uniforms.get("uPlaceFacing"), Place?.Facing ?? 0.1);
+        Device.uniform1f(Uniforms.get("uPlaceSoftness"), Place?.Softness ?? 0.06);
         Device.drawElements(Device.TRIANGLES, this.Surface.Indices.length, Device.UNSIGNED_INT, 0);
         Device.bindVertexArray(null);
     }

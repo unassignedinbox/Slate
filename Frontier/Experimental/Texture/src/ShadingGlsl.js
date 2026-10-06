@@ -1736,6 +1736,9 @@ uniform vec2 uPlaceSize;
 uniform vec3 uPlaceTint;
 uniform float uPlaceColorise;
 uniform float uPlaceVisible;
+uniform float uPlaceDepth;         // how far along the normal the projector reaches, in metres
+uniform float uPlaceFacing;        // cosine of the widest angle between the surface and the decal
+uniform float uPlaceSoftness;      // the artwork's own alpha shoulder
 
 out vec4 oColour;
 
@@ -2125,15 +2128,23 @@ void main()
     if (uPlaceVisible > 0.5)
     {
         // The decal where it would land: the stencil itself, plus a hairline around its footprint.
+        //
+        // 🔴 Gated exactly as the burn gates it — uPlaceDepth and uPlaceFacing are the decal's own depth and angle
+        //    limit, handed over by the same record the click will stamp from. Reaching a decal WIDTH down the normal
+        //    and accepting the whole right angle around it, which is what this did, made the preview a projector that
+        //    swept the artwork over every front-facing surface in the prism: the word appeared smeared down the stand
+        //    and around the limb of the ball, and only the instance in the hairline box was the one about to land.
         vec3 Bitangent = normalize(cross(uPlaceNormal, uPlaceTangent));
         vec3 Delta = vPosition - uPlacePosition;
         vec2 Local = vec2(dot(Delta, uPlaceTangent) / max(uPlaceSize.x, 1e-4), dot(Delta, Bitangent) / max(uPlaceSize.y, 1e-4)) + 0.5;
         float Depth = abs(dot(Delta, uPlaceNormal));
-        float Facing = step(0.0, dot(normalize(vNormal), uPlaceNormal));
+        float Facing = smoothstep(uPlaceFacing, mix(uPlaceFacing, 1.0, 0.45), dot(normalize(vNormal), uPlaceNormal));
         float Inside = step(0.0, Local.x) * step(Local.x, 1.0) * step(0.0, Local.y) * step(Local.y, 1.0);
-        float Near = 1.0 - smoothstep(uPlaceSize.x * 0.6, uPlaceSize.x, Depth);
+        float Near = 1.0 - smoothstep(uPlaceDepth * 0.65, uPlaceDepth, Depth);
         float Within = Inside * Facing * Near;
         vec4 Stencil = texture(uDecalPreview, vec2(Local.x, 1.0 - Local.y));
+        // The artwork's alpha shoulder, the same one the burn lays down, so the preview's edge is the burn's edge.
+        Stencil.a *= smoothstep(0.0, max(uPlaceSoftness, 0.001), Stencil.a);
         vec3 Ink = mix(Stencil.rgb, uPlaceTint, uPlaceColorise);
         float Border = max(
             max(1.0 - smoothstep(0.0, 0.012, Local.x), 1.0 - smoothstep(0.0, 0.012, 1.0 - Local.x)),

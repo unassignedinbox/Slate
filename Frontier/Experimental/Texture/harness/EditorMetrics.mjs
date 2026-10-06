@@ -240,6 +240,116 @@ Check("squared off against a chequer", Shown.every((Entry) => Entry.filter((Call
 Check("with the rasterised artwork drawn over it", Shown.every((Entry) => Entry.some((Call) => Call[0] === "drawImage" && Call[1] === 1024)));
 
 //--------------------------------------------------------------------------------------------------------------------------
+// The preview and the burn. Before the click lands the viewport draws the artwork where it would go; the click then
+// burns it. Those are two shaders reading two sets of numbers, and when the numbers drifted apart the preview became a
+// projector that swept the artwork over every front-facing surface it could reach — the word appeared smeared down the
+// stand and around the far side of the ball, and only the instance in the hairline box was the one about to land. One
+// record now feeds both, so what is shown is what is stamped.
+//--------------------------------------------------------------------------------------------------------------------------
+Decal.Decal.Placement = "stamp";
+Panel.SelectLayer(Decal.Identifier);
+Panel.SetTool("decal", true);
+At("pointermove", 480, 270);
+await Settle(Window, 2);
+const Hover = Panel.Placement;
+Check("hovering the model notes where the decal would land", !!Hover && Hover.Layer === Decal.Identifier);
+
+// Everything the gate needs is on the record, because a shader that has to invent one of these invents the wrong one.
+const Transform = (Panel.ActiveMark || Decal.Decal).Transform;
+Check("the preview is told how deep the projector reaches", Hover.Depth === Transform.Depth, `${Hover.Depth} vs ${Transform.Depth}`);
+Check(
+    "and how far off the normal it may wander",
+    Math.abs(Hover.Facing - Math.cos((Transform.AngleLimit * Math.PI) / 180)) < 1e-9,
+    `${Hover.Facing} vs ${Math.cos((Transform.AngleLimit * Math.PI) / 180)}`,
+);
+Check("and the artwork's own edge", Hover.Softness === (Panel.ActiveMark || Decal.Decal).Softness);
+
+// The click, caught on its way to the device: the record it burns from has to be the record that was previewed.
+const Landed = [];
+const Burning = Panel.Integrator.Stamp.bind(Panel.Integrator);
+Panel.Integrator.Stamp = (Held, Options) => (Options?.Mode === "decal" && Landed.push(Options), Burning(Held, Options));
+At("pointerdown", 480, 270);
+At("pointerup", 480, 270);
+await Settle(Window, 2);
+Panel.Integrator.Stamp = Burning;
+Check("clicking burns the decal rather than hanging a projector on it", Landed.length > 0, String(Landed.length));
+const Burnt = Landed[0]?.Decal || {};
+const Apart = ["Depth", "Facing", "Softness", "Rotation", "Colorise"].filter((Name) => Burnt[Name] !== Hover[Name]);
+Check("the burn uses the very numbers the preview was drawn from", Apart.length === 0, Apart.join(" · "));
+Check("down to the footprint", String(Burnt.Size) === String(Hover.Size), `${Burnt.Size} vs ${Hover.Size}`);
+Check("and the angle limit the stamp pass is handed", Landed[0]?.FacingLimit === Hover.Facing);
+
+// The gate itself, walked over the model the editor is actually showing. A placement square-on to the viewer is the
+// one case where the two agreed all along, so this sweeps the model's own normals: every vertex in turn becomes the
+// point under the pointer, and the ground each gate would light is counted. Identical numbers through identical maths
+// must light identical ground, and the prism the preview used to cast must be caught lighting far more of it.
+const Ball = Panel.SurfaceRecord;
+const Ease = (From, To, Value) =>
+{
+    const Step = Math.min(1, Math.max(0, (Value - From) / Math.max(1e-6, To - From)));
+    return Step * Step * (3 - 2 * Step);
+};
+const Gate = (Deepest, Limit) =>
+{
+    const Shown = [];
+    for (let Seed = 0; Seed < Ball.Positions.length / 3; Seed += 211)
+    {
+        let Claimed = 0;
+        const Origin = [0, 1, 2].map((Axle) => Ball.Positions[Seed * 3 + Axle]);
+        const Axis = [0, 1, 2].map((Axle) => Ball.Normals[Seed * 3 + Axle]);
+        const Length = Math.hypot(...Axis) || 1;
+        for (let Axle = 0; Axle < 3; Axle += 1) Axis[Axle] /= Length;
+        const Upright = Math.abs(Axis[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+        const Edge = [
+            Upright[1] * Axis[2] - Upright[2] * Axis[1],
+            Upright[2] * Axis[0] - Upright[0] * Axis[2],
+            Upright[0] * Axis[1] - Upright[1] * Axis[0],
+        ];
+        const Reaching = Math.hypot(...Edge) || 1;
+        for (let Axle = 0; Axle < 3; Axle += 1) Edge[Axle] /= Reaching;
+        const Side = [
+            Axis[1] * Edge[2] - Axis[2] * Edge[1],
+            Axis[2] * Edge[0] - Axis[0] * Edge[2],
+            Axis[0] * Edge[1] - Axis[1] * Edge[0],
+        ];
+        for (let Index = 0; Index < Ball.Positions.length / 3; Index += 1)
+        {
+            const Away = [0, 1, 2].map((Axle) => Ball.Positions[Index * 3 + Axle] - Origin[Axle]);
+            const Along = Away[0] * Edge[0] + Away[1] * Edge[1] + Away[2] * Edge[2];
+            const Across = Away[0] * Side[0] + Away[1] * Side[1] + Away[2] * Side[2];
+            if (Math.abs(Along) > Hover.Size[0] / 2 || Math.abs(Across) > Hover.Size[1] / 2) continue;
+            const Under = Math.abs(Away[0] * Axis[0] + Away[1] * Axis[1] + Away[2] * Axis[2]);
+            const Tilt = [0, 1, 2].reduce((Sum, Axle) => Sum + Ball.Normals[Index * 3 + Axle] * Axis[Axle], 0);
+            const Facing = Limit === null ? (Tilt >= 0 ? 1 : 0) : Ease(Limit, Limit + (1 - Limit) * 0.45, Tilt);
+            if ((1 - Ease(Deepest * 0.65, Deepest, Under)) * Facing > 0.004) Claimed += 1;
+        }
+        Shown.push(Claimed);
+    }
+    return Shown;
+};
+const Tight = Gate(Hover.Depth, Hover.Facing);
+const Loose = Gate(Hover.Size[0], null);
+const Worst = Math.max(...Loose.map((Claimed, Place) => Claimed - Tight[Place]));
+Check("the preview now claims exactly the ground the burn claims", String(Gate(Burnt.Depth, Landed[0]?.FacingLimit)) === String(Tight));
+Check("nowhere on the model does it claim more", Loose.every((Claimed, Place) => Claimed >= Tight[Place]));
+const Smeared = Math.max(...Loose.map((Claimed, Place) => Claimed / Math.max(Tight[Place], 1)));
+Check(
+    "where the decal-width prism at a right angle smeared it over twice the ground",
+    Smeared > 2,
+    `worst ${Smeared.toFixed(2)}x, ${Worst} vertices adrift of the burn`,
+);
+
+// And the two shaders say it in the same words, so neither can be edited without the other.
+const { SurfaceFragment, StampFragment } = await import("../src/ShadingGlsl.js");
+Check("the preview gates on the decal's depth", SurfaceFragment.includes("smoothstep(uPlaceDepth * 0.65, uPlaceDepth, Depth)"));
+Check("the burn gates on the same expression", StampFragment.includes("smoothstep(uStampReach * 0.65, uStampReach, Depth)"));
+Check("the preview no longer reaches a decal width down the normal", !SurfaceFragment.includes("uPlaceSize.x * 0.6"));
+Check(
+    "and no longer takes the whole right angle around it",
+    SurfaceFragment.includes("smoothstep(uPlaceFacing, mix(uPlaceFacing, 1.0, 0.45)") && !SurfaceFragment.includes("step(0.0, dot(normalize(vNormal), uPlaceNormal))"),
+);
+
+//--------------------------------------------------------------------------------------------------------------------------
 // Texture space. The same tools, the same layer, and the squares that must not eat the press.
 //--------------------------------------------------------------------------------------------------------------------------
 Type("x");

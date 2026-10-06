@@ -646,7 +646,21 @@ stamp burns the artwork into the mask at the value of its tint.
 **Previews, not guesses.** The cursor ring on the model is filled with the colour the stroke would lay down — the value
 of that colour when the mask is the target, a dark wash for the eraser — and off the mesh it becomes a dashed outline that
 follows the pointer. With the decal tool in hand the artwork itself is drawn where it would land, hairline footprint and
-all, before the click that commits it. Symmetry draws too: the mirror button in the viewport bar (or <kbd>Y</kbd>)
+all, before the click that commits it.
+
+**And the preview is gated exactly as the burn is.** It was not, and the result was the worst kind of wrong: the stamp
+landed correctly, but until the click the viewport showed the artwork smeared across the whole model — a word repeated
+down the stand and stretched around the limb of the ball — leaving you to guess which of the five copies on screen was
+the one the click would keep. The preview had been given the footprint and nothing else, so its shader invented the two
+numbers it still needed: it reached a decal *width* down the normal instead of the decal's depth, and accepted any
+surface within a right angle of the normal instead of the decal's own angle limit. That is a projector, not a preview,
+and it swept everything inside a square prism through the model. The footprint, the depth, the angle limit, the
+softness, the tint and the colourise flag are now one record, built once and handed to both the preview and the burn,
+so neither can be told something the other was not. On the shader ball at the default 55 cm size the old gate lit two
+and a half times the ground the burn would claim, nearly a thousand vertices adrift of it; the two now agree vertex for
+vertex at every placement, which the harness checks by walking the model's own normals.
+
+Symmetry draws too: the mirror button in the viewport bar (or <kbd>Y</kbd>)
 cycles off → X → Y → Z → radial, the seam where the plane cuts the model is drawn in green, and the mirrored cursor
 shows the twin stroke.
 
