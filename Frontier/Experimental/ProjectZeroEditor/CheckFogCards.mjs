@@ -63,10 +63,19 @@ try {
     "Height Fog uses the retained rich Visibility visual, a non-graph density volume, and Beam Chamber in Medium",
   );
 
-  await Page.getByRole("button", { name: "Enabled", exact: true }).click();
   const BeamCanvas = Beam.locator(".fg-chamber canvas"),
     Snapshot = () => BeamCanvas.evaluate((Canvas) => Canvas.toDataURL());
   await BeamCanvas.waitFor();
+  const DisabledPreview = await Snapshot();
+  await Page.getByLabel("Sun Scatter value", { exact: true }).fill("1.1");
+  await Page.getByLabel("Sun Scatter value", { exact: true }).press("Tab");
+  await Page.waitForTimeout(100);
+  assert.notEqual(
+    await Snapshot(),
+    DisabledPreview,
+    "Disabled Beam Chamber must remain a responsive authored preview",
+  );
+  await Page.getByRole("button", { name: "Enabled", exact: true }).click();
   for (const [Label, Value] of [
     ["Density value", "0.08"],
     ["Falloff Height value", "120"],
@@ -80,7 +89,7 @@ try {
     assert.notEqual(await Snapshot(), Before, `${Label} must repaint Beam Chamber`);
   }
   Checks.push(
-    "Enabled, Density, Falloff Height, Sun Scatter and Colour all repaint the same Beam Chamber model",
+    "Beam Chamber remains visible while disabled and Enabled, Density, Falloff Height, Sun Scatter and Colour all repaint it",
   );
 
   const NativeDensity = Page.getByLabel("Density value", { exact: true }),

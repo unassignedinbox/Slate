@@ -2922,3 +2922,13 @@ fracture algorithm, SDF computation, source-property schema or Construct behavio
 - The standalone build succeeds at 4.65 MiB. Focused checks cover bidirectional value synchronization, Beam repainting for
   all Medium properties, removal of duplicate persisted properties, the non-graph density visual and unchanged C054 cards
   for Atmospheric and Local Fog.
+
+## C062 — visible Beam preview and volumetric altitude chamber (2026-10-06)
+
+- Height Fog only: Beam Chamber now remains visibly active as an authored preview while the runtime Enabled switch is off.
+  Its display uses exposure-compressed physical transmission so dense authored fog remains readable, while the numeric
+  120 m readout continues to report the uncompressed physical result. Live/Preview labeling makes the state explicit.
+- Replaced the striped Density with altitude treatment with a non-graph volumetric chamber: a perspective-bounded fog
+  volume, soft altitude layers, suspended particles, a light shaft, a falloff plane and an altitude direction cue. It uses
+  the existing shared Height Fog variables and remains readable in disabled preview state.
+- No controls, variables or cards were added. Atmospheric Fog, Local Fog and all non-Fog inspectors are unchanged.
