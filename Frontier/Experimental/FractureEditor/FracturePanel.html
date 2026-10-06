@@ -68,24 +68,6 @@
               <dt>Storage</dt>
               <dd id="storage-label">Browser · per object</dd>
             </dl>
-            <div class="target-note">
-              <span class="tiny-label">GEOMETRY PRESERVATION</span>
-              <h2>One shape.<br />Different responses.</h2>
-              <p>
-                Material changes affect cut direction and fracture energy. Your
-                object's geometry stays the same.
-              </p>
-            </div>
-            <div class="guarantees">
-              <div><i></i> Complete occupied volume</div>
-              <div><i></i> Closed, oriented fragments</div>
-              <div><i></i> Boundary-preserving triangulation</div>
-            </div>
-            <p class="limits">
-              Analytical HTML primitive preview. No native mesh import, Jolt
-              debris simulation, or native bake integration yet. Glass is opaque
-              here so topology remains visible.
-            </p>
           </div>
           <footer class="target-footer">
             <span class="tiny-label">SOURCE OWNER</span
@@ -227,17 +209,7 @@
                 <h2>Fragment quality</h2>
                 <span>03</span>
               </header>
-              <div class="quality-graph">
-                <svg viewBox="0 0 280 78" aria-hidden="true">
-                  <path
-                    d="M18 61 45 16 110 10 127 52 76 68Z M18 61l58 7-31-52 65-6-34 58 51-16"
-                  />
-                  <path
-                    d="M158 14H263M158 64H263M263 14v50m-4-45 4-5 4 5m-8 40 4 5 4-5"
-                  />
-                  <text x="166" y="44">minimum span</text>
-                </svg>
-              </div>
+              <div class="quality-graph" id="quality-illustration"></div>
               <div id="quality-controls"></div>
               <div class="quality-checks">
                 <span>Needle rejection</span><span>Closed caps</span

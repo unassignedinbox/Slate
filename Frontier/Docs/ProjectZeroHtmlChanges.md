@@ -2423,3 +2423,25 @@ Limits: this is convex-primitive HTML authoring, not arbitrary native geometry i
 failure simulation. Torus/concave inputs are refused instead of filling holes with a convex hull. ABS plastic
 strain, reinforcement, Jolt debris/constraints, native geometry ownership and native bake serialization remain
 future integration work. Native fracture implementation still waits for visual approval.
+
+
+## C046 — Quieter fracture cards and shaded illustrations
+
+2026-10-06. Presentation-only follow-up to C045, requested after visual review.
+
+- Removed the analytical-preview/native-execution paragraph from the selected object's Fracture card.
+- Removed the expanded editor's Geometry Preservation heading, slogan, response explanation, three guarantee
+  bullets and long analytical-preview disclaimer. Object properties and functional status remain.
+- Replaced the outlined cube-to-shards diagram with a shaded, separated fracture illustration. The black inset
+  tile, arrow and caption are gone.
+- Replaced Fragment quality's wire polygon and dimension bracket with a shaded fragment-sizing illustration.
+  Fragment ceiling and Minimum span change the illustrative subdivision and spacing. These are compact vector
+  illustrations, not new geometry solvers or measured simulation results.
+
+The selected-object workflow, material responses, sliders, dynamic generation, stored geometry and unsupported-input
+refusals are unchanged. No native integration or unrelated environment-inspector changes are included.
+
+Verification: both standalone builds succeed. The fracture browser check passes 22 checks, including explicit
+absence of the removed blocks, both new graphics and their response to the two sizing controls, plus the existing
+per-object bake/replay and ownership checks. Actual 1366 × 720 captures are `Captures/FractureCard.png` and
+`Captures/QualityCard.png`; the standard desktop and narrow captures are refreshed by the same browser check.

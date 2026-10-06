@@ -4,6 +4,9 @@
 // 📦 Selected-object fracture enablement, execution choice and expansion.
 
 import React from "react";
+import { FractureGlyph } from "../FractureEditor/FractureProjection.js";
+
+const FractureArtwork = FractureGlyph();
 import {
   Normalize,
   Describe,
@@ -50,14 +53,10 @@ export default function FracturePanel({ Subject, Values, Change, Expand }) {
       </label>
       {Settings.Enabled && (
         <>
-          <div className="fracture-diagram" aria-hidden="true">
-            <svg viewBox="0 0 280 68">
-              <path d="M32 15 65 5 95 23 92 52 61 64 30 44Z M65 5 58 30 30 44M58 30 92 52M58 30 95 23" />
-              <path d="M121 34h37m-6-5 6 5-6 5" />
-              <path d="m188 13 24-8-6 24-26 11Zm32-5 26 16-30 7Zm-42 40 27-12 27 20-22 10Zm41-8 29-13-3 26Z" />
-            </svg>
-            <span>Source geometry → closed fragments</span>
-          </div>
+          <div
+            className="fracture-diagram"
+            dangerouslySetInnerHTML={{ __html: FractureArtwork }}
+          />
           <h4>BAKE</h4>
           <div
             className="fracture-mode"
@@ -87,12 +86,7 @@ export default function FracturePanel({ Subject, Values, Change, Expand }) {
           <button className="fracture-open" disabled={!Expand} onClick={Expand}>
             Edit {Subject.Name} fracture <span>↗</span>
           </button>
-          <p>
-            {Supported
-              ? "Analytical primitive preview; object scale is applied."
-              : "Concave / unrecognised geometry requires decomposition; fracture execution is refused, not replaced by a box."}{" "}
-            HTML authoring only; native execution pending.
-          </p>
+          {!Supported && <p>Concave geometry requires decomposition.</p>}
         </>
       )}
     </section>

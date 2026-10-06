@@ -106,6 +106,56 @@ try {
   Checks.push(
     "Selected sphere enable → expand; six materials; no metal workflow",
   );
+  assert.equal(
+    await Sphere.locator(".target-note, .guarantees, .limits").count(),
+    0,
+  );
+  assert(
+    !(await Editor.locator(".fracture-card").innerText()).includes(
+      "Analytical primitive preview",
+    ),
+  );
+  assert(
+    !(await Editor.locator(".fracture-card").innerText()).includes(
+      "native execution pending",
+    ),
+  );
+  assert((await Editor.locator(".fracture-diagram polygon").count()) > 20);
+  assert((await Sphere.locator("#quality-illustration polygon").count()) > 20);
+  const InitialIllustration = await Sphere.locator(
+    "#quality-illustration",
+  ).innerHTML();
+  await Sphere.getByRole("spinbutton", {
+    name: "Fragment ceiling value",
+    exact: true,
+  }).fill("96");
+  assert.notEqual(
+    await Sphere.locator("#quality-illustration").innerHTML(),
+    InitialIllustration,
+  );
+  await Sphere.getByRole("spinbutton", {
+    name: "Fragment ceiling value",
+    exact: true,
+  }).fill("48");
+  await Sphere.getByRole("spinbutton", {
+    name: "Minimum span value",
+    exact: true,
+  }).fill("0.1");
+  assert.notEqual(
+    await Sphere.locator("#quality-illustration").innerHTML(),
+    InitialIllustration,
+  );
+  await Sphere.getByRole("spinbutton", {
+    name: "Minimum span value",
+    exact: true,
+  }).fill("0.045");
+  assert.equal(
+    await Sphere.locator("#quality-illustration").innerHTML(),
+    InitialIllustration,
+  );
+  Checks.push(
+    "Explanatory blocks removed; shaded fracture illustrations replace wire diagrams and respond to both quality controls",
+  );
   const SourceGeometry = await ShapeSignature(Sphere);
   await Sphere.locator('[data-material="wood"]').click();
   assert.equal(await ShapeSignature(Sphere), SourceGeometry);

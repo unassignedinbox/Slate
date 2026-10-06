@@ -1,3 +1,4 @@
+import { QualityGlyph } from "./FractureProjection.js";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import {
@@ -258,8 +259,15 @@ function Refresh() {
         : Result.milliseconds.toFixed(1) + " ms"
       : "—";
   }
-  document.querySelector(".quality-graph text").textContent =
-    (Settings.MinimumSize * 1000).toFixed(0) + " mm min span";
+  const Illustration = ById("quality-illustration");
+  const Sizing = Settings.Ceiling + ":" + Settings.MinimumSize;
+  if (Illustration.dataset.sizing !== Sizing) {
+    Illustration.innerHTML = QualityGlyph(
+      Settings.Ceiling,
+      Settings.MinimumSize,
+    );
+    Illustration.dataset.sizing = Sizing;
+  }
   ById("viewport-caption").textContent = Owner.Removed
     ? "Object removed from the scene"
     : !Settings.Enabled
