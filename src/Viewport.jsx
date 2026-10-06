@@ -39,7 +39,11 @@ function makeEnvironment(renderer, mode = "Studio softbox") {
   return target;
 }
 
-export function renderThumbnails(callback) {
+export async function renderThumbnails(
+  callback,
+  onProgress = () => {},
+  signal,
+) {
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
     alpha: true,
@@ -63,17 +67,52 @@ export function renderThumbnails(callback) {
   const mesh = new THREE.Mesh(geometry);
   mesh.rotation.z = -0.3;
   scene.add(mesh);
+  let shaderFailure = null;
+  renderer.debug.onShaderError = (gl, program, vertex, fragment) => {
+    shaderFailure = new Error(gl.getShaderInfoLog(fragment));
+  };
   const results = {};
-  for (const p of materials) {
-    mesh.material = createMaterial(p);
-    renderer.render(scene, camera);
-    results[p.id] = renderer.domElement.toDataURL("image/png");
-    mesh.material.dispose();
+  // Yield before each GPU job, and publish real completed-job counts. Browsers
+  // with KHR_parallel_shader_compile can keep their UI responsive during linking.
+  mesh.material.dispose();
+  // Keep owners alive for this batch so Three can reuse linked programs across
+  // presets. Disposing each immediately would force recompilation 100 times.
+  const retainedMaterials = [];
+  try {
+    for (const [i, p] of materials.entries()) {
+      if (signal?.aborted) break;
+      onProgress({
+        done: i,
+        total: materials.length,
+        name: p.name,
+        phase: "compiling",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 24));
+      if (signal?.aborted) break;
+      mesh.material = createMaterial(p);
+      retainedMaterials.push(mesh.material);
+      {
+        await renderer.compileAsync(scene, camera);
+        if (signal?.aborted) break;
+        renderer.render(scene, camera);
+        if (shaderFailure) throw shaderFailure;
+        results[p.id] = renderer.domElement.toDataURL("image/png");
+        callback({ ...results });
+        onProgress({
+          done: i + 1,
+          total: materials.length,
+          name: p.name,
+          phase: i + 1 === materials.length ? "ready" : "rendered",
+        });
+      }
+    }
+  } finally {
+    retainedMaterials.forEach((material) => material.dispose());
+    geometry.dispose();
+    env.dispose();
+    renderer.dispose();
+    renderer.forceContextLoss();
   }
-  callback(results);
-  geometry.dispose();
-  env.dispose();
-  renderer.dispose();
 }
 
 export default function Viewport({
@@ -86,12 +125,15 @@ export default function Viewport({
   zoom,
   onReady,
   onZoomChange,
+  onCompile,
 }) {
   const host = useRef(null),
     engine = useRef(null),
     latest = useRef(params);
   const [error, setError] = useState(false);
   latest.current = params;
+  const wireframeRef = useRef(wireframe);
+  wireframeRef.current = wireframe;
   const zoomCallback = useRef(onZoomChange);
   zoomCallback.current = onZoomChange;
   useEffect(() => {
@@ -107,6 +149,11 @@ export default function Viewport({
       setError(true);
       return;
     }
+    renderer.debug.onShaderError = (gl, program, vertex, fragment) => {
+      console.error("Viewport shader: " + gl.getShaderInfoLog(fragment));
+      setError(true);
+      onCompile?.({ phase: "error", name: latest.current.name });
+    };
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.22;
@@ -263,6 +310,8 @@ export default function Viewport({
       magnification: 1,
       fitZoom: 0.86,
     };
+    state.compiling = true;
+    state.compileTicket = 0;
     engine.current = state;
     state.setZoom = (factor) => {
       state.magnification = THREE.MathUtils.clamp(factor, 0.1, 100);
@@ -349,13 +398,13 @@ export default function Viewport({
     const tick = () => {
       state.frame = requestAnimationFrame(tick);
       controls.update();
-      if (state.dirty) {
+      if (state.dirty && !state.compiling) {
         renderer.render(scene, camera);
         state.dirty = false;
+        renderer.domElement.dataset.materialReady = "true";
       }
     };
     tick();
-    onReady?.();
     return () => {
       cancelAnimationFrame(state.frame);
       observer.disconnect();
@@ -380,15 +429,42 @@ export default function Viewport({
   useEffect(() => {
     const e = engine.current;
     if (!e) return;
-    e.dirty = true;
-    e.scene.background = params.type === 5 ? new THREE.Color("#25272b") : null;
-    e.specimen.material.dispose();
-    e.specimen.material = createMaterial({
-      ...params,
-      clothMapping: shape === "Draped cloth",
-    });
-    e.specimen.material.wireframe = wireframe;
-    e.renderer.shadowMap.needsUpdate = true;
+    const ticket = ++e.compileTicket;
+    const previous = e.compileTask || Promise.resolve();
+    e.compiling = true;
+    e.renderer.domElement.dataset.materialReady = "false";
+    onCompile?.({ phase: "compiling", name: params.name });
+    e.compileTask = (async () => {
+      await new Promise((resolve) => setTimeout(resolve, 32));
+      await previous;
+      if (engine.current !== e || ticket !== e.compileTicket) return;
+      const old = e.specimen.material;
+      e.specimen.material = createMaterial({
+        ...params,
+        clothMapping: shape === "Draped cloth",
+      });
+      e.specimen.material.wireframe = wireframeRef.current;
+      e.scene.background =
+        params.type === 5 ? new THREE.Color("#25272b") : null;
+      try {
+        await e.renderer.compileAsync(e.scene, e.camera);
+        if (engine.current !== e || ticket !== e.compileTicket) return;
+        e.renderer.shadowMap.needsUpdate = true;
+        e.dirty = true;
+        e.compiling = false;
+        onReady?.();
+        onCompile?.({ phase: "ready", name: params.name });
+      } catch (error) {
+        if (engine.current === e && ticket === e.compileTicket) {
+          e.compiling = false;
+          onCompile?.({ phase: "error", name: params.name });
+          setError(true);
+        }
+        console.error("Material preparation failed:", error);
+      } finally {
+        old.dispose();
+      }
+    })();
   }, [params, shape]);
   useEffect(() => {
     const e = engine.current;
@@ -414,6 +490,14 @@ export default function Viewport({
     if (shape === "Draped cloth") {
       e.specimen.geometry = createDrapedClothGeometry();
       e.specimen.position.set(0, 0, 0);
+    }
+    if (shape === "Sphere") {
+      e.specimen.geometry = new THREE.SphereGeometry(1.4, 128, 96);
+    }
+    if (shape === "Panel") {
+      e.specimen.geometry = new RoundedBoxGeometry(2.8, 2.1, 0.12, 4, 0.04);
+      e.specimen.rotation.y = -0.15;
+      e.specimen.position.y = 1.35;
     }
     if (shape === "Shader ball") {
       e.specimen.geometry = createBallGeometry();

@@ -433,6 +433,210 @@ const recipes = {
   },
 };
 
+// v5 families use the same bounded recipe system and travel with shader exports.
+Object.assign(recipes, {
+  clay: {
+    title: "Clay",
+    caption:
+      "Aggregate and wetness. A procedural surface approximation, not a volume simulation.",
+    fixed: { metalness: 0, ior: 1.5, sheen: 0 },
+    colors: [{ key: "color", label: "Clay body" }],
+    controls: [
+      rough("Clay Roughness", 0.3, 0.98),
+      macro("wetness", "Clay wetness", [
+        target("moisture", 0, 1),
+        target("coat", 0, 0.45),
+        target("coatRoughness", 0.25, 0.08),
+      ]),
+      macro("grain", "Aggregate", [target("grain", 0.05, 1.2)]),
+      scale("detailScale", "Aggregate scale"),
+    ],
+  },
+  wax: {
+    title: "Wax",
+    caption:
+      "Marbling and soft transmission. Real-time wrap scattering, not volumetric subsurface transport.",
+    fixed: { metalness: 0, ior: 1.44, coat: 0, sheen: 0 },
+    colors: [{ key: "color", label: "Wax dye" }],
+    controls: [
+      rough("Wax Roughness", 0.15, 0.7),
+      macro("scattering", "Wax softness", [
+        target("scattering", 0.1, 1),
+        target("translucency", 0.03, 0.3),
+      ]),
+      macro("depth", "Body thickness", [target("depth", 0.1, 2)]),
+      macro("grain", "Wax marbling", [target("grain", 0, 0.8)], "detail"),
+      scale("detailScale", "Marble scale"),
+    ],
+  },
+  skin: {
+    title: "Skin",
+    caption:
+      "Pigment, pores and gentle wrap scattering. An illustrative skin shader, not measured multilayer SSS.",
+    fixed: { metalness: 0, ior: 1.4, coat: 0, sheen: 0, translucency: 0 },
+    colors: [
+      { key: "color", label: "Skin pigment" },
+      { key: "secondaryColor", label: "Undertone" },
+    ],
+    controls: [
+      rough("Skin Roughness", 0.32, 0.78),
+      macro("scattering", "Soft tissue response", [
+        target("scattering", 0, 0.85),
+      ]),
+      macro("freckles", "Pigment variation", [target("freckles", 0, 1)]),
+      macro("grain", "Pore definition", [target("grain", 0.05, 1.2)], "detail"),
+      scale("detailScale", "Pore scale"),
+    ],
+  },
+  engineering: {
+    title: "Engineering polymer",
+    caption:
+      "A representative molded grade, not a certification of chemical, mechanical or optical properties.",
+    fixed: { metalness: 0, coat: 0, sheen: 0 },
+    colors: [{ key: "color", label: "Polymer tint" }],
+    controls: [
+      rough("Polymer finish", 0.05, 0.88),
+      macro("grain", "Mold texture", [target("grain", 0, 1)]),
+      macro("depth", "Section thickness", [target("depth", 0.05, 2)]),
+      scale("detailScale", "Tool texture scale"),
+    ],
+  },
+  paper: {
+    title: "Paper / card",
+    caption:
+      "Pulp fibers, surface tooth and optional structural ribs. No printed image or texture input.",
+    fixed: {
+      metalness: 0,
+      ior: 1.47,
+      coat: 0,
+      sheen: 0.1,
+      sheenRoughness: 0.8,
+    },
+    colors: [
+      { key: "color", label: "Paper stock" },
+      { key: "secondaryColor", label: "Fiber tint" },
+    ],
+    controls: [
+      rough("Paper Roughness", 0.25, 0.98),
+      macro("grain", "Paper tooth", [target("grain", 0.05, 1.2)]),
+      macro("fiberContrast", "Visible fibers", [
+        target("fiberContrast", 0, 0.7),
+      ]),
+      scale("detailScale", "Fiber scale"),
+    ],
+  },
+  bareMetal: {
+    title: "Uncoated metal / alloy",
+    caption:
+      "A conductor with approximate RGB reflectance. Alloy grades are representative finishes, not measured spectral data.",
+    fixed: { metalness: 1, coat: 0, sheen: 0, anisotropy: 0 },
+    colors: [{ key: "color", label: "Conductor reflectance" }],
+    controls: [
+      macro("polish", "Metal polish", [target("roughness", 0.7, 0.045)]),
+      macro("grain", "Surface tooth", [target("grain", 0, 1)]),
+      scale("detailScale", "Tooling scale"),
+    ],
+  },
+  rust: {
+    title: "Oxidized iron",
+    caption:
+      "Metal underneath; porous dielectric oxide above. Coverage changes color, roughness, metalness and height.",
+    fixed: { metalness: 1, coat: 0, sheen: 0, anisotropy: 0 },
+    colors: [
+      { key: "color", label: "Iron reflectance" },
+      { key: "secondaryColor", label: "Oxide color" },
+    ],
+    controls: [
+      rough("Iron Roughness", 0.22, 0.65),
+      macro("oxidation", "Rust coverage", [target("oxidation", 0, 1)]),
+      macro("grain", "Oxide crust", [target("grain", 0.1, 1.2)]),
+      scale("detailScale", "Oxide scale"),
+    ],
+  },
+  solar: {
+    title: "Photovoltaic module",
+    caption:
+      "Procedural cells and conductive grid beneath glass. A surface model, not an electrical simulation.",
+    fixed: { metalness: 0.55, coat: 0.95, ior: 1.5, coatIor: 1.5, sheen: 0 },
+    colors: [
+      { key: "color", label: "Silicon color" },
+      { key: "secondaryColor", label: "Contact metal" },
+    ],
+    controls: [
+      rough("Cell Roughness", 0.12, 0.5),
+      macro("gloss", "Cover glass gloss", [
+        target("coatRoughness", 0.15, 0.025),
+      ]),
+      macro("busbar", "Busbar width", [target("busbarWidth", 0.006, 0.04)]),
+      scale("detailScale", "Cell scale"),
+    ],
+  },
+  golf: {
+    title: "Dimpled golf-ball cover",
+    caption:
+      "Staggered recessed dimples in the normal field. Surface detail only; no displacement of the silhouette.",
+    fixed: { metalness: 0, ior: 1.5, sheen: 0 },
+    colors: [{ key: "color", label: "Cover color" }],
+    controls: [
+      rough("Cover Roughness", 0.18, 0.6),
+      macro("dimple", "Dimple depth", [target("dimpleDepth", 0.002, 0.025)]),
+      macro("gloss", "Protective gloss", [
+        target("coat", 0.15, 0.9),
+        target("coatRoughness", 0.18, 0.045),
+      ]),
+      scale("detailScale", "Dimple scale"),
+    ],
+  },
+  jersey: {
+    title: "Jersey knit",
+    caption:
+      "Interlocking V-shaped yarn loops, not an over/under weave. Scale follows the cloth UVs.",
+    fixed: { metalness: 0, coat: 0, ior: 1.5, sheenRoughness: 0.75 },
+    colors: [
+      { key: "color", label: "Yarn dye" },
+      { key: "secondaryColor", label: "Melange fiber" },
+    ],
+    controls: [
+      rough("Jersey Roughness", 0.7, 0.97),
+      macro("softness", "Knit softness", [
+        target("fuzz", 0.1, 0.8),
+        target("sheen", 0.2, 0.7),
+      ]),
+      macro("grain", "Loop relief", [target("grain", 0.1, 1.2)]),
+      scale("detailScale", "Stitch scale"),
+      direct(
+        "weaveAngle",
+        "Stitch direction",
+        -180,
+        180,
+        "detail",
+        "°",
+        false,
+        false,
+        1,
+      ),
+    ],
+  },
+  led: {
+    title: "LED emitter array",
+    caption:
+      "Emissive packages with a dark substrate. No bloom or light cast on neighboring objects.",
+    fixed: { metalness: 0, coat: 0.25, ior: 1.5, sheen: 0 },
+    colors: [
+      { key: "color", label: "Substrate color" },
+      { key: "emissionColor", label: "Emitted light" },
+    ],
+    controls: [
+      macro("brightness", "Emitter brightness", [
+        target("emissionStrength", 0, 8),
+      ]),
+      macro("pixel", "Emitter fill", [target("pixelFill", 0.2, 0.94)]),
+      rough("Package Roughness", 0.2, 0.65),
+      scale("detailScale", "Pixel scale"),
+    ],
+  },
+});
+
 export function materialFamily(p) {
   if (p.recipeId && recipes[p.recipeId]) return p.recipeId;
   if (p.type === 0) return "paint";
@@ -462,6 +666,15 @@ export function materialFamily(p) {
       9: "grainPlastic",
       10: "wornPlastic",
       11: "leather",
+      12: "clay",
+      13: "wax",
+      14: "skin",
+      15: "paper",
+      16: "rust",
+      17: "solar",
+      18: "golf",
+      19: "jersey",
+      20: "led",
     }[p.type] || "paint"
   );
 }
@@ -469,7 +682,24 @@ export function materialFamily(p) {
 export function getRecipe(p) {
   const id = materialFamily(p),
     base = recipes[id] || recipes.woven;
-  const controls = [...base.controls];
+  const controls = base.controls.filter(
+    (c) => !(id === "engineering" && c.id === "depth" && !p.opticalGrade),
+  );
+  if (id === "denim" && (!p.weavePattern || p.weavePattern === "denim"))
+    controls.push(
+      macro("denimFade", "Indigo fade", [target("denimFade", 0, 0.9)]),
+      macro("slub", "Slub character", [target("slub", 0, 1)], "detail"),
+    );
+  if (id === "engineering" && p.opticalGrade)
+    controls.push(
+      macro(
+        "clarity",
+        "Optical clarity",
+        [target("translucency", 0.01, 0.95)],
+        "finish",
+      ),
+    );
+
   if (base.woven)
     controls.push(
       scale("detailScale", "Thread scale", "construction"),
@@ -518,6 +748,13 @@ export function getRecipe(p) {
     );
   return {
     ...base,
+    fixed:
+      id === "engineering"
+        ? {
+            ...base.fixed,
+            ior: Math.max(1.3, Math.min(1.7, p.polymerIOR || 1.5)),
+          }
+        : base.fixed,
     id,
     iridescent,
     title: iridescent ? "Iridescent automotive paint" : base.title,
@@ -586,7 +823,7 @@ export function applyRecipeControl(p, c, input) {
 
 export function applyRecipeColor(p, key, value) {
   const next = { ...p, [key]: value };
-  if (p.type === 4) {
+  if (p.type === 4 || p.type === 19) {
     if (key === "warpColor") next.color = value;
     if (key === "color" || key === "warpColor") {
       // Dye automatically informs the pile highlight: no unrelated sheen-color knob.

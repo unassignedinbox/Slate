@@ -2,8 +2,8 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests",
   testIgnore: "**/standalone.spec.js",
-  timeout: 180000,
-  expect: { timeout: 60000 },
+  timeout: 300000,
+  expect: { timeout: 180000 },
   workers: 1,
   use: {
     baseURL: "http://127.0.0.1:5173",

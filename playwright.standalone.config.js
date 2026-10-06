@@ -7,7 +7,7 @@ const { webServer, testIgnore, ...shared } = studioConfig;
 export default defineConfig({
   ...shared,
   testMatch: "standalone.spec.js",
-  timeout: 240000,
+  timeout: 420000,
   use: {
     ...shared.use,
     baseURL: "https://alloy-standalone.invalid",

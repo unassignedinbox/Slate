@@ -1,6 +1,6 @@
-# Alloy 04 — Material Studio
+# Alloy 05 — 100 Procedural Materials
 
-A real-time automotive material editor built with React, Vite and Three.js. All surface detail is procedural: **no bitmap material maps, external HDRIs, or downloaded 3D assets**. The charcoal interface uses rounded panels and desaturated accents. Fonts are self-hosted.
+A real-time procedural material editor built with React, Vite and Three.js. All surface detail is procedural: **no bitmap material maps, external HDRIs, or downloaded 3D assets**. The charcoal interface uses rounded panels and desaturated accents. Fonts are self-hosted.
 
 ## Run
 
@@ -13,7 +13,7 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-**[Launch the published studio](https://raw.githack.com/unassignedinbox/Slate/75eb5ecab78d570103fe5fa928ca740afbdc5e76/site/index.html).** If GitHack shows its external-content notice, select **Open the page**. GitHack documents this confirmation for HTML pages; it is not an Alloy error.
+Run `npm run verify:published` for the verified, immutable GitHack link. If GitHack shows its external-content notice, select **Open the page**. This is GitHack’s confirmation for HTML pages, not an Alloy error.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
@@ -33,7 +33,23 @@ Use the SHA containing the built page, not the source-only initial commit. An im
 
 ## Material-aware inspector
 
-**32 presets** cover automotive paint, three iridescent finishes, metals, carbon ceramic, rubber, glass, brake iron, carbon fiber, polymers, leather, suede, velvet and woven textiles.
+**100 unique procedural presets** across 13 categories. Presets share purpose-built shader families; this is not a claim of 100 unrelated BRDF models or measured industrial finishes.
+
+| Category                 |  Count | Examples                                                                                                                                                     |
+| ------------------------ | -----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Paint                    |      7 | Multicolor flakes, pearl, three thin-film iridescent paints                                                                                                  |
+| Metal                    |     23 | Aluminium, 24K/18K/14K gold, rose/white gold, copper, maraging/cast/stainless steel, iron/rust, chromium, bronze, brass, nickel, titanium, zinc, silver, tin |
+| Plastic                  |     17 | PVC-U/PVC-P, PP, HDPE/LDPE, PET/PBT, PTFE, POM, PA6, glass-filled PA66, PC, PMMA, PEEK; three existing polymers                                              |
+| Fabric                   |     19 | Nine weave constructions, indigo/raw/washed/black denim, two jersey knits, cotton, linen, wool, silk, satin, suede, velvet, carbon composite                 |
+| Leather                  |      4 | Cognac, nappa and two bull-grain hides                                                                                                                       |
+| Clay                     |      4 | Terracotta, wet potter’s clay, kaolin, sculpting clay                                                                                                        |
+| Wax                      |      4 | Beeswax, paraffin, soy, sealing wax                                                                                                                          |
+| Skin                     |      6 | Pigment variants with pores, undertone and bounded wrap-scattering controls                                                                                  |
+| Paper                    |      6 | Cotton rag, kraft, coated art stock, newsprint, corrugated card, mulberry                                                                                    |
+| Technical                |      7 | Three solar modules, two golf-ball covers, two LED emitter arrays                                                                                            |
+| Ceramic / Rubber / Glass | 1 each | Carbon ceramic, performance rubber, crystal glass                                                                                                            |
+
+**Interpretation:** “PPT” was treated as PP (polypropylene); PET and PBT are also included. Alloy/polymer grades and skin/wax optics are representative visual approximations, not certified spectral or mechanical data. Gold variants, steels, bronze and brass are correctly treated as alloys rather than all being described as pure metals.
 
 The inspector shows only a material's useful controls. Friendly **0–100% art-direction sliders** drive bounded internal physical values, often together. It does not expose a universal wall of metallic/roughness/IOR/clearcoat controls. `src/materialProfiles.js` defines the controls, mappings and fixed optical properties; the same rules apply to rendering, saved presets and shader exports.
 
@@ -82,7 +98,7 @@ All three foundational constructions—**plain, twill and satin**—plus basket,
 - **Macro** jumps to 800%; double-click a visible point to inspect it closely.
 - Drag to orbit; right-drag or shift-drag to pan. **Fit** or **R** restores framing.
 - Optical zoom keeps the camera outside the surface.
-- Five preview assets: grooved shader ball, frozen draped cloth, rounded cube, torus knot and perforated brake rotor.
+- Seven preview assets: grooved shader ball, frozen draped cloth, rounded cube, torus knot, perforated brake rotor, smooth sphere and flat panel. Solar/paper/LED presets select the panel; golf-ball covers select the sphere.
 - Four studio-light setups, auto rotation, wireframe and focus mode.
 
 ## Frozen cloth asset
@@ -93,9 +109,9 @@ Reproduce the bake with `npm run bake:cloth`. The small generated geometry is in
 
 ## Presets and exports
 
-Search/category filters, local presets and favorites are supported. Older presets receive v4 defaults and are bounded to their material recipe; physically incompatible legacy settings may therefore change. `recipeId` preserves a saved material's family even when its name or ID changes. Art-direction positions are retained in `tuning`.
+Search/category filters, local presets and favorites are supported. Older presets receive v5 defaults and are bounded to their material recipe; physically incompatible legacy settings may therefore change. `recipeId` preserves a saved material's family even when its name or ID changes. Art-direction positions are retained in `tuning`.
 
-Exports: **v4 JSON**, standalone Three.js material module, and PNG viewport snapshot. The JavaScript export includes the pure recipe module, normalization and unminified shader source, so it remains self-contained after production bundling. It expects Three.js 0.180+ and a lit scene/environment. Exports retain the cloth/object-space mapping mode. The shader includes procedural nap and sheen; additional preview fiber geometry belongs to the preview asset, not the exported material module.
+Exports: **v5 JSON**, standalone Three.js material module, six-channel PNG/ZIP surface baking, and PNG viewport snapshot. The JavaScript export includes the pure recipe module, shared surface kernels, normalization and unminified shader source, so it remains self-contained after production bundling. It expects Three.js 0.180+ and a lit scene/environment. Exports retain the cloth/object-space mapping mode. The shader includes procedural nap and sheen; additional preview fiber geometry belongs to the preview asset, not the exported material module.
 
 Keyboard: `/` search, `R` reset camera, `F` focus, `Space` auto rotation, `Ctrl/Cmd+S` save, `?` shortcuts.
 
@@ -103,7 +119,27 @@ Keyboard: `/` search, `R` reset camera, `F` focus, `Space` auto rotation, `Ctrl/
 
 These are **browser PBR approximations**, not Unreal Substrate slabs or measured automotive BRDFs. Optical constants are handled by material recipes. Clearcoat Fresnel replaces Three.js's fixed F0 with `((ior - 1)/(ior + 1))²`; this is not a full multi-interface spectral slab solver. Glass uses screen-space transmission.
 
+Skin and wax use bounded **wrap-scattering approximations**, with native transmission for wax; they are not true multilayer subsurface solvers. Jersey uses V-shaped loop fields rather than a woven twill. Denim uses warp-faced 3/1 construction, undyed weft, along-yarn slub and raised-thread fading, at a finer default yarn density. Golf-ball dimples perturb normals rather than geometry. Solar cells include separators, busbars and collection fingers; LEDs have patterned emission but do not cast light onto neighboring objects or produce bloom.
+
 The environment cubemap is generated from studio-light geometry, not fetched from a texture asset. The renderer runs on demand when idle. Library thumbnails are renders of the actual procedural materials.
+
+## Shader preparation progress
+
+The library compiles and renders incrementally. Its progress bar counts **completed material previews out of 100**, not an invented percentage of GPU compiler work. Each job yields to the UI; `compileAsync` uses parallel driver compilation where supported. A separate material-compilation notice appears when the active recipe changes. Rapid changes are serialized/coalesced so obsolete results do not overwrite the current selection. Driver/linking failures produce an error state rather than silently reporting success.
+
+## Baking procedural surface channels
+
+Choose **Export material → Bake procedural maps**. Select a 256, 512, 1024 or 2048 square resolution and a physical patch width of 1–1,000 mm. The shader is evaluated on a flat XY patch using **the same surface kernels as the viewport**. The six-channel ZIP contains:
+
+- `base-color.png` and `emission.png`: sRGB encoded; emission intensity is recorded separately.
+- `roughness.png` and `metalness.png`: linear, unlit scalar channels.
+- `normal.png`: linear OpenGL tangent-space normals, +Y.
+- `height.png`: linear, 8-bit signed height encoded around 0.5; decode range is in the manifest.
+- `material.json` and `README.txt`: original procedural recipe, scale, color-space conventions and limitations.
+
+The source materials use **zero input bitmap maps**. Baked maps are generated outputs, not texture inputs used to produce the material. The baker has real per-channel progress, cancellation between GPU passes, and resource cleanup.
+
+**Limits:** this is a planar material swatch, not an unwrap/UV bake of the selected mesh. Seamless tiling is not guaranteed. Height has 8-bit precision and clips to the documented range. Clearcoat, transmission, sheen, anisotropy, scattering and angle-dependent iridescence remain shader/recipe properties; static maps alone cannot reproduce the full appearance. No studio lighting or ambient occlusion is baked into base color.
 
 ## Tests
 
@@ -112,7 +148,7 @@ npx playwright install chromium
 npm test
 ```
 
-The suite covers all material families, bounded recipe mappings, context-relevant inspector controls, all nine live weave patterns, independent yarn colors, thin-film uniforms and live iridescence, frozen geometry, height-aware wear, local persistence, JSON/JavaScript/PNG exports, macro zoom, extended ranges, color ramps and mobile layouts. Use `PLAYWRIGHT_EXECUTABLE_PATH` for an existing Chromium executable; software-rendering launch flags are included.
+The 11-test development suite covers the 100-entry catalogue, all material families, progress notifications, ZIP/PNG contents and channel values, bake cancellation, bounded recipe mappings, context-relevant inspector controls, all nine live weave patterns, independent yarn colors, thin-film uniforms and live iridescence, frozen geometry, height-aware wear, local persistence, JSON/JavaScript/PNG exports, macro zoom, extended ranges, color ramps and mobile layouts. Use `PLAYWRIGHT_EXECUTABLE_PATH` for an existing Chromium executable; software-rendering launch flags are included.
 
 ### Standalone and publication checks
 
@@ -129,7 +165,7 @@ The standalone test blocks unexpected HTTP asset requests, checks the full mater
 To exercise the actual hosted page instead, set its URL explicitly:
 
 ```sh
-ALLOY_PUBLIC_URL='https://raw.githack.com/unassignedinbox/Slate/75eb5ecab78d570103fe5fa928ca740afbdc5e76/site/index.html' npm run test:standalone
+ALLOY_PUBLIC_URL='https://raw.githack.com/unassignedinbox/Slate/<published-commit>/site/index.html' npm run test:standalone
 ```
 
 The remote mode confirms GitHack's notice if present. Connection failures **fail the test**; it never substitutes a local copy. Successful artifact verification is not a claim that GitHack's live runtime was tested. Some sandbox networks block direct connections to GitHack.

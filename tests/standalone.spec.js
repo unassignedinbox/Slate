@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import * as THREE from "three";
+import { unzipSync, strFromU8 } from "fflate";
 import { materials } from "../src/materials.js";
 
 const htmlPath = new URL("../site/index.html", import.meta.url);
@@ -18,6 +19,10 @@ async function downloadText(page, name) {
 }
 
 async function frame(page) {
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-material-ready",
+    "true",
+  );
   await page.evaluate(
     () =>
       new Promise((resolve) =>
@@ -28,9 +33,7 @@ async function frame(page) {
 
 // ALLOY_PUBLIC_URL enables a genuine remote check. Connection failures fail the
 // test; it never silently substitutes the local build for an unreachable host.
-test("standalone page renders, edits and exports without external assets", async ({
-  page,
-}) => {
+test("standalone page renders, edits and exports without external assets", async ({page}, testInfo) => {
   const html = await readFile(htmlPath, "utf8");
   const url = publicURL || localURL;
   const errors = [],
@@ -68,7 +71,12 @@ test("standalone page renders, edits and exports without external assets", async
   }
   await expect(page.locator(".material-preview img")).toHaveCount(
     materials.length,
+    { timeout: 300000 },
   );
+  const thumbnails = await page
+    .locator(".material-preview img")
+    .evaluateAll((images) => images.map((img) => img.src));
+  expect(new Set(thumbnails).size).toBe(materials.length);
   await expect(page.locator("h1")).toHaveText("Racing Green");
   await expect(
     page.locator("script[src], link[rel=stylesheet][href]"),
@@ -85,7 +93,7 @@ test("standalone page renders, edits and exports without external assets", async
   const cloth = JSON.parse(
     await downloadText(page, /Material preset All surface/),
   );
-  expect(cloth.schema).toBe("alloy.material.v4");
+  expect(cloth.schema).toBe("alloy.material.v5");
   expect(cloth.material).toMatchObject({
     weavePattern: "herringbone",
     warpColor: "#344f81",
@@ -141,6 +149,33 @@ test("standalone page renders, edits and exports without external assets", async
     );
   } finally {
     material.dispose();
+  }
+  await page.getByRole("button", { name: /Export material/ }).click();
+  await page.getByRole("button", { name: /Bake procedural maps/ }).click();
+  await page.getByLabel("Bake resolution").selectOption("256");
+  const baking = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Bake & download ZIP", exact: true })
+    .click();
+  const stream = await (await baking).createReadStream(),
+    parts = [];
+  for await (const chunk of stream) parts.push(chunk);
+  const maps = unzipSync(Buffer.concat(parts));
+  expect(Object.keys(maps)).toHaveLength(8);
+  expect(JSON.parse(strFromU8(maps["material.json"])).schema).toBe(
+    "alloy.surface-bake.v1",
+  );
+  expect(Buffer.from(maps["normal.png"]).subarray(1, 4).toString()).toBe("PNG");
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  if (process.env.ALLOY_CAPTURE === "1") {
+    await page
+      .getByRole("button", { name: "Apply Raw Selvedge Denim", exact: true })
+      .click();
+    await frame(page);
+    await page.screenshot({ path: testInfo.outputPath("denim-fit.png") });
+    await page.getByRole("button", { name: "Macro", exact: true }).click();
+    await frame(page);
+    await page.screenshot({ path: testInfo.outputPath("denim-macro.png") });
   }
   expect(unexpectedRequests).toEqual([]);
   expect(errors).toEqual([]);

@@ -47,8 +47,12 @@ import { materials, normalizeMaterial } from "./materials";
 import MaterialControls from "./RecipeInspector";
 import recipeModuleSource from "./materialProfiles.js?raw";
 import materialModuleSource from "./materials.js?raw";
+import kernelModuleSource from "./surfaceKernels.js?raw";
+import BakePanel from "./BakePanel";
 const shaderSource =
   recipeModuleSource +
+  "\n" +
+  kernelModuleSource +
   "\n" +
   materialModuleSource.slice(
     materialModuleSource.indexOf("export function normalizeMaterial("),
@@ -73,6 +77,11 @@ const categories = [
   "Glass",
   "Plastic",
   "Leather",
+  "Clay",
+  "Wax",
+  "Skin",
+  "Paper",
+  "Technical",
 ];
 
 function App() {
@@ -111,18 +120,38 @@ function App() {
   });
   const [onlySaved, setOnlySaved] = useState(false);
   const [ready, setReady] = useState(false);
+  const [preparation, setPreparation] = useState({
+    done: 0,
+    total: materials.length,
+    phase: "starting",
+    name: "Library",
+  });
+  const [compileStatus, setCompileStatus] = useState({
+    phase: "compiling",
+    name: "Racing Green",
+  });
   const searchRef = useRef(null);
   const viewerRef = useRef(null);
   const notify = (text) => setToast(text);
   useEffect(() => {
-    const t = setTimeout(() => {
-      try {
-        renderThumbnails(setThumbs);
-      } catch (e) {
-        console.warn("Thumbnail renderer:", e);
-      }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      renderThumbnails(setThumbs, setPreparation, controller.signal).catch(
+        (error) => {
+          if (!controller.signal.aborted) {
+            setPreparation((p) => ({ ...p, phase: "error" }));
+            setToast(
+              "Library previews could not finish. Materials remain selectable.",
+            );
+            console.error(error);
+          }
+        },
+      );
     }, 180);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, []);
   useEffect(() => {
     if (toast) {
@@ -181,6 +210,8 @@ function App() {
     setMobileLibrary(false);
     if (mat.category === "Fabric" && mat.type !== 7 && shape !== "Draped cloth")
       setShape("Draped cloth");
+    else if (mat.type === 18) setShape("Sphere");
+    else if ([15, 17, 20].includes(mat.type)) setShape("Panel");
     else if (mat.id === "brake-disc") setShape("Brake rotor");
     else if (shape === "Brake rotor") setShape("Shader ball");
   }
@@ -318,7 +349,7 @@ function App() {
           <span>Automotive essentials</span>
           <ChevronRight size={13} />
           <strong>Material explorer</strong>
-          <span className="version-badge">v4.0</span>
+          <span className="version-badge">v5.0</span>
         </div>
         <div className="project-actions">
           <span className="saved-state">
@@ -468,7 +499,7 @@ function App() {
             </span>
             <div>
               <strong>Beautiful by calculation.</strong>
-              <p>100% procedural. Zero textures.</p>
+              <p>100 presets. Zero texture inputs.</p>
             </div>
             <CircleHelp size={14} onClick={() => setModal("guide")} />
           </div>
@@ -484,6 +515,7 @@ function App() {
             zoom={zoom}
             onReady={() => setReady(true)}
             onZoomChange={setZoomLevel}
+            onCompile={setCompileStatus}
           />
           <div className="viewport-topbar">
             <div className="live-label">
@@ -529,6 +561,36 @@ function App() {
             <h1>{params.name}</h1>
             <p>{params.description}</p>
           </div>
+          {(preparation.phase !== "ready" ||
+            compileStatus.phase !== "ready") && (
+            <div className="compile-notice" role="status" aria-live="polite">
+              <div>
+                <span className="compile-pulse" />
+                <strong>
+                  {preparation.phase === "error" ||
+                  compileStatus.phase === "error"
+                    ? "Preview preparation interrupted"
+                    : compileStatus.phase === "compiling"
+                      ? "Compiling material shader"
+                      : "Preparing procedural library"}
+                </strong>
+                <span>
+                  {preparation.done}/{preparation.total}
+                </span>
+              </div>
+              <progress
+                aria-label="Material preparation progress"
+                max={preparation.total}
+                value={preparation.done}
+              />
+              <small>
+                {compileStatus.phase === "compiling"
+                  ? compileStatus.name
+                  : preparation.name}{" "}
+                · completed material previews, not driver-percent
+              </small>
+            </div>
+          )}
           {!ready && (
             <div className="loading-state">
               <span />
@@ -623,6 +685,8 @@ function App() {
                     "Rounded cube",
                     "Torus knot",
                     "Brake rotor",
+                    "Sphere",
+                    "Panel",
                   ].map((x) => (
                     <option key={x}>{x}</option>
                   ))}
@@ -828,8 +892,11 @@ function App() {
       </main>
       <footer className="app-footer">
         <span>
-          <span className="status-dot" /> All systems ready <i />{" "}
-          <span className="footer-dim">Local workspace</span>
+          <span className="status-dot" />{" "}
+          {preparation.phase === "ready" && compileStatus.phase === "ready"
+            ? "All systems ready"
+            : "Preparing materials"}{" "}
+          <i /> <span className="footer-dim">Local workspace</span>
         </span>
         <span className="footer-center">DESIGNED FOR THE DETAILS.</span>
         <button onClick={() => setModal("shortcuts")}>
@@ -918,8 +985,8 @@ function App() {
                     download(
                       JSON.stringify(
                         {
-                          schema: "alloy.material.v4",
-                          version: 4,
+                          schema: "alloy.material.v5",
+                          version: 5,
                           material: params,
                         },
                         null,
@@ -956,6 +1023,17 @@ function App() {
                   </span>
                   <ArrowDownToLine size={17} />
                 </button>
+                <button
+                  className="export-option"
+                  onClick={() => setModal("bake")}
+                >
+                  <Layers3 size={23} />
+                  <span>
+                    <strong>Bake procedural maps</strong>
+                    <small>Six surface channels + recipe · PNG / ZIP</small>
+                  </span>
+                  <ArrowRight size={17} />
+                </button>
                 <button className="export-option" onClick={screenshot}>
                   <Camera size={23} />
                   <span>
@@ -971,6 +1049,9 @@ function App() {
                   supported.
                 </p>
               </>
+            )}
+            {modal === "bake" && (
+              <BakePanel params={params} onNotify={notify} />
             )}
             {modal === "guide" && (
               <>
@@ -993,7 +1074,7 @@ function App() {
                     {
                       icon: <Move3D size={19} />,
                       title: "02 — Look a little closer",
-                      text: "Drag to orbit and scroll to zoom. Switch between five assets, including a frozen cloth drape over a ball. Textile presets select the drape automatically.",
+                      text: "Drag to orbit and scroll to zoom. Switch between seven assets, including a frozen cloth drape over a ball. Textile presets select the drape automatically.",
                     },
                     {
                       icon: <SlidersHorizontal size={19} />,
@@ -1003,7 +1084,7 @@ function App() {
                     {
                       icon: <ArrowUpRight size={19} />,
                       title: "04 — Take it further",
-                      text: "Save a local preset, export the Three.js shader, or capture your viewport as a PNG.",
+                      text: "Save a local preset, export the Three.js shader, bake six procedural surface maps, or capture the viewport as a PNG.",
                     },
                   ].map((s) => (
                     <div key={s.title}>

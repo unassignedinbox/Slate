@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { boundMaterial } from "./materialProfiles.js";
+import { expandedCatalog } from "./catalogExpansion.js";
+import { extendedSurfaceGLSL, extendedSurfaceColor } from "./surfaceKernels.js";
 
 export const materials = [
   {
@@ -359,7 +361,7 @@ export const materials = [
     type: 4,
     colors: ["#697785", "#253c5a"],
     fabricMode: 0,
-    detailScale: 45,
+    detailScale: 150,
     weaveAngle: 0,
     weaveRelief: 0.9,
     sheen: 0.6,
@@ -734,6 +736,7 @@ export const materials = [
     filmVariation: 55,
     description: "A pearl finish with a delicate interference glow.",
   },
+  ...expandedCatalog(),
 ].map(normalizeMaterial);
 
 export function normalizeMaterial(input) {
@@ -751,6 +754,26 @@ export function normalizeMaterial(input) {
     coatRoughness: 0.15,
     depth: 0.5,
     flakes: 0,
+    secondaryColor: "#afa38d",
+    emissionColor: "#ffffff",
+    emissionStrength: 0,
+    pixelFill: 0.65,
+    moisture: 0,
+    scattering: 0,
+    translucency: 0,
+    freckles: 0,
+    paperRibs: 0,
+    fiberContrast: 0.3,
+    oxidation: 0,
+    panelMode: 0,
+    busbarWidth: 0.016,
+    dimpleDepth: 0.012,
+    denimFade: 0.12,
+    slub: 0.3,
+    opticalGrade: (p.translucency || 0) > 0,
+    polymerIOR: 1.5,
+    bakeMode: 0,
+    bakeHeightRange: 0.02,
     recipeId: p.recipeId,
     tuning: p.tuning || {},
     weavePattern:
@@ -808,7 +831,7 @@ export function normalizeMaterial(input) {
         ? p.colorStops[i]
         : i / Math.max(1, colors.length - 1),
     ),
-    materialVersion: 4,
+    materialVersion: 5,
   });
 }
 
@@ -837,7 +860,10 @@ export function createMaterial(input) {
     sheenRoughness: p.sheenRoughness,
     anisotropy: p.anisotropy,
     anisotropyRotation: (p.weaveAngle * Math.PI) / 180,
-    transmission: p.type === 5 ? 0.97 : 0,
+    transmission: p.type === 5 ? 0.97 : p.translucency,
+    emissive: p.type === 20 ? p.emissionColor : "#000000",
+    emissiveIntensity: p.emissionStrength,
+    toneMapped: !p.bakeMode,
     thickness: p.depth * 2,
     attenuationColor: new THREE.Color(p.color),
     attenuationDistance: 2.8,
@@ -874,6 +900,22 @@ export function createMaterial(input) {
   m.userData.params = p;
   m.onBeforeCompile = (shader) => {
     const values = {
+      uBakeMode: p.bakeMode,
+      uBakeHeightRange: p.bakeHeightRange,
+      uSecondary: new THREE.Color(p.secondaryColor),
+      uMoisture: p.moisture,
+      uScattering: p.scattering,
+      uFreckles: p.freckles,
+      uPaperRibs: p.paperRibs,
+      uFiberContrast: p.fiberContrast,
+      uOxidation: p.oxidation,
+      uPanelMode: p.panelMode,
+      uBusbarWidth: p.busbarWidth,
+      uDimpleDepth: p.dimpleDepth,
+      uDenimFade: p.denimFade,
+      uSlub: p.slub,
+      uPixelFill: p.pixelFill,
+      uEmissionScale: Math.max(1, p.emissionStrength),
       uAverageFlakeColor: averageColor,
       uType: p.type,
       uFlakes: p.flakes,
@@ -995,7 +1037,7 @@ export function createMaterial(input) {
         float bundle=sqrt(max(0.,1.-pow(across*2.-1.,2.)));
         float gap=smoothstep(.008,.045,edge);
         float along=mix(uv.y,uv.x,over);
-        float floatLength=(uType==4 && uWeave==2)?5.:2.;
+        float floatLength=(uType==4 && uWeave==2)?5.:(uType==4 && uWeave==8)?3.:(uType==4 && uWeave==0)?1.:2.;
         float arch=.86+.14*cos((fract(along/floatLength)*2.-1.)*3.14159);
         float freq=coord*6.283*uFiberDetail;
         float fiber=(sin(freq)*.5+.5)*(1.-smoothstep(.5,3.1,fwidth(freq)));
@@ -1015,6 +1057,7 @@ export function createMaterial(input) {
         return normalize(max(abs(det),1e-10)*n-grad);
       }
       float flakeMask=0.,flakeRandom=.5,flakeResolved=1.,surfaceHeight=0.,peelHeight=0.,wearMask=0.;
+      ${extendedSurfaceGLSL()}
       vec3 flakeTint=vec3(0.);
       vec2 yarnUV=vec2(0.);
       float yarnDirection=0.;
@@ -1060,7 +1103,7 @@ export function createMaterial(input) {
         diffuseColor.rgb=mix(mix(base,farTint,meanMask),blended,detail);
         flakeMask=mix(meanMask,maskTotal,detail);
         flakeRandom=mix(.5,randomTotal,detail);flakeResolved=detail;
-      }else if(uType==1){diffuseColor.rgb*=.8+.25*noise3(pp*vec3(uScale,5.,uScale));}
+      }else if(uType==1){diffuseColor.rgb*=.92+.1*noise3(pp*vec3(uScale,5.,uScale));surfaceHeight=noise3(pp*uScale)*uGrain*.003;}
       else if(uType==2){diffuseColor.rgb*=.6+.65*grain;surfaceHeight=grain*.003*uDepth;}
       else if(uType==3){diffuseColor.rgb*=.84+.22*grain;surfaceHeight=grain*.002*uDepth;}
       else if(uType==4 || uType==7){
@@ -1096,7 +1139,7 @@ export function createMaterial(input) {
         float phase=length(pp.xy)*uScale*3.3;
         float lines=sin(phase)*.5*(1.-smoothstep(.5,3.1,fwidth(phase)))+.5;
         diffuseColor.rgb*=.84+lines*.14;surfaceHeight=lines*.0001*uDepth;
-      }else if(uType>=8){
+      }else if(uType>=8 && uType<=11){
         float micro=noise3(pp*uScale)+.3*noise3(pp*uScale*2.7);
         if(uType==11){
           vec3 warped=pp*uScale+vec3(noise3(pp*uScale*.37),noise3(pp*uScale*.37+13.1),noise3(pp*uScale*.37+24.7))*.7;
@@ -1120,7 +1163,7 @@ export function createMaterial(input) {
         diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*1.18+vec3(.012),wearMask*.6+scratchWear);
         surfaceHeight-=scratchWear*.001*(1.-wearMask*.85);
       }
-
+      ${extendedSurfaceColor()}
     `,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -1128,7 +1171,10 @@ export function createMaterial(input) {
       `
       #include <roughnessmap_fragment>
       if(uType==0)roughnessFactor=mix(roughnessFactor,mix(uFlakeRoughMin,uFlakeRoughMax,flakeRandom),flakeMask);
-      if(uType>=8)roughnessFactor=mix(clamp(roughnessFactor+uGrain*(grain-.5)*.16,.025,1.),uWornRoughness,wearMask);
+      if(uType>=8 && uType<=11)roughnessFactor=mix(clamp(roughnessFactor+uGrain*(grain-.5)*.16,.025,1.),uWornRoughness,wearMask);
+      if(uType==12)roughnessFactor=mix(roughnessFactor,.24,uMoisture*.7);
+      if(uType==16)roughnessFactor=mix(roughnessFactor,.94,oxideMask);
+      if(uType==17)roughnessFactor=mix(roughnessFactor,.22,contactMask);
     `,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -1136,6 +1182,8 @@ export function createMaterial(input) {
       `
       #include <metalnessmap_fragment>
       if(uType==0)metalnessFactor=mix(metalnessFactor,mix(uFlakeMetalMin,uFlakeMetalMax,flakeRandom),flakeMask);
+      if(uType==16)metalnessFactor*=1.-oxideMask;
+      if(uType==17)metalnessFactor=mix(.25,.96,contactMask);
     `,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -1185,9 +1233,34 @@ export function createMaterial(input) {
       "#include <lights_physical_fragment>",
       physical,
     );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <emissivemap_fragment>",
+      `#include <emissivemap_fragment>
+      if(uType==20)totalEmissiveRadiance*=emitterMask;`,
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <lights_fragment_end>",
+      `#include <lights_fragment_end>
+      if(uType==13 || uType==14)reflectedLight.indirectDiffuse+=diffuseColor.rgb*ambientLightColor*uScattering*.22*pow(1.-abs(dot(normal,geometryViewDir)),2.)*vec3(1.,.55,.32);`,
+    );
+    // Same procedural field, unlit channel output. Bake colors are encoded sRGB;
+    // scalar and normal channels are linear. A flat XY patch gives tangent normals.
+    if (p.bakeMode)
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <opaque_fragment>",
+        `#include <opaque_fragment>
+      if(uBakeMode==1)gl_FragColor=vec4(bakeSRGB(diffuseColor.rgb),1.);
+      if(uBakeMode==2)gl_FragColor=vec4(vec3(clamp(roughnessFactor,0.,1.)),1.);
+      if(uBakeMode==3)gl_FragColor=vec4(vec3(clamp(metalnessFactor,0.,1.)),1.);
+      if(uBakeMode==4)gl_FragColor=vec4(normal*.5+.5,1.);
+      if(uBakeMode==5)gl_FragColor=vec4(vec3(clamp(.5+surfaceHeight/uBakeHeightRange,0.,1.)),1.);
+      if(uBakeMode==6)gl_FragColor=vec4(bakeSRGB(totalEmissiveRadiance/uEmissionScale),1.);
+    `,
+      );
     m.userData.shader = shader;
   };
-  m.customProgramCacheKey = () => `alloy-procedural-v4-${p.type}`;
+  m.customProgramCacheKey = () =>
+    `alloy-procedural-v5-${p.type}-${p.bakeMode > 0}`;
   return m;
 }
 

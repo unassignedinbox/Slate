@@ -21,8 +21,12 @@ test("procedural library, live editing, local presets and export", async ({
     if (m.type() === "error") errors.push(m.text());
   });
   await page.goto("/");
-  await expect(page.locator(".material-preview img")).toHaveCount(
-    materials.length,
+  // Full 100-preview compilation is covered by expansion.spec.js. These
+  // interaction tests deliberately exercise the UI while the queue continues.
+  await expect(page.locator(".material-preview img").first()).toBeVisible();
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-material-ready",
+    "true",
   );
   await expect(
     page.getByRole("heading", { name: "Racing Green", exact: true, level: 1 }),
@@ -66,7 +70,7 @@ test("procedural library, live editing, local presets and export", async ({
   let text = "";
   for await (const chunk of stream) text += chunk;
   const preset = JSON.parse(text);
-  expect(preset.schema).toBe("alloy.material.v4");
+  expect(preset.schema).toBe("alloy.material.v5");
   expect(preset.material.recipeId).toBe("paint");
   expect(preset.material.name).toBe("Ocean Chromatic");
   expect(preset.material.flakes).toBe(0.91);
@@ -114,8 +118,12 @@ test("every material family, preview controls and mobile library", async ({
     if (m.type() === "error") errors.push(m.text());
   });
   await page.goto("/");
-  await expect(page.locator(".material-preview img")).toHaveCount(
-    materials.length,
+  // Full 100-preview compilation is covered by expansion.spec.js. These
+  // interaction tests deliberately exercise the UI while the queue continues.
+  await expect(page.locator(".material-preview img").first()).toBeVisible();
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-material-ready",
+    "true",
   );
   for (const name of [
     "Liquid Silver",
@@ -150,6 +158,10 @@ test("every material family, preview controls and mobile library", async ({
       .getByRole("button", { name: "Apply " + name, exact: true })
       .click();
     await expect(page.locator("h1")).toHaveText(name);
+    await expect(page.locator("canvas")).toHaveAttribute(
+      "data-material-ready",
+      "true",
+    );
     await page.evaluate(
       () =>
         new Promise((r) =>
@@ -198,8 +210,12 @@ test("macro inspection, extended ranges, bounded finish controls and color ramp 
     if (m.type() === "error") errors.push(m.text());
   });
   await page.goto("/");
-  await expect(page.locator(".material-preview img")).toHaveCount(
-    materials.length,
+  // Full 100-preview compilation is covered by expansion.spec.js. These
+  // interaction tests deliberately exercise the UI while the queue continues.
+  await expect(page.locator(".material-preview img").first()).toBeVisible();
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-material-ready",
+    "true",
   );
   await page.getByRole("button", { name: "Macro", exact: true }).click();
   await expect(page.locator("canvas")).toHaveAttribute("data-zoom", "800");
@@ -344,8 +360,12 @@ test("frozen cloth, textile UVs, leather, cellular layers and height-aware wear"
     if (m.type() === "error") errors.push(m.text());
   });
   await page.goto("/");
-  await expect(page.locator(".material-preview img")).toHaveCount(
-    materials.length,
+  // Full 100-preview compilation is covered by expansion.spec.js. These
+  // interaction tests deliberately exercise the UI while the queue continues.
+  await expect(page.locator(".material-preview img").first()).toBeVisible();
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-material-ready",
+    "true",
   );
   await page
     .getByRole("button", { name: "Apply Natural Cotton", exact: true })
@@ -430,11 +450,19 @@ test("frozen cloth, textile UVs, leather, cellular layers and height-aware wear"
     );
   await page.getByLabel("Polymer wear value", { exact: true }).fill("0");
   await frame();
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-material-ready",
+    "true",
+  );
   const before = await page.locator("canvas").evaluate((c) => c.toDataURL());
   await page.getByLabel("Wear softness value", { exact: true }).fill("80");
   await page.getByLabel("Worn polish value", { exact: true }).fill("80");
   await page.getByLabel("Polymer wear value", { exact: true }).fill("100");
   await frame();
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-material-ready",
+    "true",
+  );
   const after = await page.locator("canvas").evaluate((c) => c.toDataURL());
   expect(after).not.toBe(before);
   await page
@@ -452,7 +480,7 @@ test("frozen cloth, textile UVs, leather, cellular layers and height-aware wear"
   );
   expect(saved.flakeLayers).toBe(4);
   expect(saved.flakeLayerDepth).toBe(0.76);
-  expect(saved.materialVersion).toBe(4);
+  expect(saved.materialVersion).toBe(5);
   expect(errors).toEqual([]);
 });
 
@@ -503,7 +531,7 @@ test("cellular flakes and polished height are actual shader paths", async () => 
 });
 
 test("every material recipe bounds all its art-direction controls", async () => {
-  expect(materials).toHaveLength(32);
+  expect(materials).toHaveLength(100);
   for (const p of materials) {
     const recipe = getRecipe(p);
     expect(recipe.controls.length).toBeGreaterThan(0);
@@ -605,8 +633,12 @@ test("guided inspector, nine live weaves, yarn colors and iridescent paint", asy
     if (m.type() === "error") errors.push(m.text());
   });
   await page.goto("/");
-  await expect(page.locator(".material-preview img")).toHaveCount(
-    materials.length,
+  // Full 100-preview compilation is covered by expansion.spec.js. These
+  // interaction tests deliberately exercise the UI while the queue continues.
+  await expect(page.locator(".material-preview img").first()).toBeVisible();
+  await expect(page.locator("canvas")).toHaveAttribute(
+    "data-material-ready",
+    "true",
   );
   await page
     .getByRole("button", { name: "Apply Midnight Velvet", exact: true })
@@ -642,7 +674,13 @@ test("guided inspector, nine live weaves, yarn colors and iridescent paint", asy
           requestAnimationFrame(() => requestAnimationFrame(r)),
         ),
     );
-  const image = () => page.locator("canvas").evaluate((c) => c.toDataURL());
+  const image = async () => {
+    await expect(page.locator("canvas")).toHaveAttribute(
+      "data-material-ready",
+      "true",
+    );
+    return page.locator("canvas").evaluate((c) => c.toDataURL());
+  };
   await page
     .getByRole("button", { name: "Apply Natural Cotton", exact: true })
     .click();
