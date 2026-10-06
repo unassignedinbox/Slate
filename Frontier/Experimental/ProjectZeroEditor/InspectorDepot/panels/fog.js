@@ -187,14 +187,14 @@ export function fogPanel(node, ctx) {
   const note = el('div', 'mp-note'); sb.append(note); host.append(sc); sc.querySelector('.mp-chead .l').onclick = () => sc.classList.toggle('shut');
 
   function paintChamber() {
-    const [g, w, h] = sizeCanvas(chamberCv, 74); g.clearRect(0, 0, w, h); g.fillStyle = '#070809'; g.fillRect(0, 0, w, h);
-    const cy = h / 2, col = rgb(C()), strength = S(), layerDensity = atHeight(D(), H(), 25), active = P.enabled !== false, preview = active ? 1 : .62, range = sightRange(layerDensity), rangeX = 12 + clamp(range / 120, 0, 1) * (w - 24), endSpread = 8 + strength * 16;
+    const [g, w, h] = sizeCanvas(chamberCv, 74); g.clearRect(0, 0, w, h); g.fillStyle = '#191919'; g.fillRect(0, 0, w, h);
+    const cy = h / 2, col = rgb(C()), strength = S(), layerDensity = atHeight(D(), H(), 25), active = P.enabled !== false, preview = active ? 1 : .84, range = sightRange(layerDensity), rangeX = 12 + clamp(range / 120, 0, 1) * (w - 24), endSpread = 8 + strength * 16;
     g.strokeStyle = 'rgba(255,255,255,.07)'; g.setLineDash([2, 5]);
     [cy - 24, cy, cy + 24].forEach(y => { g.beginPath(); g.moveTo(12, y); g.lineTo(w - 12, y); g.stroke(); }); g.setLineDash([]);
     for (let x = 12; x < w - 10; x += 2) {
-      const t = (x - 12) / Math.max(1, w - 24), physical = transmission(layerDensity, t * 120), display = .2 + .8 * Math.pow(physical, .15), spread = 3 + t * t * (12 + strength * 22), a = preview * (.06 + strength * .16) * display;
+      const t = (x - 12) / Math.max(1, w - 24), physical = transmission(layerDensity, t * 120), display = .35 + .65 * Math.pow(physical, .15), spread = 3 + t * t * (12 + strength * 22), a = preview * (.12 + Math.min(2, strength) * .22) * display;
       const grd = g.createLinearGradient(0, cy - spread, 0, cy + spread); grd.addColorStop(0, rgba(col, 0)); grd.addColorStop(.5, rgba(col, a)); grd.addColorStop(1, rgba(col, 0)); g.fillStyle = grd; g.fillRect(x, cy - spread, 2.1, spread * 2);
-      g.fillStyle = rgba(col, preview * (.14 + physical * .46)); g.fillRect(x, cy - .9, 2.1, 1.8);
+      g.fillStyle = rgba(col, preview * (.28 + physical * .5)); g.fillRect(x, cy - 1.05, 2.1, 2.1);
     }
     g.strokeStyle = rgba(col, preview * .28); g.beginPath(); g.moveTo(12, cy); g.lineTo(w - 12, cy - endSpread); g.moveTo(12, cy); g.lineTo(w - 12, cy + endSpread); g.stroke();
     g.strokeStyle = 'rgba(239,110,110,.62)'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(rangeX, 20); g.lineTo(rangeX, h - 18); g.stroke(); g.setLineDash([]);

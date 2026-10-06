@@ -961,3 +961,6 @@ body.playing .vp-menus,body.playing .axisorb{opacity:0;pointer-events:none;}
 /* Curve editor */
 .cu-hero canvas{display:block;width:100%;cursor:crosshair;touch-action:none}.cu-hero canvas.grabbing{cursor:grabbing}.mp-cap .cu-sub{text-transform:none;letter-spacing:.3px}.curvepanel .mp-subhead{margin:10px 0 4px}.cu-kinds{margin:4px 0 9px}
 .cu-steppers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-bottom:8px}.cu-axis{display:flex;flex-direction:column;gap:4px;padding:6px;background:var(--field);border:1px solid var(--stroke);border-radius:11px;min-width:0}.cu-axis>span{font-size:8px;letter-spacing:1px;color:var(--text-faint)}.cu-axis .step{width:100%}.cu-axis .step .f{min-width:0}.cu-axis .step input{width:38px}
+
+.fg-chamber{background:#191919;}
+.fogpanel.disabled .fg-chamber canvas{filter:saturate(.72);opacity:1;}

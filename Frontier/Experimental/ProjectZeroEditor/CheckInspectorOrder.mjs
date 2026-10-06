@@ -139,7 +139,6 @@ const Sections = {
     ".fog-readings:last-of-type",
     Card("Fog settings"),
     Card("Visibility through fog"),
-    ".fog-beam",
     Card("Medium"),
   ],
   "local-fog": [
@@ -147,7 +146,6 @@ const Sections = {
     ".fog-readings:last-of-type",
     Card("Fog settings"),
     Card("Visibility through fog"),
-    ".fog-beam",
     Card("Medium"),
   ],
   clouds: [

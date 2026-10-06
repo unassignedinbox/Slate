@@ -1,6 +1,6 @@
 import { CloudEdit, CloudValue } from "./CloudSpecification.js";
 import CloudDeckPanel from "./CloudDeckPanel.jsx";
-import FogPanel from "./FogPanel.jsx";
+import FogPanel, { FogBeamChamber } from "./FogPanel.jsx";
 import HeightFogVisual from "./HeightFogVisual.jsx";
 import FracturePanel from "./FracturePanel.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
@@ -1671,7 +1671,11 @@ export function Inspector({
               Local ? "Feature Scale" : Aerial ? "Mie Blend" : "Sun Scatter",
               ...(Local ? ["Anisotropy"] : []),
             )}
-            {Height && ReferenceBeamCards}
+            {Height ? (
+              ReferenceBeamCards
+            ) : (
+              <FogBeamChamber Kind={Subject.Panel} V={V} />
+            )}
           </Card>
           {Local ? (
             <FogShapePanel Values={Values} Change={Change} />

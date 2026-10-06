@@ -158,6 +158,10 @@ try {
     1,
   );
   assert.equal(await HeightBeam.locator(".fg-vis").count(), 0);
+  assert.equal(
+    await HeightBeam.locator(".fg-chamber").evaluate((Card) => getComputedStyle(Card).backgroundColor),
+    "rgb(25, 25, 25)",
+  );
   await Page.locator('[data-card="Medium"]').scrollIntoViewIfNeeded();
   await Capture("HeightFogChamber");
   Checks.push(
@@ -166,8 +170,8 @@ try {
   for (const Id of ["aerial-fog", "local-fog"]) {
     await Open(Id);
     assert.equal(
-      await Page.locator(".fog-beam svg > rect").first().getAttribute("fill"),
-      "none",
+      await Page.locator('[data-card="Medium"] .fog-shared-beam').count(),
+      1,
     );
     assert(
       await Page.locator(".fog-reading").evaluateAll((Tiles) =>
@@ -175,14 +179,14 @@ try {
       ),
     );
     const Backgrounds = await Page.locator(
-      ".fog-beam,.fog-reading",
+      ".fog-shared-beam,.fog-reading",
     ).evaluateAll((Cards) =>
       Cards.map((Card) => getComputedStyle(Card).backgroundColor),
     );
     assert(Backgrounds.every((Colour) => Colour === "rgb(25, 25, 25)"));
-    await Page.locator(".fog-beam").scrollIntoViewIfNeeded();
+    await Page.locator(".fog-shared-beam").scrollIntoViewIfNeeded();
     await Capture(Id + "Chamber");
-    Checks.push(`${Id}: restored C054 Fog instrument styling`);
+    Checks.push(`${Id}: corrected shared Beam Chamber styling inside Medium`);
   }
   await Open("reference-softbox");
   await Frame().locator(".lp-readings").waitFor();

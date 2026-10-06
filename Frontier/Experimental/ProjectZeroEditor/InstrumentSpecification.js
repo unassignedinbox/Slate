@@ -52,7 +52,7 @@ export function RecolourInstrument(Name, Source) {
     );
   } else if (Name === "fog.js") {
     Replace(
-      "const [g, w, h] = sizeCanvas(chamberCv, 74); g.clearRect(0, 0, w, h); g.fillStyle = '#070809'; g.fillRect(0, 0, w, h);",
+      "const [g, w, h] = sizeCanvas(chamberCv, 74); g.clearRect(0, 0, w, h); g.fillStyle = '#191919'; g.fillRect(0, 0, w, h);",
       "const [g, w, h] = sizeCanvas(chamberCv, 74); g.clearRect(0, 0, w, h);",
     );
   }

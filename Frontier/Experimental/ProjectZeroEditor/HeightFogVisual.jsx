@@ -77,7 +77,7 @@ export default function HeightFogVisual({ V, Change }) {
             <stop offset="1" stopColor={Colour} stopOpacity=".025" />
           </linearGradient>
         </defs>
-        <rect width="300" height="210" rx="12" fill="#0a0c0e" />
+        <rect width="300" height="210" rx="12" fill="#191919" />
         {[0, 0.05, 0.1, 0.15, 0.2].map((Value) => (
           <g key={Value}>
             <path

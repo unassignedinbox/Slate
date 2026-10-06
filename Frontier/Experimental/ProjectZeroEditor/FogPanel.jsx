@@ -3,6 +3,62 @@ import { FogGraph, FogDensity } from "./LiveGraph.jsx";
 import { ResolveFogShape } from "./FogShape.js";
 import "./FogPanel.css";
 
+// Shared by Atmospheric and Local Fog inside Medium, matching Height Fog ownership.
+export function FogBeamChamber({ Kind, V }) {
+  const Local = Kind === "local-fog",
+    Enabled = !!V("Enabled"),
+    Extinction = Math.max(0, FogDensity(Kind, V, V("Probe altitude") ?? 2)),
+    Start = Local ? 0 : Math.max(0, Number(V("Start")) || 0),
+    Spread = Math.max(0, Number(V(Local ? "Anisotropy" : "Mie Blend")) || 0),
+    Transmission = (Distance) =>
+      Math.exp(-Extinction * Math.max(0, Distance - Start)),
+    Range = Extinction > 0 ? Start - Math.log(0.02) / Extinction : Infinity,
+    Marker = 12 + Math.max(0, Math.min(1, Range / 400)) * 276,
+    Preview = Enabled ? 1 : 0.82,
+    Percent = (Value) => `${(Value * 100).toFixed(0)}%`;
+  return (
+    <section className="fog-shared-beam" data-enabled={Enabled}>
+      <header>
+        <span>Beam chamber</span>
+        <strong>{Enabled ? "LIVE" : "PREVIEW"}</strong>
+      </header>
+      <small>{Local ? "Interior 2 m layer" : `Distance haze · start ${Start} m`}</small>
+      <svg viewBox="0 0 300 102" role="img" aria-label="Fog beam chamber">
+        {[26, 51, 76].map((Y) => (
+          <path key={Y} d={`M12 ${Y}H288`} stroke="#ffffff10" strokeDasharray="2 5" />
+        ))}
+        {Array.from({ length: 70 }, (_, Index) => {
+          const Fraction = Index / 69,
+            Distance = Fraction * 400,
+            Physical = Transmission(Distance),
+            Exposure = 0.32 + 0.68 * Math.pow(Physical, 0.15),
+            Width = 3 + Fraction * Fraction * (11 + Spread * 24);
+          return (
+            <rect
+              key={Index}
+              x={12 + Fraction * 272}
+              y={51 - Width}
+              width="4.2"
+              height={Width * 2}
+              fill="#d4e3ec"
+              opacity={Preview * (0.1 + Spread * 0.2) * Exposure}
+            />
+          );
+        })}
+        <path d={`M12 51L288 ${40 - Spread * 10}M12 51L288 ${62 + Spread * 10}`} stroke="#c7dce8" strokeOpacity={Preview * 0.34} />
+        <path d="M12 51H288" stroke="#eef8ff" strokeOpacity={Preview * 0.72} strokeWidth="1.6" />
+        {Number.isFinite(Range) && (
+          <path d={`M${Marker} 18V84`} stroke="#ed8f8f" strokeOpacity=".78" strokeDasharray="3 3" />
+        )}
+        <circle cx="12" cy="51" r="4" fill="#fff1ca" opacity={Preview} />
+        <text x="10" y="13">{Local ? "ANISOTROPY" : "MIE SPREAD"} · {Spread.toFixed(2)}</text>
+        <text x="290" y="13" textAnchor="end">2% · {Number.isFinite(Range) ? Range >= 1000 ? `${(Range / 1000).toFixed(1)} km` : `${Range.toFixed(0)} m` : "CLEAR"}</text>
+        <text x="290" y="96" textAnchor="end">{Percent(Transmission(400))} PHYSICAL AT 400 m</text>
+      </svg>
+    </section>
+  );
+}
+
 // These probes share the existing HTML fog model; they are not native scene raymarches.
 export default function FogPanel({ Kind, V, Values, Change, QuickControls }) {
   const Local = Kind === "local-fog",
@@ -194,46 +250,7 @@ export default function FogPanel({ Kind, V, Values, Change, QuickControls }) {
         <h2>Visibility</h2>
         <FogGraph Kind={Kind} V={V} Change={Change} />
       </section>
-      <section className="fog-instrument fog-beam">
-        <h2>Light transport</h2>
-        <small>
-          {Local ? "Interior beam study" : "Beam chamber · distance haze"}
-        </small>
-        <svg viewBox="0 0 300 84" role="img" aria-label="Fog beam chamber">
-          <rect width="300" height="84" fill="none" />
-          {Array.from({ length: 70 }, (_, Index) => {
-            const Fraction = Index / 69,
-              Distance = Fraction * 400;
-            const Strength = Local
-              ? 0.4 + Math.max(0, V("Anisotropy"))
-              : V("Mie Blend");
-            const Width = 2 + Fraction * Fraction * (5 + Strength * 15);
-            return (
-              <rect
-                key={Index}
-                x={12 + Fraction * 272}
-                y={40 - Width}
-                width="4"
-                height={Width * 2}
-                fill="#b8cddd"
-                opacity={
-                  Enabled && Distance >= Start
-                    ? (0.025 + 0.18 * Strength) * Transmission(Distance)
-                    : 0
-                }
-              />
-            );
-          })}
-          <path d="M12 40H288" stroke="#ffffff15" />
-          <circle cx="12" cy="40" r="3" fill="#ece4ca" />
-          <text x="10" y="14">
-            SCHEMATIC
-          </text>
-          <text x="290" y="75" textAnchor="end">
-            {Percent(Transmission(400))} AT 400 m
-          </text>
-        </svg>
-      </section>
+
     </div>
   );
 }

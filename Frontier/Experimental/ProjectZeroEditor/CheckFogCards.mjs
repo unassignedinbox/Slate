@@ -122,12 +122,16 @@ try {
     assert.equal(await Page.locator(".fog-sight").count(), 1);
     assert.equal(await Page.locator(".fog-reading").count(), 6);
     assert.equal(await Page.locator('[data-card="Visibility through fog"]').count(), 1);
-    assert.equal(await Page.locator(".fog-instruments > .fog-beam").count(), 1);
+    assert.equal(await Page.locator(".fog-instruments > .fog-beam").count(), 0);
     assert.equal(
-      await Page.locator('[data-card="Medium"] [data-reference-slice="beam"]').count(),
-      0,
+      await Page.locator('[data-card="Medium"] .fog-shared-beam').count(),
+      1,
     );
-    Checks.push(`${Id}: restored C054 Fog cards remain unchanged`);
+    assert.equal(
+      await Page.locator('[data-card="Medium"] .fog-shared-beam svg').getAttribute("aria-label"),
+      "Fog beam chamber",
+    );
+    Checks.push(`${Id}: uses the corrected shared Beam Chamber inside Medium`);
   }
 } catch (Error) {
   Errors.push(Error.stack);

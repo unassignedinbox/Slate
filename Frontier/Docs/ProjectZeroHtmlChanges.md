@@ -3027,3 +3027,18 @@ in C062 where it conflicts with C063/C064.
 
 **C064 status:** requirements recorded for implementation. The requested card/background/rollout correction is not claimed
 as implemented by this documentation-only checkpoint.
+
+## C065 — Fog surface correction and shared Medium Beam Chamber (2026-10-06)
+
+- Implemented the C064 Fog-card correction in the HTML editor. Height Fog's interactive altitude-density plot and nested
+  Beam Chamber now use the normal `#191919` card surface instead of disconnected near-black canvas rectangles.
+- Increased Height Beam Chamber preview exposure, scatter-cone opacity and beam-core contrast. Dense/disabled authored
+  settings remain visibly illustrative and labelled PREVIEW, while the two-percent range and 120 m transmission labels
+  continue to report uncompressed physical values.
+- Moved Atmospheric Fog and Local Fog Beam Chambers into their existing Medium cards, matching Height Fog ownership.
+  Removed their former standalone Light transport sections; no new outer cards were added.
+- Atmospheric and Local Fog now reuse one responsive Beam Chamber component and the same surface/status treatment. Their
+  calculations remain separate: Atmospheric uses Density, Start and Mie Blend; Local uses Density, Coverage/bounds and
+  Anisotropy. Disabled entities retain a visible authored preview and physical readouts remain uncompressed.
+- Preserved Height Fog's imported Visibility replacement, canonical Height value bridge, Atmospheric spectral study, Local
+  bounds, Fog Settings, Wind Binding, notes/persistence and every non-Fog inspector.
