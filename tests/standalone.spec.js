@@ -233,6 +233,50 @@ test("standalone page renders, edits and exports without external assets", async
   } finally {
     scratchedMaterial.dispose();
   }
+  await page
+    .getByRole("button", { name: "Apply Crocodile Belly Leather", exact: true })
+    .click();
+  await expect(page.getByLabel("Preview object")).toHaveValue("Leather swatch");
+  await frame(page);
+  const leatherSource = await downloadText(page, /Three.js procedural shader/);
+  const leatherFactory = leatherSource
+    .replace(/import \* as THREE from ['"]three['"];?/, "")
+    .replace(/export const preset/, "const preset")
+    .replace(/export function /g, "function ")
+    .replace(
+      /export default createMaterial\(preset\);/,
+      "return createMaterial(preset);",
+    );
+  const leatherMaterial = new Function("THREE", leatherFactory)(THREE);
+  try {
+    const shader = {
+      uniforms: {},
+      vertexShader: THREE.ShaderLib.physical.vertexShader,
+      fragmentShader: THREE.ShaderLib.physical.fragmentShader,
+    };
+    leatherMaterial.onBeforeCompile(shader);
+    expect(shader.fragmentShader).toContain("#define uType 30");
+    expect(shader.fragmentShader).toContain("leatherCoordinate");
+    expect(leatherMaterial.map).toBeNull();
+  } finally {
+    leatherMaterial.dispose();
+  }
+  if (process.env.ALLOY_CAPTURE === "leather") {
+    for (const name of ["Crocodile Belly Leather", "Cognac Leather"]) {
+      await page
+        .getByRole("button", { name: "Apply " + name, exact: true })
+        .click();
+      await page.getByRole("button", { name: "Fit", exact: true }).click();
+      await page.getByLabel("Viewport zoom").fill("2.32");
+      await frame(page);
+      await page
+        .locator(".inspector-scroll")
+        .evaluate((e) => (e.scrollTop = 0));
+      await page.screenshot({
+        path: ".playwright/review/" + name.replaceAll(" ", "-") + ".png",
+      });
+    }
+  }
   if (process.env.ALLOY_CAPTURE === "1") {
     await page
       .getByRole("button", { name: "Apply Raw Selvedge Denim", exact: true })

@@ -106,7 +106,7 @@ function initialPreview(p) {
   if (p.type === 34) return "Sphere";
   if (p.type === 35) return "Cactus";
   if (p.type === 36) return "Stem";
-  if (p.type === 30) return "Panel";
+  if (p.type === 30 || p.type === 11) return "Leather swatch";
   if (p.type === 21) return "Pipe";
   if (p.type === 27 || p.type === 28) return "Foliage card";
   if ([15, 17, 20, 22, 23, 24, 25, 26, 29].includes(p.type)) return "Panel";
@@ -241,6 +241,7 @@ function App() {
     setMobileLibrary(false);
     if (mat.category === "Fabric" && mat.type !== 7 && shape !== "Draped cloth")
       setShape("Draped cloth");
+    else if (mat.type === 11) setShape("Leather swatch");
     else if (mat.type >= 30 && mat.type <= 36) setShape(initialPreview(mat));
     else if (mat.type === 21) setShape("Pipe");
     else if (mat.type === 27 || mat.type === 28) setShape("Foliage card");
@@ -384,7 +385,7 @@ function App() {
           <span>Automotive essentials</span>
           <ChevronRight size={13} />
           <strong>Material explorer</strong>
-          <span className="version-badge">v6.2</span>
+          <span className="version-badge">v6.3</span>
         </div>
         <div className="project-actions">
           <span className="saved-state">
@@ -722,6 +723,7 @@ function App() {
                     "Brake rotor",
                     "Sphere",
                     "Panel",
+                    "Leather swatch",
                     "Pipe",
                     "Foliage card",
                     "Leaf",
@@ -1116,7 +1118,7 @@ function App() {
                     {
                       icon: <Move3D size={19} />,
                       title: "02 — Look a little closer",
-                      text: "Drag to orbit and scroll to zoom. Switch between fourteen assets, including a frozen cloth drape over a ball. Textile presets select the drape automatically.",
+                      text: "Drag to orbit and scroll to zoom. Switch between fifteen assets, including a frozen cloth drape over a ball. Textile presets select the drape automatically.",
                     },
                     {
                       icon: <SlidersHorizontal size={19} />,

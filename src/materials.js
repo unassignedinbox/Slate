@@ -1220,7 +1220,8 @@ ${botanicalGLSL()}
         if(uType==11){
           vec3 hide=hideGrain(pp);
           micro=hide.x;
-          diffuseColor.rgb*=1.-hide.y*.14-hide.z*.075;
+          leatherGrain=hide.x;leatherFold=hide.y;
+          diffuseColor.rgb*=1.-hide.y*.035-hide.z*.02;
 
         }
         float patchNoise=noise3(pp*5.3)+.28*noise3(pp*11.7);
@@ -1259,7 +1260,8 @@ ${botanicalColor()}
       if(uType==17)roughnessFactor=mix(roughnessFactor,.22,contactMask);
       if(uType==20)roughnessFactor=mix(mix(roughnessFactor,.08,ledLens),.22,ledContact);
       if(uType==22)roughnessFactor=mix(roughnessFactor,.93,groutMask);
-      if(uType==30)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.22),bioJoint);
+      if(uType==30)roughnessFactor=clamp(roughnessFactor+bioJoint*.065+(leatherGrain-.5)*.035,.12,.95);
+      if(uType==11)roughnessFactor=clamp(roughnessFactor+leatherFold*.06-(leatherGrain-.5)*.05,.18,.95);
       if(uType==34 || uType==35)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.24),bioPore);
       if(uType==29 || uMetalScratches==1)roughnessFactor=mix(roughnessFactor,min(1.,roughnessFactor+.3),scratchMask);
     `,
@@ -1292,7 +1294,7 @@ ${botanicalColor()}
       `
       #include <clearcoat_normal_fragment_maps>
       #ifdef USE_CLEARCOAT
-        clearcoatNormal=reliefNormal(peelHeight+((uType==20 || uType==22 || uType==30 || uType>=31 || uMetalScratches==1)?surfaceHeight:0.),clearcoatNormal,-vViewPosition);
+        clearcoatNormal=reliefNormal(peelHeight+((uType==11 || uType==20 || uType==22 || uType==30 || uType>=31 || uMetalScratches==1)?surfaceHeight:0.),clearcoatNormal,-vViewPosition);
       #endif
     `,
     );
@@ -1303,6 +1305,9 @@ ${botanicalColor()}
     );
     physical += `
       #ifdef USE_CLEARCOAT
+        if(uType==11 || uType==30){
+          material.clearcoatRoughness=clamp(material.clearcoatRoughness+leatherFold*.055+(leatherGrain-.5)*.035,.06,1.);
+        }
         if(uType==20)material.clearcoat*=ledLens;
         if(uType==22)material.clearcoat*=1.-groutMask;
       #endif
@@ -1357,7 +1362,7 @@ ${botanicalColor()}
     m.userData.shader = shader;
   };
   m.customProgramCacheKey = () =>
-    `alloy-procedural-v6.2-${p.type}-${p.metalScratches}-${p.bakeMode > 0}`;
+    `alloy-procedural-v6.3-${p.type}-${p.metalScratches}-${p.bakeMode > 0}`;
   return m;
 }
 

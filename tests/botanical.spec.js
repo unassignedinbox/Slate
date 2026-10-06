@@ -77,7 +77,7 @@ test("mesh foliage, petals, fruit and cactus render and bake opaque surfaces; sc
     ["Strawberry Skin", "Sphere"],
     ["Cactus Epidermis", "Cactus"],
     ["Living Plant Stem", "Stem"],
-    ["Crocodile Belly Leather", "Panel"],
+    ["Crocodile Belly Leather", "Leather swatch"],
     ["Cognac Leather", null],
     ["Scratches", "Panel"],
   ]) {

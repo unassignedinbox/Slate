@@ -3,7 +3,7 @@ export function botanicalGLSL() {
   return `
  uniform float uCellLobing,uStomataDensity;
  uniform float uVeinRelief,uCellScale,uCellRelief,uColorGradient,uSpotDensity,uSkinMode,uPlantRibs;
- float bioJoint=0.,bioPore=0.;
+ float bioJoint=0.,bioPore=0.,leatherGrain=0.,leatherFold=0.;
  // F1/F2 and a stable site ID. Used for microscopic epidermis, not the main hide grain.
  vec3 bioCylinder(vec2 uv,vec2 freq,float seed){float a=uv.x*6.2831853;return vec3(cos(a)*freq.x/6.2831853,sin(a)*freq.x/6.2831853,uv.y*freq.y+seed);}
  vec4 bioCellAt(vec2 p,float seed,float period){
@@ -17,58 +17,80 @@ export function botanicalGLSL() {
    return vec4(d1,max(0.,d2-d1),hash31(vec3(winner,seed+37.)),hash31(vec3(winner,seed+83.)));
  }
  vec4 bioCell(vec2 p,float seed){return bioCellAt(p,seed,0.);}
- // Folded hide: overlapping, warped crease bands and short pores, no Voronoi outlines.
+ // Continuous rounded grain with sparse deeper folds. No colored cell outlines.
  vec3 hideGrain(vec3 p){
    vec3 q=p*uScale;
-   vec3 warp=vec3(stoneFBM(q*.31),stoneFBM(q*.31+11.),stoneFBM(q*.31+43.));
-   q+=warp*3.4;
-   float a=noise3(q*vec3(.7,1.5,.85)),b=noise3(q*vec3(1.6,.6,1.1)+27.);
-   float aa=max(fwidth(a),.002),ab=max(fwidth(b),.002);
-   float fold=(1.-smoothstep(.014+aa,.06+aa,abs(a-.5)))*(.3+.7*noise3(q*.8+7.));
-   float crossFold=(1.-smoothstep(.01+ab,.044+ab,abs(b-.48)))*smoothstep(.34,.7,noise3(q*.43+29.));
-   float pores=smoothstep(.69,.88,noise3(q*vec3(7.,11.,7.)));
-   float fine=noise3(q*5.7);
-   float resolved=1.-smoothstep(.35,1.4,length(fwidth(q)));
-   float creases=max(fold,crossFold*.8)*resolved;
-   return vec3((.76-creases*.46+(fine-.5)*.15-pores*.16)*resolved+.68*(1.-resolved),creases,pores*resolved);
+   vec3 warp=vec3(noise3(q*.63),noise3(q*.63+11.),noise3(q*.63+43.));
+   vec3 fineQ=q*2.7+warp*2.3;
+   float coarse=noise3(fineQ);
+   float fine=noise3(fineQ*2.31+9.);
+   float rounded=smoothstep(.18,.84,coarse*.8+fine*.2);
+   float creaseField=noise3(q*.46+warp*.42);
+   float aa=max(fwidth(creaseField),.002);
+   float furrow=exp(-pow((creaseField-.5)/max(.028,aa),2.));
+   furrow*=smoothstep(.32,.72,noise3(q*.37+21.));
+   float pores=smoothstep(.7,.86,noise3(q*vec3(9.,13.,9.)));
+   float resolved=1.-smoothstep(.4,1.4,length(fwidth(fineQ)));
+   float poreResolved=1.-smoothstep(.4,1.4,length(fwidth(q*11.)));
+   float h=.42+rounded*.47-furrow*.19;
+   return vec3(mix(.64,h,resolved)-pores*.09*poreResolved,furrow*resolved,pores*poreResolved);
  }
+ // Distance to a shared, jittered lattice line. Adjacent plates share this
+ // same crease rather than owning separate inset borders with empty corners.
+ vec3 leatherCoordinate(float coordinate,float seed){
+   float base=floor(coordinate),lo=-1e20,hi=1e20,interval=base;
+   for(int i=-1;i<=2;i++){
+     float line=base+float(i);
+     float edge=line+(hash31(vec3(line,seed,uSurfaceSeed))-.5)*.25;
+     if(edge<=coordinate && edge>lo){lo=edge;interval=line;}
+     if(edge>coordinate)hi=min(hi,edge);
+   }
+   return vec3(min(coordinate-lo,hi-coordinate),interval,(coordinate-lo)/max(hi-lo,.001));
+ }
+
 `;
 }
 export function botanicalColor() {
   return `
  if(uType==30){
-   // Broad, relatively flat belly plates grade into smaller rounder flank scales.
-   // Reference-led construction: thin folded joints, not separate domed tiles.
+   // A continuous hide, depressed along soft shared crease lines; no tile mask.
    vec2 raw=surfaceUV(pp,weights)*uScale;
-   float flank=smoothstep(.3,.92,abs(sin(raw.x*.24)));
-   vec2 uv=raw;
-   uv.x-=1.05*sin(raw.x*.48);
-   uv.y*=mix(1.,1.32,flank);
-   uv+=vec2(stoneFBM(vec3(raw*.55,uSurfaceSeed)),stoneFBM(vec3(raw*.55,uSurfaceSeed+11.)))*.23;
-   uv.y+=.06*sin(raw.x*1.4);
-   float row=floor(uv.y),stagger=hash31(vec3(row,uSurfaceSeed,1.));
-   uv.x=uv.x*(.94+.12*stagger)+(stagger-.5)*.15;
-   vec2 id=floor(uv),q=fract(uv)-.5;
-   float r=hash31(vec3(id,uSurfaceSeed));
-   q+=.018*vec2(sin(uv.y*9.+r*2.),sin(uv.x*7.+r*3.));
-   float corner=mix(.035,.145,flank)*mix(.8,1.2,r);
-   vec2 d=abs(q)-vec2(.5-uGroutWidth-corner);
-   float sd=length(max(d,0.))+min(max(d.x,d.y),0.)-corner;
-   float aa=max(length(fwidth(uv))*.4,.001);
-   float scute=1.-smoothstep(-aa,aa,sd);
-   float bevel=smoothstep(0.,.105,-sd);
-   float fine=noise3(vec3(uv*24.,uSurfaceSeed));
-   float creaseFold=sin((abs(q.x)>abs(q.y)?q.y:q.x)*67.+noise3(vec3(raw*7.,7.))*3.);
-   float creaseGrain=noise3(vec3(raw*vec2(17.,26.),uSurfaceSeed));
-   vec3 plate=mix(diffuseColor.rgb,uSecondary,r*.19)*(.97+fine*.035);
-   vec3 joint=mix(uTertiary,diffuseColor.rgb,.32)*(.9+creaseGrain*.2);
-   vec2 poreCenter=vec2((r-.5)*.22,.19+(hash31(vec3(id,71.))-.5)*.12);
-   float poreRadius=mix(.01,.023,hash31(vec3(id,81.)));
-   float pore=(1.-smoothstep(max(0.,poreRadius-aa),poreRadius+aa,length(q-poreCenter)))*step(r,uPoreDensity)*min(1.,poreRadius/aa)*scute;
-   bioJoint=1.-scute;
-   diffuseColor.rgb=mix(joint,plate,scute)*(1.-pore*.15);
-   vec3 microHide=hideGrain(pp*15.);
-   surfaceHeight=(scute*.0006+bevel*.0014+(microHide.x-.5)*.00016*scute+creaseFold*.00018*(1.-scute)-pore*.00065)*uGrain;
+   vec2 uv=raw+vec2(noise3(vec3(raw*.62,uSurfaceSeed)),noise3(vec3(raw*.62,uSurfaceSeed+19.)))*.18;
+   float flank=smoothstep(.45,.95,abs(sin(raw.x*.16)));
+   uv.x-=.75*sin(uv.x*.38);
+   uv.y*=mix(1.13,1.6,flank);
+   uv.y+=.065*sin(raw.x*2.2)+.018*sin(raw.x*8.3+raw.y*.7);
+   vec3 yCell=leatherCoordinate(uv.y,19.);
+   float row=yCell.y;
+   float rowDrift=(hash31(vec3(row,17.,uSurfaceSeed))-.5)*.2;
+   float dy=yCell.x;
+   vec3 xCell=leatherCoordinate(uv.x+rowDrift+.025*sin(uv.y*9.),37.+row*3.9);
+   float dx=xCell.x;
+   // Squared-corner shared network with a soft blend where folds intersect.
+   float d=max(0.,smoothMinimum(dx,dy,.022));
+   float aa=max(length(fwidth(raw))*.32,.00015);
+   float w=max(uGroutWidth,aa*.6);
+   float crease=exp(-pow(d/max(w*1.4,aa),2.));
+   float shoulder=exp(-pow(d/max(w*3.5,aa),2.));
+   float vertical=exp(-dx/.08),horizontal=exp(-dy/.08);
+   float folds=mix(noise3(vec3(raw*vec2(38.,13.),uSurfaceSeed)),noise3(vec3(raw*vec2(12.,47.),uSurfaceSeed+23.)),vertical/max(vertical+horizontal,.0001))-.5;
+   folds*=1.-smoothstep(.4,1.5,length(fwidth(raw*38.)));
+   float fine=noise3(vec3(raw*19.,uSurfaceSeed));
+   float wrinkles=noise3(vec3(uv*vec2(5.,26.),uSurfaceSeed));
+   vec2 cell=vec2(xCell.y,yCell.y),local=vec2(xCell.z,yCell.z);
+   float r=hash31(vec3(cell,uSurfaceSeed));
+   vec2 poreAt=vec2(.35+.3*r,.7+.08*sin(r*17.));
+   float poreRadius=mix(.006,.013,r);
+   float pore=exp(-pow(length(local-poreAt)/max(poreRadius,aa),2.))*min(1.,poreRadius/aa)*step(r,uPoreDensity);
+   float resolved=1.-smoothstep(.3,1.1,length(fwidth(raw)));
+   bioJoint=shoulder*resolved;
+   leatherGrain=fine;leatherFold=crease*resolved;
+   float mottling=stoneFBM(vec3(raw*.48,uSurfaceSeed));
+   vec3 dye=mix(diffuseColor.rgb,uSecondary,.06+mottling*.15);
+   // Narrow dye accumulation, not a dark painted grout strip.
+   diffuseColor.rgb=mix(dye,uTertiary,crease*.12*resolved)*(.97+fine*.045-pore*.035);
+   float crown=noise3(vec3(raw*vec2(2.,3.),31.))*.0002;
+   surfaceHeight=(crown-crease*.00105-shoulder*.00038+folds*shoulder*.00026+(fine-.5)*.00010+(wrinkles-.5)*shoulder*.00012-pore*.00025)*uGrain*resolved;
  }
 
  if(uType==31 || uType==32 || uType==33 || uType==36){

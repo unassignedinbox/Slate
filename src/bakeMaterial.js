@@ -28,10 +28,11 @@ export async function bakeMaterial(
   check(signal);
   const params = normalizeMaterial(input),
     span = widthMM / 100;
-  const heightRange =
-    params.type === 21
+  const heightRange = [11, 30].includes(params.type)
+    ? 0.012
+    : params.type === 21
       ? 0.12
-      : params.type === 22 || params.type === 30
+      : params.type === 22
         ? 0.05
         : params.type === 18
           ? 0.08

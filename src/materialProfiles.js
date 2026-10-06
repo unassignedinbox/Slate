@@ -888,7 +888,7 @@ Object.assign(recipes, {
   crocodile: {
     title: "Crocodile-style leather",
     caption:
-      "Broad belly plates grade into smaller flank scales. Thin folded joints, tiny scale pores and subdued hide grain; reference-led, not scanned.",
+      "One continuous hide: softly depressed shared creases, small scale pores, and a grain-responsive finish. No inset tile borders.",
     fixed: { metalness: 0, ior: 1.48, sheen: 0.12 },
     colors: [
       { key: "color", label: "Scale dye" },

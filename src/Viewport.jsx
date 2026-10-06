@@ -1,3 +1,4 @@
+import { createLeatherSwatchGeometry } from "./leatherGeometry.js";
 import { createBotanicalGeometry } from "./botanicalGeometry.js";
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
@@ -78,6 +79,8 @@ export async function renderThumbnails(
   camera.lookAt(0, 0, 0);
   const geometry = createBallGeometry();
   const plantGeometries = {
+    11: createLeatherSwatchGeometry(),
+    30: createLeatherSwatchGeometry(),
     31: createBotanicalGeometry("Leaf"),
     32: createBotanicalGeometry("Grass blade"),
     33: createBotanicalGeometry("Petal"),
@@ -543,6 +546,11 @@ export default function Viewport({
     }
     if (shape === "Sphere") {
       e.specimen.geometry = new THREE.SphereGeometry(1.4, 128, 96);
+    }
+    if (shape === "Leather swatch") {
+      e.specimen.geometry = createLeatherSwatchGeometry();
+      e.specimen.rotation.set(-0.08, -0.24, -0.12);
+      e.specimen.position.y = 1.5;
     }
     if (shape === "Panel") {
       e.specimen.geometry = new RoundedBoxGeometry(2.8, 2.1, 0.12, 4, 0.04);

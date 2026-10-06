@@ -1,4 +1,4 @@
-# Alloy 06.2 — 100+ Procedural Materials
+# Alloy 06.3 — 100+ Procedural Materials
 
 A real-time procedural material editor built with React, Vite and Three.js. All surface detail is procedural: **no bitmap material maps, external HDRIs, or downloaded 3D assets**. The charcoal interface uses rounded panels and desaturated accents. Fonts are self-hosted.
 
@@ -13,9 +13,7 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-**[Launch Alloy 06.2 — Metal scratches](https://raw.githack.com/unassignedinbox/Slate/d914e1efa51ddcc4013654ce4256c5ab59e4ad12/site/index.html?material=pure-aluminium)** · **[Crocodile leather](https://raw.githack.com/unassignedinbox/Slate/d914e1efa51ddcc4013654ce4256c5ab59e4ad12/site/index.html?material=crocodile-belly-leather)**
-
-Select **Open the page** if GitHack shows its external-content notice. On a metal, use **Metal scratches → Enable scratches**; it defaults off. Targeted regression, metal-scratch GPU/bake tests, botanical render/bake tests, and the standalone test passed. The standalone check includes all 123 unique previews, module exports for paint/leaf/scratched metal, a full-UV bake ZIP, and no external asset requests. Publication verification matched the exact 1,549,778-byte artifact (SHA-256 `207319939c741dd3b515eb972365a92dad59fa54c325795d61b0c67fd5d2812f`); this is not a claim of hosted-browser testing.
+Run `npm run verify:published` for the current immutable GitHack URL. Choose **Open the page** if GitHack shows its notice. Direct studies use `?material=cognac-leather` or `?material=crocodile-belly-leather`.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
@@ -115,9 +113,21 @@ Use **Panel** for the clearest assessment, orbit the light reflection, then use 
 
 Shader variants now compile the material-family ID as a constant, so drivers can eliminate unrelated kernels. Programs are retained through the thumbnail batch for reuse. Progress still reports real completed previews, not a fictitious GPU percentage.
 
+## Leather correction (v6.3)
+
+This revision is deliberately limited to leather. Scratch and plant fields are unchanged.
+
+- **Crocodile:** replaced inset plate masks with a continuous height field depressed along shared, jittered crease lines. Adjacent regions no longer each own a border and leave dark corner gaps. Crease dye is a small modulation rather than a separate dark grout material. Fold direction/width vary without regularly spaced sine-wave “stitches.”
+- **Regular leather:** rounded multiscale grain, sparse deeper folds and small pores rather than colored noise-cell outlines. Existing patina controls remain.
+- **Finish correction:** the clearcoat normal now follows the regular leather relief; previously it stayed smooth over the grain. Both leather families also vary finish roughness locally, instead of placing a perfectly uniform highlight over colored detail.
+- **Inspection:** a closed, finite-thickness **Leather swatch** provides gentle physical flex; **Panel** remains available and is covered by the same tests. The swatch geometry is not part of the exported material, and baking still evaluates an undeformed patch. This is not a geometry trick substituted for texture detail.
+- **Baking:** leather types 11/30 use a signed 0.012-scene-unit (1.2 mm total) height range for better 8-bit precision. The ZIP manifest records this; importers must use that range rather than an old hardcoded displacement scale. No input maps are used.
+
+These changes are visually inspected renders and analytic approximations, not a promise that passing automated tests establishes photorealism. Tests cover all five leather presets on both the swatch and a flat panel, finite/outward-facing swatch geometry, normal/roughness/height variation in real PNG bakes, unclipped height range, standalone module export and all library thumbnails.
+
 ## Leather and mesh-ready botany (v6.1)
 
-**Regular leather no longer uses outlined cellular islands as its main grain.** It combines warped, overlapping folds, intermittent cross-creases and fine pores, retaining the existing patina and physical finish controls. **Crocodile Belly Leather** is a separate surface: variable-size rounded scutes, wandering row boundaries, softer creased joints and a second scale of hide grain. Both are analytic approximations, not scans or reproductions of a particular hide.
+**Regular leather uses rounded grain, sparse folds and fine pores**, retaining existing patina controls. **Crocodile Belly Leather** now uses a continuous hide field with shared soft creases; see the v6.3 correction above. Both are analytic approximations, not scans or reproductions of a particular hide.
 
 ### Mapping onto your existing plant geometry
 
@@ -158,7 +168,7 @@ See [reference notes](docs/surface-reference-notes.md) for research links and wh
 - **Macro** jumps to 800%; double-click a visible point to inspect it closely.
 - Drag to orbit; right-drag or shift-drag to pan. **Fit** or **R** restores framing.
 - Optical zoom keeps the camera outside the surface.
-- Fourteen preview assets: grooved shader ball, frozen draped cloth, rounded cube, torus knot, perforated brake rotor, smooth sphere, flat panel, hollow pipe, legacy foliage card, leaf, grass blade, flower petal, stem and ribbed cactus. Solar/paper/LED presets select the panel; golf-ball covers select the sphere.
+- Fifteen preview assets: grooved shader ball, frozen draped cloth, rounded cube, torus knot, perforated brake rotor, smooth sphere, flat panel, hollow pipe, legacy foliage card, leaf, grass blade, flower petal, stem, ribbed cactus and a flexed leather swatch. Solar/paper/LED presets select the panel; golf-ball covers select the sphere.
 - Four studio-light setups, auto rotation, wireframe and focus mode.
 
 ## Frozen cloth asset

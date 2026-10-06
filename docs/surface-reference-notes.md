@@ -31,3 +31,9 @@ Implementation: waxy body pigment, slightly varied areole centers/sizes, fine fe
 All plant materials remain full opaque UV0 surfaces. Leaf/blade/petal V runs base to tip; U spans the organ width. For leaf midribs, U=.5 is the expected center. Fruit/cactus/stem U wraps the body and V follows its length. UV islands packed into an atlas require remapping; the editor does not infer those transforms from a mesh it has not received.
 
 Normal relief cannot alter silhouettes. Six static maps cannot preserve every shader lobe or subsurface effect. The 8-bit height output is not a precision displacement file and may quantize the smallest cells; normal maps retain more of their shading effect. No scan-quality or species-perfect claim is made.
+
+## Leather correction follow-up — v6.3
+
+Inspected the cinnamon and pecan supplier photographs from [The Leather Guy](https://theleatherguy.org/products/alligator-skin-belly-various-colors-genuine-leather-hide), explicitly sold as **alligator**, as supplementary references for finish and crease behavior—not proof of crocodile anatomy. Search results also returned stock snake images; those were rejected as inappropriate targets.
+
+The implementation no longer uses separate rounded boxes for the plates. It models one height field with shared softly depressed creases, little albedo contrast across joints, local finish variation and fine grain. The regular-leather clearcoat was also corrected to follow its relief. A flexed preview swatch is accompanied by flat-panel and planar-bake checks. Reference photos remain research only, not application assets.
