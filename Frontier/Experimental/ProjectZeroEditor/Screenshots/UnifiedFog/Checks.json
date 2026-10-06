@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-06",
+  "scope": "Unified shared Fog-card family",
+  "screenshots": [
+    "HeightTop.png",
+    "HeightVisibility.png",
+    "HeightMedium.png",
+    "AtmosphericTop.png",
+    "AtmosphericVisibility.png",
+    "AtmosphericMedium.png",
+    "LocalTop.png",
+    "LocalVisibility.png",
+    "LocalMedium.png"
+  ],
+  "verified": [
+    "Height, Atmospheric, and Local Fog render through one FogPanel component",
+    "All three use the same abstract fog field, readings, Fog settings, Visibility, Medium, and Wind binding card language",
+    "Beam chamber is embedded in Visibility under Light transport for every Fog model",
+    "Medium contains exactly one live parameter map for every Fog model",
+    "Atmospheric uses start-distance extinction, Height uses altitude falloff, and Local uses density multiplied by coverage",
+    "Atmospheric Visibility uses a 0–4000 m probe domain; Height and Local use 0–400 m",
+    "Height Fog no longer requests imported summary or detail reference iframes"
+  ]
+}

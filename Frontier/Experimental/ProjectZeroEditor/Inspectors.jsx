@@ -1637,45 +1637,37 @@ export function Inspector({
     );
   } else if (Subject.Panel.includes("fog")) {
     const Local = Subject.Panel === "local-fog",
-      Aerial = Subject.Panel === "aerial-fog";
+      Aerial = Subject.Panel === "aerial-fog",
+      MediumNames = [
+        "Density",
+        Local ? "Coverage" : Aerial ? "Start" : "Falloff Height",
+        Local ? "Feature Scale" : Aerial ? "Mie Blend" : "Sun Scatter",
+        ...(Local ? ["Anisotropy"] : []),
+      ];
     Content = (
       <>
         {Header("Environment")}
-        {ReferenceCards}
-        {(Local || Aerial) && (
-          <FogPanel
-            Kind={Subject.Panel}
-            V={V}
-            Values={Values}
-            Change={AssignProperty}
-            QuickControls={
-              <Card Title="Fog settings" Height={142}>
-                {Tiles(Local ? ["Enabled", "Follow Wind"] : ["Enabled"])}
-              </Card>
-            }
-          />
-        )}
-        {!Local && !Aerial && (
-          <Card Title="Fog settings" Height={142}>
-            {Tiles(["Enabled"])}
-          </Card>
-        )}
-        {ReferenceDetailCards}
-        <div className="card-grid">
-          <Card Title="Medium" Height={416}>
-            {Fields(
-              "Density",
-              Local ? "Coverage" : Aerial ? "Start" : "Falloff Height",
-              Local ? "Feature Scale" : Aerial ? "Mie Blend" : "Sun Scatter",
-              ...(Local ? ["Anisotropy"] : []),
-            )}
+        <FogPanel
+          Kind={Subject.Panel}
+          V={V}
+          Values={Values}
+          Change={AssignProperty}
+          QuickControls={
+            <Card Title="Fog settings" Height={142}>
+              {Tiles(Local ? ["Enabled", "Follow Wind"] : ["Enabled"])}
+            </Card>
+          }
+        />
+        <div className="card-grid fog-medium-grid">
+          <Card Title="Medium" Height={520}>
+            {Fields(...MediumNames)}
           </Card>
           {Local ? (
             <FogShapePanel Values={Values} Change={Change} />
           ) : (
             <Card
               Title={Aerial ? "Spectral transmission" : "Density with altitude"}
-              Height={416}
+              Height={520}
               GraphHandled
             >
               {Aerial ? (

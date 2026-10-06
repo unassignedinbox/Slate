@@ -317,7 +317,7 @@ try {
   Checks.push(
     "Emission tint changes the preview and survives reload; incomplete number edits restore the saved value on blur",
   );
-  for (const Id of ["sun", "wind", "height-fog"]) {
+  for (const Id of ["sun", "wind"]) {
     const Environment = await Open(Id);
     await Environment.locator(".mp-rail").waitFor();
     await Square(Environment);
@@ -336,6 +336,25 @@ try {
         ": borderless, lightly rounded statistics; original card selection retained",
     );
   }
+  await Open("height-fog");
+  assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
+  assert.equal(
+    await Page.locator(".fog-reading").evaluateAll((Tiles) =>
+      Tiles.every((Tile) => getComputedStyle(Tile).borderRadius === "12px"),
+    ),
+    true,
+  );
+  assert.equal(
+    await Page.locator(
+      '[data-card="Visibility through fog"] > .fog-beam',
+    ).count(),
+    1,
+  );
+  await Page.screenshot({ path: path.join(Proof, "height-fog-tiles.png") });
+  Checks.push(
+    "height-fog: unified native statistics and embedded Beam chamber retain the shared environment styling",
+  );
+
   Frame = await Open("reference-ece-low-beam");
   await Page.locator('iframe[title^="Reference inspector"]').evaluate(
     (Iframe) => (Iframe.style.width = "240px"),

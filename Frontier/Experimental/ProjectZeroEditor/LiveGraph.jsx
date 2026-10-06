@@ -429,7 +429,8 @@ export function FogGraph({ Kind, V, Change, Density = false }) {
   const Altitude = V("Probe altitude") ?? 2,
     Distance = V("Probe distance") ?? 200,
     Local = Kind === "local-fog";
-  const Sigma = FogDensity(Kind, V, Altitude),
+  const DistanceMaximum = Kind === "aerial-fog" ? 4000 : 400,
+    Sigma = FogDensity(Kind, V, Altitude),
     At = (D) =>
       Math.exp(
         -Sigma * Math.max(0, D - (Kind === "aerial-fog" ? V("Start") : 0)),
@@ -487,7 +488,7 @@ export function FogGraph({ Kind, V, Change, Density = false }) {
       )}
       <Plot
         Name={Density ? "Fog altitude probe" : "Fog distance probe"}
-        Domain={Density ? [0, 3000] : [0, 2000]}
+        Domain={Density ? [0, 3000] : [0, DistanceMaximum]}
         Range={Density ? [0, Math.max(0.001, V("Density"))] : [0, 100]}
         Series={[
           {
@@ -526,7 +527,7 @@ export function FogGraph({ Kind, V, Change, Density = false }) {
             aria-label="Fog probe distance"
             type="number"
             min={0}
-            max={2000}
+            max={DistanceMaximum}
             value={Distance}
             onChange={(E) =>
               Change("Probe distance", Clamp(E.target.value, 0, 2000))

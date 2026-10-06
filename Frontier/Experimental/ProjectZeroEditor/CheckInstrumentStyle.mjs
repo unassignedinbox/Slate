@@ -50,7 +50,7 @@ const Capture = async (Name) => {
   await Page.screenshot({ path: path.join(Proof, Name + ".png") });
 };
 try {
-  for (const Id of ["wind", "sun", "height-fog", "clouds", "local-cloud"]) {
+  for (const Id of ["wind", "sun", "clouds", "local-cloud"]) {
     await Open(Id);
     await Frame().locator(".mp-stat").first().waitFor();
     const Tiles = await Frame()
@@ -148,36 +148,7 @@ try {
   Checks.push(
     "Anemometer pixels have no green, retain neutral highlights/amber sample, animate, expand and resize to 240px",
   );
-  await Open("height-fog");
-  await Page.frameLocator('[data-reference-slice="details"] iframe')
-    .locator(".fg-chamber canvas")
-    .waitFor();
-  const Chamber = await Page.frameLocator(
-    '[data-reference-slice="details"] iframe',
-  )
-    .locator(".fg-chamber")
-    .evaluate((Chamber) => {
-      const Canvas = Chamber.querySelector("canvas"),
-        Pixel = [...Canvas.getContext("2d").getImageData(0, 0, 1, 1).data];
-      return {
-        Background: getComputedStyle(Chamber).backgroundColor,
-        Border: getComputedStyle(Chamber).borderTopWidth,
-        Pixel,
-        Card: getComputedStyle(Chamber.closest(".pcard")).backgroundColor,
-      };
-    });
-  assert.equal(Chamber.Background, "rgba(0, 0, 0, 0)");
-  assert.equal(Chamber.Border, "0px");
-  assert.equal(Chamber.Pixel[3], 0);
-  assert.equal(Chamber.Card, "rgb(26, 26, 26)");
-  await Page.frameLocator('[data-reference-slice="details"] iframe')
-    .locator(".fg-scatter")
-    .evaluate((Card) => Card.scrollIntoView({ block: "center" }));
-  await Capture("HeightFogChamber");
-  Checks.push(
-    "Height Fog beam canvas and wrapper are transparent: the normal charcoal card shows through without a black inset",
-  );
-  for (const Id of ["aerial-fog", "local-fog"]) {
+  for (const Id of ["height-fog", "aerial-fog", "local-fog"]) {
     await Open(Id);
     assert.equal(
       await Page.locator(".fog-beam svg > rect").first().getAttribute("fill"),

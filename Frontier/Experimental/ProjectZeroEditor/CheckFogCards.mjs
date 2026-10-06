@@ -36,40 +36,43 @@ const Open = async (Id) => {
 };
 
 try {
-  await Open("height-fog");
-  assert.equal(
-    await Page.locator('[data-card="Visibility through fog"]').count(),
-    0,
-  );
-  const Details = Page.frameLocator('[data-reference-slice="details"] iframe');
-  await Details.locator(".fg-vis").waitFor();
-  assert.equal(await Details.locator(".fg-vis > .fg-scatter").count(), 1);
-  assert.equal(await Details.locator(".fg-scatter > .fg-chamber").count(), 1);
-  Checks.push(
-    "Height Fog uses the preferred contrast-transmission card and nests Beam chamber inside it",
-  );
+  const ExpectedMediumFields = {
+    "height-fog": ["Density", "Falloff Height", "Sun Scatter"],
+    "aerial-fog": ["Density", "Start", "Mie Blend"],
+    "local-fog": ["Density", "Coverage", "Feature Scale", "Anisotropy"],
+  };
 
-  for (const [Id, Visual] of [
-    ["aerial-fog", "abstract-fog-field"],
-    ["local-fog", "bounded-grid"],
-  ]) {
+  for (const Id of Object.keys(ExpectedMediumFields)) {
     await Open(Id);
-    const Card = Page.locator('[data-card="Visibility through fog"]');
-    assert.equal(await Card.count(), 1);
-    assert.equal(await Card.locator(".fog-visibility-heading").count(), 1);
+    const Visibility = Page.locator('[data-card="Visibility through fog"]');
+    assert.equal(await Visibility.count(), 1);
     assert.equal(
-      await Card.locator('[data-live-plot="Fog distance probe"]').count(),
+      await Visibility.locator(".fog-visibility-heading").count(),
       1,
     );
-    assert.equal(await Card.locator(":scope > .fog-beam").count(), 1);
+    assert.equal(
+      await Visibility.locator('[data-live-plot="Fog distance probe"]').count(),
+      1,
+    );
+    assert.equal(await Visibility.locator(":scope > .fog-beam").count(), 1);
     assert.equal(await Page.locator(".fog-instruments > .fog-beam").count(), 0);
     assert.equal(
       await Page.locator(".fog-sight svg").getAttribute("data-fog-visual"),
-      Visual,
+      "shared-abstract-fog-field",
     );
+    assert.equal(
+      await Page.locator('[data-reference-slice="details"]').count(),
+      0,
+    );
+
+    const Medium = Page.locator('[data-card="Medium"]');
+    assert.equal(await Medium.count(), 1);
+    assert.equal(await Medium.locator(".property-graph").count(), 1);
+    for (const Label of ExpectedMediumFields[Id]) {
+      assert.equal(await Medium.getByText(Label, { exact: true }).count(), 1);
+    }
     Checks.push(
-      Id +
-        ": shared Visibility/Light transport card retains its component-specific model and hero",
+      `${Id}: one shared abstract visual, Visibility/Light transport card, embedded Beam chamber, and live Medium map`,
     );
   }
 

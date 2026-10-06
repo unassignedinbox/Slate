@@ -1,18 +1,11 @@
 {
   "Checks": [
-    "Height Fog uses the preferred contrast-transmission card and nests Beam chamber inside it",
-    "aerial-fog: shared Visibility/Light transport card retains its component-specific model and hero",
-    "local-fog: shared Visibility/Light transport card retains its component-specific model and hero",
+    "height-fog: one shared abstract visual, Visibility/Light transport card, embedded Beam chamber, and live Medium map",
+    "aerial-fog: one shared abstract visual, Visibility/Light transport card, embedded Beam chamber, and live Medium map",
+    "local-fog: one shared abstract visual, Visibility/Light transport card, embedded Beam chamber, and live Medium map",
     "Atmospheric Fog sight range responds to its start-distance extinction model",
     "Local Fog sight range responds to density multiplied by coverage"
   ],
   "Errors": [],
-  "FontFailures": [
-    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
-    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
-    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2",
-    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
-    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
-    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2"
-  ]
+  "FontFailures": []
 }

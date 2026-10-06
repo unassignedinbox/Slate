@@ -2838,3 +2838,27 @@ fracture algorithm, SDF computation, source-property schema or Construct behavio
 - Validation: 202 focused checks passed across inspector order, references, layout, fog/environment graphs, instrument
   styling, lighting, shared cards, cloud placement and the new five-check shared Fog-card audit. The generated standalone
   remains 4.64 MiB with 161 shipped icons and 57 native vector glyphs.
+
+## C057 — one unified Fog-card family (2026-10-06)
+
+- Replaced the mixed imported/native Fog implementations with one parameterized `FogPanel` used by Height Fog,
+  Atmospheric Fog and Local Fog. All three now share the same abstract fog field, readings, Fog Settings, Visibility,
+  embedded Light Transport / Beam Chamber, Medium and Wind Binding visual language and ordering.
+- Height Fog no longer requests separate imported summary/detail iframes. The preferred richer Visibility treatment is
+  implemented directly in the shared React component, so Fog inspectors cannot drift into parallel lookalikes.
+- Beam Chamber remains inside Visibility's Light Transport section for every model. Its authored spread driver is Sun
+  Scatter for Height Fog, Mie Blend for Atmospheric Fog and Anisotropy for Local Fog.
+- Medium now contains one shared live parameter map for every Fog type while preserving the original editable controls.
+  Model-specific technical cards remain: altitude density for Height, spectral transmission for Atmospheric, and bounded
+  shape for Local. Notes, useful outliner metadata, persistence and independent model values remain available.
+- Shared visuals use layered extinction bands, particles, a fading beam and distance markers rather than a landscape or
+  environment scene. Small technical overlays communicate vertical falloff, atmospheric start distance or local bounds
+  without changing the component architecture.
+- Visibility calculations remain model-specific: altitude-adjusted exponential falloff for Height, extinction after Start
+  Distance for Atmospheric, and density multiplied by coverage inside Local bounds. Atmospheric probes span 0–4000 m;
+  Height and Local probes span 0–400 m.
+- Verification: the standalone build succeeds at 4.64 MiB. **201 focused checks pass** across Fog cards, environment
+  graphs, layout, inspector order, references, instrument styling, shared cards, lighting, Cloud placement and light design.
+  Tests were updated to assert the unified native architecture instead of the superseded imported Height Fog path.
+- Nine actual browser screenshots and a proof manifest are in `ProjectZeroEditor/Screenshots/UnifiedFog/`, covering the
+  top, Visibility / Light Transport and Medium regions for Height, Atmospheric and Local Fog.

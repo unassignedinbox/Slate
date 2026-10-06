@@ -73,33 +73,38 @@ try {
   Checks.push(
     "Legacy Sky alias consolidates safely; conflicting values remain archived; non-alias objects are untouched",
   );
-  for (const Id of ["sun", "height-fog"]) {
-    await Open(Id);
-    assert.equal(
-      await Page.locator(
-        `[data-panel="${Id}"] > header + .reference-inspector-copy`,
-      ).count(),
-      1,
-    );
-    const Frame = Page.frameLocator("iframe").first();
-    await Frame.locator(".mp-rail").waitFor();
-    assert(
-      await Frame.locator(".mp-pill,.mp-stat").evaluateAll((Nodes) =>
-        Nodes.every((Node) => {
-          const Style = getComputedStyle(Node);
-          return (
-            Style.borderRadius === "12px" && Style.borderTopWidth === "0px"
-          );
-        }),
-      ),
-    );
-    await Page.waitForTimeout(150);
-    await Page.screenshot({ path: path.join(Proof, Id + "-header.png") });
-    Checks.push(
-      Id +
-        ": header precedes imported cards; borderless twelve-pixel metric corners",
-    );
-  }
+  await Open("sun");
+  assert.equal(
+    await Page.locator(
+      '[data-panel="sun"] > header + .reference-inspector-copy',
+    ).count(),
+    1,
+  );
+  const SunFrame = Page.frameLocator("iframe").first();
+  await SunFrame.locator(".mp-rail").waitFor();
+  assert(
+    await SunFrame.locator(".mp-pill,.mp-stat").evaluateAll((Nodes) =>
+      Nodes.every((Node) => {
+        const Style = getComputedStyle(Node);
+        return Style.borderRadius === "12px" && Style.borderTopWidth === "0px";
+      }),
+    ),
+  );
+  await Page.screenshot({ path: path.join(Proof, "sun-header.png") });
+  Checks.push(
+    "sun: header precedes imported cards; borderless twelve-pixel metric corners",
+  );
+
+  await Open("height-fog");
+  assert.equal(
+    await Page.locator(
+      '[data-panel="height-fog"] > header + .fog-instruments',
+    ).count(),
+    1,
+  );
+  assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
+  await Page.screenshot({ path: path.join(Proof, "height-fog-header.png") });
+  Checks.push("height-fog: header precedes the unified native Fog-card family");
   await Open("wind");
   await Page.locator(".reference-inspector-copy").evaluate((Node) =>
     Node.scrollIntoView({ block: "start" }),

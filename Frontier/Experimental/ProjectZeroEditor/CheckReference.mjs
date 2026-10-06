@@ -126,7 +126,16 @@ try {
         Id + " original cards/controls retained with requested order",
       );
     }
-    if (["world", "showcase", "lighting", "camera", "moon"].includes(Id)) {
+    if (
+      [
+        "world",
+        "showcase",
+        "lighting",
+        "camera",
+        "moon",
+        "height-fog",
+      ].includes(Id)
+    ) {
       assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
       if (["world", "showcase", "lighting"].includes(Id))
         assert.equal(await Page.locator(".folder-inspector").count(), 1);
@@ -165,10 +174,6 @@ try {
     ["sun", [".mp-hero", ".mp-rail", ".mp-duo"]],
     ["wind", [".wf-trace", ".mp-rail", ".mp-duo"]],
     ["clouds", [".cl-hero", ".mp-rail", ".mp-duo"]],
-    [
-      "height-fog",
-      [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
-    ],
     [
       "reference-rim-point",
       [
@@ -248,9 +253,10 @@ try {
     ],
   ]) {
     const Frame = await Open(Id);
-    const DetailFrame = ["light", "height-fog"].includes(Id)
-      ? Page.frames().filter((Value) => Value.url() === "about:srcdoc")[1]
-      : Frame;
+    const DetailFrame =
+      Id === "light"
+        ? Page.frames().filter((Value) => Value.url() === "about:srcdoc")[1]
+        : Frame;
     if (Selectors.includes(".lp-preview")) {
       for (const Selector of [...Selectors, ".lp-response"])
         assert.equal(
@@ -279,16 +285,6 @@ try {
         ).count(),
         2,
       );
-    } else if (Id === "height-fog") {
-      for (const Selector of Selectors)
-        assert.equal(
-          await (
-            [".fg-vis", ".fg-scatter"].includes(Selector) ? DetailFrame : Frame
-          )
-            .locator(Selector)
-            .count(),
-          1,
-        );
     } else {
       assert.deepEqual(
         await Frame.locator(".mpanel > *").evaluateAll(
@@ -313,11 +309,7 @@ try {
       0,
       "Rejected C041 controls are absent",
     );
-    if (
-      ["sun", "wind", "clouds", "height-fog", "reference-rim-point"].includes(
-        Id,
-      )
-    ) {
+    if (["sun", "wind", "clouds", "reference-rim-point"].includes(Id)) {
       await Page.locator(".reference-inspector-copy")
         .first()
         .evaluate((Node) => Node.scrollIntoView({ block: "start" }));
@@ -326,7 +318,7 @@ try {
     }
     Results.push(Id + ": only selected imported cards are added");
   }
-  for (const Id of ["wind", "sun", "height-fog"]) {
+  for (const Id of ["wind", "sun"]) {
     const Frame = await Open(Id);
     assert.equal(await Frame.locator(".ident").count(), 0);
     if (Id === "wind") {
@@ -399,6 +391,22 @@ try {
       );
     }
   }
+  await Open("height-fog");
+  const HeightVisibility = Page.locator(
+    '[data-panel="height-fog"] [data-card="Visibility through fog"]',
+  );
+  assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
+  assert.equal(await HeightVisibility.count(), 1);
+  assert.equal(await HeightVisibility.locator(":scope > .fog-beam").count(), 1);
+  assert.equal(await HeightVisibility.locator(".fog-beam svg").count(), 1);
+  await HeightVisibility.scrollIntoViewIfNeeded();
+  await Page.screenshot({
+    path: path.join(Proof, "height-fog-chamber.png"),
+  });
+  Results.push(
+    "Height Fog uses the native unified Fog-card family; Light transport contains the embedded Beam chamber",
+  );
+
   await Page.setViewportSize({ width: 1100, height: 900 });
   const Narrow = await Open("wind");
   assert.equal(
