@@ -98,13 +98,27 @@ try {
   await Open("height-fog");
   assert.equal(
     await Page.locator(
-      '[data-panel="height-fog"] > header + .fog-instruments',
+      '[data-panel="height-fog"] > header + [data-reference-slice="summary"]',
     ).count(),
     1,
   );
-  assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
+  assert.equal(await Page.locator(".reference-inspector-copy").count(), 3);
+  await Page.frameLocator('[data-reference-slice="details"] iframe')
+    .locator(".fg-vis")
+    .waitFor();
+  await Page.frameLocator('[data-reference-slice="beam"] iframe')
+    .locator(".fg-chamber")
+    .waitFor();
+  assert.equal(
+    await Page.locator(
+      '[data-card="Medium"] > [data-reference-slice="beam"]',
+    ).count(),
+    1,
+  );
   await Page.screenshot({ path: path.join(Proof, "height-fog-header.png") });
-  Checks.push("height-fog: header precedes the unified native Fog-card family");
+  Checks.push(
+    "height-fog: retained summary and Visibility cards; Beam Chamber is nested in Medium",
+  );
   await Open("wind");
   await Page.locator(".reference-inspector-copy").evaluate((Node) =>
     Node.scrollIntoView({ block: "start" }),
@@ -140,7 +154,7 @@ try {
       ).count(),
       1,
     );
-    assert.equal(await Page.locator(".fog-dashboard-stat").count(), 6);
+    assert.equal(await Page.locator(".fog-reading").count(), 6);
     assert.equal(
       await Page.getByLabel("Fog probe distance", { exact: true }).count(),
       1,
@@ -154,21 +168,20 @@ try {
     );
     assert.equal(await Page.locator("iframe").count(), 0);
     assert(
-      await Page.locator(".fog-dashboard-stat").evaluateAll((Nodes) =>
+      await Page.locator(".fog-reading").evaluateAll((Nodes) =>
         Nodes.every((Node) => {
           const Style = getComputedStyle(Node);
           return (
             Style.borderTopWidth === "0px" &&
-            Style.borderRadius === "0px" &&
             Node.scrollWidth <= Node.clientWidth
           );
         }),
       ),
     );
-    const Before = await Page.locator(".fog-dashboard-stats").first().innerText();
+    const Before = await Page.locator(".fog-readings").first().innerText();
     await Page.getByLabel("Density value", { exact: true }).fill("2");
     assert.notEqual(
-      await Page.locator(".fog-dashboard-stats").first().innerText(),
+      await Page.locator(".fog-readings").first().innerText(),
       Before,
     );
     await Open(Id);
@@ -180,7 +193,7 @@ try {
       await Page.getByRole("button", { name: "Enabled", exact: true }).click();
       await Page.getByLabel("Start value", { exact: true }).fill("250");
       assert.equal(
-        await Page.locator(".fog-dashboard-stats")
+        await Page.locator(".fog-readings")
           .nth(1)
           .locator("b")
           .first()
@@ -189,7 +202,7 @@ try {
       );
       await Page.getByLabel("Start value", { exact: true }).fill("0");
       assert.equal(
-        await Page.locator(".fog-dashboard-stats")
+        await Page.locator(".fog-readings")
           .nth(1)
           .locator("b")
           .first()
@@ -198,7 +211,7 @@ try {
       );
     } else {
       assert.equal(
-        await Page.locator(".fog-dashboard-stats")
+        await Page.locator(".fog-readings")
           .nth(1)
           .locator("b")
           .first()
@@ -207,7 +220,7 @@ try {
       );
       await Page.getByRole("button", { name: "Enabled", exact: true }).click();
       assert.equal(
-        await Page.locator(".fog-dashboard-stats")
+        await Page.locator(".fog-readings")
           .nth(1)
           .locator("b")
           .first()

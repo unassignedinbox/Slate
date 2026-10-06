@@ -148,36 +148,41 @@ try {
   Checks.push(
     "Anemometer pixels have no green, retain neutral highlights/amber sample, animate, expand and resize to 240px",
   );
-  for (const Id of ["height-fog", "aerial-fog", "local-fog"]) {
+  await Open("height-fog");
+  const HeightBeam = Page.frameLocator('[data-reference-slice="beam"] iframe');
+  await HeightBeam.locator(".fg-chamber canvas").waitFor();
+  assert.equal(
+    await Page.locator(
+      '[data-card="Medium"] > [data-reference-slice="beam"]',
+    ).count(),
+    1,
+  );
+  assert.equal(await HeightBeam.locator(".fg-vis").count(), 0);
+  await Page.locator('[data-card="Medium"]').scrollIntoViewIfNeeded();
+  await Capture("HeightFogChamber");
+  Checks.push(
+    "Height Fog Beam Chamber is retained and nested only inside the Medium card",
+  );
+  for (const Id of ["aerial-fog", "local-fog"]) {
     await Open(Id);
     assert.equal(
       await Page.locator(".fog-beam svg > rect").first().getAttribute("fill"),
       "none",
     );
-    assert.equal(await Page.locator(".fog-dashboard-stat").count(), 6);
-    assert.equal(
-      await Page.locator(".fog-dashboard-stats").evaluate(
-        (Stats) => getComputedStyle(Stats).borderRadius,
+    assert(
+      await Page.locator(".fog-reading").evaluateAll((Tiles) =>
+        Tiles.every((Tile) => getComputedStyle(Tile).borderRadius === "12px"),
       ),
-      "16px",
     );
-    const Appearance = await Page.locator(".fog-beam").evaluate((Beam) => ({
-      Background: getComputedStyle(Beam).backgroundColor,
-      Radius: getComputedStyle(Beam).borderRadius,
-      Parent: Beam.closest('[data-card="Visibility through fog"]')?.dataset
-        .card,
-    }));
-    assert.equal(Appearance.Background, "rgb(23, 23, 23)");
-    assert.equal(Appearance.Radius, "17px");
-    assert.equal(Appearance.Parent, "Visibility through fog");
-    await Page.locator(".fog-beam").evaluate((Card) =>
-      Card.scrollIntoView({ block: "center" }),
+    const Backgrounds = await Page.locator(
+      ".fog-beam,.fog-reading",
+    ).evaluateAll((Cards) =>
+      Cards.map((Card) => getComputedStyle(Card).backgroundColor),
     );
+    assert(Backgrounds.every((Colour) => Colour === "rgb(25, 25, 25)"));
+    await Page.locator(".fog-beam").scrollIntoViewIfNeeded();
     await Capture(Id + "Chamber");
-    Checks.push(
-      Id +
-        ": Beam chamber and six statistics are reused inside the single infographic Visibility card",
-    );
+    Checks.push(`${Id}: restored C054 Fog instrument styling`);
   }
   await Open("reference-softbox");
   await Frame().locator(".lp-readings").waitFor();

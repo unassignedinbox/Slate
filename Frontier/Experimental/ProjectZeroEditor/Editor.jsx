@@ -1792,9 +1792,13 @@ function App() {
               AllValues={Values}
               AllHidden={Hidden}
               ReferenceDetailCards={
-                Subject.Panel === "light" && !Subject.ReferenceOnly
+                Subject.Panel === "height-fog" ||
+                (Subject.Panel === "light" && !Subject.ReferenceOnly)
                   ? ReferenceCards("details")
                   : null
+              }
+              ReferenceBeamCards={
+                Subject.Panel === "height-fog" ? ReferenceCards("beam") : null
               }
               CloudCoverageCards={
                 ["clouds", "local-cloud"].includes(Subject.Panel)
@@ -1802,11 +1806,17 @@ function App() {
                   : null
               }
               ReferenceCards={
-                ["sun", "wind", "clouds", "local-cloud", "light"].includes(
-                  Subject.Panel,
-                )
+                [
+                  "sun",
+                  "height-fog",
+                  "wind",
+                  "clouds",
+                  "local-cloud",
+                  "light",
+                ].includes(Subject.Panel)
                   ? ReferenceCards(
-                      Subject.Panel === "light" && !Subject.ReferenceOnly
+                      Subject.Panel === "height-fog" ||
+                        (Subject.Panel === "light" && !Subject.ReferenceOnly)
                         ? "summary"
                         : undefined,
                     )

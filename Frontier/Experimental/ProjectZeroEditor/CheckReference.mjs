@@ -133,7 +133,6 @@ try {
         "lighting",
         "camera",
         "moon",
-        "height-fog",
       ].includes(Id)
     ) {
       assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
@@ -142,7 +141,11 @@ try {
     } else {
       assert.equal(
         await Page.locator(".reference-inspector-copy").count(),
-        ["clouds", "height-fog", "light"].includes(Id) ? 2 : 1,
+        Id === "height-fog"
+          ? 3
+          : ["clouds", "light"].includes(Id)
+            ? 2
+            : 1,
       );
       const Placement = await Page.evaluate(() => {
         const Native = document.querySelector(
@@ -392,19 +395,27 @@ try {
     }
   }
   await Open("height-fog");
-  const HeightVisibility = Page.locator(
-    '[data-panel="height-fog"] [data-card="Visibility through fog"]',
+  assert.equal(await Page.locator(".reference-inspector-copy").count(), 3);
+  assert.equal(await Page.locator('[data-card="Visibility through fog"]').count(), 0);
+  const HeightVisibility = Page.frameLocator(
+    '[data-reference-slice="details"] iframe',
   );
-  assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
-  assert.equal(await HeightVisibility.count(), 1);
-  assert.equal(await HeightVisibility.locator(":scope > .fog-beam").count(), 1);
-  assert.equal(await HeightVisibility.locator(".fog-beam svg").count(), 1);
-  await HeightVisibility.scrollIntoViewIfNeeded();
+  await HeightVisibility.locator(".fg-vis").waitFor();
+  assert.equal(await HeightVisibility.locator(".fg-scatter").count(), 0);
+  const HeightBeam = Page.frameLocator('[data-reference-slice="beam"] iframe');
+  await HeightBeam.locator(".fg-chamber").waitFor();
+  assert.equal(
+    await Page.locator(
+      '[data-card="Medium"] > [data-reference-slice="beam"]',
+    ).count(),
+    1,
+  );
+  await Page.locator('[data-card="Medium"]').scrollIntoViewIfNeeded();
   await Page.screenshot({
     path: path.join(Proof, "height-fog-chamber.png"),
   });
   Results.push(
-    "Height Fog uses the native unified Fog-card family; Light transport contains the embedded Beam chamber",
+    "Height Fog retains C054 cards, replaces native Visibility with the rich visual, and nests Beam Chamber in Medium",
   );
 
   await Page.setViewportSize({ width: 1100, height: 900 });

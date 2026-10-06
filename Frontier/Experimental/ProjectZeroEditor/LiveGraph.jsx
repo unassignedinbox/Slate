@@ -429,66 +429,39 @@ export function FogGraph({ Kind, V, Change, Density = false }) {
   const Altitude = V("Probe altitude") ?? 2,
     Distance = V("Probe distance") ?? 200,
     Local = Kind === "local-fog";
-  const DistanceMaximum = Kind === "aerial-fog" ? 4000 : 400,
-    Sigma = FogDensity(Kind, V, Altitude),
+  const Sigma = FogDensity(Kind, V, Altitude),
     At = (D) =>
       Math.exp(
         -Sigma * Math.max(0, D - (Kind === "aerial-fog" ? V("Start") : 0)),
       ) * 100;
   return (
     <>
-      {Density ? (
-        <>
-          <div className="graph-status">
-            <i className={V("Enabled") ? "green" : "red"} />
-            {V("Enabled")
-              ? "LIVE AUTHORING PROBE"
-              : "MEDIUM DISABLED · ZERO EXTINCTION"}
-          </div>
-          <div className="graph-metric">
-            <DecimalMetric
-              Value={
-                Sigma > 0 && Sigma < 0.0001
-                  ? Sigma.toExponential(2)
-                  : Sigma.toFixed(4)
-              }
-            />
-            <small>m⁻¹</small>
-          </div>
-          <p>Extinction at probe altitude</p>
-        </>
-      ) : (
-        <div className="fog-visibility-heading">
-          <div className="graph-status">
-            <i className={V("Enabled") ? "green" : "red"} />
-            CONTRAST TRANSMISSION · 2% THRESHOLD
-          </div>
-          <div className="graph-metric">
-            <DecimalMetric
-              Value={
-                Sigma > 0
-                  ? (
-                      (Kind === "aerial-fog" ? V("Start") : 0) -
-                      Math.log(0.02) / Sigma
-                    ).toLocaleString("en-US", {
-                      minimumFractionDigits: 1,
-                      maximumFractionDigits: 1,
-                    })
-                  : "∞"
-              }
-            />
-            <small>m sight</small>
-          </div>
-          <p>Sight range before scene contrast falls below 2%</p>
-          <div className="fog-visibility-sample">
-            <span>{Format(Distance)} m sample</span>
-            <strong>{At(Distance).toFixed(1)}% transmission</strong>
-          </div>
-        </div>
-      )}
+      <div className="graph-status">
+        <i className={V("Enabled") ? "green" : "red"} />
+        {V("Enabled")
+          ? "LIVE AUTHORING PROBE"
+          : "MEDIUM DISABLED · ZERO EXTINCTION"}
+      </div>
+      <div className="graph-metric">
+        <DecimalMetric
+          Value={
+            Density
+              ? Sigma > 0 && Sigma < 0.0001
+                ? Sigma.toExponential(2)
+                : Sigma.toFixed(4)
+              : At(Distance).toFixed(2)
+          }
+        />
+        <small>{Density ? "m⁻¹" : "%"}</small>
+      </div>
+      <p>
+        {Density
+          ? "Extinction at probe altitude"
+          : "Light transmitted at the selected distance"}
+      </p>
       <Plot
         Name={Density ? "Fog altitude probe" : "Fog distance probe"}
-        Domain={Density ? [0, 3000] : [0, DistanceMaximum]}
+        Domain={Density ? [0, 3000] : [0, 2000]}
         Range={Density ? [0, Math.max(0.001, V("Density"))] : [0, 100]}
         Series={[
           {
@@ -527,7 +500,7 @@ export function FogGraph({ Kind, V, Change, Density = false }) {
             aria-label="Fog probe distance"
             type="number"
             min={0}
-            max={DistanceMaximum}
+            max={2000}
             value={Distance}
             onChange={(E) =>
               Change("Probe distance", Clamp(E.target.value, 0, 2000))

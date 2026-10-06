@@ -127,18 +127,27 @@ const Sections = {
     Card("Wind field"),
   ],
   "height-fog": [
+    ["summary", ".fg-hero"],
+    ["summary", ".mp-rail"],
+    ["summary", ".mp-duo"],
     Card("Fog settings"),
-    Card("Visibility through fog"),
+    ["details", ".fg-vis"],
     Card("Medium"),
   ],
   "aerial-fog": [
+    ".fog-sight",
+    ".fog-readings:last-of-type",
     Card("Fog settings"),
     Card("Visibility through fog"),
+    ".fog-beam",
     Card("Medium"),
   ],
   "local-fog": [
+    ".fog-sight",
+    ".fog-readings:last-of-type",
     Card("Fog settings"),
     Card("Visibility through fog"),
+    ".fog-beam",
     Card("Medium"),
   ],
   clouds: [

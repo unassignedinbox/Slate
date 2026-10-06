@@ -98,8 +98,10 @@ function Trim() {
       Slice === "summary"
         ? [".fg-hero", ".mp-rail", ".mp-duo"]
         : Slice === "details"
-          ? [".fg-vis", ".fg-scatter"]
-          : [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
+          ? [".fg-vis"]
+          : Slice === "beam"
+            ? [".fg-scatter"]
+            : [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
     pointlight: LightCards,
     spotlight: LightCards,
     ieslight: LightCards,
@@ -146,16 +148,9 @@ function Trim() {
     Custom.querySelector(".wf-specs")?.remove();
   }
   if (Kind === "fog") {
-    const Visibility = Custom.querySelector(".fg-vis"),
-      Transport = Custom.querySelector(".fg-scatter"),
+    const Transport = Custom.querySelector(".fg-scatter"),
       Chamber = Transport?.querySelector(".fg-chamber");
-    if (Visibility && Transport && Chamber) {
-      Transport.replaceChildren(Chamber);
-      Transport.classList.remove("pcard", "mp-light");
-      Transport.style.cssText =
-        "margin:14px 0 0;padding:13px 0 0;border-top:1px solid rgba(255,255,255,.08);background:transparent";
-      Visibility.append(Transport);
-    }
+    if (Transport && Chamber) Transport.replaceChildren(Chamber);
   }
 }
 function Record(Node) {

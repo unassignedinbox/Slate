@@ -337,23 +337,20 @@ try {
     );
   }
   await Open("height-fog");
-  assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
-  assert.equal(await Page.locator(".fog-dashboard-stat").count(), 6);
-  assert.equal(
-    await Page.locator(".fog-dashboard-stats").evaluate(
-      (Stats) => getComputedStyle(Stats).borderRadius,
-    ),
-    "16px",
-  );
+  assert.equal(await Page.locator(".reference-inspector-copy").count(), 3);
+  assert.equal(await Page.locator('[data-card="Visibility through fog"]').count(), 0);
   assert.equal(
     await Page.locator(
-      '[data-card="Visibility through fog"] > .fog-beam',
+      '[data-card="Medium"] > [data-reference-slice="beam"]',
     ).count(),
     1,
   );
+  await Page.frameLocator('[data-reference-slice="details"] iframe')
+    .locator(".fg-vis")
+    .waitFor();
   await Page.screenshot({ path: path.join(Proof, "height-fog-tiles.png") });
   Checks.push(
-    "height-fog: unified native statistics and embedded Beam chamber retain the shared environment styling",
+    "height-fog: retained imported Visibility and Medium-owned Beam Chamber",
   );
 
   Frame = await Open("reference-ece-low-beam");

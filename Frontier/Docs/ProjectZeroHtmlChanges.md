@@ -2889,3 +2889,17 @@ fracture algorithm, SDF computation, source-property schema or Construct behavio
   Visibility card. Medium keeps its original controls and live parameter map with only Fog-scoped visual styling.
 - The correction remains shared by Height, Atmospheric and Local Fog through one `FogPanel`; only their data, labels,
   calculations and technical content differ. No non-Fog inspector styling changed.
+
+## C060 — restore C054 Fog cards; Height-only visual correction (2026-10-06)
+
+- Restored the Fog card implementation and styling from commit `9341425fd97992815e916537418b6b331648254d`.
+  Atmospheric Fog and Local Fog are unchanged from that baseline.
+- Changed Height Fog only: removed the later native `Visibility through fog` graph and retained the richer C054 imported
+  Visibility/contrast visual in its place.
+- Split the retained Height Fog Beam Chamber into its own reference slice and nested it inside the existing native
+  Medium card, after Density, Falloff Height and Sun Scatter. It is no longer attached to Visibility and no new card was
+  created.
+- Height Fog retains its C054 summary visual/statistics, Fog Settings, Medium, Density with altitude, Colour and Wind
+  Binding controls. Other inspectors are outside this correction.
+- The standalone HTML build succeeds at 4.64 MiB. Focused tests now assert three Height reference slices (summary,
+  Visibility and Beam), no duplicate native Visibility card, and Beam ownership by Medium.

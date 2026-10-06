@@ -55,46 +55,38 @@ try {
   await Page.evaluate(() => document.fonts.ready);
   await Select("Height Fog");
   await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-  const HeightVisibility = Card("Visibility through fog");
-  assert.equal(await HeightVisibility.count(), 1);
-  assert.equal(await HeightVisibility.locator(":scope > .fog-beam").count(), 1);
-  assert.equal(await HeightVisibility.locator(".fog-dashboard-stat").count(), 6);
-  assert.equal(await Page.locator(".fog-sight").count(), 0);
-  await HeightVisibility.getByLabel("Fog probe altitude", { exact: true }).fill(
-    "1800",
+  assert.equal(await Card("Visibility through fog").count(), 0);
+  const HeightVisibility = Page.frameLocator(
+    '[data-reference-slice="details"] iframe',
   );
-  await HeightVisibility.getByLabel("Fog probe altitude", {
-    exact: true,
-  }).press("Tab");
-  assert.equal((await Saved()).Values["height-fog"]["Probe altitude"], 1800);
-  await Card("Medium")
-    .getByRole("slider", { name: "Medium: Density chart", exact: true })
-    .focus();
-  await Page.keyboard.press("Home");
-  assert.equal((await Saved()).Values["height-fog"].Density, 0);
+  await HeightVisibility.locator(".fg-vis").waitFor();
+  assert.equal(await HeightVisibility.locator(".fg-vis").count(), 1);
+  const HeightBeam = Page.frameLocator('[data-reference-slice="beam"] iframe');
+  await HeightBeam.locator(".fg-chamber").waitFor();
+  assert.equal(
+    await Card("Medium").locator('[data-reference-slice="beam"]').count(),
+    1,
+  );
   await Page.getByLabel("Density value", { exact: true }).fill("0.02");
   await Page.getByLabel("Density value", { exact: true }).press("Tab");
-  await HeightVisibility.scrollIntoViewIfNeeded();
+  await Page.locator('[data-reference-slice="details"]').scrollIntoViewIfNeeded();
   await Page.screenshot({ path: Proof + "/HeightFogVisibility.png" });
 
   await Select("Atmospheric Fog");
   const Visibility = Card("Visibility through fog");
-  assert.match(await Visibility.locator(".graph-metric").innerText(), /∞/);
+  assert.match(await Visibility.locator(".graph-metric").innerText(), /100\.00/);
   await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-  assert.match(await Visibility.locator(".graph-metric").innerText(), /3,962/);
+  assert.match(await Visibility.locator(".graph-metric").innerText(), /86\.07/);
   await Visibility.getByRole("slider", {
     name: "Fog distance probe",
     exact: true,
   }).focus();
   await Page.keyboard.press("End");
-  assert.equal((await Saved()).Values["aerial-fog"]["Probe distance"], 4000);
+  assert.equal((await Saved()).Values["aerial-fog"]["Probe distance"], 2000);
   await Visibility.scrollIntoViewIfNeeded();
   await Page.screenshot({ path: Proof + "/AtmosphericFogVisibility.png" });
-  await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-  assert.match(await Visibility.locator(".graph-metric").innerText(), /∞/);
-  await Page.getByRole("button", { name: "Enabled", exact: true }).click();
   Checks.push(
-    "Height and Atmospheric Fog use the shared model-aware Visibility card with Beam chamber nested in Light transport",
+    "Height Fog retains the rich imported Visibility visual and places Beam Chamber in Medium; Atmospheric remains at C054",
   );
   await Select("Sun");
   const Day = Page.getByRole("slider", {
@@ -412,7 +404,7 @@ try {
     type: "touchEnd",
     touchPoints: [],
   });
-  assert.equal((await Saved()).Values["aerial-fog"]["Probe distance"], 4000);
+  assert.equal((await Saved()).Values["aerial-fog"]["Probe distance"], 2000);
   await CDP.detach();
   Checks.push(
     "Aerial spectral mixture, cloud vertical probes, editable local bounds/derived extents, cloud-shadow parameter graph, and real touch drag/clamping",

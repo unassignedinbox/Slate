@@ -11,8 +11,7 @@ const Require = createRequire(
 );
 const { chromium } = Require("playwright");
 const Proof =
-  process.env.FRONTIER_PROOF_FOLDER ||
-  path.join(Folder, "Screenshots/FogCards");
+  process.env.FRONTIER_PROOF_FOLDER || path.join(Folder, "Screenshots/FogCards");
 fs.mkdirSync(Proof, { recursive: true });
 const Browser = await chromium.launch({
   executablePath: process.env.FRONTIER_BROWSER_EXECUTABLE || "/tmp/chromium",
@@ -36,66 +35,40 @@ const Open = async (Id) => {
 };
 
 try {
-  const ExpectedMediumFields = {
-    "height-fog": ["Density", "Falloff Height", "Sun Scatter"],
-    "aerial-fog": ["Density", "Start", "Mie Blend"],
-    "local-fog": ["Density", "Coverage", "Feature Scale", "Anisotropy"],
-  };
+  await Open("height-fog");
+  assert.equal(await Page.locator('[data-reference-slice="summary"]').count(), 1);
+  assert.equal(await Page.locator('[data-reference-slice="details"]').count(), 1);
+  assert.equal(await Page.locator('[data-reference-slice="beam"]').count(), 1);
+  assert.equal(await Page.locator('[data-card="Visibility through fog"]').count(), 0);
 
-  for (const Id of Object.keys(ExpectedMediumFields)) {
+  const Visibility = Page.frameLocator('[data-reference-slice="details"] iframe');
+  await Visibility.locator(".fg-vis").waitFor();
+  assert.equal(await Visibility.locator(".fg-vis").count(), 1);
+  assert.equal(await Visibility.locator(".fg-scatter").count(), 0);
+
+  const Medium = Page.locator('[data-card="Medium"]');
+  assert.equal(await Medium.locator('[data-reference-slice="beam"]').count(), 1);
+  const Beam = Page.frameLocator('[data-reference-slice="beam"] iframe');
+  await Beam.locator(".fg-chamber").waitFor();
+  assert.equal(await Beam.locator(".fg-chamber").count(), 1);
+  assert.equal(await Beam.locator(".fg-vis").count(), 0);
+  Checks.push(
+    "Height Fog uses the retained rich Visibility visual and nests Beam Chamber in Medium",
+  );
+
+  for (const Id of ["aerial-fog", "local-fog"]) {
     await Open(Id);
-    const Visibility = Page.locator('[data-card="Visibility through fog"]');
-    assert.equal(await Visibility.count(), 1);
+    assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
+    assert.equal(await Page.locator(".fog-sight").count(), 1);
+    assert.equal(await Page.locator(".fog-reading").count(), 6);
+    assert.equal(await Page.locator('[data-card="Visibility through fog"]').count(), 1);
+    assert.equal(await Page.locator(".fog-instruments > .fog-beam").count(), 1);
     assert.equal(
-      await Visibility.locator(".fog-visibility-heading").count(),
-      1,
-    );
-    assert.equal(
-      await Visibility.locator('[data-live-plot="Fog distance probe"]').count(),
-      1,
-    );
-    assert.equal(await Visibility.locator(":scope > .fog-beam").count(), 1);
-    assert.equal(await Page.locator(".fog-instruments > .fog-beam").count(), 0);
-    assert.equal(await Visibility.locator(".fog-dashboard-stats").count(), 1);
-    assert.equal(await Visibility.locator(".fog-dashboard-stat").count(), 6);
-    assert.equal(await Page.locator(".fog-sight,.fog-reading").count(), 0);
-    assert.equal(
-      await Page.locator('[data-reference-slice="details"]').count(),
+      await Page.locator('[data-card="Medium"] [data-reference-slice="beam"]').count(),
       0,
     );
-
-    const Medium = Page.locator('[data-card="Medium"]');
-    assert.equal(await Medium.count(), 1);
-    assert.equal(await Medium.locator(".property-graph").count(), 1);
-    for (const Label of ExpectedMediumFields[Id]) {
-      assert.equal(await Medium.getByText(Label, { exact: true }).count(), 1);
-    }
-    Checks.push(
-      `${Id}: one reused infographic Visibility card, six inline statistics, embedded Beam chamber, and live Medium map`,
-    );
+    Checks.push(`${Id}: restored C054 Fog cards remain unchanged`);
   }
-
-  await Open("aerial-fog");
-  const Metric = Page.locator(
-    '[data-card="Visibility through fog"] .graph-metric',
-  );
-  assert.match(await Metric.innerText(), /∞/);
-  await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-  assert.match(await Metric.innerText(), /3,962/);
-  Checks.push(
-    "Atmospheric Fog sight range responds to its start-distance extinction model",
-  );
-
-  await Open("local-fog");
-  assert.match(
-    await Page.locator(
-      '[data-card="Visibility through fog"] .graph-metric',
-    ).innerText(),
-    /711/,
-  );
-  Checks.push(
-    "Local Fog sight range responds to density multiplied by coverage",
-  );
 } catch (Error) {
   Errors.push(Error.stack);
 } finally {
@@ -106,4 +79,4 @@ try {
   await Browser.close();
 }
 assert.deepEqual(Errors, []);
-console.log("Shared fog-card checks passed:", Checks.length);
+console.log("Height Fog correction checks passed:", Checks.length);

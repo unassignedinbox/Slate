@@ -387,22 +387,27 @@ try {
   );
   for (const Id of ["aerial-fog", "local-fog"]) {
     await Open(Id);
-    const Visibility = Page.locator('[data-card="Visibility through fog"]'),
-      Before = await Visibility.locator(".fog-dashboard-stats").innerText();
+    const Before = await Page.locator(".fog-sight svg").innerHTML();
     if (Id === "aerial-fog")
       await Page.getByRole("button", { name: "Enabled", exact: true }).click();
     await Page.getByLabel("Density value", { exact: true }).fill("2");
-    assert.notEqual(
-      await Visibility.locator(".fog-dashboard-stats").innerText(),
-      Before,
+    assert.notEqual(await Page.locator(".fog-sight svg").innerHTML(), Before);
+    assert.equal(
+      await Page.locator(".fog-caption").evaluate(
+        (Caption) => getComputedStyle(Caption).position,
+      ),
+      "absolute",
     );
-    assert.equal(await Visibility.locator(".fog-dashboard-stat").count(), 6);
-    assert.equal(await Visibility.locator(":scope > .fog-beam").count(), 1);
-    assert.equal(await Page.locator(".fog-sight,.fog-caption").count(), 0);
+    assert.equal(
+      await Page.locator(".fog-sight svg").evaluate((Sight) =>
+        Math.round(Sight.getBoundingClientRect().height),
+      ),
+      166,
+    );
     await Capture(Id);
     Checks.push(
       Id +
-        ": existing Visibility card is the reused infographic surface and responds to native Fog controls",
+        ": restored C054 visual structure, 166px sightline and overlay caption",
     );
   }
   assert.deepEqual(Errors, []);
