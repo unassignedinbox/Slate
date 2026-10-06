@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Icon } from "./Inspectors.jsx";
+import { EntityNotes, Icon } from "./Inspectors.jsx";
 import { FolderInventory, CollectionTypes } from "./FolderInventory.mjs";
 import "./WorkspaceCards.css";
 const Count = (N) => N.toLocaleString("en");
@@ -70,6 +70,10 @@ export default function FolderInspector({
           {Subject.Description || "Scene collection"} · indexed from the current
           scene
         </p>
+        <EntityNotes
+          Value={Values.Notes || ""}
+          Change={(Next) => Change("Notes", Next)}
+        />
       </header>
       <nav
         className="collection-trail"
@@ -360,12 +364,6 @@ export default function FolderInspector({
           <i className="warm" />
           Collection notes
         </h2>
-        <textarea
-          aria-label="Collection notes"
-          placeholder="Purpose, ownership or review notes for this collection…"
-          value={Values.Notes || ""}
-          onChange={(E) => Change("Notes", E.target.value)}
-        />
         <label className="collection-tint">
           Collection accent
           <input

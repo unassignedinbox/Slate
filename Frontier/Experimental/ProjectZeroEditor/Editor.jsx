@@ -7,6 +7,7 @@ import {
   ReadRecord as ReadFracture,
 } from "../FractureEditor/FractureSpecification.js";
 import { CloudProperties, CloudEdit } from "./CloudSpecification.js";
+import { LightContextDefaults } from "./LightSpecification.js";
 import ReferencePanel, {
   EnsureReferenceLights,
   PrepareLightRows,
@@ -200,6 +201,178 @@ function Restore() {
     return {};
   }
 }
+function OutlinerValue(Row, Record, Label) {
+  const Stored = Record?.[Label];
+  if (Stored !== undefined) return Stored;
+  return Panels[Row.Panel]?.find((Field) => Field.Label === Label)?.Default;
+}
+function CompactNumber(Value, Digits = 1) {
+  const NumberValue = Number(Value);
+  if (!Number.isFinite(NumberValue)) return "—";
+  return NumberValue.toLocaleString("en-US", {
+    maximumFractionDigits: Digits,
+  });
+}
+function CompactPosition(Value) {
+  const Position = Array.isArray(Value) ? Value : [0, 0, 0];
+  return Position.map((Axis) => CompactNumber(Axis, 1)).join(",");
+}
+function OutlinerMetadata(Row, Record = {}, Rows = []) {
+  const V = (Label) => OutlinerValue(Row, Record, Label);
+  const LightProperties = {
+    ...(LightContextDefaults[Row.ReferencePreset] || {}),
+    ...(Record.ReferenceInspector?.Properties || {}),
+  };
+  const Position = LightProperties.pos || Record.Position || [0, 0, 0];
+  if (IsEditorCamera(Row)) return "Editor · permanent";
+  if (Row.Panel === "group") {
+    const Count = Rows.filter((Item) => Item.Parent === Row.Id).length;
+    return Count + (Count === 1 ? " item" : " items");
+  }
+  if (Row.Panel === "geometry")
+    return "Position " + CompactPosition(Position) + " m";
+  if (Row.Panel === "camera")
+    return (
+      CompactNumber(V("Focal Length"), 0) +
+      " mm · f/" +
+      CompactNumber(V("Aperture"))
+    );
+  if (Row.Panel === "post")
+    return (
+      "EV " +
+      (V("EV Compensation") >= 0 ? "+" : "") +
+      CompactNumber(V("EV Compensation"))
+    );
+  if (Row.Panel === "atmosphere")
+    return (
+      "Mie " +
+      CompactNumber(V("Mie")) +
+      "× · ozone " +
+      CompactNumber(V("Ozone"))
+    );
+  if (Row.Panel === "sun")
+    return (
+      CompactNumber(V("Intensity")) +
+      "× · " +
+      CompactNumber(V("Angular Diameter"), 2) +
+      "°"
+    );
+  if (Row.Panel === "flare")
+    return (
+      CompactNumber(V("Intensity")) +
+      "× · " +
+      CompactNumber(V("Ghosts"), 0) +
+      " ghosts"
+    );
+  if (Row.Panel === "moon") {
+    const Phase = Record["moon0:Phase"] ?? V("Phase");
+    return (
+      "Lunar phase " +
+      CompactNumber(Phase * 360, 0) +
+      "° · " +
+      CompactNumber(Phase * 100, 0) +
+      "%"
+    );
+  }
+  if (Row.Panel === "stars")
+    return (
+      CompactNumber(V("Limiting magnitude")) +
+      " mag · " +
+      CompactNumber(V("Brightness")) +
+      "×"
+    );
+  if (Row.Panel === "wind")
+    return (
+      CompactNumber(V("Speed")) +
+      " m/s · " +
+      CompactNumber(V("Bearing"), 0) +
+      "°"
+    );
+  if (Row.Panel === "height-fog")
+    return (
+      CompactNumber(V("Density"), 2) +
+      "× · " +
+      CompactNumber(V("Falloff Height"), 0) +
+      " m"
+    );
+  if (Row.Panel === "aerial-fog")
+    return (
+      CompactNumber(V("Density")) +
+      "× · starts " +
+      CompactNumber(V("Start"), 0) +
+      " m"
+    );
+  if (Row.Panel === "local-fog")
+    return (
+      CompactNumber(V("Density")) +
+      "× · " +
+      CompactNumber(V("Coverage") * 100, 0) +
+      "%"
+    );
+  if (["clouds", "local-cloud"].includes(Row.Panel))
+    return (
+      CompactNumber(V("Coverage") * 100, 0) +
+      "% · " +
+      CompactNumber(V("Density")) +
+      "×"
+    );
+  if (Row.Panel === "precipitation") {
+    const Type =
+      ["Rain", "Drizzle", "Hail", "Snow", "Sleet"][V("Precipitation")] ||
+      "Rain";
+    return Type + " · " + CompactNumber(V("Intensity")) + " mm/h";
+  }
+  if (Row.Panel === "rainbow")
+    return (
+      CompactNumber(V("Intensity")) +
+      "× · " +
+      CompactNumber(V("Minimum Path"), 0) +
+      " m"
+    );
+  if (Row.Panel === "light") {
+    const Properties = LightProperties;
+    const Type = Row.ReferenceType || "arealight";
+    const Names = {
+      pointlight: "Point",
+      spotlight: "Spot",
+      ieslight: "IES",
+      arealight: "Area",
+      tubelight: "Tube",
+      ledlight: "LED",
+      ledstrip: "Strip",
+    };
+    let Output = V("Intensity"),
+      Unit = "lx";
+    if (Row.ReferenceType) {
+      Unit = ["pointlight", "spotlight"].includes(Type) ? "cd" : "lm";
+      Output =
+        Type === "ledlight"
+          ? (Properties.watts ?? 10) *
+            (Properties.efficacy ?? 110) *
+            (Properties.dimmer ?? 1)
+          : Type === "ledstrip"
+            ? (Properties.lumensPerMetre ?? 1000) *
+              (Properties.length ?? 2.4) *
+              (Properties.dimmer ?? 1)
+            : (Properties[
+                ["pointlight", "spotlight"].includes(Type)
+                  ? "intensity"
+                  : "lumens"
+              ] ?? 32);
+    }
+    return (
+      CompactNumber(Output, 0) +
+      " " +
+      Unit +
+      " · " +
+      Names[Type] +
+      " · " +
+      CompactPosition(Position)
+    );
+  }
+  return Row.Panel.replaceAll("-", " ");
+}
+
 const Saved = Restore();
 const SceneRows = Saved.Rows ? ConsolidateAtmosphere(Saved.Rows) : undefined;
 const SkyAlias = !SceneRows?.some((Row) => Row.Id === "sky");
@@ -1182,21 +1355,13 @@ function App() {
                 onBlur={() => RenameRow(null)}
               />
             ) : (
-              <span className="row-name">{Row.Name}</span>
+              <div className="row-identity">
+                <span className="row-name">{Row.Name}</span>
+                <small title={OutlinerMetadata(Row, Values[Row.Id], Rows)}>
+                  {OutlinerMetadata(Row, Values[Row.Id], Rows)}
+                </small>
+              </div>
             )}
-            <small>
-              {IsEditorCamera(Row)
-                ? "EDITOR"
-                : Row.Panel === "camera"
-                  ? "55°"
-                  : Row.Panel === "geometry"
-                    ? "24 tris"
-                    : Row.Panel === "sun"
-                      ? "5.2°"
-                      : Row.Panel === "wind"
-                        ? "4.2 m/s"
-                        : ""}
-            </small>
             {Row.Panel !== "group" && (
               <span className="row-status">
                 <Glyph Name="check" Size={11} />

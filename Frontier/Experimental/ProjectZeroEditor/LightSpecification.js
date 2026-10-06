@@ -54,6 +54,17 @@ export const LightDefaults = {
     showShape: true,
   },
 };
+export const LightContextDefaults = {
+  "Key Spot": { pos: [-6, 8.5, 5], intensity: 90 },
+  "Rim Point": { pos: [5.2, 2.4, -4.2], intensity: 22 },
+  "Fill Point": { pos: [-3.5, 1.6, 4.6], intensity: 10 },
+  "ECE Low Beam": { pos: [-1.1, 0.72, 4.2], lumens: 0 },
+  Softbox: { pos: [3.5, 4.5, 2], lumens: 0 },
+  "Studio Tube": { pos: [-3, 3.2, -2], lumens: 0 },
+  "LED Emitter": { pos: [0, 2, 0], watts: 10, efficacy: 110, dimmer: 1 },
+  "LED Strip": { pos: [0, 2, 0], lumensPerMetre: 1000, length: 2.4, dimmer: 1 },
+  "IES Downlight": { pos: [0, 2, 0], lumens: 1600 },
+};
 export const LightPresetDefaults = {
   "IES Downlight": {
     profile: "Downlight",

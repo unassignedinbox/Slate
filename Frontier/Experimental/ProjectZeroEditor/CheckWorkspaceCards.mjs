@@ -107,17 +107,18 @@ try {
     await Page.locator("[data-collection-total]").getAttribute(
       "data-collection-total",
     ),
-    "14",
+    "13",
   );
-  assert.equal(await Page.locator(".collection-entry").count(), 14);
+  assert.equal(await Page.locator(".collection-entry").count(), 13);
   await Page.getByLabel("Collection scope", { exact: true }).selectOption(
     "direct",
   );
-  assert.equal(await Page.locator(".collection-entry").count(), 11);
+  assert.equal(await Page.locator(".collection-entry").count(), 10);
   await Page.getByLabel("Collection scope", { exact: true }).selectOption(
     "all",
   );
-  await Page.getByLabel("Collection notes", { exact: true }).fill(
+  await Page.getByRole("button", { name: "Add notes", exact: true }).click();
+  await Page.getByLabel("Instance notes", { exact: true }).fill(
     "Environment review notes",
   );
   await Page.getByLabel("Collection tint", { exact: true }).fill("#589979");
@@ -127,7 +128,7 @@ try {
     "#589979",
   );
   assert.equal(
-    await Page.getByLabel("Collection notes", { exact: true }).inputValue(),
+    await Page.getByLabel("Instance notes", { exact: true }).inputValue(),
     "Environment review notes",
   );
   await Page.getByRole("button", {

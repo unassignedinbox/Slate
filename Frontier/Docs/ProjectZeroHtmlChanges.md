@@ -2809,3 +2809,18 @@ fracture algorithm, SDF computation, source-property schema or Construct behavio
 - Validation: 149 focused checks passed (89 inspector-order, 28 reference-preservation, 21 light-design and 11
   instrument-style), with no reported errors. The generated standalone remains 4.64 MiB with 161 shipped icons and 57
   native vector glyphs.
+
+## C055 — optional entity notes and contextual outliner values (2026-10-06)
+
+- Added an optional **Add notes** action to every entity and collection heading. Notes remain absent from the inspector
+  until requested, persist with the entity, reopen automatically when authored, and can be hidden without deleting the
+  text.
+- Replaced the outliner's hard-coded values with live, type-specific context for all 35 default entries. Examples include
+  light output/type/position, precipitation type and mm/h, lunar phase angle and percentage, wind speed/bearing, camera
+  focal length/aperture, cloud coverage/density, fog density/range, and geometry position.
+- Values update with edits; names, hierarchy, visibility, status controls, inspector ordering and bake-last placement are
+  unchanged. Light units follow their existing authored models: native Area uses lx, Point/Spot use cd, and illustrative
+  source-flux panels use lm.
+- Validation: the 212-check C053 regression set still passes, plus 6 entity-context checks covering all 35 entries and the
+  collection workspace persistence checks. The generated standalone remains 4.64 MiB with 161 shipped icons and 57
+  native vector glyphs.

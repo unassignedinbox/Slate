@@ -60,6 +60,7 @@ function Inventory() {
       .map((Node) => Node.textContent)
       .sort(),
     Controls: [...Root.querySelectorAll("input,select,textarea")]
+      .filter((Node) => !Node.getAttribute("aria-label")?.includes("notes"))
       .map((Node) => [Node.tagName, Node.type, Node.getAttribute("aria-label")])
       .sort((A, B) => JSON.stringify(A).localeCompare(JSON.stringify(B))),
   };
@@ -413,12 +414,13 @@ try {
     "Added Cloud deck edits persist without removing original Cloud controls",
   );
   await Open("world");
-  await Page.getByLabel("Collection notes", { exact: true }).fill(
+  await Page.getByRole("button", { name: "Add notes", exact: true }).click();
+  await Page.getByLabel("Instance notes", { exact: true }).fill(
     "Original folder retained",
   );
   await Page.reload();
   assert.equal(
-    await Page.getByLabel("Collection notes", { exact: true }).inputValue(),
+    await Page.getByLabel("Instance notes", { exact: true }).inputValue(),
     "Original folder retained",
   );
   assert.equal(await Page.locator("iframe").count(), 0);

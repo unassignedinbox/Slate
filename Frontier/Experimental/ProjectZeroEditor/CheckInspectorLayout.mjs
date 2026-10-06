@@ -353,7 +353,11 @@ try {
           Node.max,
           Node.step,
         ])
-        .filter((Value) => Value[2] !== "Inspector name")
+        .filter(
+          (Value) =>
+            Value[2] !== "Inspector name" &&
+            !Value[2]?.toLowerCase().includes("notes"),
+        )
         .map((Value) => JSON.stringify(Value))
         .sort();
     for (const Id of [

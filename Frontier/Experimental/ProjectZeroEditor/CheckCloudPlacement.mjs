@@ -155,7 +155,10 @@ try {
         1,
       );
       assert.equal(
-        await Page.getByLabel("Instance notes", { exact: true }).count(),
+        await Page.getByRole("button", {
+          name: "Add notes",
+          exact: true,
+        }).count(),
         1,
       );
       await Page.screenshot({ path: path.join(Proof, "AreaLightTop.png") });
@@ -268,7 +271,12 @@ try {
           ".inspector-scroll > [data-panel] input,.inspector-scroll > [data-panel] select,.inspector-scroll > [data-panel] textarea",
         ),
       ]
-        .filter((Node) => Node.getAttribute("aria-label") !== "Inspector name")
+        .filter(
+          (Node) =>
+            !["Inspector name", "Instance notes"].includes(
+              Node.getAttribute("aria-label"),
+            ),
+        )
         .map((Node) =>
           JSON.stringify([
             Node.tagName,

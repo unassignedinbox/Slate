@@ -2931,3 +2931,97 @@ img {
 .generic-inspector > .reference-inspector-copy {
   margin-bottom: 16px;
 }
+
+.entity-notes-add {
+  min-height: 30px;
+  margin-top: 10px;
+  padding: 5px 9px;
+  border: 1px dashed #424242;
+  background: transparent;
+  color: #898989;
+  font-size: 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.entity-notes-add:hover {
+  color: #d2d2d2;
+  border-color: #676767;
+}
+.entity-notes {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 9px;
+  background: #191919;
+  border: 1px solid #303030;
+}
+.entity-notes > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.entity-notes strong {
+  color: #c9c9c9;
+  font-size: 10px;
+  font-weight: 500;
+}
+.entity-notes small {
+  color: #6e6e6e;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+.entity-notes button {
+  min-height: 22px;
+  margin-left: auto;
+  padding: 2px 7px;
+  border: 0;
+  background: #252525;
+  color: #858585;
+  font-size: 8px;
+}
+.entity-notes textarea {
+  width: 100%;
+  min-height: 76px;
+  resize: vertical;
+  border-radius: 6px;
+  background: #111;
+  color: #ccc;
+}
+.row-identity {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+.row-identity .row-name {
+  line-height: 14px;
+}
+.row-identity small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #747474;
+  font-size: 8px;
+  line-height: 10px;
+}
+.inspector-heading > .entity-notes-add {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 0;
+}
+.inspector-heading:has(> .entity-notes) {
+  height: 224px;
+}
+.inspector-heading > .entity-notes {
+  position: absolute;
+  top: 105px;
+  left: 0;
+  right: 0;
+  margin: 0;
+}
+.collection-heading > .entity-notes-add {
+  margin-top: 4px;
+}

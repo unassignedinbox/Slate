@@ -405,6 +405,36 @@ function Metric({ Value, Unit, Caption }) {
     </>
   );
 }
+export function EntityNotes({ Value = "", Change }) {
+  const [Open, SetOpen] = useState(Boolean(Value));
+  if (!Open)
+    return (
+      <button
+        className="entity-notes-add"
+        onClick={() => SetOpen(true)}
+        aria-label="Add notes"
+      >
+        <Glyph Name="plus" Size={13} />
+        Add notes
+      </button>
+    );
+  return (
+    <section className="entity-notes" aria-label="Optional entity notes">
+      <div>
+        <strong>Notes</strong>
+        <small>Optional</small>
+        <button onClick={() => SetOpen(false)}>Hide</button>
+      </div>
+      <textarea
+        aria-label="Instance notes"
+        placeholder="Purpose, ownership, review notes…"
+        value={Value}
+        onChange={(Event) => Change(Event.target.value)}
+      />
+    </section>
+  );
+}
+
 function Bake({ Title, Sun = false }) {
   return (
     <Card Title={Title} Height={Sun ? 225 : 162}>
@@ -534,6 +564,10 @@ export function Inspector({
       <div className="breadcrumbs">Inspector / {Category}</div>
       <h1>{Title}</h1>
       <p className="eyebrow">{Subject.Description}</p>
+      <EntityNotes
+        Value={Values.Notes || ""}
+        Change={(Next) => Change("Notes", Next)}
+      />
     </header>
   );
   const Capabilities = () => (
@@ -654,14 +688,6 @@ export function Inspector({
             )}
           </details>
         ))}
-      <details className="generic-card" open>
-        <summary>NOTES</summary>
-        <textarea
-          aria-label="Instance notes"
-          value={Values.Notes || ""}
-          onChange={(Event) => Change("Notes", Event.target.value)}
-        />
-      </details>
       {Subject.Panel === "geometry" && (
         <FracturePanel
           Subject={Subject}

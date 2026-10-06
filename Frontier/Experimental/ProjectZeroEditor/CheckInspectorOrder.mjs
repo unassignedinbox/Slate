@@ -84,10 +84,9 @@ const Sections = {
     ".transform-card",
     ".entity-capabilities",
     ".material-panel",
-    ".generic-card:has(>summary)",
     ".fracture-card",
   ],
-  post: [".entity-capabilities", ".generic-card:has(>summary)"],
+  post: [".entity-capabilities"],
   camera: [Card("Lens + field of view"), Card("Aperture study")],
   atmosphere: [
     ".atmosphere-lab-cards",
@@ -307,6 +306,10 @@ try {
             "input[aria-label]:not([readonly]),select[aria-label],textarea[aria-label]",
           ),
         ]
+          .filter(
+            (Node) =>
+              !Node.getAttribute("aria-label")?.toLowerCase().includes("notes"),
+          )
           .map((Node) =>
             [Node.tagName, Node.type, Node.getAttribute("aria-label")].join(
               " ",
