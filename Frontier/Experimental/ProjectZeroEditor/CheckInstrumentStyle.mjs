@@ -154,15 +154,12 @@ try {
       await Page.locator(".fog-beam svg > rect").first().getAttribute("fill"),
       "none",
     );
-    assert(
-      await Page.locator(".fog-reading").evaluateAll((Tiles) =>
-        Tiles.every((Tile) => {
-          const Style = getComputedStyle(Tile);
-          return (
-            Style.borderRadius === "18px" && Style.borderTopWidth === "1px"
-          );
-        }),
+    assert.equal(await Page.locator(".fog-dashboard-stat").count(), 6);
+    assert.equal(
+      await Page.locator(".fog-dashboard-stats").evaluate(
+        (Stats) => getComputedStyle(Stats).borderRadius,
       ),
+      "16px",
     );
     const Appearance = await Page.locator(".fog-beam").evaluate((Beam) => ({
       Background: getComputedStyle(Beam).backgroundColor,
@@ -179,7 +176,7 @@ try {
     await Capture(Id + "Chamber");
     Checks.push(
       Id +
-        ": infographic Beam chamber is nested in Visibility and shared Fog KPI cards retain the new rounding",
+        ": Beam chamber and six statistics are reused inside the single infographic Visibility card",
     );
   }
   await Open("reference-softbox");

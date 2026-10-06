@@ -2877,3 +2877,15 @@ fracture algorithm, SDF computation, source-property schema or Construct behavio
   keyed visual language. Notes, persistence, outliner context, Wind Binding and model independence are unchanged.
 - The standalone HTML build succeeds at 4.65 MiB. Fog-specific computed-style assertions now cover the authorized
   18 px KPI cards and 17 px nested Beam Chamber treatment.
+
+## C059 — Fog infographic correction: reuse existing cards (2026-10-06)
+
+- Removed the additional Fog overview and six standalone KPI tile surfaces introduced in C058. The existing shared
+  Visibility card is now the infographic surface; its six statistics are cells inside that card, not separate cards.
+- Kept the existing Fog Settings, Visibility, Medium, model-specific technical and Wind Binding cards. No replacement
+  card family and no per-model card variants were created.
+- Visibility now follows the supplied dashboard references through one large live metric, a bordered statistics table,
+  the existing transmission plot and restrained accent/status details. Beam Chamber remains an inset inside that same
+  Visibility card. Medium keeps its original controls and live parameter map with only Fog-scoped visual styling.
+- The correction remains shared by Height, Atmospheric and Local Fog through one `FogPanel`; only their data, labels,
+  calculations and technical content differ. No non-Fog inspector styling changed.

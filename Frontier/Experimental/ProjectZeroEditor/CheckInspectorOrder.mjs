@@ -127,22 +127,16 @@ const Sections = {
     Card("Wind field"),
   ],
   "height-fog": [
-    ".fog-sight",
-    ".fog-readings:last-of-type",
     Card("Fog settings"),
     Card("Visibility through fog"),
     Card("Medium"),
   ],
   "aerial-fog": [
-    ".fog-sight",
-    ".fog-readings:last-of-type",
     Card("Fog settings"),
     Card("Visibility through fog"),
     Card("Medium"),
   ],
   "local-fog": [
-    ".fog-sight",
-    ".fog-readings:last-of-type",
     Card("Fog settings"),
     Card("Visibility through fog"),
     Card("Medium"),

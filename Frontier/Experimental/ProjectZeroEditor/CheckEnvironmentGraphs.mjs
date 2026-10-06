@@ -58,10 +58,8 @@ try {
   const HeightVisibility = Card("Visibility through fog");
   assert.equal(await HeightVisibility.count(), 1);
   assert.equal(await HeightVisibility.locator(":scope > .fog-beam").count(), 1);
-  assert.equal(
-    await Page.locator(".fog-sight svg").getAttribute("data-fog-visual"),
-    "shared-abstract-fog-field",
-  );
+  assert.equal(await HeightVisibility.locator(".fog-dashboard-stat").count(), 6);
+  assert.equal(await Page.locator(".fog-sight").count(), 0);
   await HeightVisibility.getByLabel("Fog probe altitude", { exact: true }).fill(
     "1800",
   );

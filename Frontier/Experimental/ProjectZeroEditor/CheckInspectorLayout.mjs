@@ -140,7 +140,7 @@ try {
       ).count(),
       1,
     );
-    assert.equal(await Page.locator(".fog-reading").count(), 6);
+    assert.equal(await Page.locator(".fog-dashboard-stat").count(), 6);
     assert.equal(
       await Page.getByLabel("Fog probe distance", { exact: true }).count(),
       1,
@@ -154,21 +154,21 @@ try {
     );
     assert.equal(await Page.locator("iframe").count(), 0);
     assert(
-      await Page.locator(".fog-reading").evaluateAll((Nodes) =>
+      await Page.locator(".fog-dashboard-stat").evaluateAll((Nodes) =>
         Nodes.every((Node) => {
           const Style = getComputedStyle(Node);
           return (
-            Style.borderTopWidth === "1px" &&
-            Style.borderRadius === "18px" &&
+            Style.borderTopWidth === "0px" &&
+            Style.borderRadius === "0px" &&
             Node.scrollWidth <= Node.clientWidth
           );
         }),
       ),
     );
-    const Before = await Page.locator(".fog-readings").first().innerText();
+    const Before = await Page.locator(".fog-dashboard-stats").first().innerText();
     await Page.getByLabel("Density value", { exact: true }).fill("2");
     assert.notEqual(
-      await Page.locator(".fog-readings").first().innerText(),
+      await Page.locator(".fog-dashboard-stats").first().innerText(),
       Before,
     );
     await Open(Id);
@@ -180,7 +180,7 @@ try {
       await Page.getByRole("button", { name: "Enabled", exact: true }).click();
       await Page.getByLabel("Start value", { exact: true }).fill("250");
       assert.equal(
-        await Page.locator(".fog-readings")
+        await Page.locator(".fog-dashboard-stats")
           .nth(1)
           .locator("b")
           .first()
@@ -189,7 +189,7 @@ try {
       );
       await Page.getByLabel("Start value", { exact: true }).fill("0");
       assert.equal(
-        await Page.locator(".fog-readings")
+        await Page.locator(".fog-dashboard-stats")
           .nth(1)
           .locator("b")
           .first()
@@ -198,7 +198,7 @@ try {
       );
     } else {
       assert.equal(
-        await Page.locator(".fog-readings")
+        await Page.locator(".fog-dashboard-stats")
           .nth(1)
           .locator("b")
           .first()
@@ -207,7 +207,7 @@ try {
       );
       await Page.getByRole("button", { name: "Enabled", exact: true }).click();
       assert.equal(
-        await Page.locator(".fog-readings")
+        await Page.locator(".fog-dashboard-stats")
           .nth(1)
           .locator("b")
           .first()

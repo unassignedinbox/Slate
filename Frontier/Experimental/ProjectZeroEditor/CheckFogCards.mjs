@@ -56,10 +56,9 @@ try {
     );
     assert.equal(await Visibility.locator(":scope > .fog-beam").count(), 1);
     assert.equal(await Page.locator(".fog-instruments > .fog-beam").count(), 0);
-    assert.equal(
-      await Page.locator(".fog-sight svg").getAttribute("data-fog-visual"),
-      "shared-abstract-fog-field",
-    );
+    assert.equal(await Visibility.locator(".fog-dashboard-stats").count(), 1);
+    assert.equal(await Visibility.locator(".fog-dashboard-stat").count(), 6);
+    assert.equal(await Page.locator(".fog-sight,.fog-reading").count(), 0);
     assert.equal(
       await Page.locator('[data-reference-slice="details"]').count(),
       0,
@@ -72,7 +71,7 @@ try {
       assert.equal(await Medium.getByText(Label, { exact: true }).count(), 1);
     }
     Checks.push(
-      `${Id}: one shared abstract visual, Visibility/Light transport card, embedded Beam chamber, and live Medium map`,
+      `${Id}: one reused infographic Visibility card, six inline statistics, embedded Beam chamber, and live Medium map`,
     );
   }
 

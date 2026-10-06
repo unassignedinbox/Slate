@@ -338,11 +338,12 @@ try {
   }
   await Open("height-fog");
   assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
+  assert.equal(await Page.locator(".fog-dashboard-stat").count(), 6);
   assert.equal(
-    await Page.locator(".fog-reading").evaluateAll((Tiles) =>
-      Tiles.every((Tile) => getComputedStyle(Tile).borderRadius === "18px"),
+    await Page.locator(".fog-dashboard-stats").evaluate(
+      (Stats) => getComputedStyle(Stats).borderRadius,
     ),
-    true,
+    "16px",
   );
   assert.equal(
     await Page.locator(

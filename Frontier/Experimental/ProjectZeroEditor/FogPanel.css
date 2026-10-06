@@ -1,9 +1,39 @@
 .fog-instruments {
-  --fog-accent: #8fd0bf;
+  --fog-accent: #55d7ae;
   display: grid;
   gap: 12px;
-  margin-bottom: 18px;
   min-width: 0;
+  margin-bottom: 18px;
+}
+
+/* Restyle the existing shared Fog cards; do not add model-owned cards. */
+.fog-instruments > .property-card,
+.fog-medium-grid > .property-card {
+  margin: 0;
+  border: 1px solid #ffffff09;
+  border-radius: 22px;
+  background:
+    linear-gradient(145deg, #ffffff04, transparent 38%),
+    #1b1b1b;
+  box-shadow: inset 0 1px 0 #ffffff05;
+}
+
+.fog-instruments > .property-card > h3,
+.fog-medium-grid > .property-card > h3 {
+  position: relative;
+  padding-left: 12px;
+}
+
+.fog-instruments > .property-card > h3::before,
+.fog-medium-grid > .property-card > h3::before {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  left: 0;
+  width: 3px;
+  border-radius: 4px;
+  background: var(--fog-accent, #55d7ae);
+  content: "";
 }
 
 .fog-instrument {
@@ -11,306 +41,6 @@
   min-width: 0;
   overflow: hidden;
   padding: 18px;
-  border: 1px solid #ffffff0a;
-  border-radius: 22px;
-  background: #1b1b1b;
-  box-shadow: inset 0 1px 0 #ffffff06;
-}
-
-.fog-instrument h2 {
-  margin: 0;
-  color: #e4e4df;
-  font-size: 15px;
-  font-weight: 450;
-}
-
-.fog-instrument > small {
-  color: #81817d;
-  font-size: 9px;
-}
-
-.fog-instrument svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.fog-instrument svg text {
-  fill: #8d918f;
-  font: 8px sans-serif;
-}
-
-/* One shared Fog overview card, modelled after the supplied KPI infographics. */
-.fog-sight {
-  min-height: 274px;
-  padding: 0;
-  border-radius: 24px;
-  background:
-    radial-gradient(
-      circle at 78% 8%,
-      color-mix(in srgb, var(--fog-accent) 12%, transparent),
-      transparent 36%
-    ),
-    #1a1a1a;
-}
-
-.fog-overview-head {
-  position: absolute;
-  z-index: 3;
-  top: 18px;
-  right: 18px;
-  left: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: #b9bbb7;
-  font-size: 11px;
-}
-
-.fog-overview-head span {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.fog-overview-head i,
-.fog-card-heading h2 i {
-  width: 3px;
-  height: 15px;
-  border-radius: 4px;
-  background: var(--fog-accent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--fog-accent) 48%, transparent);
-}
-
-.fog-overview-head em {
-  padding: 5px 9px;
-  border-radius: 999px;
-  background: #ffffff09;
-  color: #777a76;
-  font-size: 8px;
-  font-style: normal;
-  letter-spacing: 0.9px;
-  text-transform: uppercase;
-}
-
-.fog-overview-metric {
-  position: absolute;
-  z-index: 3;
-  top: 54px;
-  right: 18px;
-  left: 18px;
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-}
-
-.fog-overview-metric strong {
-  color: #e8e8e3;
-  font-size: 43px;
-  font-weight: 300;
-  letter-spacing: -2.2px;
-  line-height: 1;
-}
-
-.fog-overview-metric small {
-  color: #777a76;
-  font-size: 12px;
-}
-
-.fog-overview-metric b {
-  margin-left: auto;
-  color: var(--fog-accent);
-  font-size: 22px;
-  font-weight: 300;
-}
-
-.fog-height-style > svg {
-  height: 274px;
-  opacity: 0.82;
-}
-
-.fog-height-style .fog-caption {
-  position: absolute;
-  z-index: 3;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  display: grid;
-  gap: 3px;
-  padding: 34px 15px 12px;
-  background: linear-gradient(transparent, #171717 48%);
-}
-
-.fog-height-style .fog-caption strong {
-  color: #d5d6d1;
-  font-size: 13px;
-  font-weight: 450;
-}
-
-.fog-height-style .fog-caption small {
-  display: flex;
-  justify-content: space-between;
-  gap: 7px;
-  color: #717571;
-  font-size: 8px;
-  letter-spacing: 0.25px;
-  line-height: 1.5;
-}
-
-.fog-height-style .fog-caption span {
-  color: var(--fog-accent);
-  font-size: 8px;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.fog-height-style svg text {
-  font-size: 7px;
-}
-
-/* Reused KPI tile component for every Fog model. */
-.fog-readings {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.fog-reading {
-  display: grid;
-  min-width: 0;
-  min-height: 116px;
-  gap: 8px;
-  overflow: hidden;
-  padding: 13px;
-  border: 1px solid #ffffff08;
-  border-radius: 18px;
-  background: linear-gradient(145deg, #ffffff04, transparent 42%), #1b1b1b;
-  box-shadow: inset 0 1px 0 #ffffff05;
-}
-
-.fog-reading-label {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 7px;
-  min-width: 0;
-}
-
-.fog-reading small {
-  color: #858783;
-  font-size: 8px;
-  letter-spacing: 0.75px;
-  line-height: 1.4;
-  text-transform: uppercase;
-}
-
-.fog-reading-label span {
-  flex: none;
-  color: var(--fog-accent);
-  font-size: 13px;
-}
-
-.fog-reading b {
-  color: #e2e2dd;
-  font-size: 24px;
-  font-weight: 300;
-  letter-spacing: -0.7px;
-  line-height: 1;
-  overflow-wrap: anywhere;
-}
-
-.fog-reading svg {
-  align-self: end;
-  height: 27px;
-  overflow: visible;
-}
-
-.fog-reading svg path:not(.fog-reading-area) {
-  fill: none;
-  stroke: var(--fog-accent);
-  stroke-width: 1.3;
-  vector-effect: non-scaling-stroke;
-}
-
-.fog-reading-area {
-  fill: color-mix(in srgb, var(--fog-accent) 10%, transparent);
-}
-
-.fog-reading svg circle {
-  fill: var(--fog-accent);
-  stroke: #1b1b1b;
-  stroke-width: 1.2;
-}
-
-.fog-reading-summary .fog-reading {
-  min-height: 100px;
-}
-
-.fog-reading-meter {
-  align-self: end;
-  height: 3px;
-  overflow: hidden;
-  border-radius: 4px;
-  background: #ffffff0a;
-}
-
-.fog-reading-meter i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--fog-accent);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--fog-accent) 50%, transparent);
-}
-
-.fog-reading-dots {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  align-self: end;
-}
-
-.fog-reading-dots i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--fog-accent);
-}
-
-.fog-reading-dots i:nth-child(2) {
-  opacity: 0.7;
-}
-.fog-reading-dots i:nth-child(3) {
-  opacity: 0.42;
-}
-.fog-reading-dots i:nth-child(4) {
-  opacity: 0.2;
-}
-
-.fog-instruments .property-card {
-  margin: 0;
-}
-
-.fog-instruments > .property-card {
-  border: 1px solid #ffffff08;
-  border-radius: 22px;
-  background: #1b1b1b;
-  box-shadow: inset 0 1px 0 #ffffff05;
-}
-
-.fog-instruments > .property-card > h3 {
-  position: relative;
-  padding-left: 11px;
-}
-
-.fog-instruments > .property-card > h3::before {
-  position: absolute;
-  top: 1px;
-  bottom: 1px;
-  left: 0;
-  width: 3px;
-  border-radius: 4px;
-  background: var(--fog-accent);
-  content: "";
 }
 
 .fog-card-heading {
@@ -318,26 +48,106 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 2px;
+  margin-bottom: 16px;
 }
 
 .fog-card-heading h2 {
   display: flex;
   align-items: center;
   gap: 9px;
+  margin: 0;
+  color: #e6e6e1;
+  font-size: 15px;
+  font-weight: 450;
 }
 
-.fog-card-heading span {
-  color: #71736f;
+.fog-card-heading h2 i {
+  width: 3px;
+  height: 15px;
+  border-radius: 4px;
+  background: var(--fog-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--fog-accent) 45%, transparent);
+}
+
+.fog-card-heading > span {
+  color: #727570;
   font-size: 8px;
-  letter-spacing: 0.7px;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
 }
 
-.fog-visibility-card .graph-metric {
-  margin: 3px 0 1px;
-  font-size: 46px;
-  letter-spacing: -2px;
+/* Statistics are content inside Visibility, not six additional cards. */
+.fog-dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  margin-bottom: 18px;
+  border: 1px solid #ffffff08;
+  border-radius: 16px;
+  background: #171717;
+}
+
+.fog-dashboard-stat {
+  display: grid;
+  min-width: 0;
+  min-height: 68px;
+  gap: 8px;
+  padding: 11px 12px;
+  border-right: 1px solid #ffffff08;
+  border-bottom: 1px solid #ffffff08;
+}
+
+.fog-dashboard-stat:nth-child(2n) {
+  border-right: 0;
+}
+
+.fog-dashboard-stat:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.fog-dashboard-stat small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  color: #7d817c;
+  font-size: 7px;
+  letter-spacing: 0.7px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.fog-dashboard-stat small i {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--fog-accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--fog-accent) 45%, transparent);
+}
+
+.fog-dashboard-stat small i.alert {
+  background: #e05e5e;
+  box-shadow: 0 0 8px #e05e5e55;
+}
+
+.fog-dashboard-stat strong {
+  overflow: hidden;
+  color: #e2e2dd;
+  font-size: 21px;
+  font-weight: 300;
+  letter-spacing: -0.6px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Preserve the existing Visibility graph and make it the main infographic. */
+.fog-visibility-card .graph-status {
+  margin: 13px 0 10px;
 }
 
 .fog-visibility-card .graph-status i {
@@ -345,26 +155,52 @@
   box-shadow: 0 0 9px color-mix(in srgb, var(--fog-accent) 55%, transparent);
 }
 
+.fog-visibility-card .graph-metric {
+  margin: 2px 0;
+  color: #edede8;
+  font-size: 47px;
+  font-weight: 300;
+  letter-spacing: -2.2px;
+}
+
+.fog-visibility-card .graph-metric small {
+  color: #747873;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.fog-visibility-card .fog-visibility-heading > p {
+  margin: 10px 0 16px;
+  color: #7d817c;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.fog-visibility-card .fog-visibility-sample {
+  padding: 9px 0;
+  border-top: 1px solid #ffffff08;
+  border-bottom: 1px solid #ffffff08;
+}
+
 .fog-visibility-card .parameter-plot {
-  margin-top: 7px;
+  margin-top: 8px;
   border-radius: 12px;
   background: linear-gradient(180deg, #ffffff02, transparent);
 }
 
-.fog-instrument > .fog-beam {
-  margin-top: 18px;
+.fog-visibility-card .graph-probes input {
+  border-color: #ffffff08;
+  background: #151615;
 }
 
+/* Beam Chamber remains part of Visibility as an inset, never a standalone card. */
 .fog-beam-card {
+  margin-top: 18px;
   padding: 14px;
   border: 1px solid #ffffff08;
   border-radius: 17px;
   background:
-    radial-gradient(
-      circle at 15% 50%,
-      color-mix(in srgb, var(--fog-accent) 8%, transparent),
-      transparent 46%
-    ),
+    radial-gradient(circle at 14% 50%, color-mix(in srgb, var(--fog-accent) 8%, transparent), transparent 44%),
     #171717;
 }
 
@@ -376,51 +212,56 @@
 }
 
 .fog-beam strong {
-  color: #d2d3ce;
+  color: #d5d6d1;
   font-size: 11px;
   font-weight: 450;
 }
 
 .fog-beam small {
-  color: #727572;
+  color: #727672;
   font-size: 8px;
 }
 
 .fog-beam svg {
+  display: block;
+  width: 100%;
+  height: auto;
   margin-top: 8px;
   border-radius: 9px;
 }
 
-/* Keep the shared Medium and model cards in the same infographic family. */
-.fog-medium-grid > .property-card {
-  border-color: #ffffff08;
-  border-radius: 22px;
-  background: #1b1b1b;
-  box-shadow: inset 0 1px 0 #ffffff05;
+.fog-beam svg text {
+  fill: #797d79;
+  font: 8px sans-serif;
 }
 
-.fog-medium-grid > .property-card > h3 {
-  position: relative;
-  padding-left: 11px;
+/* Existing Medium parameter map adopts the same dashboard treatment. */
+.fog-medium-grid .property-graph {
+  padding: 12px;
+  border: 1px solid #ffffff08;
+  border-radius: 16px;
+  background: #171717;
 }
 
-.fog-medium-grid > .property-card > h3::before {
-  position: absolute;
-  top: 1px;
-  bottom: 1px;
-  left: 0;
-  width: 3px;
-  border-radius: 4px;
-  background: var(--fog-accent, #8fd0bf);
-  content: "";
+.fog-medium-grid .parameter-plot {
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff02, transparent);
 }
 
 @media (min-width: 540px) {
-  .fog-readings {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .fog-dashboard-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .fog-reading-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .fog-dashboard-stat:nth-child(2n) {
+    border-right: 1px solid #ffffff08;
+  }
+
+  .fog-dashboard-stat:nth-child(3n) {
+    border-right: 0;
+  }
+
+  .fog-dashboard-stat:nth-last-child(-n + 3) {
+    border-bottom: 0;
   }
 }
