@@ -1,7 +1,7 @@
 # Frontier Texture
 
 An experimental, browser-resident texture authoring editor: paint an **OpenPBR Surface** texture set straight onto a model,
-with a full layer stack, Substance-style masks and SVG/text decals. It shares its shell, theme and conventions with the
+with a full layer stack, a surface bake behind it, Substance-style masks with a generator stack, and SVG/text decals. It shares its shell, theme and conventions with the
 [Frontier fluid app](https://github.com/unassignedinbox/Slate/tree/ed7d5dfbda50ee856ad27471767c1f06197a0c18/Frontier/Experimental/Fluid)
 — same DM Sans chrome, same rounded panels, same slider pills — but the subject is surfaces rather than gas.
 
@@ -118,6 +118,66 @@ mask no longer changes the view either.
 Generator and colour masks have no image behind them, so a pass of their own resolves whichever kind the layer carries
 into a preview target before the viewport samples it: what you see is what the compositor applied, inversion included.
 Masks are undoable with the rest of the stack, and a removed mask frees its image so the next one starts clean.
+
+### Reading the surface
+
+![Fourteen maps baked off a two-object scene, and the antialiasing filters side by side](readings.png)
+
+**A new scene opens by asking the model what shape it is.** Substance calls them bakers, Unreal calls them bake maps,
+Blender calls them passes and hides two of the best ones — pointiness and the bevel node — inside the shader graph.
+They are the same questions, so the dialog asks all of them at once: ticking a map, previewing it on the plate, and
+then spending the rest of the session asking the texture instead of the triangles. It is reachable later from **Read
+the surface…** in the scene pod and from the generator section on any mask.
+
+| Family | Maps | Where they come from |
+| --- | --- | --- |
+| Directions | Normal · Bevel · Bent · Face | Substance, Unreal, and Blender's bevel node |
+| Light | Ambient occlusion · Thickness | all three · Substance |
+| Shape | Curvature · Cavity · Position · World height | Substance's bakers, Blender's pointiness |
+| Layout | UV coordinate · Identity · Texel density · Coverage | Blender · Substance's ID map · Unreal's density tool · Substance's opacity |
+
+Nothing in that list promises anything the geometry cannot answer. There is no high-poly transfer in this editor and no
+vertex colour attribute on the surface, so neither is offered: a map that bakes to a flat grey is worse than a map that
+is not in the list, because somebody will spend an afternoon deciding it is their fault.
+
+**One walk of the triangles answers all of them.** The expensive part of a bake is not the arithmetic, it is finding
+out which triangle a texel belongs to and with what weights — and that answer is the same whether it is being asked for
+a normal or for an occlusion. So the rasterisation happens once per antialiasing sample and every requested map is
+accumulated inside it. The per-vertex work happens before any of it and happens once, which is why doubling the sheet
+costs nothing in ray time.
+
+**Antialiasing, with the filter you choose.** A bake is a point sample of a surface through a grid of texels, and a
+point sample of an edge is a staircase. One to thirty-six samples a texel, reconstructed through **box, tent, Gaussian,
+Mitchell, Catmull-Rom or Blackman-Harris**. Two details make the choice worth having:
+
+- The lattice is laid inside the kernel's **inscribed square**, so a four-by-four really is sixteen samples. A square
+  lattice measured against a round kernel throws its own corners away and quietly becomes thirteen.
+- **Negative weights are kept.** Mitchell and Catmull-Rom both undershoot past their first lobe, and that overshoot is
+  exactly what makes an edge read as sharp. The accumulated weight is divided out afterwards rather than assumed to be
+  one, and a texel whose weights cancel is left to the padding pass rather than divided by nothing.
+
+Below nine samples the kernel is clamped to the texel whatever the filter says, because four samples spread over two
+and a half texels is not antialiasing, it is noise — with Mitchell they can all land on the curve's own zero.
+
+**Bent normals and the bevel node.** The bent normal is the average of the occlusion rays that got away: on a flat wall
+it is the normal, in a corner it leans out of it, and a point that sees nothing keeps the normal it had rather than
+normalising a zero into a NaN. The bevel normal is Blender's idea — rounding an edge in the shading without rounding it
+in the geometry — done by averaging the normal field over a sphere of the bevel's width. It is gathered **by position**,
+because a hard corner is duplicated once per face and averaging along the index buffer would average a face with itself.
+A cylinder's cap meets its wall at ninety degrees and comes back at forty-five, which is the whole of what a bevel is.
+
+**A tangent-space direction stands on the face, not on the smooth normal.** Measured against its own shading normal
+every direction map in tangent space is the constant (0, 0, 1) — a flat blue sheet that is technically correct and
+worth nothing. Measured against the flat triangle it is the map you would have got by baking the model onto a faceted
+copy of itself, and the smoothing, the bevel and the lean of the bent normal all become something you can see. The face
+normal is the one that comes out blue, as it should.
+
+**Padding, and what the maps are for.** Every island ends somewhere and a renderer filtering a texel at the edge of one
+reaches past it, so the edge is walked outwards a ring of texels at a time, each new texel averaging the filled
+neighbours it can see. Coverage is excluded, because the whole point of that map is showing where the padding had to
+start. When the bake finishes, **the generators take it**: the stack on every mask drops its own 256² measurement and
+reads the sheet that was just taken, at the resolution it was taken at. The maps also write out as PNGs beside the
+texture set.
 
 ### Generators
 
@@ -816,6 +876,8 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `ChannelSpecification.js` | The twelve channels, their packing, encodings, blend and export orderings. |
 | `MaterialSpecification.js` | Surface constants, the conductor archive, material presets, the environments. |
 | `GeneratorSpecification.js` | The twenty-four generators, their families, glyphs, controls and parameter ranges. |
+| `ReadingSpecification.js` | The bake catalogue: fourteen maps, their families and heritage, the sample counts and the six reconstruction filters. |
+| `ReadingSolver.js` | One walk of the triangles per sample, every map accumulated inside it; bent and bevel normals, identity colours, padding. |
 | `SurfaceSolver.js` | Measuring the model: welded-mesh curvature, thickness, UV islands, and the rasterisation that puts every reading into texture space. |
 | `MaskSolver.js` | Solving a stack of generators into one sheet — the weathering recipes, the selections, and how entries combine. |
 | `FinishSpecification.js` | Procedural material families, their styles, named controls and the preset shelf. |
@@ -840,6 +902,7 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `DocumentSequence.js` | Up to four resident documents and their tabs. |
 | `ExportSequence.js` | Slot resolve, PNG emission, OpenPBR descriptor. |
 | `SheetCodec.js` | Painted sheets ⇄ PNG text: the writer, the reader, the blank test and the resample a saved document needs. |
+| `ReadingMetrics.mjs` | The bake: that every filter spends every sample, that a negative lobe survives, and that a known shape reads the way it should. |
 | `FieldMetrics.mjs` | What the surface measures to and what a stack of generators makes of it, against shapes whose answers are known. |
 | `*.mjs` | Node test files — surface maths, stack semantics, device behaviour and context recovery, against a recording WebGL2 stand-in. |
 
