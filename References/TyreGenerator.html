@@ -1456,7 +1456,7 @@ function buildPresetUI() {
   });
 }
 function applyPreset(i) {
-  const pr = PRESETS[i]; Object.assign(T, pr.tyre); P.name = pr.name; P.type = pr.type; P.layers = pr.layers.map(l => Object.assign({}, l)); UI.sel = -1; T.wear = 0; document.getElementById('wearSlider').value = 0;
+  const pr = PRESETS[i]; Object.assign(T, pr.tyre); P.name = pr.name; P.type = pr.type; P.layers = pr.layers.map(cloneLayer); UI.sel = -1; T.wear = 0; document.getElementById('wearSlider').value = 0;
   refreshAll();
 }
 function refreshAll() { buildTyreUI(); buildRimUI(); buildDecalUI(); buildPresetUI(); buildLayerUI(); document.getElementById('pName').value = P.name; document.getElementById('pType').value = P.type; rebuild(); }
@@ -1555,6 +1555,11 @@ function buildShapeEditorUI(props, ly) {
   });
   draw();
 }
+// Shallow Object.assign is fine for every original layer type (all-primitive fields), but
+// `shape` layers carry a mutable `points` array that the shape editor edits in place (dragging
+// a vertex, inserting/deleting points) - a plain shallow copy would leave the duplicate/mirrored
+// layer sharing that same array, so editing one outline would silently corrupt the other.
+function cloneLayer(ly) { const c = Object.assign({}, ly); if (Array.isArray(c.points)) c.points = c.points.map(p => p.slice()); return c; }
 function buildLayerUI() {
   const box = document.getElementById('layers'); box.innerHTML = '';
   P.layers.forEach((ly, i) => {
@@ -1563,7 +1568,7 @@ function buildLayerUI() {
     el.innerHTML = `<span class="ic" style="background:${def.color}"></span><span class="nm">${def.label} <small>${desc}</small></span><button title="duplicate">⧉</button><button title="up">↑</button><button title="down">↓</button><button title="delete">✕</button>`;
     const [dup, up, dn, del] = el.querySelectorAll('button');
     el.onclick = () => { UI.sel = i; buildLayerUI(); };
-    dup.onclick = e => { e.stopPropagation(); P.layers.splice(i + 1, 0, Object.assign({}, ly)); UI.sel = i + 1; buildLayerUI(); schedule(); };
+    dup.onclick = e => { e.stopPropagation(); P.layers.splice(i + 1, 0, cloneLayer(ly)); UI.sel = i + 1; buildLayerUI(); schedule(); };
     up.onclick = e => { e.stopPropagation(); if (i > 0) { [P.layers[i - 1], P.layers[i]] = [P.layers[i], P.layers[i - 1]]; UI.sel = i - 1; buildLayerUI(); schedule(); } };
     dn.onclick = e => { e.stopPropagation(); if (i < P.layers.length - 1) { [P.layers[i + 1], P.layers[i]] = [P.layers[i], P.layers[i + 1]]; UI.sel = i + 1; buildLayerUI(); schedule(); } };
     del.onclick = e => { e.stopPropagation(); P.layers.splice(i, 1); UI.sel = -1; buildLayerUI(); schedule(); };
@@ -1583,7 +1588,7 @@ function buildLayerUI() {
   }
   const mir = document.createElement('div'); mir.className = 'btns';
   mir.innerHTML = '<button class="small">Mirror layer across centre</button>'; mir.querySelector('button').onclick = () => {
-    const c = Object.assign({}, ly); if ('pos' in c) c.pos = -c.pos; if ('from' in c) { const f = -c.to, tt = -c.from; c.from = f; c.to = tt; } if ('angle' in c && !c.mirror) c.angle = -c.angle; if ('phase' in c) c.phase = (c.phase + 0.5) % 1;
+    const c = cloneLayer(ly); if ('pos' in c) c.pos = -c.pos; if ('from' in c) { const f = -c.to, tt = -c.from; c.from = f; c.to = tt; } if ('angle' in c && !c.mirror) c.angle = -c.angle; if ('phase' in c) c.phase = (c.phase + 0.5) % 1;
     P.layers.splice(UI.sel + 1, 0, c); UI.sel++; buildLayerUI(); schedule();
   }; props.appendChild(mir);
 }
