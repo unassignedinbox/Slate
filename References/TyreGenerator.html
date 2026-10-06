@@ -189,13 +189,8 @@
   </main>
 
   <aside id="right">
-    <div class="card" style="--bar:var(--green)">
-      <h2>Tread presets <span class="r" id="presetCount"></span></h2>
-      <div id="presets"></div>
-      <div class="btns"><button id="randomBtn" class="primary">Random tyre</button><button id="randomName">New name</button></div>
-    </div>
     <div class="card" style="--bar:var(--yellow)">
-      <h2>Tread editor</h2>
+      <h2>Tread editor <span class="r" style="font-weight:400;opacity:.7">design your own tread</span></h2>
       <div class="row"><label>Name</label><input type="text" id="pName"></div>
       <div class="row"><label>Type</label><select id="pType"></select></div>
       <div class="row"><label>Add layer</label><select id="addLayer"></select><button id="addLayerBtn" class="small">Add</button></div>
@@ -203,7 +198,12 @@
     </div>
     <div class="card" style="--bar:var(--red)">
       <h2>Layer properties</h2>
-      <div id="layerProps" class="hint">Select a layer to edit it. Layers are drawn in order; deeper cuts win.<br>Across-position <code>-1…1</code> = tread edges, <code>±1.3</code> reaches the shoulder.</div>
+      <div id="layerProps" class="hint">Select a layer to edit it. Layers are drawn in order; deeper cuts win.<br>Across-position <code>-1…1</code> = tread edges, <code>±1.3</code> reaches the shoulder.<br>Pick <b>Custom shape</b> in "Add layer" above for the 2D draw/mirror/move shape editor.</div>
+    </div>
+    <div class="card" style="--bar:var(--green)">
+      <h2>Tread presets <span class="r" id="presetCount"></span></h2>
+      <div id="presets"></div>
+      <div class="btns"><button id="randomBtn" class="primary">Random tyre</button><button id="randomName">New name</button></div>
     </div>
   </aside>
 
@@ -692,6 +692,20 @@ function exPolygons(paths) {                               // → [{outer:[[x,y]
   const L = CL(); const c = new L.Clipper(); c.AddPaths(paths, L.PolyType.ptSubject, true); const tree = new L.PolyTree(); c.Execute(L.ClipType.ctUnion, tree, L.PolyFillType.pftNonZero, L.PolyFillType.pftNonZero);
   return L.JS.PolyTreeToExPolygons(tree).map(ex => ({ outer: ex.outer.map(p => [p.X / CS, p.Y / CS]), holes: ex.holes.map(h => h.map(p => [p.X / CS, p.Y / CS])) }));
 }
+// Intersection that returns fully-resolved {outer,holes} pieces directly (one Clipper object,
+// one PolyTree walk) instead of chaining inter()+exPolygons() through a second integer
+// round-trip. Crucially this is an EXACT polygon boolean, so unlike a naive edge-by-edge
+// rectangle clip it is correct even when the subject touches the clip rectangle in several
+// disconnected places (a shallow-angle groove can cross the same small grid cell more than
+// once) - it comes back as the right number of separate pieces instead of one polygon with a
+// phantom bridge edge connecting them, which was producing both holes (bridge cuts off area
+// that should be included) and overlapping/degenerate faces (bridge wrongly includes area)
+// wherever that happened.
+function interEx(subjectPaths, clipPaths) {
+  const L = CL(); const c = new L.Clipper(); c.AddPaths(subjectPaths, L.PolyType.ptSubject, true); c.AddPaths(clipPaths, L.PolyType.ptClip, true);
+  const tree = new L.PolyTree(); c.Execute(L.ClipType.ctIntersection, tree, L.PolyFillType.pftNonZero, L.PolyFillType.pftNonZero);
+  return L.JS.PolyTreeToExPolygons(tree).map(ex => ({ outer: ex.outer.map(p => [p.X / CS, p.Y / CS]), holes: ex.holes.map(h => h.map(p => [p.X / CS, p.Y / CS])) }));
+}
 // Every groove layer as Clipper paths with its depth
 function patternPolygons(pattern, d, treadDepth) {
   const th = d.treadHalf, circ = d.circ, A = d.acrossHalf; const out = []; const bars = [];
@@ -780,28 +794,6 @@ function scanlineCrossings(ring, Y) {
   xs.sort((p, q) => p - q); return xs;
 }
 function insideAtX(crossings, x) { let lo = 0, hi = crossings.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (crossings[mid] < x) lo = mid + 1; else hi = mid; } return (lo % 2) === 1; }
-// Fast Sutherland–Hodgman clip of a simple polygon against an axis-aligned rectangle (no
-// Clipper/integer round-trip needed). Used for the common boundary-cell case where no hole
-// touches the cell; this keeps the quad grid fast even on dense patterns with thousands of
-// small boundary cells (holes still fall back to the exact ClipperLib boolean below).
-function shClipEdge(poly, inside, interp) {
-  if (!poly.length) return poly; const out = [];
-  for (let i = 0; i < poly.length; i++) {
-    const curr = poly[i], prev = poly[(i + poly.length - 1) % poly.length];
-    const ci = inside(curr), pi = inside(prev);
-    if (ci >= -1e-9) { if (pi < -1e-9) out.push(interp(prev, curr, pi / (pi - ci))); out.push(curr); }
-    else if (pi >= -1e-9) out.push(interp(prev, curr, pi / (pi - ci)));
-  }
-  return out;
-}
-function clipPolyToRect(poly, xs, ys, xe, ye) {
-  let out = poly;
-  out = shClipEdge(out, p => p[0] - xs, (a, b, t) => [xs, a[1] + (b[1] - a[1]) * t]);
-  out = shClipEdge(out, p => xe - p[0], (a, b, t) => [xe, a[1] + (b[1] - a[1]) * t]);
-  out = shClipEdge(out, p => p[1] - ys, (a, b, t) => [a[0] + (b[0] - a[0]) * t, ys]);
-  out = shClipEdge(out, p => ye - p[1], (a, b, t) => [a[0] + (b[0] - a[0]) * t, ye]);
-  return out;
-}
 function polyArea(poly) { let a = 0; for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length]; a += p[0] * q[1] - q[0] * p[1]; } return Math.abs(a) / 2; }
 function buildPolyTread(d, pmGeo, wantWire) {
   const { pieces, levels } = treadRegions(P, d, T.treadDepth, T.wear);
@@ -873,6 +865,7 @@ function buildPolyTread(d, pmGeo, wantWire) {
     const holeBuckets = new Map();
     for (const h of holeInfo) { const b0 = Math.max(ci0, Math.floor(h.bbox[0] / colWidth) - 1), b1 = Math.min(ci1 - 1, Math.floor(h.bbox[2] / colWidth) + 1); for (let b = b0; b <= b1; b++) { if (!holeBuckets.has(b)) holeBuckets.set(b, []); holeBuckets.get(b).push(h); } }
     const noHoles = [];
+    const outerPath = toPath(ex.outer);   // Clipper integer path for the outer ring, built once per ex (not per cell)
     for (let ci = ci0; ci < ci1; ci++) {
       const xs = X_EDGES[ci], xe = X_EDGES[ci + 1], c0 = ci - ci0, c1 = c0 + 1;
       const holeCandidates = holeBuckets.get(ci) || noHoles;
@@ -887,24 +880,18 @@ function buildPolyTread(d, pmGeo, wantWire) {
         if (allOut && !overlappingHoles.length && !outerTouches) continue;                 // fully outside the piece
         if (allIn && !overlappingHoles.length && !outerTouches) { emitQuad(xs, ys, xe, ye, hz); continue; }   // fully inside: clean quad
         const cellArea = (xe - xs) * (ye - ys);
-        if (!overlappingHoles.length) {
-          // Fast path (no local hole in this cell): plain Sutherland–Hodgman clip, no ClipperLib round-trip.
-          const clipped = clipPolyToRect(ex.outer, xs, ys, xe, ye);
-          if (clipped.length < 3) continue;
-          const area = polyArea(clipped);
-          if (area < cellArea * 1e-7) continue;
-          if (clipped.length === 4 && Math.abs(area - cellArea) < cellArea * 1e-6) { emitQuad(xs, ys, xe, ye, hz); continue; }
-          emitTriPatch(clipped, [], hz);
-        } else {
-          // Slow, exact path: a hole boundary also passes through this cell — use the real boolean.
-          for (const h of overlappingHoles) if (!h.path) h.path = toPath(h.ring);
-          const clipSubject = [toPath(ex.outer), ...overlappingHoles.map(h => h.path)];
-          const clipped = inter(clipSubject, [rectPath(xs, ys, xe, ye)]);
-          if (!clipped.length) continue;
-          const cellAreaCS = cellArea * CS * CS; let totalArea = 0; for (const p of clipped) totalArea += Math.abs(CL().Clipper.Area(p));
-          if (clipped.length === 1 && clipped[0].length === 4 && Math.abs(totalArea - cellAreaCS) < cellAreaCS * 1e-6) { emitQuad(xs, ys, xe, ye, hz); continue; }
-          for (const subEx of exPolygons(clipped)) emitTriPatch(subEx.outer, subEx.holes, hz);   // boundary cell: exact clipped outline, localised fan
-        }
+        // Boundary cell: always resolve it with the exact polygon boolean, never the naive
+        // Sutherland-Hodgman rect clip. A thin/shallow-angle groove boundary can cross the same
+        // small grid cell more than once (two disjoint pieces of the outline inside one cell);
+        // the exact boolean correctly comes back as separate ex-polygons in that case, where the
+        // naive clip would instead bridge them with a phantom edge - producing exactly the holes
+        // and overlapping/degenerate faces this was causing.
+        for (const h of overlappingHoles) if (!h.path) h.path = toPath(h.ring);
+        const clipSubject = overlappingHoles.length ? [outerPath, ...overlappingHoles.map(h => h.path)] : [outerPath];
+        const pieces2 = interEx(clipSubject, [rectPath(xs, ys, xe, ye)]);
+        if (!pieces2.length) continue;
+        if (pieces2.length === 1 && pieces2[0].holes.length === 0 && pieces2[0].outer.length === 4 && Math.abs(polyArea(pieces2[0].outer) - cellArea) < cellArea * 1e-6) { emitQuad(xs, ys, xe, ye, hz); continue; }
+        for (const subEx of pieces2) emitTriPatch(subEx.outer, subEx.holes, hz);   // boundary cell: exact clipped outline(s), localised fan
       }
     }
   }
@@ -927,18 +914,22 @@ function buildPolyTread(d, pmGeo, wantWire) {
     let ci0 = 0; while (ci0 < xCount && X_EDGES[ci0 + 1] <= x0) ci0++;
     let ci1 = ci0; while (ci1 < xCount && X_EDGES[ci1] < x1) ci1++;
     const out = [];
-    // Plain float Sutherland-Hodgman clipping (same primitive the per-cell fast path already
-    // uses) instead of a ClipperLib round-trip: it is exact, so a cut placed exactly on an
-    // X_EDGES line produces bit-identical boundary coordinates in both neighbouring strips -
-    // no float/integer rounding to nudge a corner across a grid line and spuriously turn a
-    // clean interior quad into a boundary triangle patch.
+    const outerPath = toPath(ex.outer), holePaths = ex.holes.map(toPath);
+    const subject = [outerPath, ...holePaths];
+    // Exact ClipperLib intersection per strip (not a naive per-ring Sutherland-Hodgman clip):
+    // a wide, highly re-entrant outline (the kind that actually triggers this chopping path) can
+    // easily cross a single strip's boundary in several disconnected places, and/or a hole can
+    // get sliced into more than one piece by the cut - a naive clip can't represent that and
+    // would bridge the pieces with a phantom edge, while clipping the outer ring and each hole
+    // ring separately (as this used to) can also mis-pair a split hole with the wrong outer
+    // fragment. Clipping the whole {outer + holes} subject against the strip in one boolean and
+    // re-deriving outer/hole nesting from the result (exPolygons) sidesteps both problems - the
+    // X_EDGES-aligned cut still produces bit-identical coordinates between neighbouring strips.
     for (let ci = ci0; ci < ci1; ci += STRIP_COLS) {
       const xs = X_EDGES[ci], xe = X_EDGES[Math.min(ci + STRIP_COLS, ci1)];
-      const outer = clipPolyToRect(ex.outer, xs, y0 - 1, xe, y1 + 1);
-      if (outer.length < 3) continue;
-      const holes = [];
-      for (const h of ex.holes) { const hb = bboxOf(h); if (hb[2] < xs || hb[0] > xe) continue; const ch = clipPolyToRect(h, xs, y0 - 1, xe, y1 + 1); if (ch.length >= 3) holes.push(ch); }
-      out.push({ outer, holes });
+      const clipped = inter(subject, [rectPath(xs, y0 - 1, xe, y1 + 1)]);
+      if (!clipped.length) continue;
+      for (const subEx of exPolygons(clipped)) out.push(subEx);
     }
     return out;
   }
