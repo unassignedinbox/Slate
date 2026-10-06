@@ -13,7 +13,9 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-Run `npm run verify:published` for the current immutable GitHack URL. Choose **Open the page** if GitHack shows its notice. Direct studies use `?material=cognac-leather` or `?material=crocodile-belly-leather`.
+**[Open v6.3 — Cognac Leather](https://raw.githack.com/unassignedinbox/Slate/c81e5f0ffeae19ff0cae5439b1c801244f46db03/site/index.html?material=cognac-leather)** · **[Crocodile Belly Leather](https://raw.githack.com/unassignedinbox/Slate/c81e5f0ffeae19ff0cae5439b1c801244f46db03/site/index.html?material=crocodile-belly-leather)**
+
+Choose **Open the page** if GitHack shows its notice. Eleven targeted leather, scratch, botanical, bounds/shader and standalone tests passed. Publication verification matched all 1,553,707 bytes (SHA-256 `0d9eb04a7410ef599ce67a0e5b55543d14b2238b549ce790a506092c4d6606d8`). This verifies the GitHub artifact, not hosted-browser execution or visual realism. Run `npm run verify:published` to repeat verification.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
