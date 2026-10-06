@@ -57,5 +57,5 @@ PASS coplanar card continuity at shipping card/volume resolutions
 PASS production SDF pipelines: populated three-level fields, emissive GI, bounce cache, GI toggle, moving instances, history reset, solar shadows, camera re-snapping, recreation, mesh reflection, thin/solid refraction, Beer attenuation and resize
 PASS Vulkan validation including synchronization and resource destruction: zero errors
 
-Execution seconds: 842.62
+Execution seconds: 1099.87
 Exit code: 0
