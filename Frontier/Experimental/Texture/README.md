@@ -68,7 +68,10 @@ layer's sheet resamples what is already painted on it rather than discarding it,
 lighten, difference, linear-burn), drag reorder, folders, isolate, duplicate, delete, double-click rename, and a mask per
 layer. Each row is
 a card: a thumbnail of what the layer actually holds — its coverage blitted down to 64² on the GPU and read back, over a
-checkerboard where the layer is transparent, falling back to the kind's glyph until something is painted — its kind,
+checkerboard where the layer is transparent, falling back to the kind's glyph until something is painted. It is the
+**same picture the layer panel enlarges**, drawn the same way, so the stack and the panel are never two different
+previews of one layer; a mask gets a plate of its own pinned to the corner of that one, ringed while the brush is
+aimed at it, rather than taking its place. Then the row's kind,
 blend and channel count, the opacity read large, and a pair of chips —
 **Content** and **Mask** — naming where the next stroke will land. The eye and the bin sit at the right of the row and
 appear on hover, so hiding or deleting a layer is one click on the layer you are already pointing at; <kbd>Del</kbd>
@@ -870,7 +873,8 @@ front of it.
 
 **A blank sheet looks blank.** The plate in the layer panel is a window onto what is painted, so it is checkered like
 one — neutral greys on near-black, not a transparency grid tinted with the layer's accent, which read as orange paint
-on an empty layer. When the read-back behind it holds no ink at all, the plate says so in words under the kind's own
+on an empty layer. The row in the stack is the same window at 46px, down to the checker: one read-back, two sizes,
+and the mask beside the sheet in both places instead of swapping with it. When the read-back behind it holds no ink at all, the plate says so in words under the kind's own
 glyph: *Nothing painted yet*, or *Painted from values* for the layers that have no sheet to fill. And the cards in the
 panel stand further apart, so a group ends where it looks like it ends.
 

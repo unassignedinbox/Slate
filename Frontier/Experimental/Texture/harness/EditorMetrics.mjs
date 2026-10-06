@@ -297,6 +297,23 @@ await Settle(Window, 3);
 Check("adding a mask puts the mask beside the sheet", Plates().length === 2, String(Plates().length));
 Check("and the second plate is the mask", Plates()[1].dataset.thumbnailTarget === "mask");
 
+// 🔴 One layer, one picture. The row and the panel read the same sheet back, and the mask has a plate of its own in
+//    both places — a row that swapped its picture for the mask would be a second, different preview of one layer.
+const RowPlate = Find(`#layer-stack [data-layer="${Panel.ActiveLayer.Identifier}"] .layer-swatch`);
+Check("the stack row carries a plate of the layer's own sheet", RowPlate?.dataset.thumbnail === Panel.ActiveLayer.Identifier);
+Check("read back at the row's size", !RowPlate?.dataset.thumbnailSize && !RowPlate?.dataset.thumbnailTarget);
+Check("and the mask hangs off its corner", !!RowPlate?.querySelector(".layer-mask-chip[data-thumbnail-target=\"mask\"]"));
+Check("each plate owning its own canvas", RowPlate?.querySelectorAll("canvas").length === 2, String(RowPlate?.querySelectorAll("canvas").length));
+Panel.SetPaintTarget("mask");
+await Settle(Window, 2);
+const Aimed = Find(`#layer-stack [data-layer="${Panel.ActiveLayer.Identifier}"] .layer-swatch`);
+Check(
+    "aiming at the mask rings the chip rather than taking the sheet's plate",
+    !Aimed?.dataset.thumbnailTarget && !!Aimed?.querySelector(".layer-mask-chip.aimed"),
+);
+Panel.SetPaintTarget("coverage");
+await Settle(Window, 2);
+
 // The environment pod: nine generated skies with their own faces on them, a sun, and a rig of three lights.
 Press(Find("#environment-button"));
 await Settle(Window, 2);

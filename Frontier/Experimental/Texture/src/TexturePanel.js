@@ -1457,16 +1457,19 @@ export class TexturePanel
     DrawThumbnails()
     {
         if (!this.Integrator.Ready) return;
-        const Masking = this.Projection.Brush.Target === "mask";
         for (const Holder of SelectAll("[data-thumbnail]"))
         {
             const Layer = this.Layers.find((Entry) => Entry.Identifier === Holder.dataset.thumbnail);
-            const Canvas = Holder.querySelector("canvas");
+            // 🔴 Its own canvas, not the first one under it. A stack row holds the sheet and, when the layer has
+            //    one, the mask chip pinned to its corner — and a plain querySelector would hand the chip's plate
+            //    the sheet's image.
+            const Canvas = Holder.querySelector(":scope > canvas");
             if (!Layer || !Canvas) continue;
-            // A holder can name the sheet it wants and how big it wants it; a stack row names neither and gets the
-            // 64² plate that follows the brush target, which is what every row has always drawn.
+            // A holder can name the sheet it wants and how big it wants it. A stack row names neither and gets the
+            // 64² read-back of the layer's own sheet — the same image the inspector enlarges to 192², never a
+            // different one: the mask has a plate of its own in both places rather than taking this one over.
             const Asked = Holder.dataset.thumbnailTarget;
-            const Target = Asked || (Masking && Layer.Mask.Kind === "stroke" ? "mask" : "coverage");
+            const Target = Asked || "coverage";
             const Preview = this.Integrator.PreviewLayer(Layer, Target, Number(Holder.dataset.thumbnailSize) || 64);
             const Context = Preview ? Canvas.getContext("2d") : null;
             const Size = Preview?.Size || 0;
@@ -2767,6 +2770,14 @@ export class TexturePanel
                     }
                     <span class="layer-swatch" style="--swatch:${Swatch}" ${Folder ? "" : `data-thumbnail="${Layer.Identifier}"`}>
                         ${Folder ? "" : '<canvas width="64" height="64" aria-hidden="true"></canvas>'}${Icon(Kind.Glyph)}
+                        ${
+                            Carried && !Folder
+                                ? `<span class="layer-mask-chip ${Masking && Selected ? "aimed" : ""}" data-thumbnail="${Layer.Identifier}"
+                                         data-thumbnail-target="mask" title="Mask · ${Escape(MaskNote)}">
+                                       <canvas width="64" height="64" aria-hidden="true"></canvas>
+                                   </span>`
+                                : ""
+                        }
                     </span>
                     <span class="layer-copy">
                         <span class="layer-name">${Escape(Layer.Name)}</span>
@@ -3498,6 +3509,12 @@ export class TexturePanel
                 "targeted",
                 Chip.dataset.chip === (Masking ? "mask" : "content") && Chip.dataset.chipLayer === this.Project.Selection,
             ),
+        );
+        // The row keeps showing the layer's own sheet whichever side is being painted, so the ring on the mask chip
+        // is what says the next stroke lands in the mask. Toggled here rather than redrawn, because switching sides
+        // is something a hand does mid-stroke.
+        SelectAll(".layer-mask-chip").forEach((Chip) =>
+            Chip.classList.toggle("aimed", Masking && Chip.dataset.thumbnail === this.Project.Selection),
         );
         SelectAll(".target-switch button").forEach((Button) =>
         {
