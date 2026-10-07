@@ -1,4 +1,4 @@
-# Alloy 07.7 — Pattern & Material Studio
+# Alloy 07.8 — Pattern & Material Studio
 
 A real-time procedural material editor built with React, Vite and Three.js. Most library surfaces are analytic. **V7 adds a generated SVG leather atlas and editable SVG/image pattern sources**, with procedural material shading. No external HDRIs or downloaded 3D assets are required. The charcoal interface uses rounded panels and desaturated accents. Fonts are self-hosted.
 
@@ -13,11 +13,9 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-**[Open v7.7 — Geometric constructions](https://raw.githack.com/unassignedinbox/Slate/6352aeb409684398d414f5d56f85e18decff0640/site/index.html?material=natural-cotton&studio=pattern&pattern=truchet-circuits)** · **[Single-color stitches](https://raw.githack.com/unassignedinbox/Slate/6352aeb409684398d414f5d56f85e18decff0640/site/index.html?material=natural-cotton&studio=pattern&pattern=chain-stitch)** · **[Single-color weaves](https://raw.githack.com/unassignedinbox/Slate/6352aeb409684398d414f5d56f85e18decff0640/site/index.html?material=natural-cotton&studio=pattern&pattern=basket-weave&view=3d)**
+**V7.8 — Geometric Set 02.** The immutable release link is pinned after the rebuilt standalone artifact is verified.
 
-Choose **Open the page** if GitHack shows its notice. The previous rug collections and the 200-design claim have been withdrawn. Functional tests are not a certificate of visual realism or user approval. `npm run verify:published` checks the committed GitHub artifact byte-for-byte, not hosted-browser execution.
-
-V7.7 passed 21 construction/document checks, seven targeted browser checks and the final offline standalone test. Publication verification matched **1,934,770 bytes**, SHA-256 `eebb33bb263186da6fb75d1086d741839751ae2cc5696d59a15f5577e3937e3f`.
+Choose **Open the page** if GitHack shows its notice. Publication verification compares the GitHub artifact byte-for-byte; it does not substitute for a hosted-browser check. Functional tests do not certify visual realism.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
@@ -120,6 +118,8 @@ Shader variants now compile the material-family ID as a constant, so drivers can
 ## Pattern studio and vector leather (v7)
 
 Open **Pattern studio** in the top navigation (or append `?studio=pattern`). Design with vector motifs, freehand/SVG paths, grouped SVG imports and embedded PNG/JPEG/WebP images. Transform/layer controls, undo/redo, material assignments and portable exports remain available.
+
+**V7.8 adds Geometric Set 02: eight constructions**, with the previously approved six retained unchanged. Open **Geometric constructions** and search **Set 02** for linked racetrack loops, hexagon-square junctions, a pinwheel square tessellation, a tangram mosaic, Sierpinski lace, a vesica net, stepped corner inlays and a ruled saddle lattice. All are editable vectors with repeat, color, finish, SVG/JSON and material-export support. No new rug collections or palette-count variants were added.
 
 **V7.7 removes the rejected rug, African and Islamic collections from the public library and deep links**, including African Diamond Carpet, Islamic Medallion Carpet, Medallion rug and Golden Cube Fade. Existing saved documents retain their embedded artwork and editing controls. Legacy factories remain for compatibility, not public recommendations.
 

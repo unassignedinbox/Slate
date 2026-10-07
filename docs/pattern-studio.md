@@ -1,12 +1,31 @@
-# Pattern studio — v7.7
+# Pattern studio — v7.8
 
 This is a **hybrid vector/procedural material workflow**, not the previous zero-input-map claim. Existing paint, scratch and botanical families remain analytic. All five leather presets now share one generated SVG height atlas; pattern documents can contain vector shapes, sanitized SVG groups and embedded user images. No reference photographs are shipped as leather maps.
+
+## V7.8 — Geometric Set 02
+
+Eight additional geometric constructions join the existing six. Choose **Geometric constructions**, then search **Set 02** to isolate the new cards. The original six documents are regression-checked against the approved V7.7 release. Stitches, weaves and existing material shaders are unchanged.
+
+| Construction                 | Geometry                                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------- |
+| Linked racetrack loops       | Two closed stadium paths, four crossings with alternating upper passes and continuous inset lines |
+| Hexagon-square junctions     | Regular hexagons and squares with triangular gaps, 3.4.6.4 vertex arrangement                     |
+| Pinwheel square tessellation | Pythagorean square tiling with 3:1 large/small edges                                              |
+| Tangram mosaic               | Seven-piece square dissection: five triangles, a square and a parallelogram                       |
+| Sierpinski lace              | Three recursive subdivisions on an equilateral-triangle lattice                                   |
+| Vesica net                   | Lens regions bounded by intersecting equal-radius circles                                         |
+| Stepped corner inlay         | Eight alternating L-shaped courses around a square core                                           |
+| Ruled saddle lattice         | Straight-line fans forming curved envelopes; no gradient-based illusion                           |
+
+These are constructions, not separately counted palettes or orientations. Colors stay editable; alternate orientations inside a repeat remain part of the same design. Hexagonal and triangular lattices retain the physical artboard aspect instead of stretching regular polygons to a square. The new set uses no images, external assets or retired rug recipes.
+
+Checks cover full path preservation, JSON and shader exports, the original six remaining unchanged, exact tangram areas and coverage, non-overlapping L courses and polygon cells, physical polygon regularity, raster repeat seams against unwrapped fields, and the loop crossings/inset-line continuity. Browser checks cover all eight cards, editing/undo/import and actual 3D preview. Visual inspection is separate from these functional checks; none is a claim of artistic approval.
 
 ## V7.7 — corrected public library
 
 Rejected rug, African and Islamic collections are removed, including African Diamond Carpet, Islamic Medallion Carpet, Medallion rug and Golden Cube Fade. Old starter URLs no longer resolve to these designs. The 200-structure claim and filters are withdrawn; no smaller quota is presented as completion of the earlier request.
 
-The current library has 58 nonblank family cards plus Blank: six new geometric constructions, ten weave families, ten stitches, and the retained geometric/printed/original starters, including Diamond Dissolve. This is a transparent inventory, not a claim that all entries are equally complex or user-approved. Backgrounds, palettes and settings do not create extra cards.
+The current library has 66 nonblank family cards plus Blank: fourteen geometric constructions, ten weave families, ten stitches, and the retained geometric/printed/original starters, including Diamond Dissolve. This is a transparent inventory, not a claim that all entries are equally complex or user-approved. Backgrounds, palettes and settings do not create extra cards.
 
 ### Geometric additions
 
@@ -131,7 +150,9 @@ The six-channel ZIP includes the embedded document in `material.json`. Patterned
 
 ## Checks
 
-V7.7 validation completed 21 document/construction checks and seven targeted browser checks: library/palette/stitch editing; the monochrome weave/draft UI; saved-rug Apply behavior; stitch height/normal baking; image/SVG imports with save/undo/shader export; deep links/focus/generation; and saved-composition editing/roundtrips. The final rebuilt standalone page also passed its offline rendering/export test with external assets blocked. This is a targeted selection, not the complete historical test suite.
+V7.8 validation passed nine Set 02 checks, 21 existing document/textile/compatibility checks, and the rebuilt offline standalone test. This includes factory construction of all eight new designs from the independent shader export. The new previews were also inspected visually. This is targeted validation, not a claim that the entire historical suite was rerun.
 
+
+V7.7 validation completed 21 document/construction checks and seven targeted browser checks: library/palette/stitch editing; the monochrome weave/draft UI; saved-rug Apply behavior; stitch height/normal baking; image/SVG imports with save/undo/shader export; deep links/focus/generation; and saved-composition editing/roundtrips. The final rebuilt standalone page also passed its offline rendering/export test with external assets blocked. This is a targeted selection, not the complete historical test suite.
 
 Pattern tests cover document bounds, source identity, SVG sanitization, image/vector import, editing, undo/redo, local persistence, independent exported-shader GPU compilation, actual roughness/metalness/height bake values, repeat-edge continuity and leather atlas gutters. Leather is tested on both swatch and flat panel. The self-contained build is tested with HTTP asset requests blocked, including leather source loading and decorated pottery. Passing these checks establishes functionality, **not visual realism**.

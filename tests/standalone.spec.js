@@ -1,3 +1,4 @@
+import { geometricSetTwo } from "../src/geometricConstructions.js";
 import { patternStarter } from "../src/patternDocument.js";
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
@@ -360,13 +361,11 @@ test("standalone page renders, edits and exports without external assets", async
   await page
     .getByRole("button", { name: "Pattern studio", exact: true })
     .click();
-  await page
-    .locator('input[accept=".json"]')
-    .setInputFiles({
-      name: "legacy-fade.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify(patternStarter("Golden Cube Fade"))),
-    });
+  await page.locator('input[accept=".json"]').setInputFiles({
+    name: "legacy-fade.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(patternStarter("Golden Cube Fade"))),
+  });
   await page.getByLabel("Fade direction").selectOption("right");
   await page.getByRole("button", { name: /Apply to material/ }).click();
   await frame(page);
@@ -473,15 +472,13 @@ test("standalone page renders, edits and exports without external assets", async
   await page
     .getByRole("button", { name: "Pattern studio", exact: true })
     .click();
-  await page
-    .locator('input[accept=".json"]')
-    .setInputFiles({
-      name: "legacy-rug.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(
-        JSON.stringify(patternStarter("Saffron Rosette Court")),
-      ),
-    });
+  await page.locator('input[accept=".json"]').setInputFiles({
+    name: "legacy-rug.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify(patternStarter("Saffron Rosette Court")),
+    ),
+  });
   await page.getByLabel("Rug detail level").selectOption("3");
   await page.getByRole("button", { name: "3D material", exact: true }).click();
   await expect(
@@ -528,7 +525,11 @@ test("standalone page renders, edits and exports without external assets", async
   );
   rugHelper.dispose();
   // New modules must be present in the independent export, not just Vite.
-  for (const name of ["Truchet circuits", "Satin weave"]) {
+  for (const name of [
+    "Truchet circuits",
+    "Satin weave",
+    ...geometricSetTwo.map((p) => p.name),
+  ]) {
     const made = new Function(
       "THREE",
       stitchFactory.replace(

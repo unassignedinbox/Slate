@@ -29,11 +29,11 @@ const geometry = (d) =>
 
 test("rejected collections have no public cards or quota claim", () => {
   expect(patternInventory).toEqual({
-    catalogEntries: 58,
+    catalogEntries: 66,
     stitches: 10,
     weaves: 10,
   });
-  expect(patternStructureManifest).toHaveLength(58);
+  expect(patternStructureManifest).toHaveLength(66);
   for (const p of ornamentalCatalog)
     expect(patternStarterCatalog.some((c) => c.name === p.name)).toBe(false);
   expect(patternStarterCatalog.some((p) => p.countedDesign)).toBe(false);

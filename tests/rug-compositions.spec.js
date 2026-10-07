@@ -34,7 +34,7 @@ const signature = (d) =>
 
 test("108 legacy blueprints: bounds, determinism, complete serialization", () => {
   expect(rugDesignCatalog).toHaveLength(108);
-  expect(patternStarterCatalog).toHaveLength(59);
+  expect(patternStarterCatalog).toHaveLength(67);
   for (const group of [
     "African compositions",
     "Islamic carpets",

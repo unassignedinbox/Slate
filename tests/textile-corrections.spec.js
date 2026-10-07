@@ -168,7 +168,7 @@ test("draft edits preserve added artwork and stitches and survive validation", (
   expect(validatePattern(JSON.parse(JSON.stringify(next)))).toEqual(next);
   expect(Object.keys(weaveVariants)).toHaveLength(10);
 });
-test("six geometric constructions preserve complete vector paths and physical aspect", () => {
+test("geometric constructions preserve complete vector paths and physical aspect", () => {
   for (const spec of geometricCatalog) {
     const raw = geometricPattern(spec.name),
       d = patternStarter(spec.name);
@@ -200,7 +200,7 @@ test("public UI removes rejected filters, exposes one yarn control and saves dra
   await expect(page.getByLabel("Pattern collection")).toHaveValue(
     "Geometric constructions",
   );
-  await expect(page.locator(".pe-starters button")).toHaveCount(6);
+  await expect(page.locator(".pe-starters button")).toHaveCount(14);
   const options = await page
     .getByLabel("Pattern collection")
     .locator("option")
