@@ -1,13 +1,13 @@
 import {
-  ornamentalCatalog,
-  ornamentalPattern,
-} from "./ornamentalConstructions.js";
+  geometricCatalog,
+  geometricPattern,
+} from "./geometricConstructions.js";
+import { normalizeWeave } from "./patternWeaves.js";
+import { ornamentalPattern } from "./ornamentalConstructions.js";
 import {
-  referenceDesignCatalog,
   referencePattern,
   referenceDiamondPattern,
 } from "./referencePatterns.js";
-import { rugDesignCatalog } from "./rugDesigns.js";
 import { richRugPattern, normalizeRugComposition } from "./rugCompositions.js";
 import {
   textileLibraryEntries,
@@ -16,7 +16,6 @@ import {
 } from "./patternLibrary.js";
 import { normalizeStitches } from "./patternStitches.js";
 import {
-  collectionPatterns,
   collectionPattern,
   normalizeCollectionFade,
 } from "./patternCollections.js";
@@ -116,6 +115,7 @@ export function validatePattern(input) {
         }
       : {}),
     ...(input.stitch ? { stitch: normalizeStitches(input.stitch) } : {}),
+    ...(input.weave ? { weave: normalizeWeave(input.weave) } : {}),
     background: patternColor(input.background, "#eee8dc"),
     backgroundOpacity: patternNumber(input.backgroundOpacity, 1, 0, 1),
     repeat:
@@ -174,6 +174,7 @@ export function validatePattern(input) {
         ...(["holes", "thread", "highlight"].includes(l.stitchRole)
           ? { stitchRole: l.stitchRole }
           : {}),
+        ...(l.weaveRole === "yarn" ? { weaveRole: "yarn" } : {}),
         flipX: l.flipX === true,
         flipY: l.flipY === true,
         opacity: patternNumber(l.opacity, 1, 0, 1),
@@ -209,104 +210,64 @@ export function patternLayer(kind = "diamond", extra = {}) {
     ...extra,
   };
 }
-// Colorways are options within a family; legacy aliases are never catalog cards.
-const patternAliases = new Set([
-  "African Diamond Carpet",
-  "Islamic Medallion Carpet",
-  "Islamic Garden Carpet",
-  "Ink Cube Fade",
-]);
+// Public starters only. Retired generators below are retained solely for old
+// exported factories; saved documents load their embedded paths unchanged.
 export const canonicalTextileEntries = textileLibraryEntries
   .filter(
     (p) =>
-      p.palette === "Indigo" &&
+      (p.palette === "Indigo" || p.palette.startsWith("Single")) &&
       !["Micro dots", "Awning stripes", "Candy stripes"].includes(p.family),
   )
   .map((p) => ({
     ...p,
     name: p.family,
-    colorways: Object.keys(textilePalettes),
+    colorways: p.palette.startsWith("Single")
+      ? []
+      : Object.keys(textilePalettes),
   }));
 export const patternStarterCatalog = [
-  ...ornamentalCatalog.map((p) => ({ ...p, countedDesign: true })),
+  ...geometricCatalog,
   {
-    ...rugDesignCatalog.find((p) => p.name === "Chromatic Diamond Tapestry"),
-    group: "Reference studies",
-    reference: true,
-    countedDesign: true,
+    name: "Diamond Dissolve",
+    group: "Geometric designs",
+    description:
+      "Retained geometric size fade: density changes motif size, not opacity.",
   },
-  ...referenceDesignCatalog.map((p) => ({
-    ...p,
-    group: "Reference studies",
-    reference: true,
-    countedDesign: true,
-  })),
-  ...rugDesignCatalog
-    .filter((p) => p.name !== "Chromatic Diamond Tapestry")
-    .map((p) => ({
-      ...p,
-      group: "Compositions / " + p.group,
-      countedDesign: true,
-    })),
-  ...canonicalTextileEntries.map((p) => ({
-    ...p,
-    countedDesign: ["Fabric weaves", "Stitch patterns"].includes(p.group),
-    group: ["Fabric weaves", "Stitch patterns"].includes(p.group)
-      ? p.group
-      : "Basic / " + p.group,
-  })),
+  ...canonicalTextileEntries,
   ...[
     "Diamond weave",
     "Painted blossoms",
     "Cube lattice",
     "Inlaid tile",
     "Banded geometry",
-    "Medallion rug",
     "Graduated lattice",
     "Blank",
-  ].map((name) => ({ name, group: "Basic / Originals" })),
-  ...collectionPatterns
-    .filter((p) => !patternAliases.has(p.name))
-    .map((p) => ({ ...p, group: "Legacy / " + p.group })),
+  ].map((name) => ({ name, group: "Originals" })),
 ];
 export const patternStarterNames = patternStarterCatalog.map((p) => p.name);
 export function resolvePatternStarterName(slug) {
-  return [
-    ...patternStarterNames,
-    ...textileLibraryEntries.map((p) => p.name),
-    ...patternAliases,
-  ].find((name) => name.toLowerCase().replaceAll(" ", "-") === slug);
+  // Do not resurrect rejected rugs through their old aliases/deep links.
+  return patternStarterNames.find(
+    (name) => name.toLowerCase().replaceAll(" ", "-") === slug,
+  );
 }
-// Count whole compositions and actual weave/stitch constructions. Elementary
-// repeats, aliases and palette variants never contribute to this quota.
 export const patternInventory = {
-  target: 200,
-  referenceStudies: 4,
   catalogEntries: patternStarterCatalog.length - 1,
-  ornamental: patternStarterCatalog.filter((p) => p.countedDesign && p.detailed)
+  stitches: patternStarterCatalog.filter((p) => p.group === "Stitch patterns")
     .length,
-  textile: patternStarterCatalog.filter((p) => p.countedDesign && !p.detailed)
+  weaves: patternStarterCatalog.filter((p) => p.group === "Fabric weaves")
     .length,
-  designs: patternStarterCatalog.filter((p) => p.countedDesign).length,
-  targetMet: patternStarterCatalog.filter((p) => p.countedDesign).length >= 200,
 };
-// Human-readable construction ledger. Borders, palette names, density, seed,
-// uniform scale and overall rotation are deliberately absent from these keys.
+// No quota, inferred artistic quality score, or "200 structures" claim.
 export const patternStructureManifest = patternStarterCatalog
-  .filter((p) => p.countedDesign)
+  .filter((p) => p.name !== "Blank")
   .map((p) => ({
     name: p.name,
     group: p.group,
-    structure:
-      p.structureKey ||
-      (p.reference
-        ? `reference:${p.id}`
-        : p.layout
-          ? `composition:${p.layout}/${p.motif}/${p.secondary}/${p.center}`
-          : `textile:${p.family}`),
+    structure: p.id || p.family || p.name,
     basis:
       p.description ||
-      `${p.family}: yarn interlacement or thread-path construction`,
+      "Editable pattern family; settings and colors do not add entries.",
   }));
 export function patternStarter(name = "Diamond weave", colorway = "Indigo") {
   if (
@@ -322,8 +283,10 @@ export function patternStarter(name = "Diamond weave", colorway = "Indigo") {
         ? { name, collection: "African-inspired" }
         : {}),
     });
+  const geometry = geometricPattern(name);
+  if (geometry) return validatePattern(geometry);
   const family = canonicalTextileEntries.find((p) => p.name === name);
-  if (family)
+  if (family?.colorways.length)
     name =
       name +
       " - " +
@@ -592,10 +555,22 @@ export function patternShape(l, fill) {
       .join("");
   return `<path d="${l.path}" ${l.strokeWidth ? `fill="none" stroke="${fill}" stroke-width="${l.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"` : style}/>`;
 }
+export const textilePreviewDefs = `<defs><filter id="textile-relief" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB"><feDropShadow dx=".12" dy=".18" stdDeviation=".13" flood-color="#000000" flood-opacity=".55"/></filter></defs>`;
+export function textilePreviewShape(l, fill) {
+  const shadow =
+    l.stitchRole === "thread" ||
+    l.stitchRole === "highlight" ||
+    (l.weaveRole && l.name === "Yarn silhouette");
+  const shape = patternShape(l, fill);
+  return shadow ? `<g filter="url(#textile-relief)">${shape}</g>` : shape;
+}
 export function patternSVG(input, mode = "color") {
+  const preview = mode === "preview";
+  if (preview) mode = "color";
   const d = validatePattern(input),
     [w, h] = patternDimensions(d);
   let body = `<rect width="${w}" height="${h}" fill="${mode === "color" ? d.background : mode === "finish" ? "rgb(255,0,0)" : "rgb(158,0,128)"}" opacity="${mode === "color" ? d.backgroundOpacity : 0}"/>`;
+  if (preview) body = textilePreviewDefs + body;
   for (const l of d.layers.filter((l) => l.visible)) {
     const f = patternFinishes[l.finish];
     const fill =
@@ -633,7 +608,9 @@ export function patternSVG(input, mode = "color") {
         const shape =
           ["image", "svg"].includes(l.kind) && mode !== "color"
             ? `<defs><filter id="${id}" color-interpolation-filters="sRGB"><feFlood flood-color="${tint}"/><feComposite in2="SourceAlpha" operator="in"/></filter></defs><g filter="url(#${id})">${patternShape(l, tint)}</g>`
-            : patternShape(l, tint);
+            : preview
+              ? textilePreviewShape(l, tint)
+              : patternShape(l, tint);
         body += `<g opacity="${l.opacity}" transform="translate(${x} ${y}) rotate(${l.rotation * sx * sy}) scale(${(sx * l.width * (l.flipX ? -1 : 1)) / 100} ${(sy * l.height * (l.flipY ? -1 : 1)) / 100}) translate(-50 -50)">${shape}</g>`;
       }
   }

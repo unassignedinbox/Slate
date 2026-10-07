@@ -1,3 +1,4 @@
+import { replacePatternColor } from "./patternLibrary.js";
 import RugCompositionControls from "./RugCompositionControls.jsx";
 import PatternTextileTools from "./PatternTextileTools.jsx";
 import { textilePalettes } from "./patternLibrary.js";
@@ -31,10 +32,11 @@ import {
   patternStarter,
   resolvePatternStarterName,
   patternStarterCatalog,
-  patternInventory,
   generatePatternLayout,
   patternLayer,
   patternSVG,
+  textilePreviewDefs,
+  textilePreviewShape,
   patternShape,
   validatePattern,
   patternFinishes,
@@ -49,15 +51,13 @@ import "./patternEditor.css";
 const StarterThumb = React.memo(function StarterThumb({ name, palette }) {
   const src = useMemo(
     () =>
-      `data:image/svg+xml,${encodeURIComponent(patternSVG(patternStarter(name, palette)))}`,
+      `data:image/svg+xml,${encodeURIComponent(patternSVG(patternStarter(name, palette), "preview"))}`,
     [name, palette],
   );
   return <img src={src} alt="" loading="lazy" decoding="async" />;
 });
 const libraryGroups = [
   "All patterns",
-  "200 structures",
-  "Ornamental compositions",
   ...new Set(patternStarterCatalog.map((p) => p.group)),
 ];
 
@@ -95,12 +95,10 @@ export default function PatternEditor({
     [grid, setGrid] = useState(0),
     [aspect, setAspect] = useState(false),
     [ring, setRing] = useState({ count: 6, radius: 160 });
-  const [collectionFilter, setCollectionFilter] = useState(() =>
-    doc.referenceDesign || doc.name === "Chromatic Diamond Tapestry"
-      ? "Reference studies"
-      : doc.ornament
-        ? "Ornamental compositions"
-        : "Reference studies",
+  const [collectionFilter, setCollectionFilter] = useState(
+    () =>
+      patternStarterCatalog.find((p) => p.name === doc.name)?.group ||
+      "Geometric constructions",
   );
   const [librarySearch, setLibrarySearch] = useState(""),
     [libraryPalette, setLibraryPalette] = useState("Indigo"),
@@ -110,8 +108,6 @@ export default function PatternEditor({
       patternStarterCatalog.filter(
         (p) =>
           (collectionFilter === "All patterns" ||
-            (collectionFilter === "Ornamental compositions" && p.detailed) ||
-            (collectionFilter === "200 structures" && p.countedDesign) ||
             p.group === collectionFilter) &&
           `${p.name} ${p.group} ${p.description || ""} ${p.study || ""}`
             .toLowerCase()
@@ -235,6 +231,8 @@ export default function PatternEditor({
       if (kind === "json") {
         const parsed = validatePattern(JSON.parse(await file.text()));
         commit(parsed);
+        if (parsed.presentation === "rug" || parsed.library)
+          setBase("natural-cotton");
         setSelection(0);
         return;
       }
@@ -506,21 +504,21 @@ export default function PatternEditor({
           <button
             className="pe-wide pe-rich-library"
             onClick={() => {
-              setCollectionFilter("Reference studies");
+              setCollectionFilter("Geometric constructions");
               setLibraryPalette("Indigo");
               setLibrarySearch("");
             }}
           >
-            Reference studies ↗
+            Geometric constructions ↗
           </button>
           <button
             className="pe-wide pe-rich-library"
             onClick={() => {
-              setCollectionFilter("200 structures");
+              setCollectionFilter("Stitch patterns");
               setLibrarySearch("");
             }}
           >
-            200 structures · no colorway counts ↗
+            Stitches · one thread color ↗
           </button>
           <select
             className="pe-collection-filter"
@@ -540,23 +538,25 @@ export default function PatternEditor({
             value={librarySearch}
             onChange={(e) => setLibrarySearch(e.target.value)}
           />
-          <span className="pe-hint">
-            Starter colorway · weaves, stitches & basics
-          </span>
-          <select
-            aria-label="Textile family colorway"
-            title="Color option for weave, stitch and basic families; never a separate design"
-            value={libraryPalette}
-            onChange={(e) => setLibraryPalette(e.target.value)}
-          >
-            {Object.keys(textilePalettes).map((p) => (
-              <option key={p}>{p}</option>
-            ))}
-          </select>
+          {!["Fabric weaves", "Stitch patterns"].includes(collectionFilter) && (
+            <>
+              <span className="pe-hint">
+                Print palette · not a separate pattern
+              </span>
+              <select
+                aria-label="Textile family colorway"
+                title="Color option for printed basic families only"
+                value={libraryPalette}
+                onChange={(e) => setLibraryPalette(e.target.value)}
+              >
+                {Object.keys(textilePalettes).map((p) => (
+                  <option key={p}>{p}</option>
+                ))}
+              </select>
+            </>
+          )}
           <p className="pe-library-count" aria-live="polite">
-            {libraryMatches.length} results · {patternStarterCatalog.length - 1}{" "}
-            catalog entries + Blank · {patternInventory.designs} counted
-            structures
+            {libraryMatches.length} results · one card per family
           </p>
           <div
             className="pe-starters"
@@ -606,10 +606,9 @@ export default function PatternEditor({
             </button>
           </div>
           <p className="pe-hint">
-            174 ornamental compositions + 16 weave constructions + 10 stitch
-            constructions. Colorways, aliases and the 38 basic/legacy starters
-            are excluded from the 200. Select a card to inspect its
-            construction.
+            Stitches and weaves use one thread/yarn color. Backgrounds, colors,
+            direction and draft variants do not add library cards. The rejected
+            rug collections have been removed.
           </p>
           <div className="pe-section">
             <h3>Generate a layout</h3>
@@ -868,6 +867,7 @@ export default function PatternEditor({
                   onPointerUp={up}
                   onPointerCancel={up}
                 >
+                  <g dangerouslySetInnerHTML={{ __html: textilePreviewDefs }} />
                   <rect
                     width="512"
                     height="512"
@@ -909,7 +909,7 @@ export default function PatternEditor({
                           opacity={p.opacity}
                           transform={`translate(${p.x} ${p.y}) rotate(${p.rotation}) scale(${(p.width / 100) * (p.flipX ? -1 : 1)} ${(p.height / 100) * (p.flipY ? -1 : 1)}) translate(-50 -50)`}
                           dangerouslySetInnerHTML={{
-                            __html: patternShape(p, p.color),
+                            __html: textilePreviewShape(p, p.color),
                           }}
                         />
                       ),
@@ -1197,7 +1197,14 @@ export default function PatternEditor({
                       aria-label="Motif color"
                       type="color"
                       value={l.color}
-                      onChange={(e) => layer({ color: e.target.value })}
+                      onChange={(e) =>
+                        l.weaveRole ||
+                        ["thread", "highlight"].includes(l.stitchRole)
+                          ? commit(
+                              replacePatternColor(doc, l.color, e.target.value),
+                            )
+                          : layer({ color: e.target.value })
+                      }
                     />
                   </label>
                 </>

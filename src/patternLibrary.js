@@ -1,30 +1,19 @@
-import { stitchTypes, applyStitches, stitchTint } from "./patternStitches.js";
-// 54 constructions x four explicit colorways. Colorways are not counted as
-// different textile constructions. All geometry remains in the document.
+import { stitchTypes, applyStitches } from "./patternStitches.js";
+import {
+  weaveFamilies,
+  weaveVariants,
+  weaveFamilyName,
+  weaveDraft,
+  applyWeave,
+} from "./patternWeaves.js";
+export { weaveFamilies, weaveDraft } from "./patternWeaves.js";
+// Palettes apply to printed geometry only, never to stitch/weave identities.
 export const textilePalettes = {
   Indigo: ["#142c49", "#eee3ca", "#387594", "#87acb1", "#bc8252", "#19202a"],
   Earth: ["#593b31", "#ecd9ae", "#ad533c", "#c79448", "#788265", "#282c25"],
   Studio: ["#222832", "#f4eee2", "#dc5245", "#e3b84e", "#258879", "#3871ad"],
   Mulberry: ["#462f4f", "#f2dfda", "#a95c7d", "#d39890", "#8285ad", "#c8b97d"],
 };
-export const weaveFamilies = [
-  "Plain weave",
-  "Basket 2x2",
-  "Basket 3x3",
-  "Twill 2 over 1",
-  "Twill 2 over 2",
-  "Twill 3 over 1",
-  "Reverse twill",
-  "Herringbone weave",
-  "Broken twill",
-  "Diamond twill",
-  "Point twill",
-  "Five shaft satin",
-  "Eight shaft satin",
-  "Warp rib",
-  "Weft rib",
-  "Waffle weave",
-];
 export const geometricFamilies = [
   "Polka dots",
   "Micro dots",
@@ -58,20 +47,32 @@ export const colorFamilies = [
   "Ombre bands",
 ];
 export const textileLibraryEntries = [
-  ...weaveFamilies.map((family) => ({ family, group: "Fabric weaves" })),
-  ...stitchTypes.map((family) => ({ family, group: "Stitch patterns" })),
-  ...geometricFamilies.map((family) => ({
+  ...Object.keys(weaveVariants).map((family) => ({
     family,
-    group: "Geometric designs",
+    name: family,
+    group: "Fabric weaves",
+    palette: "Single yarn",
   })),
-  ...colorFamilies.map((family) => ({ family, group: "Color patterns" })),
-].flatMap((spec) =>
-  Object.keys(textilePalettes).map((palette) => ({
-    ...spec,
-    palette,
-    name: spec.family + " - " + palette,
+  ...stitchTypes.map((family) => ({
+    family,
+    name: family,
+    group: "Stitch patterns",
+    palette: "Single thread",
   })),
-);
+  ...[
+    ...geometricFamilies.map((family) => ({
+      family,
+      group: "Geometric designs",
+    })),
+    ...colorFamilies.map((family) => ({ family, group: "Color patterns" })),
+  ].flatMap((spec) =>
+    Object.keys(textilePalettes).map((palette) => ({
+      ...spec,
+      palette,
+      name: spec.family + " - " + palette,
+    })),
+  ),
+];
 const textileNum = (n) => Number(n.toFixed(3));
 const textilePoly = (points) =>
   points
@@ -87,54 +88,26 @@ const textileRect = (x, y, w, h) =>
     [x + w, y + h],
     [x, y + h],
   ]);
-export function weaveDraft(family, x, y) {
-  const mod = (v, n) => ((v % n) + n) % n;
-  const reflect = (v, n) => {
-    const a = mod(v, 2 * n);
-    return a < n ? a : 2 * n - 1 - a;
-  };
-  switch (family) {
-    case "Basket 2x2":
-      return mod(Math.floor(x / 2) + Math.floor(y / 2), 2) === 0;
-    case "Basket 3x3":
-      return mod(Math.floor(x / 3) + Math.floor(y / 3), 2) === 0;
-    case "Twill 2 over 1":
-      return mod(x - y, 3) < 2;
-    case "Twill 2 over 2":
-      return mod(x - y, 4) < 2;
-    case "Twill 3 over 1":
-      return mod(x - y, 4) < 3;
-    case "Reverse twill":
-      return mod(x + y, 4) < 2;
-    case "Herringbone weave":
-      return mod((Math.floor(x / 6) % 2 ? -x : x) - y, 4) < 2;
-    case "Broken twill":
-      return mod(x + [0, 1, 3, 2][mod(y, 4)], 4) < 2;
-    case "Diamond twill":
-      return mod(reflect(x, 4) + reflect(y, 4), 4) < 2;
-    case "Point twill":
-      return mod(reflect(x, 4) - y, 4) < 2;
-    case "Five shaft satin":
-      return mod(x - y * 2, 5) !== 0;
-    case "Eight shaft satin":
-      return mod(x - y * 3, 8) !== 0;
-    case "Warp rib":
-      return mod(x + Math.floor(y / 3), 2) === 0;
-    case "Weft rib":
-      return mod(Math.floor(x / 3) + y, 2) === 0;
-    case "Waffle weave":
-      return mod(x, 6) === 0 || mod(y, 6) === 0 || mod(x + y, 6) === 3;
-    default:
-      return mod(x + y, 2) === 0;
-  }
-}
 export function textilePattern(name) {
-  const spec = textileLibraryEntries.find((p) => p.name === name);
+  // Old palette-qualified names remain factory inputs for exported projects,
+  // but they all resolve to the same monochrome construction now.
+  const legacy = name
+    .replace(/ - (Indigo|Earth|Studio|Mulberry)$/, "")
+    .replace("Satin bars", "Satin stitch");
+  const draft = weaveFamilies.includes(legacy)
+    ? legacy
+    : weaveVariants[legacy]?.[0];
+  const spec =
+    textileLibraryEntries.find((p) => p.name === name) ||
+    textileLibraryEntries.find(
+      (p) => p.name === (draft ? weaveFamilyName(draft) : legacy),
+    );
   if (!spec) return null;
-  const c = textilePalettes[spec.palette],
+  const mono = ["Fabric weaves", "Stitch patterns"].includes(spec.group);
+  const c = mono ? ["#353b3e", "#ded3bb"] : textilePalettes[spec.palette],
     d = {
       schema: "alloy.pattern.v1",
-      name,
+      name: mono ? spec.family : name,
       collection: spec.group,
       library: { family: spec.family, palette: spec.palette },
       background: c[0],
@@ -174,45 +147,15 @@ export function textilePattern(name) {
     return applyStitches(d, {
       type: spec.family,
       color: c[1],
-      spacing: 32,
+      spacing: 40,
       width: 3.5,
       relief: 0.6,
     });
-  if (spec.group === "Fabric weaves") {
-    // Use complete integer draft periods so opposite edges agree.
-    const n = spec.family === "Five shaft satin" ? 30 : 24,
-      step = 512 / n,
-      warp = [],
-      weft = [],
-      top = [],
-      warpLight = [],
-      weftLight = [];
-    for (let x = 0; x < n; x++)
-      warp.push(textileRect((x + 0.13) * step, 0, step * 0.74, 512));
-    for (let y = 0; y < n; y++) {
-      weft.push(textileRect(0, (y + 0.13) * step, 512, step * 0.74));
-      for (let x = 0; x < n; x++)
-        if (weaveDraft(spec.family, x, y)) {
-          top.push(textileRect((x + 0.13) * step, y * step, step * 0.74, step));
-          warpLight.push(
-            textileRect((x + 0.27) * step, y * step, step * 0.12, step),
-          );
-        } else
-          weftLight.push(
-            textileRect(x * step, (y + 0.27) * step, step, step * 0.12),
-          );
-    }
-    layer(warp.join(""), c[2], { name: "Warp underlay", relief: 0.08 });
-    layer(weft.join(""), c[1], { name: "Weft yarns", relief: 0.16 });
-    layer(top.join(""), c[2], { name: "Warp floats", relief: 0.26 });
-    layer(warpLight.join(""), c[3], {
-      name: "Warp glints",
-      relief: 0.28,
-      opacity: 0.35,
+  if (spec.group === "Fabric weaves")
+    return applyWeave(d, {
+      draft: draft || weaveVariants[spec.family][0],
+      color: c[1],
     });
-    layer(weftLight.join(""), c[1], { name: "Weft glints", relief: 0.18 });
-    return d;
-  }
   const paths = Array.from({ length: 6 }, () => []);
   const poly = (pts, k = 1) => paths[k].push(textilePoly(pts));
   const rect = (x, y, w, h, k = 1) => paths[k].push(textileRect(x, y, w, h));
@@ -558,8 +501,9 @@ export function replacePatternColor(doc, from, to) {
   if (doc.stitch?.color === from) {
     next.stitch = { ...doc.stitch, color: to };
     next.layers = next.layers.map((l) =>
-      l.stitchRole === "highlight" ? { ...l, color: stitchTint(to, 1.18) } : l,
+      ["thread", "highlight"].includes(l.stitchRole) ? { ...l, color: to } : l,
     );
   }
+  if (doc.weave?.color === from) next.weave = { ...doc.weave, color: to };
   return next;
 }

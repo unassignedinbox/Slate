@@ -17,7 +17,7 @@ import { createMaterial, materials } from "../src/materials.js";
 import { createLeatherSwatchGeometry } from "../src/leatherGeometry.js";
 
 test("all ten collections are bounded editable vectors, including maximum-density fades", () => {
-  expect(patternStarterNames).toHaveLength(239);
+  expect(patternStarterNames).toHaveLength(59);
   for (const p of collectionPatterns) {
     const raw = collectionPattern(p.name),
       doc = patternStarter(p.name);
@@ -162,7 +162,7 @@ async function ready(page) {
   ).toHaveAttribute("data-material-ready", "true");
 }
 
-test("collection filters, fade controls, undo, border export and JSON reload", async ({
+test("Legacy saved fade: controls, undo, border export and JSON reload", async ({
   page,
 }) => {
   const errors = [];
@@ -170,17 +170,13 @@ test("collection filters, fade controls, undo, border export and JSON reload", a
   await page.goto(
     "/?material=natural-cotton&studio=pattern&pattern=golden-cube-fade",
   );
-  await expect(page.getByLabel("Pattern name")).toHaveValue("Golden Cube Fade");
   await page
-    .getByLabel("Pattern collection")
-    .selectOption("Legacy / Islamic geometry");
-  await expect(page.locator(".pe-starters button")).toHaveCount(2);
-  await page
-    .getByLabel("Pattern collection")
-    .selectOption("Legacy / African-inspired");
-  await expect(page.locator(".pe-starters button")).toHaveCount(2);
-  await page.getByLabel("Pattern collection").selectOption("Legacy / Fading");
-  await expect(page.locator(".pe-starters button")).toHaveCount(2);
+    .locator('input[accept=".json"]')
+    .setInputFiles({
+      name: "fade.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(patternStarter("Golden Cube Fade"))),
+    });
   await page.getByLabel("Motif color", { exact: true }).fill("#cf1234");
   await page.getByLabel("Fade direction").selectOption("left");
   await page.getByLabel("Motif density").fill("18");
@@ -205,9 +201,6 @@ test("collection filters, fade controls, undo, border export and JSON reload", a
   expect(d.tileAxes).toBe("xy");
   expect(d.fade.loop).toBe(true);
   await expect(page.getByLabel("Repeat layout")).toBeEnabled();
-  await page
-    .getByRole("button", { name: "Diamond Dissolve", exact: true })
-    .click();
   await page.locator('input[accept=".json"]').setInputFiles({
     name: "fade.json",
     mimeType: "application/json",
@@ -220,7 +213,7 @@ test("collection filters, fade controls, undo, border export and JSON reload", a
   expect(errors).toEqual([]);
 });
 
-test("rug live preview renders a wool surface and applies the dedicated rug mesh", async ({
+test("Legacy saved rug live preview renders a wool surface and applies the dedicated rug mesh", async ({
   page,
 }) => {
   test.setTimeout(600000);
@@ -232,13 +225,17 @@ test("rug live preview renders a wool surface and applies the dedicated rug mesh
   await page.goto(
     "/?material=natural-cotton&studio=pattern&pattern=african-diamond-carpet&view=3d",
   );
+  await page
+    .locator('input[accept=".json"]')
+    .setInputFiles({
+      name: "legacy.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(
+        JSON.stringify(patternStarter("African Diamond Carpet")),
+      ),
+    });
   await ready(page);
   await expect(page.getByLabel("Pattern preview object")).toHaveValue("Rug");
-  const d = await saveDoc(page);
-  expect(d.layers.every((l) => l.finish === "cotton")).toBe(true);
-  await page
-    .getByLabel("Pattern collection")
-    .selectOption("Legacy / African-inspired");
   await page.getByLabel("Pattern preview zoom").fill("180");
   await ready(page);
   await page.evaluate(
@@ -247,12 +244,14 @@ test("rug live preview renders a wool surface and applies the dedicated rug mesh
   );
   await page.screenshot({ path: ".playwright/final-african-rug.png" });
   await page
-    .getByLabel("Pattern collection")
-    .selectOption("Compositions / Islamic carpets");
-  await page.getByLabel("Search patterns").fill("Azure Arabesque Medallion");
-  await page
-    .getByRole("button", { name: "Azure Arabesque Medallion", exact: true })
-    .click();
+    .locator('input[accept=".json"]')
+    .setInputFiles({
+      name: "legacy.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(
+        JSON.stringify(patternStarter("Azure Arabesque Medallion")),
+      ),
+    });
   await ready(page);
   await page.screenshot({ path: ".playwright/final-islamic-rug.png" });
   await page.getByRole("button", { name: /Apply to material/ }).click();

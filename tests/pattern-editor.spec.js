@@ -105,7 +105,7 @@ test("pointer resize/rotate, snapping, nudge, reflections and bounded radial cop
   page,
 }) => {
   await page.goto("/?material=natural-cotton&studio=pattern");
-  await page.getByLabel("Pattern collection").selectOption("Basic / Originals");
+  await page.getByLabel("Pattern collection").selectOption("Originals");
   await page.getByRole("button", { name: "Blank", exact: true }).click();
   await page.getByRole("button", { name: "triangle", exact: true }).click();
   const errors = [];
@@ -204,9 +204,9 @@ test("live preview uses the applied shader, updates finishes and switches previe
     if (m.type() === "error") errors.push(m.text());
   });
   await page.goto("/?material=natural-cotton&studio=pattern");
-  await page.getByLabel("Pattern collection").selectOption("Basic / Originals");
+  await page.getByLabel("Pattern collection").selectOption("Originals");
   await page
-    .getByRole("button", { name: "Medallion rug", exact: true })
+    .getByRole("button", { name: "Banded geometry", exact: true })
     .click();
   await page.getByRole("button", { name: "3D material", exact: true }).click();
   const preview = page.getByRole("region", {

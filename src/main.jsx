@@ -1,3 +1,5 @@
+import geometricModuleSource from "./geometricConstructions.js?raw";
+import weaveModuleSource from "./patternWeaves.js?raw";
 import ornamentDrawingSource from "./ornamentDrawing.js?raw";
 import ornamentalSource from "./ornamentalConstructions.js?raw";
 import referenceModuleSource from "./referencePatterns.js?raw";
@@ -70,6 +72,10 @@ import botanicalModuleSource from "./botanicalKernels.js?raw";
 import architectureModuleSource from "./architecturalKernels.js?raw";
 import BakePanel from "./BakePanel";
 const shaderSource =
+  geometricModuleSource +
+  "\n" +
+  weaveModuleSource +
+  "\n" +
   ornamentDrawingSource +
   "\n" +
   referenceModuleSource.replace(/^import[\s\S]*?;\s*/gm, "") +
@@ -82,7 +88,9 @@ const shaderSource =
   "\n" +
   rugCompositionModuleSource.replace(/^import[\s\S]*?;\s*/gm, "") +
   "\n" +
-  textileModuleSource.replace(/^import[\s\S]*?;\s*/gm, "") +
+  textileModuleSource
+    .replace(/^import[\s\S]*?;\s*/gm, "")
+    .replace(/^export \{[^}]*\} from [^;]*;\s*/gm, "") +
   "\n" +
   collectionModuleSource.replace(/^import[\s\S]*?;\s*/gm, "") +
   "\n" +
@@ -450,7 +458,7 @@ function App() {
           <span>Automotive essentials</span>
           <ChevronRight size={13} />
           <strong>Material explorer</strong>
-          <span className="version-badge">v7.6</span>
+          <span className="version-badge">v7.7</span>
         </div>
         <div className="project-actions">
           <span className="saved-state">

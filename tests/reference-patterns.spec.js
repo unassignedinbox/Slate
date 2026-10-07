@@ -1,3 +1,4 @@
+import { referenceDesignCatalog } from "../src/referencePatterns.js";
 import { test, expect } from "@playwright/test";
 import * as THREE from "three";
 import {
@@ -11,17 +12,16 @@ import {
 import { createMaterial, materials } from "../src/materials.js";
 import { createLeatherSwatchGeometry } from "../src/leatherGeometry.js";
 
-const references = patternStarterCatalog.filter((p) => p.reference);
+const references = [
+  { name: "Chromatic Diamond Tapestry" },
+  ...referenceDesignCatalog,
+];
 test("catalog audit: one ombre, no palette or compatibility-alias cards; no primitive/colorway padding", () => {
   expect(references).toHaveLength(4);
   expect(patternInventory).toEqual({
-    target: 200,
-    referenceStudies: 4,
-    catalogEntries: 238,
-    ornamental: 174,
-    textile: 26,
-    designs: 200,
-    targetMet: true,
+    catalogEntries: 58,
+    stitches: 10,
+    weaves: 10,
   });
   expect(
     patternStarterCatalog.filter((p) => p.name.startsWith("Ombre")),
@@ -34,9 +34,9 @@ test("catalog audit: one ombre, no palette or compatibility-alias cards; no prim
   expect(
     patternStarterCatalog.some((p) => p.name === "African Diamond Carpet"),
   ).toBe(false);
-  expect(
-    patternStarterCatalog.find((p) => p.name === "Polka dots").group,
-  ).toMatch(/^Basic/);
+  expect(patternStarterCatalog.find((p) => p.name === "Polka dots").group).toBe(
+    "Geometric designs",
+  );
   for (const palette of ["Indigo", "Earth", "Studio", "Mulberry"]) {
     const d = patternStarter("Ombre bands", palette);
     expect(d.library).toEqual({ family: "Ombre bands", palette });
@@ -46,12 +46,10 @@ test("catalog audit: one ombre, no palette or compatibility-alias cards; no prim
     const legacy = "Ombre bands - " + palette;
     expect(
       resolvePatternStarterName(legacy.toLowerCase().replaceAll(" ", "-")),
-    ).toBe(legacy);
+    ).toBeUndefined();
     expect(patternStarter(legacy)).toEqual(d);
   }
-  expect(resolvePatternStarterName("african-diamond-carpet")).toBe(
-    "African Diamond Carpet",
-  );
+  expect(resolvePatternStarterName("african-diamond-carpet")).toBeUndefined();
 });
 
 test("reference documents: complete portable paths, physical aspect, bead metadata and guarded shader", () => {
@@ -115,7 +113,7 @@ async function save(page) {
   return JSON.parse(Buffer.concat(chunks));
 }
 
-test("reference studio cards, SVG aspect, bead 3D and save/reload", async ({
+test("Retired saved documents still load with SVG aspect, bead 3D and save/reload", async ({
   page,
 }) => {
   test.setTimeout(600000);
@@ -127,10 +125,13 @@ test("reference studio cards, SVG aspect, bead 3D and save/reload", async ({
   await page.goto(
     "/?material=natural-cotton&studio=pattern&pattern=chromatic-diamond-tapestry",
   );
-  await expect(page.getByLabel("Pattern collection")).toHaveValue(
-    "Reference studies",
-  );
-  await expect(page.locator(".pe-starters button")).toHaveCount(4);
+  await page.locator('input[accept=".json"]').setInputFiles({
+    name: "legacy.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify(patternStarter("Chromatic Diamond Tapestry")),
+    ),
+  });
   const art = await page.getByLabel("Pattern design canvas").boundingBox();
   expect(art.width / art.height).toBeCloseTo(640 / 360, 1);
   await page.screenshot({ path: ".playwright/reference-v75/woven-studio.png" });
@@ -139,7 +140,11 @@ test("reference studio cards, SVG aspect, bead 3D and save/reload", async ({
     "Crimson Star and Cross Carpet",
     "Beaded Diamond Weave",
   ]) {
-    await page.getByRole("button", { name, exact: true }).click();
+    await page.locator('input[accept=".json"]').setInputFiles({
+      name: "legacy.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(patternStarter(name))),
+    });
     const d = await save(page);
     expect(d).toEqual(patternStarter(name));
     await page.screenshot({

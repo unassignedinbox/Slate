@@ -1,3 +1,4 @@
+import { patternStarter } from "../src/patternDocument.js";
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import * as THREE from "three";
@@ -311,7 +312,7 @@ test("standalone page renders, edits and exports without external assets", async
   await page
     .getByRole("button", { name: "Pattern studio", exact: true })
     .click();
-  await page.getByLabel("Pattern collection").selectOption("Basic / Originals");
+  await page.getByLabel("Pattern collection").selectOption("Originals");
   await page
     .getByRole("button", { name: "Painted blossoms", exact: true })
     .click();
@@ -359,10 +360,13 @@ test("standalone page renders, edits and exports without external assets", async
   await page
     .getByRole("button", { name: "Pattern studio", exact: true })
     .click();
-  await page.getByLabel("Pattern collection").selectOption("Legacy / Fading");
   await page
-    .getByRole("button", { name: "Golden Cube Fade", exact: true })
-    .click();
+    .locator('input[accept=".json"]')
+    .setInputFiles({
+      name: "legacy-fade.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(patternStarter("Golden Cube Fade"))),
+    });
   await page.getByLabel("Fade direction").selectOption("right");
   await page.getByRole("button", { name: /Apply to material/ }).click();
   await frame(page);
@@ -393,7 +397,7 @@ test("standalone page renders, edits and exports without external assets", async
     .getByRole("button", { name: "Pattern studio", exact: true })
     .click();
   await page.getByLabel("Pattern collection").selectOption("Stitch patterns");
-  await page.getByLabel("Textile family colorway").selectOption("Indigo");
+  await expect(page.getByLabel("Textile family colorway")).toHaveCount(0);
   await page.getByLabel("Search patterns").fill("Chain");
   await page.getByRole("button", { name: "Chain stitch", exact: true }).click();
   await page.getByLabel("Stitch placement").selectOption("diagonal");
@@ -470,15 +474,14 @@ test("standalone page renders, edits and exports without external assets", async
     .getByRole("button", { name: "Pattern studio", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Reference studies ↗", exact: true })
-    .click();
-  await page
-    .getByLabel("Pattern collection")
-    .selectOption("Compositions / Islamic carpets");
-  await page.getByLabel("Search patterns").fill("Saffron Rosette Court");
-  await page
-    .getByRole("button", { name: "Saffron Rosette Court", exact: true })
-    .click();
+    .locator('input[accept=".json"]')
+    .setInputFiles({
+      name: "legacy-rug.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(
+        JSON.stringify(patternStarter("Saffron Rosette Court")),
+      ),
+    });
   await page.getByLabel("Rug detail level").selectOption("3");
   await page.getByRole("button", { name: "3D material", exact: true }).click();
   await expect(
@@ -524,40 +527,19 @@ test("standalone page renders, edits and exports without external assets", async
     "raffia-labyrinth-panels",
   );
   rugHelper.dispose();
-  if (process.env.ALLOY_CAPTURE === "patterns") {
-    await page.getByRole("button", { name: "Fit", exact: true }).click();
-    await frame(page);
-    await page.screenshot({ path: ".playwright/final-pottery.png" });
-    await page
-      .getByRole("button", { name: "Pattern studio", exact: true })
-      .click();
-    await page
-      .getByLabel("Pattern collection")
-      .selectOption("Reference studies");
-    await page
-      .getByRole("button", { name: "Chromatic Diamond Tapestry", exact: true })
-      .click();
-    await page
-      .getByLabel("Pattern base material")
-      .selectOption("natural-cotton");
-    await page
-      .getByRole("button", { name: "3D material", exact: true })
-      .click();
-    await expect(
-      page.getByRole("status", { name: "Material preview status" }),
-    ).toContainText("Live material · ready");
-    await page.getByLabel("Pattern preview object").selectOption("Rug");
-    await expect(
-      page.getByRole("status", { name: "Material preview status" }),
-    ).toContainText("Live material · ready");
-    await page.getByLabel("Pattern preview zoom").fill("180");
-    await page.evaluate(
-      () =>
-        new Promise((r) =>
-          requestAnimationFrame(() => requestAnimationFrame(r)),
-        ),
-    );
-    await page.screenshot({ path: ".playwright/final-pattern-editor.png" });
+  // New modules must be present in the independent export, not just Vite.
+  for (const name of ["Truchet circuits", "Satin weave"]) {
+    const made = new Function(
+      "THREE",
+      stitchFactory.replace(
+        "return createMaterial(preset);",
+        `return createMaterial({...preset,pattern:patternStarter('${name}')});`,
+      ),
+    )(THREE);
+    expect(made.userData.params.pattern.name).toBe(name);
+    if (name === "Satin weave")
+      expect(made.userData.params.pattern.weave.draft).toBe("Five shaft satin");
+    made.dispose();
   }
   expect(unexpectedRequests).toEqual([]);
   expect(errors).toEqual([]);

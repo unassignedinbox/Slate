@@ -1,7 +1,15 @@
+import {
+  applyWeave,
+  weaveVariants,
+  weaveFamilyName,
+  weaveDraft,
+  weavePeriod,
+} from "./patternWeaves.js";
 import React from "react";
 import {
   normalizeStitches,
   stitchTypes,
+  stitchDescriptions,
   applyStitches,
 } from "./patternStitches.js";
 import { replacePatternColor } from "./patternLibrary.js";
@@ -12,7 +20,9 @@ export default function PatternTextileTools({ doc, commit, onError }) {
     ...new Set([
       doc.background,
       ...doc.layers
-        .filter((l) => !["image", "svg"].includes(l.kind))
+        .filter(
+          (l) => !["image", "svg"].includes(l.kind) && l.stitchRole !== "holes",
+        )
         .map((l) => l.color),
     ]),
   ];
@@ -25,6 +35,86 @@ export default function PatternTextileTools({ doc, commit, onError }) {
   };
   return (
     <>
+      {doc.weave && (
+        <details className="pe-section pe-textile-tools" open>
+          <summary>
+            Weave construction <span>One yarn color</span>
+          </summary>
+          <label>
+            Draft within this family
+            <select
+              aria-label="Weave draft"
+              value={doc.weave.draft}
+              onChange={(e) => {
+                try {
+                  commit(applyWeave(doc, { draft: e.target.value }));
+                } catch (error) {
+                  onError(error.message);
+                }
+              }}
+            >
+              {weaveVariants[weaveFamilyName(doc.weave.draft)].map((d) => (
+                <option key={d}>{d}</option>
+              ))}
+            </select>
+          </label>
+          <label className="pe-color">
+            Yarn color · warp and weft
+            <input
+              aria-label="Weave yarn color"
+              type="color"
+              value={doc.weave.color}
+              onChange={(e) =>
+                commit(
+                  replacePatternColor(doc, doc.weave.color, e.target.value),
+                )
+              }
+            />
+          </label>
+          <svg
+            viewBox="0 0 120 120"
+            role="img"
+            aria-label={
+              doc.weave.draft + " drawdown; filled cells mean warp above weft"
+            }
+            style={{
+              width: 120,
+              height: 120,
+              display: "block",
+              margin: "12px auto",
+              background: "#eee9dd",
+            }}
+          >
+            {Array.from(
+              { length: weavePeriod(doc.weave.draft) ** 2 },
+              (_, i) => {
+                const n = weavePeriod(doc.weave.draft),
+                  x = i % n,
+                  y = Math.floor(i / n);
+                return (
+                  <rect
+                    key={i}
+                    x={(x * 120) / n}
+                    y={(y * 120) / n}
+                    width={120 / n}
+                    height={120 / n}
+                    fill={
+                      weaveDraft(doc.weave.draft, x, y) ? "#364c51" : "#eee9dd"
+                    }
+                    stroke="#87918b"
+                    strokeWidth=".4"
+                  />
+                );
+              },
+            )}
+          </svg>
+          <p className="pe-hint">
+            Drawdown, not yarn colors: filled = warp on top; empty = weft on
+            top. Both use the same yarn. Use 3D material to inspect crossing
+            relief. Draft settings are not extra library patterns.
+          </p>
+        </details>
+      )}
       <details className="pe-section pe-textile-tools">
         <summary>
           Design palette <span>{colors.length} colors</span>
@@ -77,6 +167,7 @@ export default function PatternTextileTools({ doc, commit, onError }) {
             ))}
           </select>
         </label>
+        <p className="pe-hint">{stitchDescriptions[stitch.type]}</p>
         <label>
           Placement
           <select
@@ -126,10 +217,11 @@ export default function PatternTextileTools({ doc, commit, onError }) {
           </label>
         ))}
         <p className="pe-hint">
-          Raised cotton thread + recessed entry marks. Spacing snaps to whole
-          repeats; spacing, width and inset use tile units. Edits rebuild only
-          the 3 stitch layers, replacing manual edits to their paths. This is
-          surface relief, not holes cut into the mesh.
+          One thread color, raised upper passes and recessed needle entries.
+          Spacing snaps to whole repeats; spacing, width and inset use tile
+          units. Edits rebuild only the generated stitch layers, replacing
+          manual edits to their paths. This is surface relief, not holes cut
+          into the mesh.
         </p>
         {stitch.enabled && (
           <button className="pe-wide" onClick={() => update({})}>

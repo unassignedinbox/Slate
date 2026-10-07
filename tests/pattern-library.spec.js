@@ -1,3 +1,4 @@
+import { weavePeriod } from "../src/patternWeaves.js";
 import { test, expect } from "@playwright/test";
 import { createHash } from "node:crypto";
 import {
@@ -21,10 +22,10 @@ import {
 } from "../src/patternStitches.js";
 import { rebuildCollectionFade } from "../src/patternCollections.js";
 
-test("238 catalog entries plus Blank: colorways remain compatible but do not multiply cards", () => {
-  expect(patternStarterCatalog).toHaveLength(239);
-  expect(new Set(patternStarterCatalog.map((p) => p.name)).size).toBe(239);
-  expect(textileLibraryEntries).toHaveLength(216);
+test("Public families are bounded and palette options do not multiply constructions", () => {
+  expect(patternStarterCatalog).toHaveLength(59);
+  expect(new Set(patternStarterCatalog.map((p) => p.name)).size).toBe(59);
+  expect(textileLibraryEntries).toHaveLength(132);
   const structures = new Map();
   for (const p of textileLibraryEntries) {
     const raw = textilePattern(p.name),
@@ -59,14 +60,14 @@ test("238 catalog entries plus Blank: colorways remain compatible but do not mul
       expect(signature).toBe(structures.get(p.family));
     else structures.set(p.family, signature);
   }
-  expect(structures.size).toBe(54);
-  expect(new Set(structures.values()).size).toBe(54);
+  expect(structures.size).toBe(48);
+  expect(new Set(structures.values()).size).toBe(48);
   expect(
     textileLibraryEntries.filter((p) => p.group === "Fabric weaves"),
-  ).toHaveLength(64);
+  ).toHaveLength(10);
   expect(
     textileLibraryEntries.filter((p) => p.group === "Stitch patterns"),
-  ).toHaveLength(40);
+  ).toHaveLength(10);
   expect(
     textileLibraryEntries.filter((p) => p.group === "Geometric designs"),
   ).toHaveLength(64);
@@ -74,7 +75,7 @@ test("238 catalog entries plus Blank: colorways remain compatible but do not mul
     textileLibraryEntries.filter((p) => p.group === "Color patterns"),
   ).toHaveLength(48);
   for (const family of weaveFamilies) {
-    const n = family === "Five shaft satin" ? 30 : 24;
+    const n = weavePeriod(family);
     for (let i = 0; i < n; i++) {
       expect(weaveDraft(family, i, 0)).toBe(weaveDraft(family, i, n));
       expect(weaveDraft(family, 0, i)).toBe(weaveDraft(family, n, i));
@@ -160,17 +161,17 @@ test("search, paging, palette edits, stitch overlays, undo and portable saved do
   });
   await page.goto("/?material=natural-cotton&studio=pattern");
   await expect(page.locator(".pe-library-count")).toContainText(
-    "238 catalog entries + Blank",
+    "one card per family",
   );
-  await expect(page.locator(".pe-starters button")).toHaveCount(4);
+  await expect(page.locator(".pe-starters button")).toHaveCount(7);
   await page.getByLabel("Pattern collection").selectOption("Fabric weaves");
-  await expect(page.locator(".pe-library-count")).toContainText("16 results");
+  await expect(page.locator(".pe-library-count")).toContainText("10 results");
   await expect(
     page.getByRole("button", { name: "Next pattern page" }),
   ).toBeDisabled();
   await expect(page.locator(".pe-library-paging")).toContainText("Page 1 / 1");
-  await page.getByLabel("Textile family colorway").selectOption("Indigo");
-  await expect(page.locator(".pe-starters button")).toHaveCount(16);
+  await expect(page.getByLabel("Textile family colorway")).toHaveCount(0);
+  await expect(page.locator(".pe-starters button")).toHaveCount(10);
   await page.getByLabel("Search patterns").fill("herringbone");
   await expect(page.locator(".pe-starters button")).toHaveCount(1);
   await page
@@ -196,14 +197,14 @@ test("search, paging, palette edits, stitch overlays, undo and portable saved do
     width: 4,
     relief: 0.8,
   });
-  expect(doc.layers).toHaveLength(9);
+  expect(doc.layers).toHaveLength(10);
   expect(doc.layers[0].color).toBe("#172c47");
   const svg = await download(page, "Export seamless SVG");
   expect(svg).toContain("#e2ab69");
   expect(svg).toContain('stroke-linecap="round"');
   await page.getByLabel("Enable stitch overlay").uncheck();
   expect(JSON.parse(await download(page, "Save document")).layers).toHaveLength(
-    6,
+    7,
   );
   await page.getByTitle("Undo", { exact: true }).click();
   expect(JSON.parse(await download(page, "Save document"))).toEqual(doc);

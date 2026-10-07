@@ -27,41 +27,19 @@ const geometry = (d) =>
     })),
   );
 
-test("200 construction ledger excludes primitives, palettes, aliases and parameter-only variants", () => {
-  expect(patternInventory).toMatchObject({
-    designs: 200,
-    ornamental: 174,
-    textile: 26,
+test("rejected collections have no public cards or quota claim", () => {
+  expect(patternInventory).toEqual({
+    catalogEntries: 58,
+    stitches: 10,
+    weaves: 10,
   });
-  expect(patternStructureManifest).toHaveLength(200);
-  expect(new Set(patternStructureManifest.map((p) => p.structure)).size).toBe(
-    200,
-  );
-  const counted = patternStarterCatalog.filter((p) => p.countedDesign);
-  for (const name of [
-    "Polka dots",
-    "Ombre bands",
-    "Zigzag ribbons",
-    "Micro dots",
-    "Ink Cube Fade",
-    "African Diamond Carpet",
-    "Pinstripes",
-  ])
-    expect(counted.some((p) => p.name === name)).toBe(false);
-  expect(counted.filter((p) => p.group === "Fabric weaves")).toHaveLength(16);
-  expect(counted.filter((p) => p.group === "Stitch patterns")).toHaveLength(10);
-  const hashes = new Set();
-  for (const p of counted) {
-    const doc = patternStarter(p.name);
-    const hash = createHash("sha256").update(geometry(doc)).digest("hex");
-    expect(hashes.has(hash), p.name).toBe(false);
-    hashes.add(hash);
-    expect(validatePattern(JSON.parse(JSON.stringify(doc)))).toEqual(doc);
-  }
-  // This is regression evidence for no exact geometry duplicates, not a visual quality score.
+  expect(patternStructureManifest).toHaveLength(58);
+  for (const p of ornamentalCatalog)
+    expect(patternStarterCatalog.some((c) => c.name === p.name)).toBe(false);
+  expect(patternStarterCatalog.some((p) => p.countedDesign)).toBe(false);
 });
 
-test("63 new constructions preserve complete bounded paths, construction identity and added stitches", () => {
+test("Retired construction factories preserve complete bounded paths, construction identity and added stitches", () => {
   expect(ornamentalCatalog).toHaveLength(63);
   for (const group of [
     "African inlay",
@@ -94,48 +72,4 @@ test("63 new constructions preserve complete bounded paths, construction identit
     expect(stitched.layers.filter((l) => l.stitchRole)).toHaveLength(3);
     expect(stitched.construction).toBe(p.id);
   }
-});
-
-test("200 filter, construction descriptions, palette independence and live new material", async ({
-  page,
-}) => {
-  test.setTimeout(300000);
-  const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(
-    "/?material=natural-cotton&studio=pattern&pattern=chromatic-diamond-tapestry",
-  );
-  await page
-    .getByRole("button", {
-      name: "200 structures · no colorway counts ↗",
-      exact: true,
-    })
-    .click();
-  await expect(page.locator(".pe-library-count")).toContainText("200 results");
-  await page.getByLabel("Textile family colorway").selectOption("Earth");
-  await expect(page.locator(".pe-library-count")).toContainText("200 results");
-  await page.getByLabel("Pattern collection").selectOption("African inlay");
-  await expect(page.locator(".pe-starters button")).toHaveCount(21);
-  await page
-    .getByRole("button", { name: "Four Gate Marquetry", exact: true })
-    .click();
-  await expect(page.getByText("Construction:", { exact: false })).toContainText(
-    "Four opposed gates",
-  );
-  await page.screenshot({ path: ".playwright/v76/african-studio.png" });
-  await page.getByLabel("Pattern collection").selectOption("Islamic networks");
-  await page
-    .getByRole("button", { name: "Diamond Bowtie Arabesque", exact: true })
-    .click();
-  await page.screenshot({ path: ".playwright/v76/islamic-studio.png" });
-  await page.getByRole("button", { name: "3D material", exact: true }).click();
-  await expect(
-    page.getByRole("status", { name: "Material preview status" }),
-  ).toContainText("Live material · ready");
-  await page.getByRole("button", { name: /Apply to material/ }).click();
-  await expect(page.locator("canvas")).toHaveAttribute(
-    "data-material-ready",
-    "true",
-  );
-  expect(errors).toEqual([]);
 });

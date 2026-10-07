@@ -1,14 +1,12 @@
+> **Historical research only.** The rug, African and Islamic collections described below were rejected and removed from the V7.7 public library. They are not recommendations or evidence of user approval. Retained code supports existing saved documents.
+
 # Rug and textile studies — v7.6
 
 ## Scope and originality
 
-Earlier revisions relied on palette-expanded counts and geometry hashes, which did not establish reference fidelity. V7.6 distinguishes structural accounting, actual rendering checks and historical authenticity.
+The earlier work below was rejected. Its recipes are retained only for old saved-document and exported-factory compatibility. The former inventory claim is withdrawn; no geometry hash or research citation establishes user acceptance. See [the current guide](pattern-studio.md).
 
-**The counted inventory is 200: 174 ornamental compositions, 16 weave constructions and 10 stitch constructions.** It is not a claim of 200 carpet layouts or unrelated algorithms. The total catalog has 238 entries plus Blank; the other 38 elementary/legacy starters are explicitly excluded. Palette variants, compatibility aliases, ink/gold cube-fade duplicates, dot-size and stripe-width variations do not contribute. [The full ledger](pattern-structure-ledger.md) identifies each counted construction without using palettes, density, seed, rotation or scale as an identity.
-
-63 additions supply 21 African-inspired inlays, 21 Islamic geometric/floral networks and 21 garden/compartment carpets. Each has an explicit compartment plan and interior construction. Shared vocabulary is intentional: the difference is the whole panel/connection arrangement and its ornament, not a claim that every leaf requires a separate renderer. Existing sparse dot, ring, stripe, check, ladder and chevron fields in the older 108 blueprints were replaced by compound ornament; those replacements are not new entries.
-
-The four reference studies correspond to the four distinct visual subjects in the supplied images; repeated woven-rug images are not counted separately. **Chromatic Diamond Tapestry is replaced**, not counted twice. Beaded Diamond Weave, Turquoise Faceted Vault and Crimson Star and Cross Carpet are three additions. They are contemporary vector studies, not authenticated traditional works, loom-ready instructions or exact replicas. No reference pixels, museum photographs, watermarks or external assets are shipped in the artwork.
+No reference photographs are shipped as material inputs. These notes record historical research, not current starter recommendations.
 
 ### Additional research for the supplied references
 
@@ -60,7 +58,7 @@ The reference studies are fixed, editable path documents. The legacy Composition
 
 ## Rendering limits and interpretation
 
-- The inventory includes 26 textile constructions as well as 174 ornamental designs. It must not be advertised as 200 carpets. Count identity and passing tests do not establish subjective artistic quality or historical authenticity.
+- The prior inventory claim is withdrawn. Passing tests do not establish artistic quality or historical authenticity.
 - The SVG artwork remains scalable, but live color/parameter/finish maps are finite resolution. Very fine ornament needs a close view and sufficiently large bakes.
 - Bead relief is a derivative-filtered fixed lattice, not separate physical glass bead meshes, transmission or thread simulation. Moving individual pigment layers does not move that procedural relief grid; transform the complete document for coherent beadwork.
 - The vault design is flat ornament, not a muqarnas/dome model. Wool uses relief and sheen, not groomed fibers, antique wear, fringe or loom simulation.

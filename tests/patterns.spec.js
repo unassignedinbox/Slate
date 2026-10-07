@@ -81,7 +81,7 @@ test("editor shapes, vector/image imports, undo, assignments, save/reload and in
     .getByRole("button", { name: "Pattern studio", exact: true })
     .click();
   const editor = page.getByRole("dialog", { name: "Pattern studio" });
-  await page.getByLabel("Pattern collection").selectOption("Basic / Originals");
+  await page.getByLabel("Pattern collection").selectOption("Originals");
   await editor
     .getByRole("button", { name: "Inlaid tile", exact: true })
     .click();
