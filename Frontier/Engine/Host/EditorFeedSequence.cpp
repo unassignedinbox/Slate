@@ -525,6 +525,7 @@ EditorProperty* EditorFeedSequence::BuildSheet(uint32_t Index, EditorInstance* I
                 EditorPropertyGroup& Source=OpenGroup(Sheet,"Light source");
                 auto& Enabled=OpenProp(Source,"Enabled",EditorPropertyCategory::Switch);Enabled.On=L.Enabled;
                 auto& Shadows=OpenProp(Source,"Cast Shadows",EditorPropertyCategory::Switch);Shadows.On=L.CastShadows;
+                if(L.Category==PunctualLuminaireCategory::Strip){auto& Emitter=OpenProp(Source,"Draw emitter",EditorPropertyCategory::Switch);Emitter.On=L.DrawEmitter;}
                 auto& Type=OpenProp(Source,"Type",EditorPropertyCategory::Select);Type.OptionCount=6;Type.Picked=static_cast<uint32_t>(L.Category);
                 const char* Types[]={"Directional","Point","Spot","Rectangle / Area","Tube","Strip"};for(unsigned I=0;I<6;++I)std::snprintf(Type.Options[I],sizeof(Type.Options[I]),"%s",Types[I]);
                 auto& Power=OpenProp(Source,"Intensity",EditorPropertyCategory::Slider);Power.Minimum=0;Power.Maximum=L.Category==PunctualLuminaireCategory::Directional?200000.f:100000.f;Power.Figure=L.Category==PunctualLuminaireCategory::Strip?L.LumensPerMetre*L.Size[0]*L.Dimmer:L.Intensity;Power.Decimals=1;std::snprintf(Power.Unit,sizeof(Power.Unit),L.Category==PunctualLuminaireCategory::Directional?"lx":L.Category==PunctualLuminaireCategory::Strip?"lm":"cd");
@@ -651,6 +652,7 @@ void EditorFeedSequence::ApplyLightSheet(uint32_t Index,uint32_t RowCount,SceneS
     auto Find=[&](const char* Name)->const EditorProperty*{for(uint32_t G=0;G<Sheet.GroupCount;++G)for(uint32_t I=0;I<Sheet.Groups[G].PropertyCount;++I)if(!std::strcmp(Sheet.Groups[G].Properties[I].Label,Name))return &Sheet.Groups[G].Properties[I];return nullptr;};
     if(auto* Q=Find("Enabled"))L.Enabled=Q->On;
     if(auto* Q=Find("Cast Shadows"))L.CastShadows=Q->On;
+    if(auto* Q=Find("Draw emitter"))L.DrawEmitter=Q->On;
     if(auto* Q=Find("Type"))L.Category=static_cast<PunctualLuminaireCategory>(std::min(Q->Picked,5u));
     if(auto* Q=Find("Distribution"))L.Distribution=static_cast<LuminaireDistribution>(std::min(Q->Picked,2u));
     if(auto* Q=Find("Intensity"))L.Intensity=std::max(0.f,Q->Figure);

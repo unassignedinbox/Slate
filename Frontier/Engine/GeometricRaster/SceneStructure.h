@@ -163,6 +163,7 @@ struct PunctualLuminaireRecord
     float                     EmittersPerMetre = 60.0f; // [/m]
     float                     SupplyVoltage = 24.0f;    // [V]
     bool                      Diffuser = true;
+    bool                      DrawEmitter = true;
     bool                      Enabled = true;
     bool                      CastShadows = true;
 };
