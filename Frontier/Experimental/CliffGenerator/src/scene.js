@@ -104,6 +104,7 @@ export class CliffScene {
     this.sunDir.setFromSphericalCoords(1, phi, theta);
     const u = this.sky.material.uniforms;
     u.sunPosition.value.copy(this.sunDir);
+    this.uniforms.uSunDir.value.copy(this.sunDir);
     u.turbidity.value = v.turbidity;
     u.rayleigh.value = 1.6 + (1 - Math.min(1, v.sunElevation / 30)) * 1.2;
     u.mieCoefficient.value = 0.004 + v.turbidity * 0.0006;
@@ -298,17 +299,19 @@ export class CliffScene {
   setRocks(v) {
     this.disposeGroup(this.rockGroup);
     this.rockCount = 0;
+    this.pebbleCount = 0;
     if (!this.field || !v.rocksEnabled) return;
     const key = `${v.rockSeed}:${v.rockAngularity}`;
     if (!this.rockLibrary || this.rockLibrary.key !== key) {
-      if (this.rockLibrary) for (const set of ['large', 'small']) this.rockLibrary[set].forEach((g) => g.dispose());
+      if (this.rockLibrary) for (const set of ['large', 'small', 'pebble']) this.rockLibrary[set].forEach((g) => g.dispose());
       this.rockLibrary = buildRockLibrary(v.rockSeed, v.rockAngularity);
       this.rockLibrary.key = key;
     }
     const placements = placeRocks(this.meshField || this.field, v, this.rockLibrary);
     const meshes = buildRockMeshes(placements, this.rockLibrary, this.rockMaterial);
     meshes.forEach((m) => this.rockGroup.add(m));
-    this.rockCount = placements.length;
+    this.rockCount = placements.filter((pl) => pl.kind !== 'pebble').length;
+    this.pebbleCount = placements.length - this.rockCount;
     this.rockGroup.visible = !!v.showRocks;
   }
 

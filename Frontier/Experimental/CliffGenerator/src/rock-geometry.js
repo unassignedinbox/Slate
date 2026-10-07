@@ -158,5 +158,7 @@ export function buildRockLibrary(seed, angularity) {
   return {
     large: families.map((family, i) => buildRockGeometry({ seed: seed * 10 + i, family, angularity, detail: 3 })),
     small: families.map((family, i) => buildRockGeometry({ seed: seed * 10 + i + 50, family, angularity, detail: 1 })),
+    // pebbles: rounded, low-poly, for the dense gravel scatter
+    pebble: families.slice(0, 6).map((family, i) => buildRockGeometry({ seed: seed * 10 + i + 90, family: 'boulder', angularity: angularity * 0.3, detail: 1 })),
   };
 }

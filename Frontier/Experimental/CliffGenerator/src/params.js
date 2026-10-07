@@ -54,6 +54,9 @@ export const defaults = {
   rockSizeMax: 9,           // [m]
   rockAngularity: 0.7,
   rockEmbed: 0.45,
+  pebblesOn: 1,
+  pebbleDensity: 0.45,
+  pebbleSize: 0.45,         // [m]
   // Cliff depth (mesh displacement)
   overhang: 3.5,            // [m]
   buttress: 0.5,
@@ -84,33 +87,27 @@ export const defaults = {
   cavityStrength: 0.8,
   bumpScale: 1,
   baseRoughness: 0.9,
-  // Mineral flakes
+  // Mineral flakes — three layers, each with its own colour / size / height / crystals
   flakesOn: 1,
-  flakeStrength: 0.6,
-  flakeScale: 1.2,          // [m]
-  flakeColor: 0.45,
-  flakeRelief: 0.6,
+  flakeStrength: 0.7,
   flakeSheen: 0.35,
-  flakeDensity: 0.78,
-  flakeLayers: 3,
   flakeEdge: 0.3,
-  // Exfoliation & joints
+  flakeOxide: 0.5,
+  flakeSparkle: 0.6,
+  flakeOn1: 1, flakeColor1: '#9d9893', flakeSize1: 1.6, flakeDensity1: 0.7, flakeHeight1: 6, flakeCrystal1: 0.0, flakeVar1: 0.5, flakeShape1: 0.2, flakeReveal1: 0.0,
+  flakeOn2: 1, flakeColor2: '#bdb4a7', flakeSize2: 0.55, flakeDensity2: 0.75, flakeHeight2: 4, flakeCrystal2: 0.08, flakeVar2: 0.5, flakeShape2: 0.1, flakeReveal2: 0.3,
+  flakeOn3: 1, flakeColor3: '#d9d6cf', flakeSize3: 0.18, flakeDensity3: 0.6, flakeHeight3: 2, flakeCrystal3: 0.3, flakeVar3: 0.6, flakeShape3: 0.0, flakeReveal3: 0.0,
+  // Spalling (peel)
   peelOn: 1,
-  peelStrength: 0.5,
-  peelScale: 2.6,           // [m]
-  peelLift: 0.6,
-  peelCoverage: 0.25,
-  peelThickness: 1,
-  peelBedding: 0.5,
-  peelFresh: 0.8,
-  peelOcclusion: 0.7,
-  peelSmall: 0.6,
-  jointsOn: 0,
-  jointStrength: 0.3,
-  jointScale: 4,            // [m]
-  jointWidth: 0.04,
-  jointDepth: 0.6,
-  jointStretch: 0.4,
+  peelStrength: 0.6,
+  peelScale: 1.6,           // [m]
+  peelCoverage: 0.3,
+  peelThickness: 0.025,     // [m]
+  peelSecond: 0.6,
+  peelPits: 0.5,
+  peelBedding: 0.4,
+  peelFresh: 0.7,
+  peelShadow: 0.6,
   // Ground cover
   runoffOn: 1,
   wetness: 0.6,
@@ -118,7 +115,9 @@ export const defaults = {
   streakAmount: 1,
   gravelOn: 1,
   gravelAmount: 0.8,
-  gravelScale: 0.5,         // [m]
+  gravelScale: 0.14,        // [m]
+  gravelRelief: 0.7,
+  gravelVariation: 0.6,
   gravelColor: '#9a938a',
   vegOn: 1,
   vegetation: 0.6,
@@ -183,7 +182,7 @@ export const presets = {
   'Alpine granite': {
     palette: 'granite', mountainHeight: 560, baseFrequency: 1.7, ridgeSharpness: 2.2, peakPower: 1.4, warpStrength: 0.6,
     strataBand: 26, strataStrength: 0.6, strataDip: 6, hardnessContrast: 0.7, plateauStrength: 0, canyonDepth: 0,
-    snowLine: 430, vegetation: 0.6, seaLevel: 0, waterEnabled: 1, talusSoft: 34, talusHard: 80, droplets: 180000, peelStrength: 0.45, peelCoverage: 0.3, flakeStrength: 0.65, flakeScale: 1.0, jointsOn: 0, jointStrength: 0.2,
+    snowLine: 430, vegetation: 0.6, seaLevel: 0, waterEnabled: 1, talusSoft: 34, talusHard: 80, droplets: 180000, peelStrength: 0.45, peelCoverage: 0.3, flakeStrength: 0.65,
   },
   'Sandstone mesa': {
     palette: 'sandstone', mountainHeight: 320, baseElevation: 60, baseFrequency: 1.3, ridgeSharpness: 1.4, peakPower: 1.0, warpStrength: 0.45,
@@ -204,14 +203,14 @@ export const presets = {
     reliefContrast: 0.9, strataBand: 22, strataStrength: 0.85, strataDip: 8, strataDipDirection: 120, hardnessContrast: 0.9,
     plateauStrength: 0.5, plateauHeight: 220, canyonDepth: 0, snowLine: 5000, vegetation: 0.9, mossiness: 0.8, seaLevel: 70, waterEnabled: 1,
     talusSoft: 35, talusHard: 84, droplets: 150000,
-    peelStrength: 0.5, peelScale: 1.8, flakeStrength: 0.7, jointsOn: 1, jointStrength: 0.4, jointScale: 2.5, sunElevation: 18, sunAzimuth: 290, turbidity: 3, fogDensity: 0.5,
+    peelStrength: 0.5, peelScale: 1.8, flakeStrength: 0.7, sunElevation: 18, sunAzimuth: 290, turbidity: 3, fogDensity: 0.5,
   },
   'Limestone escarpment': {
     palette: 'limestone', mountainHeight: 420, baseElevation: 30, baseFrequency: 1.2, ridgeSharpness: 1.7, peakPower: 1.2, warpStrength: 0.7,
     reliefContrast: 0.95, strataBand: 30, strataStrength: 0.9, strataDip: 10, strataDipDirection: 300, hardnessContrast: 0.9,
     plateauStrength: 0.35, plateauHeight: 400, canyonDepth: 0, snowLine: 5000, vegetation: 0.75, mossiness: 0.5, seaLevel: 0, waterEnabled: 0,
     talusSoft: 33, talusHard: 82, droplets: 170000,
-    peelStrength: 0.55, peelScale: 2.4, flakeStrength: 0.5, jointsOn: 1, jointStrength: 0.35, sunElevation: 28, sunAzimuth: 160, turbidity: 4,
+    peelStrength: 0.55, peelScale: 2.4, flakeStrength: 0.5, sunElevation: 28, sunAzimuth: 160, turbidity: 4,
   },
 };
 
@@ -232,7 +231,7 @@ Object.assign(presets, {
     palette: 'limestone', mountainHeight: 650, baseElevation: 120, baseFrequency: 2.0, ridgeSharpness: 3.2, peakPower: 1.9, warpStrength: 0.45,
     reliefContrast: 1, strataBand: 34, strataStrength: 0.9, strataDip: 3, hardnessContrast: 1, plateauStrength: 0, canyonDepth: 0,
     snowOn: 1, snowLine: 560, vegetation: 0.7, mossiness: 0.3, waterEnabled: 0, seaLevel: -100, talusSoft: 35, talusHard: 88, droplets: 150000,
-    overhang: 5, rockDensity: 0.35, jointsOn: 1, jointStrength: 0.3, jointScale: 6, sunElevation: 30, sunAzimuth: 190, turbidity: 4, fogDensity: 0.3,
+    overhang: 5, rockDensity: 0.35, sunElevation: 30, sunAzimuth: 190, turbidity: 4, fogDensity: 0.3,
   },
   'Desert buttes': {
     palette: 'sandstone', mountainHeight: 240, baseElevation: 40, baseFrequency: 1.0, ridgeSharpness: 1.2, peakPower: 1.6, warpStrength: 0.3,
@@ -244,7 +243,7 @@ Object.assign(presets, {
     palette: 'basalt', mountainHeight: 520, baseElevation: -90, baseFrequency: 0.8, ridgeSharpness: 1.5, peakPower: 1.8, warpStrength: 0.5,
     reliefFrequency: 0.8, reliefContrast: 1, strataBand: 22, strataStrength: 0.5, hardnessContrast: 0.6, plateauStrength: 0, canyonDepth: 0,
     snowOn: 0, vegetation: 0.9, mossiness: 0.8, seaLevel: 0, waterEnabled: 1, droplets: 240000, erodeSpeed: 0.45, talusSoft: 33, talusHard: 80,
-    rockDensity: 0.3, jointsOn: 1, jointStrength: 0.4, jointScale: 2, fogDensity: 0.4, turbidity: 5, sunElevation: 35, sunAzimuth: 120,
+    rockDensity: 0.3, fogDensity: 0.4, turbidity: 5, sunElevation: 35, sunAzimuth: 120,
   },
   'Highland glens': {
     palette: 'granite', mountainHeight: 380, baseElevation: 20, baseFrequency: 1.3, ridgeSharpness: 1.6, peakPower: 1.1, warpStrength: 0.8,
@@ -252,22 +251,57 @@ Object.assign(presets, {
     snowOn: 0, vegetation: 0.95, mossiness: 0.8, dryness: 0.6, seaLevel: -10, waterEnabled: 1, droplets: 220000, talusSoft: 34, talusHard: 78,
     rockDensity: 0.5, peelStrength: 0.3, sunElevation: 22, sunAzimuth: 250, turbidity: 4, fogDensity: 0.5,
   },
+  'Boulder field': {
+    palette: 'granite', mountainHeight: 420, baseElevation: 30, baseFrequency: 1.5, ridgeSharpness: 1.4, peakPower: 1.0, warpStrength: 0.7,
+    reliefContrast: 0.6, strataBand: 36, strataStrength: 0.3, hardnessContrast: 0.4, plateauStrength: 0, canyonDepth: 0,
+    snowOn: 0, vegetation: 0.25, mossiness: 0.5, dryness: 0.7, waterEnabled: 0, seaLevel: -100, droplets: 200000, thermalIterations: 40, talusSoft: 36, talusHard: 76,
+    rockDensity: 0.95, rockSlopeMax: 50, rockClustering: 0.35, rockSizeMin: 1.5, rockSizeMax: 16, rockEmbed: 0.4, pebbleDensity: 0.7,
+    peelStrength: 0.4, sunElevation: 30, sunAzimuth: 225, turbidity: 4, fogDensity: 0.25,
+  },
+  'Scree slopes': {
+    palette: 'slate', mountainHeight: 600, baseElevation: 40, baseFrequency: 1.4, ridgeSharpness: 2.6, peakPower: 1.5, warpStrength: 0.55,
+    reliefContrast: 0.9, strataBand: 24, strataStrength: 0.6, strataDip: 12, hardnessContrast: 0.8, plateauStrength: 0, canyonDepth: 0,
+    snowOn: 1, snowLine: 620, vegetation: 0.15, mossiness: 0.3, waterEnabled: 0, seaLevel: -100, droplets: 160000, thermalIterations: 60, thermalRate: 0.7, talusSoft: 37, talusHard: 84,
+    rockDensity: 0.8, rockSlopeMin: 15, rockSlopeMax: 48, rockClustering: 0.2, rockSizeMin: 0.5, rockSizeMax: 6, pebbleDensity: 0.9, pebbleSize: 0.6, gravelAmount: 1,
+    peelStrength: 0.5, sunElevation: 26, sunAzimuth: 200, turbidity: 3, fogDensity: 0.35,
+  },
+  'Granite domes': {
+    palette: 'granite', mountainHeight: 520, baseElevation: 60, baseFrequency: 0.9, ridgeSharpness: 1.1, peakPower: 1.7, warpStrength: 0.35,
+    reliefFrequency: 1.2, reliefContrast: 1, strataBand: 60, strataStrength: 0.15, hardnessContrast: 0.3, plateauStrength: 0.2, plateauHeight: 520, canyonDepth: 0,
+    snowOn: 0, vegetation: 0.35, mossiness: 0.2, waterEnabled: 0, seaLevel: -100, droplets: 90000, erodeSpeed: 0.2, thermalIterations: 10, talusSoft: 38, talusHard: 85,
+    rockDensity: 0.5, rockSlopeMax: 35, rockClustering: 0.6, rockSizeMin: 2, rockSizeMax: 22, rockEmbed: 0.55, pebbleDensity: 0.3,
+    peelStrength: 0.85, peelCoverage: 0.45, peelScale: 4, peelThickness: 0.05, flakeStrength: 0.8, sunElevation: 42, sunAzimuth: 240, turbidity: 5, fogDensity: 0.15,
+  },
+  'Rocky coast': {
+    palette: 'basalt', mountainHeight: 220, baseElevation: -40, baseFrequency: 1.8, ridgeSharpness: 1.8, peakPower: 1.2, warpStrength: 0.6,
+    reliefContrast: 0.8, strataBand: 16, strataStrength: 0.8, strataDip: 6, hardnessContrast: 0.9, plateauStrength: 0.4, plateauHeight: 140, canyonDepth: 0,
+    snowOn: 0, vegetation: 0.5, mossiness: 0.7, seaLevel: 0, waterEnabled: 1, droplets: 180000, talusSoft: 34, talusHard: 86,
+    rockDensity: 0.9, rockSlopeMax: 60, rockClustering: 0.4, rockSizeMin: 0.8, rockSizeMax: 12, pebbleDensity: 0.9, pebbleSize: 0.5, gravelAmount: 1,
+    peelStrength: 0.4, sunElevation: 20, sunAzimuth: 280, turbidity: 4, fogDensity: 0.45, wetness: 0.9,
+  },
+  'Talus canyon': {
+    palette: 'sandstone', mountainHeight: 300, baseElevation: 220, baseFrequency: 1.1, ridgeSharpness: 1.3, peakPower: 0.9, warpStrength: 0.4,
+    plateauStrength: 0.9, plateauHeight: 440, canyonDepth: 360, canyonWidth: 520, strataBand: 20, strataStrength: 1, strataDip: 2, hardnessContrast: 1,
+    snowOn: 0, vegetation: 0.08, mossiness: 0.05, seaLevel: -20, waterEnabled: 0, droplets: 170000, thermalIterations: 50, thermalRate: 0.7, talusSoft: 33, talusHard: 87,
+    rockDensity: 0.9, rockSlopeMin: 10, rockSlopeMax: 55, rockClustering: 0.3, rockSizeMin: 0.8, rockSizeMax: 14, pebbleDensity: 0.8, pebbleSize: 0.6, gravelAmount: 1,
+    peelStrength: 0.6, peelScale: 3, oxideAmount: 0.7, sunElevation: 40, sunAzimuth: 205, turbidity: 6, fogDensity: 0.2,
+  },
   'Karst pinnacles': {
     palette: 'limestone', mountainHeight: 300, baseElevation: 30, baseFrequency: 3.2, ridgeSharpness: 3.0, peakPower: 1.7, warpStrength: 0.4,
     reliefFrequency: 2.4, reliefContrast: 0.9, strataBand: 20, strataStrength: 0.5, hardnessContrast: 0.8, plateauStrength: 0, canyonDepth: 0,
     snowOn: 0, vegetation: 0.85, mossiness: 0.9, waterEnabled: 1, seaLevel: 0, droplets: 200000, talusSoft: 36, talusHard: 88,
-    overhang: 4, rockDensity: 0.25, jointsOn: 1, jointStrength: 0.45, jointScale: 3, sunElevation: 45, sunAzimuth: 170, turbidity: 6, fogDensity: 0.45,
+    overhang: 4, rockDensity: 0.25, sunElevation: 45, sunAzimuth: 170, turbidity: 6, fogDensity: 0.45,
   },
 });
 
 export const palettes = {
-  granite:   { name: 'Granite',   rockA: '#b3b1ae', rockB: '#94918f', rockC: '#c7c2ba', fresh: '#d6d3cd', oxide: '#ac947b' },
-  sandstone: { name: 'Sandstone', rockA: '#e1b794', rockB: '#bd8f72', rockC: '#eed6b7', fresh: '#f3dec2', oxide: '#a8755a' },
-  limestone: { name: 'Limestone', rockA: '#d9d3c7', rockB: '#b3aea4', rockC: '#e9e4d9', fresh: '#f1ede4', oxide: '#baa080' },
-  basalt:    { name: 'Basalt',    rockA: '#858588', rockB: '#616165', rockC: '#a09e9c', fresh: '#b1b0ae', oxide: '#a08068' },
-  slate:     { name: 'Slate',     rockA: '#9498a0', rockB: '#6f7580', rockC: '#b0b3ba', fresh: '#c2c6ca', oxide: '#a48a75' },
+  granite:   { name: 'Granite',   rockA: '#b3b1ae', rockB: '#94918f', rockC: '#c7c2ba', fresh: '#d6d3cd', oxide: '#ac947b', flakeColor1: '#9d9893', flakeColor2: '#c9bfb3', flakeColor3: '#e4e0d8', gravelColor: '#9a938a' },
+  sandstone: { name: 'Sandstone', rockA: '#e1b794', rockB: '#bd8f72', rockC: '#eed6b7', fresh: '#f3dec2', oxide: '#a8755a', flakeColor1: '#c9a07c', flakeColor2: '#e5c8a4', flakeColor3: '#f2e3c9', gravelColor: '#c7a383' },
+  limestone: { name: 'Limestone', rockA: '#d9d3c7', rockB: '#b3aea4', rockC: '#e9e4d9', fresh: '#f1ede4', oxide: '#baa080', flakeColor1: '#c4bdae', flakeColor2: '#e2dccf', flakeColor3: '#f3f0e8', gravelColor: '#bdb6a8' },
+  basalt:    { name: 'Basalt',    rockA: '#858588', rockB: '#616165', rockC: '#a09e9c', fresh: '#b1b0ae', oxide: '#a08068', flakeColor1: '#6c6c70', flakeColor2: '#8e8d8a', flakeColor3: '#b5b2ad', gravelColor: '#7a7a7c' },
+  slate:     { name: 'Slate',     rockA: '#9498a0', rockB: '#6f7580', rockC: '#b0b3ba', fresh: '#c2c6ca', oxide: '#a48a75', flakeColor1: '#767b86', flakeColor2: '#a3a7ae', flakeColor3: '#cfd2d6', gravelColor: '#8a8e96' },
 };
-export const paletteKeys = ['rockA', 'rockB', 'rockC', 'fresh', 'oxide'];
+export const paletteKeys = ['rockA', 'rockB', 'rockC', 'fresh', 'oxide', 'flakeColor1', 'flakeColor2', 'flakeColor3', 'gravelColor'];
 
 // Inspector schema. Each group = one outliner row. Each control: [key, label, min, max, step, unit, hint]
 export const groups = [
@@ -399,6 +433,11 @@ export const groups = [
         ['rockClusterScale', 'Cluster size', 10, 400, 5, 'm', ''],
         ['rockTilt', 'Follow slope', 0, 1, 0.05, '', 'Upright → aligned to the ground normal'],
       ] },
+      { title: 'Gravel stones', controls: [
+        ['pebblesOn', 'Enable stones', 0, 1, 1, '', 'Real small stone meshes on scree aprons and river beds, on top of the pebble shading'],
+        ['pebbleDensity', 'Stone density', 0, 1, 0.05, '', 'Up to 40 000 instances'],
+        ['pebbleSize', 'Largest stone', 0.1, 2, 0.05, 'm', ''],
+      ] },
       { title: 'Rock shape', controls: [
         ['rockSizeMin', 'Smallest rock', 0.3, 6, 0.1, 'm', ''],
         ['rockSizeMax', 'Largest rock', 2, 40, 0.5, 'm', ''],
@@ -449,45 +488,65 @@ export const groups = [
     ],
   },
   {
-    id: 'flakes', name: 'Mineral flakes', type: 'Cellular plates', stage: 'live', color: '#d8c38a',
+    id: 'flakes', name: 'Mineral flakes', type: 'Layered grain', stage: 'live', color: '#d8c38a',
     cards: [
       { title: 'Flakes', controls: [
         ['flakesOn', 'Enable flakes', 0, 1, 1, '', ''],
-        ['flakeStrength', 'Flake coverage', 0, 1, 0.05, '', 'Three stacked layers of angular mineral plates — basal chips, laminae, fine flecks'],
-        ['flakeScale', 'Flake size', 0.05, 8, 0.05, 'm', 'Size of the mid layer; chips are 1.65× and flecks 0.2× this'],
-        ['flakeLayers', 'Layers', 1, 3, 1, '', 'Chips only · + laminae · + flecks'],
-        ['flakeDensity', 'Density', 0.1, 1, 0.05, '', 'Fraction of cells that grow a plate'],
-      ] },
-      { title: 'Plate look', controls: [
-        ['flakeColor', 'Colour variation', 0, 1, 0.05, '', 'Geology tint → independent hue per plate'],
-        ['flakeRelief', 'Raised plates', 0, 1, 0.05, '', 'Fraction of plates with tilted / bevelled normals'],
+        ['flakeStrength', 'Coverage', 0, 1, 0.05, '', 'Overall amount of plates on exposed rock'],
         ['flakeEdge', 'Rim highlight', 0, 1, 0.05, '', 'Bright bevel along plate edges'],
         ['flakeSheen', 'Plate sheen', 0, 1, 0.05, '', 'Lower roughness on plates so they catch light'],
+        ['flakeSparkle', 'Crystal glitter', 0, 2, 0.05, '', 'Sun glints on crystal plates (view dependent)'],
+        ['flakeOxide', 'Oxidise with runoff', 0, 1, 0.05, '', 'Plates take the oxide colour where water flows and in oxide pockets — the erosion channels drive the tint'],
+      ] },
+      { title: 'Layer 1 · base chips', controls: [
+        ['flakeOn1', 'Enable layer', 0, 1, 1, '', 'Largest plates at the bottom of the stack'],
+        ['flakeColor1', 'Layer colour', 0, 0, 0, 'color', ''],
+        ['flakeSize1', 'Plate size', 0.03, 8, 0.01, 'm', ''],
+        ['flakeDensity1', 'Density', 0.1, 1, 0.05, '', 'Fraction of cells that grow a plate'],
+        ['flakeHeight1', 'Plate height', 0, 30, 0.5, 'mm', 'Tilt and rim bevel in the normal'],
+        ['flakeVar1', 'Tint variation', 0, 1, 0.05, '', 'Per-plate lightness / warmth jitter around the layer colour'],
+        ['flakeShape1', 'Shape', 0, 1, 0.05, '', 'Angular chips → rounded grains'],
+        ['flakeCrystal1', 'Crystals', 0, 1, 0.05, '', 'Share of plates that are crystals: brighter, glossy, they glint in the sun'],
+        ['flakeReveal1', 'Reveal by hardness', -1, 1, 0.05, '', '−1 only on soft / eroded beds · 0 everywhere · +1 only on hard caprock'],
+      ] },
+      { title: 'Layer 2 · laminae', controls: [
+        ['flakeOn2', 'Enable layer', 0, 1, 1, '', 'Mid-size plates over the chips'],
+        ['flakeColor2', 'Layer colour', 0, 0, 0, 'color', ''],
+        ['flakeSize2', 'Plate size', 0.03, 8, 0.01, 'm', ''],
+        ['flakeDensity2', 'Density', 0.1, 1, 0.05, '', 'Fraction of cells that grow a plate'],
+        ['flakeHeight2', 'Plate height', 0, 30, 0.5, 'mm', 'Tilt and rim bevel in the normal'],
+        ['flakeVar2', 'Tint variation', 0, 1, 0.05, '', 'Per-plate lightness / warmth jitter around the layer colour'],
+        ['flakeShape2', 'Shape', 0, 1, 0.05, '', 'Angular chips → rounded grains'],
+        ['flakeCrystal2', 'Crystals', 0, 1, 0.05, '', 'Share of plates that are crystals: brighter, glossy, they glint in the sun'],
+        ['flakeReveal2', 'Reveal by hardness', -1, 1, 0.05, '', '−1 only on soft / eroded beds · 0 everywhere · +1 only on hard caprock'],
+      ] },
+      { title: 'Layer 3 · fine grain', controls: [
+        ['flakeOn3', 'Enable layer', 0, 1, 1, '', 'Smallest plates on top; the usual place for crystals'],
+        ['flakeColor3', 'Layer colour', 0, 0, 0, 'color', ''],
+        ['flakeSize3', 'Plate size', 0.03, 8, 0.01, 'm', ''],
+        ['flakeDensity3', 'Density', 0.1, 1, 0.05, '', 'Fraction of cells that grow a plate'],
+        ['flakeHeight3', 'Plate height', 0, 30, 0.5, 'mm', 'Tilt and rim bevel in the normal'],
+        ['flakeVar3', 'Tint variation', 0, 1, 0.05, '', 'Per-plate lightness / warmth jitter around the layer colour'],
+        ['flakeShape3', 'Shape', 0, 1, 0.05, '', 'Angular chips → rounded grains'],
+        ['flakeCrystal3', 'Crystals', 0, 1, 0.05, '', 'Share of plates that are crystals: brighter, glossy, they glint in the sun'],
+        ['flakeReveal3', 'Reveal by hardness', -1, 1, 0.05, '', '−1 only on soft / eroded beds · 0 everywhere · +1 only on hard caprock'],
       ] },
     ],
   },
   {
-    id: 'exfoliation', name: 'Cell layers', type: 'Peeling sheets & joint cells', stage: 'live', color: '#c9a37c',
+    id: 'exfoliation', name: 'Spalling', type: 'Sheets flaked off the face', stage: 'live', color: '#c9a37c',
     cards: [
-      { title: 'Peeling sheets', controls: [
-        ['peelOn', 'Enable peeling', 0, 1, 1, '', 'Voronoi sheets in patches: intact (cracked outline), lifting, or spalled'],
-        ['peelStrength', 'Peel strength', 0, 1, 0.05, '', 'Onion-skin sheets lifting and spalling off exposed rock'],
-        ['peelCoverage', 'Coverage', 0, 1, 0.05, '', 'Fraction of the rock covered by peeling patches'],
-        ['peelScale', 'Sheet size', 0.5, 12, 0.1, 'm', ''],
-        ['peelThickness', 'Sheet thickness', 0, 2, 0.05, '', 'Relief of the sheet edges in the normal'],
-        ['peelLift', 'Edge lift', 0, 1, 0.05, '', 'How far sheet edges curl away from the rock'],
-        ['peelSmall', 'Small sheets', 0, 1, 0.05, '', 'Secondary generation of smaller spalls'],
-        ['peelBedding', 'Follow bedding', 0, 1, 0.05, '', 'Stretch sheets horizontally along the beds'],
+      { title: 'Spalls', controls: [
+        ['peelOn', 'Enable spalling', 0, 1, 1, '', 'Irregular patches where a thin sheet has flaked off: a shallow step with a bevelled rim, paler fresh rock inside'],
+        ['peelStrength', 'Amount', 0, 1, 0.05, '', ''],
+        ['peelCoverage', 'Coverage', 0, 1, 0.05, '', 'Share of the rock face that has spalled'],
+        ['peelScale', 'Patch size', 0.2, 12, 0.1, 'm', ''],
+        ['peelThickness', 'Sheet thickness', 0, 0.15, 0.005, 'm', 'Height of the step at the patch edge'],
+        ['peelSecond', 'Small spalls', 0, 1, 0.05, '', 'Second generation of smaller patches stepping down inside and around the first'],
+        ['peelPits', 'Weathering pits', 0, 1, 0.05, '', 'Sparse small holes'],
+        ['peelBedding', 'Follow bedding', 0, 1, 0.05, '', 'Stretch patches horizontally along the beds'],
         ['peelFresh', 'Fresh contrast', 0, 1, 0.05, '', 'How pale the freshly exposed rock is'],
-        ['peelOcclusion', 'Shadow depth', 0, 1, 0.05, '', 'Darkening under lifted edges and in cracks'],
-      ] },
-      { title: 'Joint cells (Voronoi)', controls: [
-        ['jointsOn', 'Enable joint cells', 0, 1, 1, '', 'Cellular crack network over all exposed rock — off by default'],
-        ['jointStrength', 'Crack darkness', 0, 1, 0.05, '', 'Dark fracture lines along the cell borders'],
-        ['jointScale', 'Block size', 0.5, 20, 0.1, 'm', 'Average spacing of the fractures'],
-        ['jointWidth', 'Line width', 0.01, 0.2, 0.005, '', 'Width relative to block size'],
-        ['jointDepth', 'Groove depth', 0, 1, 0.05, '', 'Relief of the fracture in the normal'],
-        ['jointStretch', 'Bedding bias', 0, 1, 0.05, '', 'Elongate blocks along the beds'],
+        ['peelShadow', 'Rim shadow', 0, 1, 0.05, '', 'Soft darkening in the bevel'],
       ] },
     ],
   },
@@ -503,8 +562,10 @@ export const groups = [
       { title: 'Gravel', controls: [
         ['gravelOn', 'Enable gravel', 0, 1, 1, '', ''],
         ['gravelAmount', 'Gravel on scree', 0, 1, 0.05, '', 'Fine debris texture where sediment collected'],
-        ['gravelScale', 'Gravel scale', 0.1, 3, 0.05, 'm', ''],
-        ['gravelColor', 'Gravel colour', 0, 0, 0, 'color', ''],
+        ['gravelScale', 'Stone size', 0.03, 1.5, 0.01, 'm', 'Largest pebbles; a second generation at 0.45× fills the gaps'],
+        ['gravelRelief', 'Stone relief', 0, 1, 0.05, '', 'Dome normal on each stone'],
+        ['gravelVariation', 'Stone variation', 0, 1, 0.05, '', 'Tone and warmth jitter per stone'],
+        ['gravelColor', 'Stone colour', 0, 0, 0, 'color', 'Matrix between the stones is a mix of this and the silt colour'],
       ] },
       { title: 'Vegetation', controls: [
         ['vegOn', 'Enable vegetation', 0, 1, 1, '', ''],
@@ -572,7 +633,7 @@ export const groups = [
         ['autoRotate', 'Auto-rotate', 0, 1, 1, '', ''],
       ] },
       { title: 'Isolate layer', controls: [
-        ['debugView', 'Show only', 0, 8, 1, 'enum', 'Off|Strata|Grain|Flakes|Peeling|Joint cells|Cover|Masks|Features'],
+        ['debugView', 'Show only', 0, 8, 1, 'enum', 'Off|Strata|Grain|Flakes|Spalls|Pebbles|Cover|Masks|Features'],
       ] },
       { title: 'Export', kind: 'export' },
     ],

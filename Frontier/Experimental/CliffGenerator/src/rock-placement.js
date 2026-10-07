@@ -9,6 +9,7 @@ import { mulberry32, smoothstep, SimplexNoise } from './noise.js';
 import { makeSampler } from './terrain-geometry.js';
 
 const MAX_INSTANCES = 20000;
+const MAX_PEBBLES = 40000;
 
 export function placeRocks(field, params, library) {
   const sampler = makeSampler(field);
@@ -17,7 +18,6 @@ export function placeRocks(field, params, library) {
   const cluster = new SimplexNoise(params.rockSeed * 101 + 3);
 
   const density = Math.max(0, params.rockDensity || 0);
-  if (density <= 0) return [];
   // candidate spacing: denser grid as density rises, so the slider covers "a few" → "a lot"
   const spacing = size / Math.round(60 + 160 * density);
   const steps = Math.floor(size / spacing);
@@ -36,9 +36,9 @@ export function placeRocks(field, params, library) {
   const sizeMin = params.rockSizeMin, sizeMax = Math.max(params.rockSizeMin + 0.1, params.rockSizeMax);
   const powerLaw = (lo, hi, k) => lo * Math.pow(hi / lo, Math.pow(rand(), k));
 
-  for (let j = 0; j < steps; j++) {
+  for (let j = 0; j < steps && density > 0; j++) {
     for (let i = 0; i < steps; i++) {
-      if (placements.length >= MAX_INSTANCES) return placements;
+      if (placements.length >= MAX_INSTANCES) break;
       const x = (i + 0.5 + (rand() - 0.5) * 0.95) * spacing - size * 0.5;
       const z = (j + 0.5 + (rand() - 0.5) * 0.95) * spacing - size * 0.5;
       if (Math.abs(x) > size * 0.495 || Math.abs(z) > size * 0.495) continue;
@@ -78,6 +78,51 @@ export function placeRocks(field, params, library) {
       const tone = 0.82 + rand() * 0.3;
       const warm = (rand() - 0.5) * 0.08;
       placements.push({ set: geometrySet, index, matrix: m.clone(), kind: 'scatter', color: [tone + warm, tone, tone - warm] });
+    }
+  }
+  // ---- pebbles: dense small stones on scree aprons and river beds -----------------------------
+  const pebbleDensity = params.pebblesOn ? Math.max(0, params.pebbleDensity || 0) : 0;
+  if (pebbleDensity > 0 && library.pebble) {
+    const pSpacing = size / Math.round(160 + 420 * pebbleDensity);
+    const pSteps = Math.floor(size / pSpacing);
+    const pMax = Math.max(0.08, params.pebbleSize || 0.5);
+    let count = 0;
+    for (let j = 0; j < pSteps && count < MAX_PEBBLES; j++) {
+      for (let i = 0; i < pSteps && count < MAX_PEBBLES; i++) {
+        const x = (i + 0.5 + (rand() - 0.5) * 0.95) * pSpacing - size * 0.5;
+        const z = (j + 0.5 + (rand() - 0.5) * 0.95) * pSpacing - size * 0.5;
+        if (Math.abs(x) > size * 0.495 || Math.abs(z) > size * 0.495) continue;
+        const deposit = sampler.map('deposit', x, z);
+        const bed = field.river ? sampler.map('river', x, z) : 0;
+        const where = Math.max(smoothstep(0.15, 0.6, deposit), smoothstep(0.4, 0.9, bed));
+        if (where <= 0.01) continue;
+        const h = sampler.height(x, z);
+        if (params.waterEnabled && h < params.seaLevel - 0.5) continue;
+        if (field.waterLevel && sampler.map('waterLevel', x, z) > h + 0.6) continue;
+        if (field.road && sampler.map('road', x, z) > 0.2) continue;
+        const slope = sampler.map('slope', x, z);
+        if (slope > 1.1) continue;
+        if (rand() > pebbleDensity * where * 0.9) continue;
+        const radius = powerLaw(0.08, pMax, 1.6);
+        const n = sampler.normal(x, z);
+        nrm.set(n[0], n[1], n[2]);
+        const [px, py, pz] = sampler.surface(x, z, params);
+        const index = Math.floor(rand() * library.pebble.length);
+        const geometry = library.pebble[index];
+        target.copy(up).lerp(nrm, 0.8).normalize();
+        qTilt.setFromUnitVectors(up, target);
+        qYaw.setFromAxisAngle(up, rand() * Math.PI * 2);
+        axis.set(rand() - 0.5, rand() - 0.5, rand() - 0.5).normalize();
+        qTumble.setFromAxisAngle(axis, (rand() - 0.5) * 1.2);
+        q.copy(qTilt).multiply(qYaw).multiply(qTumble);
+        s.set(radius * (0.8 + rand() * 0.4), radius * (0.55 + rand() * 0.4), radius * (0.8 + rand() * 0.4));
+        p.set(px, py, pz).addScaledVector(nrm, -geometry.userData.height * s.y * 0.5 * 0.55);
+        m.compose(p, q, s);
+        const tone = 0.75 + rand() * 0.45;
+        const warm = (rand() - 0.5) * 0.1;
+        placements.push({ set: 'pebble', index, matrix: m.clone(), kind: 'pebble', color: [tone + warm, tone, tone - warm] });
+        count++;
+      }
     }
   }
   return placements;

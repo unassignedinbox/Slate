@@ -47,26 +47,29 @@ overhangs are limited to roughly one grid cell. True 3‑D (voxel / SDF) terrain
    (boulder / block / slab / shard): displaced icosphere, anisotropic stretch, then clipped by
    bedding + joint‑set planes, crease‑aware normals. Placement is a plain scatter: jittered
    grid × density × slope window × clustering mask, power‑law sizes, slope‑following tilt and
-   embed depth. Rendered as `InstancedMesh` with per‑instance tone variation and the same
+   embed depth. A second, denser pass scatters up to 40 000 small rounded **stones** on scree
+   aprons and river beds (slope‑limited, never on roads or under water) so gravel is real
+   geometry up close. Rendered as `InstancedMesh` with per‑instance tone variation and the same
    surface shader.
 6. **Surface** (`src/surface-shader.js`) — analytic, world‑space, texture‑free material injected
    into `MeshStandardMaterial` so Three's PBR, shadows, sky environment and fog still apply:
    - strata colour bands with dip, bed seams, oxide pockets, aggregate grain (3D value noise
      with analytic gradient);
-   - **mineral flakes** — three stacked, independently seeded layers of angular plates (basal
-     chips, laminae, fine flecks); the front plate occludes those behind; per‑plate colour,
-     tilt/bevel relief and sheen are separate controls, size from 5 cm to 8 m;
-   - **exfoliation (“peeling rock”)** — Voronoi sheets in three states: *intact* (joint cracks),
-     *lifting* (sheet tilted so one edge curls off the face, shadowed underside) and *spalled*
-     (sheet gone: recessed pale fresh rock with a dark rim); two octaves (sheets and small
-     flakes). Sheets only grow on exposed rock, in patches, and are stretched along bedding on
-     vertical faces — coverage, size, thickness, lift, bedding stretch, fresh contrast and
-     shadow depth are all separate controls;
-   - **joint network** — an independent Voronoi fracture set (F2−F1 V‑grooves) with its own
-     block size, line width, groove depth and bedding bias, so cracks and peeling can be tuned
-     (or switched off) separately;
-   - cover: runoff staining from the flow map + face streaks, gravel on deposits, vegetation on
-     gentle ground, moss in concavities, slope‑limited snow above the snow line.
+   - **mineral flakes** — three stacked plate layers composited top‑over‑bottom, each with its
+     **own colour** (filled from the rock type, then editable), size (3 cm – 8 m), density,
+     plate height (mm; drives tilt + rim bevel in the normal), shape (angular chips → rounded
+     grains), tint variation and a **crystal share**: crystal plates are brighter, glossy,
+     slightly metallic and carry a view‑dependent sun glint. Each layer can be revealed only on
+     hard caprock or only on soft eroded beds (the *hardness* channel), and plates take the
+     oxide colour where the *flow* channel and oxide pockets say the rock is weathering;
+   - **spalling (“peeling rock”)** — modelled on exfoliating sandstone: irregular fbm‑threshold
+     patches where a thin sheet has flaked off, each a shallow step (sheet thickness in metres,
+     height + analytic normal) with a bevelled rim, paler fresh rock inside, a second generation
+     of smaller spalls and sparse weathering pits. Patches are stretched along bedding on
+     vertical faces; no cell networks or concentric contours;
+   - cover: runoff staining from the flow map + face streaks, **pebble gravel** on deposits and
+     river beds (two generations of domed stones in a sandy matrix, each with its own tone),
+     vegetation on gentle ground, moss in concavities, slope‑limited snow above the snow line.
    All layers contribute height **and** an analytic gradient, combined triplanarly into one
    perturbed normal — no finite differences, no texture reads.
 7. **Drawn features** (`src/features.js`) — splines and points drawn in the viewport:
@@ -90,19 +93,21 @@ overhangs are limited to roughly one grid cell. True 3‑D (voxel / SDF) terrain
 Outliner rows map to inspector groups: **Landform / Strata / Erosion** rebuild the heightfield
 (press *Generate* or Ctrl+Enter; the worker reports progress), **Rocks** re‑scatter automatically,
 **Cliff depth** rebuilds the mesh live, and everything under **Rock material / Mineral flakes /
-Cell layers / Ground cover / Sun & atmosphere / Viewport** is live. Presets: Alpine
+Spalling / Ground cover / Sun & atmosphere / Viewport** is live. Presets: Alpine
 granite, Sandstone mesa, Canyon, Sea cliffs, Limestone escarpment, Fjord, Badlands, Dolomite towers,
-Desert buttes, Volcanic island, Highland glens, Karst pinnacles.
+Desert buttes, Volcanic island, Highland glens, Boulder field, Scree slopes, Granite domes,
+Rocky coast, Talus canyon, Karst pinnacles.
 
 Every texture layer is fully exposed: each has an **enable** toggle, its own **scale**,
 **strength** and **colour** controls —
 
 | Group | Layers | Controls |
 | --- | --- | --- |
-| Rock material | palette → five editable colour swatches; strata; grain; oxide; cavity | bed contrast, band scale, laminae, bed shading, seam darkness/width, caprock tint, grain size/relief/mottle/fineness, oxide amount/scale, cavity shading, bump strength, base roughness |
-| Mineral flakes | 1–3 cellular plate layers | coverage, size (5 cm – 8 m), layer count, density, colour variation, raised plates, rim highlight, sheen |
-| Cell layers | peeling sheets; joint cells (Voronoi, off by default) | peel strength, coverage, sheet size/thickness, edge lift, small sheets, follow bedding, fresh contrast, shadow depth; joint darkness, block size, line width, groove depth, bedding bias |
-| Ground cover | runoff; gravel; vegetation; moss; snow | wetness, face streaks + scale; gravel amount/scale/colour; vegetation amount, slope limit, patch scale, patchiness, dry grass + three colours; moss amount/scale/colour; snow line, slope limit, transition, roughness, colour |
+| Rock material | palette → nine editable colour swatches (beds, fresh, oxide, three flake layers, stones); strata; grain; oxide; cavity | bed contrast, band scale, laminae, bed shading, seam darkness/width, caprock tint, grain size/relief/mottle/fineness, oxide amount/scale, cavity shading, bump strength, base roughness |
+| Mineral flakes | three plate layers | global: coverage, rim highlight, sheen, crystal glitter, oxidise‑with‑runoff; per layer: enable, colour, plate size, density, plate height (mm), tint variation, shape, crystals, reveal by hardness |
+| Spalling | flaked‑off sheets | amount, coverage, patch size, sheet thickness (m), small spalls, weathering pits, follow bedding, fresh contrast, rim shadow |
+| Rocks → Gravel stones | instanced small stones | enable, density, largest stone |
+| Ground cover | runoff; pebble gravel; vegetation; moss; snow | wetness, face streaks + scale; gravel amount, stone size/relief/variation/colour; vegetation amount, slope limit, patch scale, patchiness, dry grass + three colours; moss amount/scale/colour; snow line, slope limit, transition, roughness, colour |
 
 Picking a rock type fills the colour swatches; they can be edited freely afterwards.
 
@@ -113,8 +118,8 @@ delete buttons and per‑lake level sliders, persist with the settings, and surv
 **Water** (own outliner row) has the live sea‑level slider, colour, opacity, shoreline wetness and
 the dried‑bed toggles.
 
-**Viewport → Isolate layer** renders a single layer on its own (Strata / Grain / Flakes / Peeling /
-Joint cells / Cover / Masks) so each pattern and its scale can be judged before tuning it.
+**Viewport → Isolate layer** renders a single layer on its own (Strata / Grain / Flakes / Spalls /
+Pebbles / Cover / Masks / Features) so each pattern and its scale can be judged before tuning it.
 
 Exports (all maps share the heightmap's top‑down frame): OBJ / GLB (displaced terrain block +
 all rock instances), 16‑bit packed heightmap PNG, **satmap** PNG (top‑down lit colour render at

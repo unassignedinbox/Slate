@@ -4,7 +4,7 @@ import { Editor } from './ui.js';
 import { CliffScene } from './scene.js';
 
 const STORAGE_KEY = 'frontier-cliff-generator';
-const SCHEMA = 4; // bump when parameter semantics change so stale saved values do not override new defaults
+const SCHEMA = 5; // bump when parameter semantics change so stale saved values do not override new defaults
 
 function readStored() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
@@ -133,7 +133,7 @@ function updateStats(extra = {}) {
   editor.setStats({
     'Grid': `${lastField.resolution}²${scene.meshField && scene.meshField !== lastField ? ` → ${scene.meshField.resolution}²` : ''} · ${values.worldSize} m`,
     'Triangles': (scene.stats.triangles + scene.rockGroup.children.reduce((n, m) => n + (m.geometry.getAttribute('position').count / 3) * m.count, 0)).toLocaleString('en-US', { maximumFractionDigits: 0 }),
-    'Rocks': scene.rockCount.toLocaleString('en-US'),
+    'Rocks': `${scene.rockCount.toLocaleString('en-US')} + ${(scene.pebbleCount || 0).toLocaleString('en-US')} stones`,
     'Relief': `${lastField.stats.min.toFixed(0)} – ${lastField.stats.max.toFixed(0)} m`,
     'Heightfield': `${(lastField.stats.elapsedMs / 1000).toFixed(1)} s`,
   });

@@ -4,11 +4,12 @@
 // Layers (each contributes height + analytic gradient → one normal perturbation):
 //   1. strata colour bands with geological dip, bed seams and oxide pockets
 //   2. aggregate grain  — 3D value noise, analytic gradient
-//   3. mineral flakes   — stacked cellular plates with tilt (the layered "flake" look)
-//   4. exfoliation      — Voronoi sheets in three states: intact (joint cracks), lifting
-//                          (tilted sheet with raised edge and shadowed underside), spalled
-//                          (recessed fresh rock with a rim) — the "peeling rock" effect
-//   5. cover            — runoff staining, scree gravel, vegetation, moss, snow
+//   3. mineral flakes   — three stacked plate layers, each with its own colour, size, height,
+//                          shape and crystal share (crystals glint); revealed by the hardness
+//                          channel and oxidised by the flow channel
+//   4. spalling         — irregular patches where a thin sheet flaked off: a shallow bevelled
+//                          step (height + normal), paler fresh rock, weathering pits
+//   5. cover            — runoff staining, pebble gravel, vegetation, moss, snow
 //
 // Vertex aux = (deposit, flow, hardness, cavity) from the erosion pipeline (zeros on rocks).
 
@@ -44,11 +45,13 @@ uniform float uStrataBand, uStrataContrast, uDipX, uDipZ, uSeamStrength, uSeamWi
 uniform float uGrainSize, uGrainStrength, uGrainContrast, uGrainFineness;
 uniform float uOxideAmount, uOxideScale;
 uniform float uCavityStrength;
-uniform float uFlakeStrength, uFlakeScale, uFlakeColor, uFlakeRelief, uFlakeSheen, uFlakeDensity, uFlakeLayers, uFlakeEdge;
-uniform float uPeelStrength, uPeelScale, uPeelLift, uPeelCoverage, uPeelThickness, uPeelBedding, uPeelFresh, uPeelOcclusion, uPeelSmall;
-uniform float uJointStrength, uJointScale, uJointWidth, uJointDepth, uJointStretch;
+uniform float uFlakeStrength, uFlakeSheen, uFlakeEdge, uFlakeOxide, uFlakeSparkle;
+uniform vec3 uFlakeCol[3];
+uniform float uFlakeOn[3], uFlakeSize[3], uFlakeDensity[3], uFlakeHeight[3], uFlakeCrystal[3], uFlakeVar[3], uFlakeShape[3], uFlakeReveal[3];
+uniform float uPeelStrength, uPeelScale, uPeelCoverage, uPeelThickness, uPeelBedding, uPeelFresh, uPeelPits, uPeelShadow, uPeelSecond;
 uniform float uWetness, uStreakScale, uStreakAmount;
-uniform float uGravelAmount, uGravelScale;
+uniform float uGravelAmount, uGravelScale, uGravelRelief, uGravelVariation;
+uniform vec3 uSunDir;
 uniform float uVegetation, uVegScale, uVegSlope, uVegPatchiness, uDryness;
 uniform float uMossiness, uMossScale;
 uniform float uSnowLine, uSnowSlopeCos, uSnowSoftness, uSnowRoughness;
@@ -95,65 +98,74 @@ vec4 cgFbm3( vec3 p, int octaves ) {
   return sum / norm;
 }
 
-// ---- exfoliation sheets --------------------------------------------------------------------
-struct PeelOut { float h; vec2 g; float fresh; float crack; float occl; };
-PeelOut peelLayer( vec2 p, float scale, float lift, float aa, float seed ) {
-  PeelOut o; o.h = 1.0; o.g = vec2( 0.0 ); o.fresh = 0.0; o.crack = 0.0; o.occl = 0.0;
+// ---- spalling ("peel") ---------------------------------------------------------------------
+// Thin sheets flaked off the face: irregular patches recessed by the sheet thickness with a soft
+// bevelled rim (height + analytic normal), a second generation of smaller spalls stepping down
+// inside and around them, and sparse weathering pits. No cells, no Voronoi.
+struct SpallOut { float h; vec2 g; float fresh; float rim; float pit; };
+vec3 spallNoise( vec2 p, float seed ) {   // (value, d/dx, d/dy) of a 3-octave blobby field
+  vec4 a = cgNoise3( vec3( p, seed ) );
+  vec4 b = cgNoise3( vec3( p * 2.3 + 7.1, seed + 3.0 ) );
+  vec4 c = cgNoise3( vec3( p * 5.1 + 2.9, seed + 6.0 ) );
+  return vec3( a.x * 0.6 + b.x * 0.28 + c.x * 0.12, a.yz * 0.6 + b.yz * ( 2.3 * 0.28 ) + c.yz * ( 5.1 * 0.12 ) );
+}
+SpallOut spallLayer( vec2 p, float scale, float coverage, float second, float pits, float aa, float seed ) {
+  SpallOut o; o.h = 0.0; o.g = vec2( 0.0 ); o.fresh = 0.0; o.rim = 0.0; o.pit = 0.0;
   vec2 q = p / scale;
-  ivec2 cell = ivec2( floor( q ) );
-  vec2 f = fract( q );
-  float F1 = 8.0, F2 = 8.0;
-  vec2 d1 = vec2( 0.0 ), d2 = vec2( 0.0 );
-  ivec2 id1 = cell;
-  for ( int y = -1; y <= 1; y++ ) for ( int x = -1; x <= 1; x++ ) {
-    ivec2 c = cell + ivec2( x, y );
-    vec2 centre = vec2( x, y ) + vec2( cgHash2( c, seed ), cgHash2( c, seed + 1.0 ) );
-    vec2 d = f - centre;
-    float dist = length( d );
-    if ( dist < F1 ) { F2 = F1; d2 = d1; F1 = dist; d1 = d; id1 = c; }
-    else if ( dist < F2 ) { F2 = dist; d2 = d; }
-  }
-  float b = F2 - F1;
-  vec2 gb = ( d2 / max( F2, 1e-4 ) - d1 / max( F1, 1e-4 ) ) / scale;
-  float state = cgHash2( id1, seed + 7.0 );
-  float rimW = 0.10 + 0.10 * cgHash2( id1, seed + 9.0 );
-  float w = max( rimW, aa );
-  float tb = clamp( b / w, 0.0, 1.0 );
-  float e = tb * tb * ( 3.0 - 2.0 * tb );
-  float de = 6.0 * tb * ( 1.0 - tb ) / w;
-  vec2 ge = de * gb;
-  o.crack = 1.0 - smoothstep( 0.0, max( 0.035, aa ), b );
-  if ( state < 0.42 ) {
-    // intact sheet: flush, shallow joint groove
-    o.h = 1.0 - 0.3 * ( 1.0 - e );
-    o.g = 0.3 * ge;
-    o.crack *= 0.35;
-  } else if ( state < 0.80 ) {
-    // lifting sheet: anchored on one side, edge curled up on the other
-    float ang = cgHash2( id1, seed + 11.0 ) * 6.2831853;
-    vec2 dir = vec2( cos( ang ), sin( ang ) );
-    float t = clamp( dot( d1, dir ) + 0.5, 0.0, 1.2 );
-    float curl = t * t;
-    float liftH = lift * 2.2 * curl;
-    o.h = e * ( 1.0 + liftH );
-    o.g = ge * ( 1.0 + liftH ) + e * lift * 2.2 * 2.0 * t * dir / scale;
-    o.occl = ( 1.0 - e ) * smoothstep( 0.3, 1.0, t ) * lift;
-    o.crack *= 0.6;
-  } else {
-    // spalled: the sheet is gone, fresh rock exposed in a recess
-    o.h = 0.0;
-    o.g = vec2( 0.0 );
-    o.fresh = 1.0;
-    o.occl = ( 1.0 - e ) * 0.7;
+  vec3 n1 = spallNoise( q, seed );
+  float th = mix( 0.72, 0.44, coverage );
+  float w = max( 0.03, aa * 1.2 );
+  float t = clamp( ( n1.x - th ) / w + 0.5, 0.0, 1.0 );
+  float s1 = t * t * ( 3.0 - 2.0 * t );
+  float ds1 = 6.0 * t * ( 1.0 - t ) / w;
+  vec2 g1 = ds1 * n1.yz / scale;
+  // second generation: smaller spalls, stepping down inside the first and dotted around them
+  vec3 n2 = spallNoise( q * 2.9 + 11.0, seed + 29.0 );
+  float th2 = mix( 0.78, 0.5, coverage );
+  float w2 = max( 0.035, aa * 2.9 * 1.2 );
+  float t2 = clamp( ( n2.x - th2 ) / w2 + 0.5, 0.0, 1.0 );
+  float s2 = ( t2 * t2 * ( 3.0 - 2.0 * t2 ) ) * second;
+  float ds2 = 6.0 * t2 * ( 1.0 - t2 ) / w2 * second;
+  vec2 g2 = ds2 * n2.yz * 2.9 / scale;
+  o.h = -( s1 + 0.6 * s2 );
+  o.g = -( g1 + 0.6 * g2 );
+  o.fresh = clamp( s1 + 0.7 * s2, 0.0, 1.0 );
+  o.rim = clamp( ( 6.0 * t * ( 1.0 - t ) + 6.0 * t2 * ( 1.0 - t2 ) * second ) / 1.5, 0.0, 1.0 );
+  // weathering pits: sparse small craters
+  if ( pits > 0.001 ) {
+    float ps = scale * 0.14;
+    vec2 pq = p / ps;
+    ivec2 pc = ivec2( floor( pq ) );
+    vec2 pf = fract( pq );
+    float paa = aa * scale / ps;
+    for ( int y = -1; y <= 1; y++ ) for ( int x = -1; x <= 1; x++ ) {
+      ivec2 c = pc + ivec2( x, y );
+      float pr = cgHash2( c, seed + 51.0 );
+      if ( pr > pits * 0.35 ) continue;
+      vec2 centre = vec2( x, y ) + vec2( cgHash2( c, seed + 52.0 ), cgHash2( c, seed + 53.0 ) );
+      vec2 dv = pf - centre;
+      float d = length( dv );
+      float r = 0.12 + 0.16 * cgHash2( c, seed + 54.0 );
+      if ( d > r + paa ) continue;
+      float x1 = clamp( d / r, 0.0, 1.0 );
+      float crater = 1.0 - x1 * x1 * ( 3.0 - 2.0 * x1 );
+      float dcr = -6.0 * x1 * ( 1.0 - x1 ) / r;
+      vec2 gc = dcr * ( d > 1e-4 ? dv / d : vec2( 0.0 ) ) / ps;
+      o.h -= 0.5 * crater;
+      o.g += 0.5 * gc;
+      o.pit = max( o.pit, crater );
+    }
   }
   return o;
 }
 
 // ---- mineral flakes ------------------------------------------------------------------------
-// Overlapping angular plates; the front-most plate wins so plates occlude rather than add.
-struct FlakeOut { float cover; vec2 g; vec3 color; float finish; float edge; float relief; };
-FlakeOut flakeLayer( vec2 p, float scale, float aa, float seed ) {
-  FlakeOut o; o.cover = 0.0; o.g = vec2( 0.0 ); o.color = vec3( 0.5 ); o.finish = 0.5; o.edge = 0.0; o.relief = 0.0;
+// Three stacked layers of plates. Every layer has its own colour, size, density, height, shape and
+// crystal share; every plate gets a small tint jitter around the layer colour, its own tilt and a
+// bevelled rim. The front-most plate wins so plates occlude rather than add.
+struct FlakeOut { float cover; vec2 g; vec3 jitter; float crystal; float edge; vec2 facet; };
+FlakeOut flakeLayer( vec2 p, float scale, float density, float shape, float aa, float seed ) {
+  FlakeOut o; o.cover = 0.0; o.g = vec2( 0.0 ); o.jitter = vec3( 0.5 ); o.crystal = 1.0; o.edge = 0.0; o.facet = vec2( 0.0 );
   vec2 q = p / scale;
   ivec2 cell = ivec2( floor( q ) );
   vec2 f = fract( q );
@@ -161,7 +173,7 @@ FlakeOut flakeLayer( vec2 p, float scale, float aa, float seed ) {
   for ( int y = -1; y <= 1; y++ ) for ( int x = -1; x <= 1; x++ ) {
     ivec2 c = cell + ivec2( x, y );
     float pr = cgHash2( c, seed );
-    if ( pr < 1.0 - uFlakeDensity ) continue;
+    if ( pr < 1.0 - density ) continue;
     vec2 centre = vec2( x, y ) + vec2( cgHash2( c, seed + 1.0 ), cgHash2( c, seed + 2.0 ) );
     float ang = cgHash2( c, seed + 3.0 ) * 6.2831853;
     float ca = cos( ang ), sa = sin( ang );
@@ -170,10 +182,12 @@ FlakeOut flakeLayer( vec2 p, float scale, float aa, float seed ) {
     float h4 = cgHash2( c, seed + 4.0 ), h5 = cgHash2( c, seed + 5.0 );
     vec2 axes = vec2( 0.8 + h4 * 0.65, 0.75 + pr * 0.8 );
     vec2 d = abs( local ) * axes;
-    // six irregular edges: box, bevel diagonal and one oblique cut → angular chips, not pebbles
+    // angular: box ∩ bevel ∩ oblique cut; rounded: ellipse; shape blends them.
     float bevel = dot( d, vec2( 0.6 + pr * 0.25, 0.55 + h5 * 0.35 ) );
     float cut = dot( local, normalize( vec2( pr - 0.35, 0.65 ) ) ) * 1.18;
-    float dist = max( max( d.x, d.y ), max( bevel, cut ) );
+    float dPoly = max( max( d.x, d.y ), max( bevel, cut ) );
+    float dRound = length( local * axes ) * 0.92;
+    float dist = mix( dPoly, dRound, shape );
     float radius = 0.27 + h4 * 0.38;
     float cover = 1.0 - smoothstep( radius - aa, radius + aa, dist );
     if ( cover > 0.001 && pr > front ) {
@@ -183,65 +197,55 @@ FlakeOut flakeLayer( vec2 p, float scale, float aa, float seed ) {
       vec2 edgeDir = transpose( R ) * ( sign( local ) * axes );
       float edge = 1.0 - smoothstep( aa, aa + 0.06, abs( dist - radius ) );
       o.edge = edge * cover;
-      o.relief = step( 1.0 - uFlakeRelief, cgHash2( c, seed + 7.0 ) );
-      // plate tilt plus a bevel at the rim
-      o.g = ( transpose( R ) * tilt * cover * 4.0 + edgeDir * o.edge * 3.0 ) / scale * o.relief;
-      o.color = vec3( cgHash2( c, seed + 8.0 ), cgHash2( c, seed + 9.0 ), cgHash2( c, seed + 10.0 ) );
-      o.finish = cgHash2( c, seed + 11.0 );
+      // plate tilt plus a bevel at the rim [1/cell]
+      o.g = transpose( R ) * tilt * cover * 4.0 + edgeDir * o.edge * 3.0;
+      o.jitter = vec3( cgHash2( c, seed + 8.0 ), cgHash2( c, seed + 9.0 ), cgHash2( c, seed + 10.0 ) );
+      o.crystal = cgHash2( c, seed + 11.0 );
+      o.facet = ( vec2( cgHash2( c, seed + 12.0 ), cgHash2( c, seed + 13.0 ) ) - 0.5 ) * 2.0;
     }
   }
   return o;
 }
-// Three independently seeded layers: basal chips, mid laminae, fine flecks. Foreground covers background.
-FlakeOut flakeStack( vec2 p, float scale, float footprint, float seed ) {
-  FlakeOut r; r.cover = 0.0; r.g = vec2( 0.0 ); r.color = vec3( 0.5 ); r.finish = 0.5; r.edge = 0.0; r.relief = 0.0;
-  for ( int layer = 0; layer < 3; layer++ ) {
-    if ( float( layer ) >= uFlakeLayers ) break;
-    float s = layer == 0 ? 1.65 : ( layer == 1 ? 0.6 : 0.21 );
-    float ls = scale * s;
-    float vis = 1.0 - smoothstep( 0.12, 0.5, footprint / ls );
-    if ( vis < 0.001 ) continue;
-    FlakeOut f = flakeLayer( p + vec2( float( layer ) * 19.0, 7.0 ), ls, max( 0.025, 1.3 * footprint / ls ), seed + float( layer ) * 71.0 );
-    float alpha = f.cover * vis * ( layer == 0 ? 0.8 : ( layer == 1 ? 0.75 : 0.55 ) );
-    r.cover = mix( r.cover, 1.0, alpha );
-    r.g = mix( r.g, f.g, alpha );
-    r.color = mix( r.color, f.color, alpha );
-    r.finish = mix( r.finish, f.finish, alpha );
-    r.edge = mix( r.edge, f.edge, alpha );
-    r.relief = mix( r.relief, f.relief, alpha );
-  }
-  return r;
-}
 
-// ---- joint network -------------------------------------------------------------------------
-// Independent Voronoi fracture set: V-grooves along cell borders, darkened and recessed.
-struct JointOut { float crack; vec2 g; };
-JointOut jointLayer( vec2 p, float scale, float width, float aa, float seed ) {
-  JointOut o; o.crack = 0.0; o.g = vec2( 0.0 );
-  vec2 q = p / scale;
+// ---- gravel pebbles ------------------------------------------------------------------------
+// Rounded stones packed in a sandy matrix: two generations of jittered-cell ellipsoid domes with a
+// proper dome normal and per-stone tone. Front stone wins. Anti-aliased by the pixel footprint.
+struct PebbleOut { float cover; vec2 g; float tone; float hue; };
+PebbleOut pebbleLayer( vec2 p, float size, float aa, float seed ) {
+  PebbleOut o; o.cover = 0.0; o.g = vec2( 0.0 ); o.tone = 0.5; o.hue = 0.5;
+  vec2 q = p / size;
   ivec2 cell = ivec2( floor( q ) );
   vec2 f = fract( q );
-  float F1 = 8.0, F2 = 8.0;
-  vec2 d1 = vec2( 0.0 ), d2 = vec2( 0.0 );
+  float front = -1.0;
   for ( int y = -1; y <= 1; y++ ) for ( int x = -1; x <= 1; x++ ) {
     ivec2 c = cell + ivec2( x, y );
-    vec2 centre = vec2( x, y ) + vec2( cgHash2( c, seed ), cgHash2( c, seed + 1.0 ) );
-    vec2 d = f - centre;
-    float dist = length( d );
-    if ( dist < F1 ) { F2 = F1; d2 = d1; F1 = dist; d1 = d; }
-    else if ( dist < F2 ) { F2 = dist; d2 = d; }
+    float pr = cgHash2( c, seed );
+    if ( pr < 0.22 ) continue;
+    vec2 centre = vec2( x, y ) + 0.5 + ( vec2( cgHash2( c, seed + 1.0 ), cgHash2( c, seed + 2.0 ) ) - 0.5 ) * 0.55;
+    float ang = cgHash2( c, seed + 3.0 ) * 3.1415926;
+    float ca = cos( ang ), sa = sin( ang );
+    mat2 R = mat2( ca, sa, -sa, ca );
+    vec2 local = R * ( f - centre );
+    vec2 axes = vec2( 1.0, 0.65 + 0.5 * cgHash2( c, seed + 4.0 ) );
+    vec2 le = local * axes;
+    float d = length( le );
+    float r = 0.3 + 0.2 * cgHash2( c, seed + 5.0 );
+    float cover = 1.0 - smoothstep( r - aa, r + aa, d );
+    if ( cover > 0.001 && pr > front ) {
+      front = pr;
+      o.cover = cover;
+      float x1 = clamp( d / r, 0.0, 0.97 );
+      float slope = x1 / sqrt( 1.0 - x1 * x1 );                 // dome: h = r·sqrt(1−x²)
+      vec2 dir = d > 1e-4 ? transpose( R ) * ( le * axes / d ) : vec2( 0.0 );
+      o.g = -dir * slope * cover * 0.6;                         // [1/cell], scaled by height later
+      o.tone = cgHash2( c, seed + 6.0 );
+      o.hue = cgHash2( c, seed + 7.0 );
+    }
   }
-  float b = F2 - F1;
-  float w = max( width, aa );
-  float t = clamp( b / w, 0.0, 1.0 );
-  o.crack = 1.0 - t * t * ( 3.0 - 2.0 * t );
-  float dt = 6.0 * t * ( 1.0 - t ) / w;
-  vec2 gb = ( d2 / max( F2, 1e-4 ) - d1 / max( F1, 1e-4 ) ) / scale;
-  o.g = dt * gb;   // gradient of (1 - crack) = groove rising towards the cell interior
   return o;
 }
 
-struct Surface { vec3 albedo; vec3 normalW; float roughness; float ao; };
+struct Surface { vec3 albedo; vec3 normalW; float roughness; float ao; float metal; vec3 emissive; };
 
 Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   float road = aux2.x * ( 1.0 - uIsRock ) * uRoadOn;
@@ -277,80 +281,101 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   w /= dot( w, vec3( 1.0 ) );
 
   vec3 G = vec3( 0.0 );
-  float fresh = 0.0, crack = 0.0, occl = 0.0, joint = 0.0, flakeCover = 0.0, flakeFinish = 0.0, flakeEdge = 0.0;
-  vec3 flakeCol = vec3( 0.0 );
+  float fresh = 0.0, rim = 0.0, pit = 0.0;
+  float flakeCover = 0.0, flakeCrystal = 0.0, flakeEdge = 0.0;
+  vec3 flakeCol = vec3( 0.0 ), flakeFacet = vec3( 0.0 );
+  float pebbleCover = 0.0, pebbleTone = 0.0, pebbleHue = 0.0;
 
-  // exfoliation happens in patches (uPeelCoverage = fraction of rock covered), mostly on faces
-  float patchNoise = cgNoise3( wp * 0.03 + 13.0 ).x * 0.65 + cgNoise3( wp * 0.11 ).x * 0.35;
-  float patchEdge = 1.0 - uPeelCoverage;
-  float peelPatch = smoothstep( patchEdge - 0.08, patchEdge + 0.08, patchNoise );
-  float peelAmount = uPeelStrength * rockMask * peelPatch;
-  float peelThick = 0.1 * uPeelThickness * peelAmount;
-  float peelThick2 = 0.03 * uPeelThickness * peelAmount * uPeelSmall;
+  // spalling happens in patches (uPeelCoverage = share of the rock), on exposed rock only
+  float peelAmount = uPeelStrength * rockMask;
+  float peelThick = uPeelThickness * peelAmount;                 // [m] sheet thickness
   float flakeAmount = uFlakeStrength * rockMask;
-  float flakeH = 0.012 * flakeAmount;
-  float jointAmount = uJointStrength * rockMask;
-  float cellVar = 0.75 + 0.6 * cgNoise3( wp * 0.05 + 31.0 ).x;   // non-uniform sheet sizes
-  vec3 warp3 = vec3( cgNoise3( wp * 0.35 ).x, cgNoise3( wp * 0.35 + 17.0 ).x, cgNoise3( wp * 0.35 + 41.0 ).x ) - 0.5;
+  float gravelHere = max( gravelMix, smoothstep( 0.3, 0.9, riverBed ) );
+  float hsel = smoothstep( 0.3, 0.7, hardness );
 
   for ( int axis = 0; axis < 3; axis++ ) {
     float wa = axis == 0 ? w.x : ( axis == 1 ? w.y : w.z );
     if ( wa < 0.02 ) continue;
-    vec3 wq = wp + warp3 * uPeelScale * 0.25;
-    vec2 pp = axis == 0 ? wq.yz : ( axis == 1 ? wq.xz : wq.xy );
+    vec2 pp = axis == 0 ? wp.yz : ( axis == 1 ? wp.xz : wp.xy );
     pp += vec2( float( axis ) * 37.0, uSeed );
     vec2 g2 = vec2( 0.0 );
-    // vertical projections: compress the up axis so features follow bedding
+    // vertical projections: compress the up axis so spalls follow bedding
     vec2 bedStretch = axis == 1 ? vec2( 1.0 ) : ( axis == 0 ? vec2( 1.0 - 0.4 * uPeelBedding, 1.0 + 0.4 * uPeelBedding ) : vec2( 1.0 + 0.4 * uPeelBedding, 1.0 - 0.4 * uPeelBedding ) );
 
     if ( peelAmount > 0.003 ) {
-      float sc = uPeelScale * cellVar;
-      float fade = 1.0 - smoothstep( 0.08, 0.35, footprint / sc );
+      float sc = uPeelScale;
+      float fade = 1.0 - smoothstep( 0.1, 0.4, footprint / sc );
       if ( fade > 0.0 ) {
-        PeelOut a = peelLayer( pp * bedStretch, sc, uPeelLift, max( 0.02, 1.5 * footprint / sc ), uSeed + float( axis ) * 13.0 );
-        g2 += a.g * bedStretch * peelThick * fade;
-        fresh += a.fresh * fade * wa * peelPatch;
-        crack += a.crack * fade * wa * peelPatch;
-        occl += a.occl * fade * wa * peelPatch;
-        float sc2 = sc * 0.27;
-        float fade2 = ( 1.0 - smoothstep( 0.08, 0.35, footprint / sc2 ) ) * step( 0.01, uPeelSmall );
-        if ( fade2 > 0.0 ) {
-          PeelOut b = peelLayer( pp * bedStretch + vec2( 31.0, 17.0 ), sc2, uPeelLift * 0.6, max( 0.02, 1.5 * footprint / sc2 ), uSeed + 101.0 + float( axis ) * 13.0 );
-          float keep = ( 1.0 - a.fresh * 0.6 ) * uPeelSmall;
-          g2 += b.g * bedStretch * peelThick2 * fade2;
-          fresh += b.fresh * fade2 * wa * 0.5 * keep * peelPatch;
-          crack += b.crack * fade2 * wa * 0.5 * keep * peelPatch;
-          occl += b.occl * fade2 * wa * 0.5 * keep * peelPatch;
-        }
-      }
-    }
-
-    if ( jointAmount > 0.003 ) {
-      vec2 js = axis == 1 ? vec2( 1.0 ) : ( axis == 0 ? vec2( 1.0 - 0.5 * uJointStretch, 1.0 + 0.5 * uJointStretch ) : vec2( 1.0 + 0.5 * uJointStretch, 1.0 - 0.5 * uJointStretch ) );
-      float jf = 1.0 - smoothstep( 0.05, 0.3, footprint / uJointScale );
-      if ( jf > 0.0 ) {
-        JointOut jo = jointLayer( pp * js + vec2( 53.0, 11.0 ), uJointScale, uJointWidth, max( 0.01, 1.2 * footprint / uJointScale ), uSeed + 401.0 + float( axis ) * 7.0 );
-        joint += jo.crack * jf * wa * jointAmount;
-        g2 += jo.g * js * 0.12 * uJointDepth * jointAmount * jf;
+        SpallOut sp = spallLayer( pp * bedStretch, sc, uPeelCoverage, uPeelSecond, uPeelPits, max( 0.01, 1.2 * footprint / sc ), uSeed + float( axis ) * 13.0 );
+        g2 += sp.g * bedStretch * peelThick * fade;
+        fresh += sp.fresh * fade * wa;
+        rim += sp.rim * fade * wa;
+        pit += sp.pit * fade * wa;
       }
     }
 
     if ( flakeAmount > 0.003 ) {
-      FlakeOut fs = flakeStack( pp, uFlakeScale, footprint, uSeed + 211.0 + float( axis ) * 7.0 );
-      g2 += fs.g * flakeH;
-      flakeCover += fs.cover * wa;
-      flakeCol += fs.color * fs.cover * wa;
-      flakeFinish += fs.finish * fs.cover * wa;
-      flakeEdge += fs.edge * wa;
+      // bottom → top; the top layer occludes the ones below
+      float cov = 0.0, cry = 0.0, edg = 0.0; vec3 col = vec3( 0.0 ), fac = vec3( 0.0 ); vec2 gf = vec2( 0.0 );
+      for ( int L = 0; L < 3; L++ ) {
+        if ( uFlakeOn[L] < 0.5 ) continue;
+        float ls = uFlakeSize[L];
+        float vis = 1.0 - smoothstep( 0.12, 0.5, footprint / ls );
+        if ( vis < 0.001 ) continue;
+        FlakeOut f = flakeLayer( pp + vec2( float( L ) * 19.0, 7.0 ), ls, uFlakeDensity[L], uFlakeShape[L], max( 0.02, 1.3 * footprint / ls ), uSeed + 211.0 + float( L ) * 71.0 + float( axis ) * 7.0 );
+        // reveal by the erosion hardness channel: +1 only on hard beds, −1 only on soft beds
+        float rv = uFlakeReveal[L];
+        float reveal = rv >= 0.0 ? mix( 1.0, hsel, rv ) : mix( 1.0, 1.0 - hsel, -rv );
+        float alpha = f.cover * vis * reveal;
+        vec3 jit = ( f.jitter - 0.5 ) * uFlakeVar[L];
+        vec3 lc = uFlakeCol[L] * ( 1.0 + jit.x * 0.7 ) * ( vec3( 1.0 ) + vec3( jit.y, 0.0, -jit.y ) * 0.25 );
+        float isCry = step( f.crystal, uFlakeCrystal[L] );
+        lc = mix( lc, lc * 1.25 + vec3( 0.03, 0.04, 0.06 ), isCry );
+        cov = mix( cov, 1.0, alpha );
+        col = mix( col, lc, alpha );
+        cry = mix( cry, isCry, alpha );
+        edg = mix( edg, f.edge, alpha );
+        fac = mix( fac, vec3( f.facet, 0.0 ), alpha );
+        gf = mix( gf, f.g / ls * uFlakeHeight[L] * 0.001, alpha );
+      }
+      g2 += gf * flakeAmount;
+      flakeCover += cov * wa;
+      flakeCol += col * wa;
+      flakeCrystal += cry * wa;
+      flakeEdge += edg * wa;
+      flakeFacet += fac * wa;
+    }
+
+    if ( gravelHere > 0.003 && uGravelAmount > 0.001 ) {
+      float ps = uGravelScale;
+      float v1 = 1.0 - smoothstep( 0.12, 0.5, footprint / ps );
+      if ( v1 > 0.001 ) {
+        PebbleOut pa = pebbleLayer( pp + vec2( 5.0, 23.0 ), ps, max( 0.02, 1.3 * footprint / ps ), uSeed + 307.0 + float( axis ) * 7.0 );
+        float ps2 = ps * 0.45;
+        float v2 = 1.0 - smoothstep( 0.12, 0.5, footprint / ps2 );
+        PebbleOut pb = pebbleLayer( pp + vec2( 41.0, 3.0 ), ps2, max( 0.02, 1.3 * footprint / ps2 ), uSeed + 331.0 + float( axis ) * 7.0 );
+        // small stones fill the gaps between the big ones
+        float ca = pa.cover * v1, cb = pb.cover * v2 * ( 1.0 - ca );
+        float cov = ca + cb;
+        vec2 gp = ( pa.g / ps * ps * 0.5 * ca + pb.g / ps2 * ps2 * 0.5 * cb );   // dome height ≈ half the stone size
+        g2 += gp * uGravelRelief * gravelHere;
+        pebbleCover += cov * wa;
+        pebbleTone += ( pa.tone * ca + pb.tone * cb ) * wa;
+        pebbleHue += ( pa.hue * ca + pb.hue * cb ) * wa;
+      }
     }
 
     vec3 g3 = axis == 0 ? vec3( 0.0, g2.x, g2.y ) : ( axis == 1 ? vec3( g2.x, 0.0, g2.y ) : vec3( g2.x, g2.y, 0.0 ) );
     G += g3 * wa;
   }
   flakeCol = flakeCover > 1e-4 ? flakeCol / flakeCover : vec3( 0.5 );
-  flakeFinish = flakeCover > 1e-4 ? flakeFinish / flakeCover : 0.5;
+  flakeCrystal = flakeCover > 1e-4 ? flakeCrystal / flakeCover : 0.0;
+  flakeFacet = flakeCover > 1e-4 ? flakeFacet / flakeCover : vec3( 0.0 );
   flakeCover = clamp( flakeCover * flakeAmount, 0.0, 1.0 );
-  joint = clamp( joint, 0.0, 1.0 );
+  pebbleTone = pebbleCover > 1e-4 ? pebbleTone / pebbleCover : 0.5;
+  pebbleHue = pebbleCover > 1e-4 ? pebbleHue / pebbleCover : 0.5;
+  pebbleCover = clamp( pebbleCover, 0.0, 1.0 );
+  fresh = clamp( fresh, 0.0, 1.0 ); rim = clamp( rim, 0.0, 1.0 ); pit = clamp( pit, 0.0, 1.0 );
 
   // Aggregate grain (3D, no projection needed)
   float grainFade = 1.0 - smoothstep( 0.15, 0.6, footprint / uGrainSize );
@@ -392,19 +417,22 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   rock *= 1.0 - uGrainContrast * 0.45 + uGrainContrast * 0.9 * ( grain.x * 0.5 + 0.5 );
   rock *= 1.0 - uGrainContrast * 0.2 + uGrainContrast * 0.4 * ( grainFine.x * 0.5 + 0.5 );
 
+  float streakPre = smoothstep( 0.56, 0.78, cgNoise3( vec3( wp.x, wp.y * 0.05, wp.z ) / uStreakScale ).x * 0.6 + cgNoise3( vec3( wp.x * 3.6, wp.y * 0.1, wp.z * 3.6 ) / uStreakScale + 5.0 ).x * 0.4 ) * wall;
+
   // oxide pockets
   float ox = smoothstep( 0.52, 0.8, cgNoise3( wp / uOxideScale + 7.0 ).x * 0.6 + cgNoise3( wp / uOxideScale * 3.4 ).x * 0.4 );
   rock = mix( rock, uOxide, ox * uOxideAmount );
 
-  // exfoliation colour: pale fresh rock in spalls, dark joints, shadow under lifted edges
-  rock = mix( rock, uFresh, clamp( fresh, 0.0, 1.0 ) * uPeelFresh );
-  rock *= 1.0 - clamp( crack, 0.0, 1.0 ) * 0.3 * uPeelOcclusion;
-  rock *= 1.0 - clamp( occl, 0.0, 1.0 ) * 0.6 * uPeelOcclusion;
-  rock *= 1.0 - joint * 0.55;
+  // spalls: paler fresh rock where the sheet is gone, a soft shadow in the bevel, dark pits
+  rock = mix( rock, mix( rock, uFresh, uPeelFresh ), fresh );
+  rock *= 1.0 - rim * 0.22 * uPeelShadow;
+  rock *= 1.0 - pit * 0.45;
 
-  // flakes: per-plate colour (geology tint → independent hue as uFlakeColor rises) and rim highlight
-  vec3 plateTint = mix( vec3( 0.65 + 0.7 * flakeCol.x ), 0.4 + 1.2 * flakeCol, uFlakeColor );
-  rock = mix( rock, rock * plateTint, flakeCover * 0.85 );
+  // flakes: layer colours (already composited top-over-bottom), oxidised by the erosion channels,
+  // bright bevel at the rims
+  float oxidise = clamp( ox * 0.7 + flow * 0.6 + streakPre * 0.4, 0.0, 1.0 ) * uFlakeOxide;
+  vec3 plateCol = mix( flakeCol, uOxide * ( 0.7 + 0.5 * flakeCol.g ), oxidise );
+  rock = mix( rock, plateCol, flakeCover );
   rock += vec3( 0.08 ) * clamp( flakeEdge, 0.0, 1.0 ) * flakeAmount * uFlakeEdge;
 
   // cavity / convexity
@@ -416,14 +444,15 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   float wet = clamp( uWetness * ( flow * 0.9 + streak * wall * 0.7 ), 0.0, 1.0 );
   rock *= 1.0 - wet * 0.5;
 
-  // scree gravel on deposits
-  float gravelSpeckle = cgNoise3( wp / uGravelScale ).x;
-  vec3 gravel = uGravel * ( 0.7 + 0.6 * gravelSpeckle );
+  // scree gravel on deposits: pebbles in a sandy matrix
+  vec3 matrix = mix( uGravel, uSilt, 0.5 ) * 0.8 * ( 0.9 + 0.2 * speckle );
+  vec3 stone = uGravel * ( 1.0 - uGravelVariation * 0.5 + uGravelVariation * pebbleTone ) * ( vec3( 1.0 ) + vec3( pebbleHue - 0.5, 0.0, 0.5 - pebbleHue ) * 0.25 * uGravelVariation );
+  vec3 gravel = mix( matrix, stone, pebbleCover );
   rock = mix( rock, gravel, gravelMix );
 
   // drawn features: river beds (cobbles → silt towards the banks), lake beds (silt), roads
   float cobble = cgNoise3( wp * 2.6 ).x * 0.5 + cgNoise3( wp * 9.0 + 3.0 ).x * 0.5;
-  vec3 bedCol = mix( uSilt, uGravel * ( 0.65 + 0.7 * cobble ), smoothstep( 0.45, 0.95, riverBed ) );
+  vec3 bedCol = mix( uSilt, mix( uGravel * ( 0.65 + 0.7 * cobble ), gravel, step( 0.001, uGravelAmount ) ), smoothstep( 0.45, 0.95, riverBed ) );
   bedCol = mix( bedCol, uSilt * ( 0.9 + 0.2 * speckle ), lakeBed * ( 1.0 - riverBed ) );
   float bedMix = smoothstep( 0.05, 0.5, max( riverBed, lakeBed ) );
   rock = mix( rock, bedCol, bedMix );
@@ -441,7 +470,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
 
   // moss in sheltered concavities
   float moss = uMossiness * ( 0.35 + 0.65 * smoothstep( 0.0, 0.6, -cavity ) ) * smoothstep( 0.05, 0.7, n.y + 0.2 )
-    * smoothstep( 0.5, 0.78, cgNoise3( wp / uMossScale ).x * 0.6 + cgNoise3( wp / uMossScale * 0.15 + 9.0 ).x * 0.4 ) * belowSnow * aboveWater * ( 1.0 - crack * 0.5 );
+    * smoothstep( 0.5, 0.78, cgNoise3( wp / uMossScale ).x * 0.6 + cgNoise3( wp / uMossScale * 0.15 + 9.0 ).x * 0.4 ) * belowSnow * aboveWater * ( 1.0 - fresh * 0.5 );
   moss = clamp( moss, 0.0, 1.0 );
 
   vec3 color = mix( rock, grass, veg );
@@ -460,11 +489,20 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
 
   float roughness = uBaseRoughness - wet * 0.4 - fresh * 0.05 - shore * 0.35 * uShoreWet;
   roughness = mix( roughness, 0.95, roadSurf );
-  roughness = mix( roughness, mix( 0.75, 0.3, flakeFinish ), flakeCover * uFlakeSheen );
+  roughness = mix( roughness, 0.45, flakeCover * uFlakeSheen );
+  float crystalMask = flakeCover * flakeCrystal;
+  roughness = mix( roughness, 0.12, crystalMask );
+  float metal = 0.35 * crystalMask;
+  // glitter: each crystal plate is a tiny facet; a sharp highlight when it lines up with the sun
+  vec3 V = normalize( cameraPosition - wp );
+  vec3 H = normalize( V + normalize( uSunDir ) );
+  vec3 facetN = normalize( nW + flakeFacet * 0.35 );
+  float glint = pow( max( dot( facetN, H ), 0.0 ), 260.0 );
+  vec3 emissive = vec3( glint * crystalMask * uFlakeSparkle * 2.5 ) * ( 1.0 - snow ) * ( 1.0 - veg );
   roughness = mix( roughness, 0.95, veg );
   roughness = mix( roughness, uSnowRoughness, snow );
 
-  float ao = ( 1.0 - clamp( crack, 0.0, 1.0 ) * 0.35 * uPeelOcclusion ) * ( 1.0 - clamp( occl, 0.0, 1.0 ) * 0.6 * uPeelOcclusion ) * ( 1.0 - joint * 0.5 ) * ( 1.0 - max( 0.0, -cavity ) * 0.4 * uCavityStrength );
+  float ao = ( 1.0 - rim * 0.25 * uPeelShadow ) * ( 1.0 - pit * 0.4 ) * ( 1.0 - max( 0.0, -cavity ) * 0.4 * uCavityStrength );
   ao = mix( ao, 1.0, snow * 0.6 );
 
   vec3 nFinal = normalize( mix( nW, n, max( snow, veg * 0.8 ) ) );
@@ -472,16 +510,18 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   Surface s;
   s.albedo = color;
   s.normalW = nFinal;
-  s.roughness = clamp( roughness, 0.2, 1.0 );
+  s.roughness = clamp( roughness, 0.08, 1.0 );
   s.ao = ao;
+  s.metal = metal;
+  s.emissive = emissive;
   if ( uDebugView > 0.5 ) {
     // Isolate one layer so its contribution can be judged on its own (lit, flat normal).
     vec3 dbg = vec3( 0.0 );
     if ( uDebugView < 1.5 ) dbg = strataOnly;
     else if ( uDebugView < 2.5 ) dbg = vec3( 0.5 + 0.5 * grain.x ) * ( 1.0 - uGrainContrast * 0.5 + uGrainContrast * ( 0.5 + 0.5 * grainFine.x ) ) * ( 0.3 + 0.7 * uGrainStrength );
-    else if ( uDebugView < 3.5 ) dbg = mix( vec3( 0.12 ), mix( vec3( 0.5 + 0.5 * flakeCol.x ), flakeCol, uFlakeColor ) + vec3( 0.25 ) * clamp( flakeEdge, 0.0, 1.0 ) * uFlakeEdge, flakeCover );
-    else if ( uDebugView < 4.5 ) dbg = vec3( 0.15 ) + vec3( 0.0, 0.7, 0.9 ) * clamp( fresh, 0.0, 1.0 ) + vec3( 0.9, 0.2, 0.1 ) * clamp( crack, 0.0, 1.0 ) + vec3( 0.0, 0.0, 0.5 ) * clamp( occl, 0.0, 1.0 );
-    else if ( uDebugView < 5.5 ) dbg = vec3( 0.75 ) * ( 1.0 - joint ) + vec3( 0.9, 0.3, 0.0 ) * joint;
+    else if ( uDebugView < 3.5 ) dbg = mix( vec3( 0.12 ), flakeCol + vec3( 0.25 ) * clamp( flakeEdge, 0.0, 1.0 ) * uFlakeEdge + vec3( 0.3, 0.3, 0.6 ) * flakeCrystal, flakeCover );
+    else if ( uDebugView < 4.5 ) dbg = vec3( 0.15 ) + vec3( 0.0, 0.7, 0.9 ) * fresh + vec3( 0.9, 0.2, 0.1 ) * rim + vec3( 0.0, 0.0, 0.6 ) * pit;
+    else if ( uDebugView < 5.5 ) dbg = mix( vec3( 0.1 ), vec3( 0.3 + 0.6 * pebbleTone ), pebbleCover ) * ( 0.3 + 0.7 * gravelHere );
     else if ( uDebugView < 6.5 ) dbg = vec3( 0.12 ) + vec3( 0.1, 0.7, 0.1 ) * veg + vec3( 0.05, 0.3, 0.15 ) * moss + vec3( 0.9 ) * snow + vec3( 0.5, 0.4, 0.3 ) * gravelMix;
     else if ( uDebugView < 7.5 ) dbg = vec3( rockMask, wet, hardness );
     else dbg = vec3( road, riverBed, lakeBed ) + vec3( 0.0, 0.0, 0.4 ) * under;
@@ -489,6 +529,8 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
     s.normalW = n;
     s.roughness = 1.0;
     s.ao = 1.0;
+    s.metal = 0.0;
+    s.emissive = vec3( 0.0 );
   }
   return s;
 }
@@ -503,8 +545,10 @@ const fragmentBody = /* glsl */`
     diffuseColor.rgb *= vColor.rgb;
   #endif
   roughnessFactor = s.roughness;
+  metalnessFactor = s.metal;
   normal = normalize( ( viewMatrix * vec4( s.normalW, 0.0 ) ).xyz );
   cgAO = s.ao;
+  cgEmissive = s.emissive;
 }
 `;
 
@@ -515,21 +559,26 @@ const scalarKeys = {
   uStrataContrast: ['strataContrast', 'strataOn'], uSeamStrength: ['seamStrength', 'strataOn'], uSeamWidth: ['seamWidth'], uLaminae: ['laminae', 'strataOn'], uBedGradient: ['bedGradient', 'strataOn'], uHardnessTint: ['hardnessTint', 'strataOn'],
   uGrainSize: ['grainSize'], uGrainStrength: ['grainStrength', 'grainOn'], uGrainContrast: ['grainContrast', 'grainOn'], uGrainFineness: ['grainFineness'],
   uOxideAmount: ['oxideAmount', 'oxideOn'], uOxideScale: ['oxideScale'], uCavityStrength: ['cavityStrength'],
-  uFlakeStrength: ['flakeStrength', 'flakesOn'], uFlakeScale: ['flakeScale'], uFlakeColor: ['flakeColor'], uFlakeRelief: ['flakeRelief'], uFlakeSheen: ['flakeSheen'], uFlakeDensity: ['flakeDensity'], uFlakeLayers: ['flakeLayers'], uFlakeEdge: ['flakeEdge'],
-  uPeelStrength: ['peelStrength', 'peelOn'], uPeelScale: ['peelScale'], uPeelLift: ['peelLift'], uPeelCoverage: ['peelCoverage'], uPeelThickness: ['peelThickness'], uPeelBedding: ['peelBedding'], uPeelFresh: ['peelFresh'], uPeelOcclusion: ['peelOcclusion'], uPeelSmall: ['peelSmall'],
-  uJointStrength: ['jointStrength', 'jointsOn'], uJointScale: ['jointScale'], uJointWidth: ['jointWidth'], uJointDepth: ['jointDepth'], uJointStretch: ['jointStretch'],
+  uFlakeStrength: ['flakeStrength', 'flakesOn'], uFlakeSheen: ['flakeSheen'], uFlakeEdge: ['flakeEdge'], uFlakeOxide: ['flakeOxide'], uFlakeSparkle: ['flakeSparkle'],
+  uPeelStrength: ['peelStrength', 'peelOn'], uPeelScale: ['peelScale'], uPeelCoverage: ['peelCoverage'], uPeelThickness: ['peelThickness'], uPeelBedding: ['peelBedding'], uPeelFresh: ['peelFresh'], uPeelPits: ['peelPits'], uPeelShadow: ['peelShadow'], uPeelSecond: ['peelSecond'],
   uWetness: ['wetness', 'runoffOn'], uStreakScale: ['streakScale'], uStreakAmount: ['streakAmount'],
-  uGravelAmount: ['gravelAmount', 'gravelOn'], uGravelScale: ['gravelScale'],
+  uGravelAmount: ['gravelAmount', 'gravelOn'], uGravelScale: ['gravelScale'], uGravelRelief: ['gravelRelief'], uGravelVariation: ['gravelVariation'],
   uVegetation: ['vegetation', 'vegOn'], uVegScale: ['vegScale'], uVegPatchiness: ['vegPatchiness'], uDryness: ['dryness'],
   uMossiness: ['mossiness', 'mossOn'], uMossScale: ['mossScale'],
   uSnowSoftness: ['snowSoftness'], uSnowRoughness: ['snowRoughness'],
   uBumpScale: ['bumpScale'], uBaseRoughness: ['baseRoughness'], uDebugView: ['debugView'], uShoreWet: ['shoreWet'], uRoadOn: ['roadShading'], uBedOn: ['bedShading'],
 };
 
+// per-layer flake uniforms (arrays of 3): uniform → value key prefix (key = prefix + layer index 1..3)
+const flakeArrayKeys = { uFlakeOn: 'flakeOn', uFlakeSize: 'flakeSize', uFlakeDensity: 'flakeDensity', uFlakeHeight: 'flakeHeight', uFlakeCrystal: 'flakeCrystal', uFlakeVar: 'flakeVar', uFlakeShape: 'flakeShape', uFlakeReveal: 'flakeReveal' };
+
 export function makeSurfaceUniforms() {
   const u = {};
   for (const k of Object.keys(colorKeys)) u[k] = { value: new THREE.Color(0.5, 0.5, 0.5) };
   for (const k of Object.keys(scalarKeys)) u[k] = { value: 0 };
+  for (const k of Object.keys(flakeArrayKeys)) u[k] = { value: [0, 0, 0] };
+  u.uFlakeCol = { value: [new THREE.Color(), new THREE.Color(), new THREE.Color()] };
+  u.uSunDir = { value: new THREE.Vector3(0.3, 0.8, 0.5) };
   Object.assign(u, {
     uStrataBand: { value: 26 }, uDipX: { value: 0 }, uDipZ: { value: 0 },
     uVegSlope: { value: 0.72 }, uSnowLine: { value: 430 }, uSnowSlopeCos: { value: 0.67 },
@@ -544,6 +593,8 @@ export function updateSurfaceUniforms(uniforms, v) {
     const on = enable ? (v[enable] ? 1 : 0) : 1;
     uniforms[u].value = Number(v[key]) * on;
   }
+  for (const [u, prefix] of Object.entries(flakeArrayKeys)) for (let L = 0; L < 3; L++) uniforms[u].value[L] = Number(v[`${prefix}${L + 1}`]);
+  for (let L = 0; L < 3; L++) uniforms.uFlakeCol.value[L].setStyle(v[`flakeColor${L + 1}`] || '#808080');
   uniforms.uStrataBand.value = v.strataBand * (v.strataBandScale || 1);
   const dipRad = (v.strataDip * Math.PI) / 180, dirRad = (v.strataDipDirection * Math.PI) / 180;
   uniforms.uDipX.value = Math.tan(dipRad) * Math.cos(dirRad);
@@ -563,7 +614,8 @@ export function makeSurfaceMaterial(uniforms, { isRock = false } = {}) {
       .replace('#include <common>', `#include <common>\n${vertexHead}`)
       .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>\n${vertexBody}`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${fragmentHead}\nfloat cgAO = 1.0;`)
+      .replace('#include <common>', `#include <common>\n${fragmentHead}\nfloat cgAO = 1.0;\nvec3 cgEmissive = vec3( 0.0 );`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += cgEmissive;')
       .replace('#include <normal_fragment_maps>', fragmentBody)
       .replace('#include <aomap_fragment>', `#include <aomap_fragment>\nreflectedLight.indirectDiffuse *= cgAO;\nreflectedLight.indirectSpecular *= cgAO;\nreflectedLight.directDiffuse *= mix( 1.0, cgAO, 0.5 );`);
   };
