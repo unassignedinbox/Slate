@@ -1,3 +1,8 @@
+import {
+  collectionPatterns,
+  collectionPattern,
+  normalizeCollectionFade,
+} from "./patternCollections.js";
 import { sanitizePatternSVG } from "./patternImport.js";
 // Portable vector pattern documents. No DOM dependency; shared by editor/export.
 export const patternFinishes = {
@@ -52,14 +57,24 @@ export function validatePattern(input) {
     throw new Error("Pattern document exceeds 12 MB.");
   if (input.layers.length > 64)
     throw new Error("A pattern supports up to 64 layers.");
+  const tileAxes = ["x", "y"].includes(input.tileAxes) ? input.tileAxes : "xy";
   return {
     schema: "alloy.pattern.v1",
     name: String(input.name || "Untitled pattern").slice(0, 80),
+    ...(input.collection
+      ? { collection: String(input.collection).slice(0, 60) }
+      : {}),
+    ...(input.presentation === "rug" ? { presentation: "rug" } : {}),
+    ...(input.fade ? { fade: normalizeCollectionFade(input.fade) } : {}),
+    tileAxes,
     background: patternColor(input.background, "#eee8dc"),
     backgroundOpacity: patternNumber(input.backgroundOpacity, 1, 0, 1),
-    repeat: ["straight", "half-drop", "mirror"].includes(input.repeat)
-      ? input.repeat
-      : "straight",
+    repeat:
+      tileAxes !== "xy"
+        ? "straight"
+        : ["straight", "half-drop", "mirror"].includes(input.repeat)
+          ? input.repeat
+          : "straight",
     repeats: patternNumber(input.repeats, 2, 0.25, 24),
     rotation: patternNumber(input.rotation, 0, -180, 180),
     mapping: ["object", "cylinder"].includes(input.mapping)
@@ -146,9 +161,12 @@ export const patternStarterNames = [
   "Banded geometry",
   "Medallion rug",
   "Graduated lattice",
+  ...collectionPatterns.map((p) => p.name),
   "Blank",
 ];
 export function patternStarter(name = "Diamond weave") {
+  const collection = collectionPattern(name);
+  if (collection) return validatePattern(collection);
   const d = {
     schema: "alloy.pattern.v1",
     name,
@@ -419,6 +437,11 @@ export function patternSVG(input, mode = "color") {
     // Each motif is wrapped, including motifs straddling the repeat boundary.
     for (let col = -4; col <= 4; col++)
       for (let row = -4; row <= 4; row++) {
+        if (
+          (d.tileAxes === "x" && row !== 0) ||
+          (d.tileAxes === "y" && col !== 0)
+        )
+          continue;
         const mirror = d.repeat === "mirror",
           sx = mirror && Math.abs(col % 2) ? -1 : 1,
           sy = mirror && Math.abs(row % 2) ? -1 : 1;

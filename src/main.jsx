@@ -1,3 +1,4 @@
+import collectionModuleSource from "./patternCollections.js?raw";
 import {
   resolvePatternBase,
   composePatternMaterial,
@@ -62,6 +63,8 @@ import botanicalModuleSource from "./botanicalKernels.js?raw";
 import architectureModuleSource from "./architecturalKernels.js?raw";
 import BakePanel from "./BakePanel";
 const shaderSource =
+  collectionModuleSource +
+  "\n" +
   patternImportSource +
   "\n" +
   patternDocumentSource.replace(/^import[\s\S]*?;\s*/gm, "") +
@@ -340,7 +343,7 @@ function App() {
             setParams(composePatternMaterial(target, pattern));
             if (base !== "current") {
               setSelected(target);
-              setShape(patternPreviewShape(target));
+              setShape(patternPreviewShape({ ...target, pattern }));
             }
             setModal(null);
             notify("Pattern applied. Save as a preset to keep this material.");
@@ -426,7 +429,7 @@ function App() {
           <span>Automotive essentials</span>
           <ChevronRight size={13} />
           <strong>Material explorer</strong>
-          <span className="version-badge">v7.1</span>
+          <span className="version-badge">v7.2</span>
         </div>
         <div className="project-actions">
           <span className="saved-state">
@@ -765,6 +768,7 @@ function App() {
                     "Sphere",
                     "Panel",
                     "Leather swatch",
+                    "Rug",
                     "Teapot",
                     "Pipe",
                     "Foliage card",
@@ -1179,7 +1183,7 @@ function App() {
                     {
                       icon: <Move3D size={19} />,
                       title: "02 — Look a little closer",
-                      text: "Drag to orbit and scroll to zoom. Switch between sixteen assets, including a frozen cloth drape over a ball. Textile presets select the drape automatically.",
+                      text: "Drag to orbit and scroll to zoom. Switch between seventeen assets, including a frozen cloth drape over a ball. Textile presets select the drape automatically.",
                     },
                     {
                       icon: <SlidersHorizontal size={19} />,

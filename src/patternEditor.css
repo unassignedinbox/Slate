@@ -532,3 +532,28 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+.pe-collection-filter {
+  margin-top: 12px;
+}
+.pe-fade-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pe-overlay .pe-fade-range input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  accent-color: #b3c8a6;
+}
+.pe-fade-range output {
+  width: 34px;
+  text-align: right;
+  color: #b3c8a6;
+  font-variant-numeric: tabular-nums;
+}
+.pe-overlay select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

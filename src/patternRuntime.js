@@ -115,6 +115,7 @@ export function attachSurfaceSources(material, p) {
       background: doc.background,
       backgroundOpacity: doc.backgroundOpacity,
       repeat: doc.repeat,
+      tileAxes: doc.tileAxes,
       layers: doc.layers.map(({ name, id, ...surface }) => surface),
     });
     pattern = acquirePatternTextures(sourceKey, async () => {
@@ -138,6 +139,12 @@ export function attachSurfaceSources(material, p) {
         finish,
       ];
     });
+    for (const texture of pattern.textures) {
+      texture.wrapS =
+        doc.tileAxes === "y" ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+      texture.wrapT =
+        doc.tileAxes === "x" ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+    }
     resources.push(pattern);
   }
   material.userData.ready = Promise.all(resources.map((r) => r.ready));

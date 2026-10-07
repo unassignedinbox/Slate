@@ -555,6 +555,11 @@ export default function Viewport({
       e.specimen.geometry = new TeapotGeometry(1.05, 20);
       e.specimen.position.y = 1.4;
     }
+    if (shape === "Rug") {
+      e.specimen.geometry = createLeatherSwatchGeometry({ rug: true });
+      e.specimen.rotation.set(-0.2, -0.16, 0);
+      e.specimen.position.y = 1.35;
+    }
     if (shape === "Leather swatch") {
       e.specimen.geometry = createLeatherSwatchGeometry();
       e.specimen.rotation.set(-0.08, -0.24, -0.12);

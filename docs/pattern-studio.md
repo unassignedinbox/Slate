@@ -1,11 +1,42 @@
-# Pattern studio — v7.1
+# Pattern studio — v7.2
 
 This is a **hybrid vector/procedural material workflow**, not the previous zero-input-map claim. Existing paint, scratch and botanical families remain analytic. All five leather presets now share one generated SVG height atlas; pattern documents can contain vector shapes, sanitized SVG groups and embedded user images. No reference photographs are shipped as leather maps.
 
-## New in v7.1: compose and inspect together
+## New in v7.2: rugs, geometric collections and size fades
+
+**Ten new editable starters** join the seven existing designs (17 designs plus Blank). Filter the library with **Pattern collection**:
+
+| Collection | Starters |
+| --- | --- |
+| Islamic geometry | Islamic Star Lattice, Islamic Rosette Mosaic, Islamic Garden Carpet, Islamic Medallion Carpet |
+| African-inspired | African Diamond Carpet, African Chevron Weave, Indigo Diamond Rug |
+| Fading | Golden Cube Fade, Ink Cube Fade, Diamond Dissolve |
+
+These are original reference-inspired vector constructions, not reproductions of a particular named textile tradition or embedded stock images. The gold and black fade references inform the geometric growth, not a raster decal. Dense repeating details use compound paths to stay below 64 layers and 100,000 path characters per layer; each cube-face group is editable, rather than each individual cube having its own layer.
+
+### Make a rug
+
+Choose a carpet/rug starter, then **3D material**. Rug starters select cotton backing, with cut-pile wool finish assigned to the colored regions. **Rug** is a gently flexed, finite-thickness rectangular preview mesh, available in the editor and the main workspace. Edit each motif's color, roughness and relief, or bulk-assign finishes; the same document can be used on cloth, a panel, tiles or pottery. Wool detail is shader relief and sheen, not groomed carpet strands, fringe or a manufacturing weave specification. Mesh UVs control artwork aspect/distortion.
+
+Examples: `?material=natural-cotton&studio=pattern&pattern=african-diamond-carpet&view=3d` and `?material=natural-cotton&studio=pattern&pattern=islamic-medallion-carpet&view=3d`.
+
+### Geometric fading, not transparency
+
+Choose a Fading starter. **Fade direction**, **Motif density** (4–22 columns), **Fade strength**, **Smallest motif**, **Lattice gap**, **Fade start** and **Fade end** regenerate the geometry. Small detached facets grow into the cube lattice while their opacity remains unchanged. Gold starts with metal-inlay assignments; black starts with printed dye. **Loop fade seamlessly** changes the one-way growth into a small→large→small density envelope.
+
+- One-way fades repeat **across** the fade only. Their ends deliberately do not repeat. SVG copies are suppressed along that axis; live and exported shader textures use clamp-to-edge there. The terminal row/column stretches if mapping samples outside the source. Repeat layout is locked to Straight. The export is labeled **Export border SVG**, not seamless SVG.
+- Loop profiles repeat on both axes and enable the other repeat layouts. Arbitrary later motif edits, rotation, mapping and physical bake crops still need checking.
+- Regeneration preserves matching face-group colors, finishes, roughness, metalness, relief, opacity and visibility. It replaces manual geometry/extra layers and resets the repeat layout to Straight. Undo/redo is available. Renaming a face group prevents its old assignment from being matched.
+- Collection, rug presentation, fade settings and `tileAxes` (`x`, `y`, `xy`) survive pattern JSON, saved presets and standalone shader exports. Older documents without `tileAxes` default to repeating both axes.
+
+Try `?studio=pattern&pattern=golden-cube-fade`. **Save document** keeps the editable controls and geometry; SVG export is the current vector result, not a procedural editor.
+
+Validation for v7.2: 13 targeted collection/editor/integration tests plus one standalone test with external assets blocked. Checks include maximum-density path bounds, directional coverage growth, loop-edge sampling, cache wrap modes, undo/JSON reload, live wool rug rendering, gold metallic baking and independent shader exports. This is not a claim that the entire historical suite was rerun or that the shaders reproduce measured rug fibers. Existing leather sources, scratch kernels and plant shaders were not changed.
+
+## Retained from v7.1: compose and inspect together
 
 - **Design tile / 3D material** switches the center pane between the vector artboard and the actual workspace shader. Color, relief and finish edits update the material after a 450 ms editing pause. This is a second live renderer, not a screenshot or a different approximation.
-- Preview on a panel, draped cloth, leather swatch, shader ball, cube, sphere or teapot. Lighting, orbit, a 60–800% zoom slider, Fit and Inspect detail are available. Preview view settings are local; **Apply to material** commits the material, not the inspection camera.
+- Preview on a rug, panel, draped cloth, leather swatch, shader ball, cube, sphere or teapot. Lighting, orbit, a 60–800% zoom slider, Fit and Inspect detail are available. Preview view settings are local; **Apply to material** commits the material, not the inspection camera.
 - **Banded geometry**, **Medallion rug** and **Graduated lattice** add original editable compositions to the existing four starters. The rug uses layered wool relief; it still does not generate individual strand geometry.
 - On the design artboard, drag the corner handle to resize and the round handle to rotate. Shift constrains resizing to the original aspect ratio or rotation to 15-degree steps. **Keep aspect ratio** applies to corner dragging; exact numeric dimensions can still be entered independently.
 - Optional **8 / 16 / 32-unit snapping** applies to dragging and keyboard nudges. Focus the artboard and use arrow keys; Shift moves ten steps. Delete removes the selected motif. Ctrl/Cmd+S exports the pattern document without triggering the underlying workspace's save modal.
@@ -19,12 +50,12 @@ A shareable example uses `?material=natural-cotton&studio=pattern&pattern=medall
 ## Design a surface
 
 1. Open **Pattern studio** in the top navigation. `?studio=pattern` opens it directly.
-2. Choose **Diamond weave**, **Painted blossoms**, **Cube lattice**, **Inlaid tile**, **Banded geometry**, **Medallion rug**, **Graduated lattice**, or a blank document. These are original geometric/floral starters inspired by the supplied references, not reproductions of a named cultural textile tradition.
+2. Choose **Diamond weave**, **Painted blossoms**, **Cube lattice**, **Inlaid tile**, **Banded geometry**, **Medallion rug**, **Graduated lattice**, one of the new collection starters above, or a blank document. These are original geometric/floral starters inspired by the supplied references, not reproductions of a named cultural textile tradition.
 3. Alternatively, choose a generator style, seed and motif count, then **Generate pattern**. The generated layout is editable like a hand-built one.
 4. Add rectangles, ellipses, diamonds, triangles, flowers or SVG paths. Drag to position, draw a freehand path, or edit coordinates, size, rotation, opacity and path commands. Duplicate, reorder, hide and delete motifs; undo/redo retains up to 32 edits.
 5. Use the repeat inspection strip to check **straight**, **half-drop** or **mirrored** layouts. Motifs crossing boundaries are wrapped, rather than cropped and restarted. Half-drop exports a 1024 × 512 supertile; mirror exports 1024 × 1024. The canonical design tile is 512 × 512 units.
 6. Assign finishes per motif: **printed dye, woven cotton, cut-pile wool, glazed ceramic, metal inlay**. Roughness, metalness and relief in millimetres can be edited independently. **Assign this finish to all motifs** is a bulk action, not a hidden automatic conversion.
-7. Pick a base: current material, cotton, linen, porcelain floor tiles, or continuous glazed pottery. **Apply to material** prepares the sources and updates the 3D renderer. Pottery selects the new **Teapot** preview; fabrics select the draped cloth. Flat Panel and other previews remain available.
+7. Pick a base: current material, cotton, linen, porcelain floor tiles, or continuous glazed pottery. **Apply to material** prepares the sources and updates the 3D renderer. Pottery selects the new **Teapot** preview; rug starters select the Rug mesh; other fabrics select the draped cloth. Flat Panel and other previews remain available.
 8. Use **Save as preset** in the material workspace for browser-local persistence. **Save document** exports editable pattern JSON; **Open document** restores it. SVG export preserves vector geometry and embeds image layers. Material JSON/JavaScript exports retain the pattern too.
 
 The editor is not a complete Illustrator replacement or an arbitrary node/shader graph. It supports an extensible set of motifs and imported artwork—not literally every possible pattern or SVG feature. Material slots are explicit finish models, not arbitrary complete library shaders nested inside one another.
@@ -42,7 +73,7 @@ The editor is not a complete Illustrator replacement or an arbitrary node/shader
 
 Mesh UV mapping is the default for cloth and decoration. Object projection is available for solid objects; cylindrical projection helps wrap pottery bodies. A complex mesh still needs suitable UVs; the studio does not automatically unwrap or import arbitrary meshes. The built-in teapot's patch UVs may repeat artwork on separate patches; cylindrical mapping trades those patch boundaries for a cylindrical seam and distortion near the spout/handle/poles.
 
-The vector repeat/supertile is seamless by construction. **Importing a rectangular photograph does not automatically repair mismatched image edges.** Use isolated motifs on transparent ground, a mirrored layout, or pre-process the bitmap. The general six-channel baker still exports an arbitrary physical patch; rotated, non-integer repeats, base-material fields, object/cylindrical mappings and dynamically varied leather do not guarantee that every baked patch tiles. Its manifest intentionally leaves `repeatable: false`.
+The built-in repeat layouts wrap vector motifs, while one-way fades intentionally leave their fade axis nonperiodic. **Importing a rectangular photograph does not automatically repair mismatched image edges.** Use isolated motifs on transparent ground, a mirrored layout, or pre-process the bitmap. The general six-channel baker still exports an arbitrary physical patch; rotated, non-integer repeats, base-material fields, object/cylindrical mappings and dynamically varied leather do not guarantee that every baked patch tiles. Its manifest intentionally leaves `repeatable: false`.
 
 ## Material assignment, not only colored stickers
 

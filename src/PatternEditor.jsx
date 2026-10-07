@@ -1,3 +1,4 @@
+import { rebuildCollectionFade } from "./patternCollections.js";
 import PatternMaterialPreview from "./PatternMaterialPreview.jsx";
 import { resolvePatternBase } from "./patternSurface.js";
 import {
@@ -42,6 +43,7 @@ import "./patternEditor.css";
 // every pointer move or each background library-thumbnail notification.
 const starterPreviews = patternStarterNames.map((name) => ({
   name,
+  group: patternStarter(name).collection || "Originals",
   src: `data:image/svg+xml,${encodeURIComponent(patternSVG(patternStarter(name)))}`,
 }));
 
@@ -81,6 +83,7 @@ export default function PatternEditor({
     [grid, setGrid] = useState(0),
     [aspect, setAspect] = useState(false),
     [ring, setRing] = useState({ count: 6, radius: 160 });
+  const [collectionFilter, setCollectionFilter] = useState("All patterns");
   const [generator, setGenerator] = useState({
     seed: 17,
     style: "geometric",
@@ -115,7 +118,9 @@ export default function PatternEditor({
     [tool, setTool] = useState("move"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [base, setBase] = useState("current");
+    [base, setBase] = useState(() =>
+      !initial && doc.presentation === "rug" ? "natural-cotton" : "current",
+    );
   const previewTarget = useMemo(
     () => resolvePatternBase(currentMaterial, base),
     [currentMaterial, base],
@@ -455,19 +460,43 @@ export default function PatternEditor({
       <div className="pe-body">
         <aside className="pe-library">
           <span className="pe-kicker">START WITH A STRUCTURE</span>
-          <div className="pe-starters">
-            {starterPreviews.map(({ name, src }) => (
-              <button
-                key={name}
-                onClick={() => {
-                  commit(patternStarter(name));
-                  setSelection(0);
-                }}
-              >
-                <img src={src} alt="" />
-                <span>{name}</span>
-              </button>
+          <select
+            className="pe-collection-filter"
+            aria-label="Pattern collection"
+            value={collectionFilter}
+            onChange={(e) => setCollectionFilter(e.target.value)}
+          >
+            {[
+              "All patterns",
+              "Islamic geometry",
+              "African-inspired",
+              "Fading",
+              "Originals",
+            ].map((g) => (
+              <option key={g}>{g}</option>
             ))}
+          </select>
+          <div className="pe-starters">
+            {starterPreviews
+              .filter(
+                (p) =>
+                  collectionFilter === "All patterns" ||
+                  p.group === collectionFilter,
+              )
+              .map(({ name, src }) => (
+                <button
+                  key={name}
+                  onClick={() => {
+                    const next = patternStarter(name);
+                    commit(next);
+                    if (next.presentation === "rug") setBase("natural-cotton");
+                    setSelection(0);
+                  }}
+                >
+                  <img src={src} alt="" />
+                  <span>{name}</span>
+                </button>
+              ))}
           </div>
           <div className="pe-section">
             <h3>Generate a layout</h3>
@@ -635,7 +664,11 @@ export default function PatternEditor({
           </div>
           <div className="pe-canvas-heading">
             <div>
-              <span className="pe-kicker">SEAMLESS TILE / 512 UNITS</span>
+              <span className="pe-kicker">
+                {doc.tileAxes === "xy"
+                  ? "REPEAT TILE / 512 UNITS"
+                  : "ONE-WAY BORDER / 512 UNITS"}
+              </span>
               <input
                 aria-label="Pattern name"
                 value={doc.name}
@@ -810,12 +843,20 @@ export default function PatternEditor({
             aria-label="Repeated pattern preview"
             style={{
               backgroundImage: `url("${preview}")`,
+              backgroundRepeat:
+                doc.tileAxes === "x"
+                  ? "repeat-x"
+                  : doc.tileAxes === "y"
+                    ? "repeat-y"
+                    : "repeat",
               backgroundSize:
-                doc.repeat === "mirror"
-                  ? "240px 240px"
-                  : doc.repeat === "half-drop"
-                    ? "240px 120px"
-                    : "120px 120px",
+                doc.tileAxes !== "xy"
+                  ? "160px 160px"
+                  : doc.repeat === "mirror"
+                    ? "240px 240px"
+                    : doc.repeat === "half-drop"
+                      ? "240px 120px"
+                      : "120px 120px",
             }}
           />
           {error && (
@@ -826,6 +867,83 @@ export default function PatternEditor({
           {busy && <p role="status">Preparing embedded source…</p>}
         </main>
         <aside className="pe-inspector">
+          {doc.fade && (
+            <div className="pe-section pe-fade-controls">
+              <span className="pe-kicker">GEOMETRIC FADING</span>
+              <p className="pe-hint">
+                Motifs grow from separated marks into a connected lattice. Color
+                stays opaque.
+              </p>
+              <label>
+                Fade direction
+                <select
+                  aria-label="Fade direction"
+                  value={doc.fade.direction}
+                  onChange={(e) =>
+                    commit(
+                      rebuildCollectionFade(doc, { direction: e.target.value }),
+                    )
+                  }
+                >
+                  <option value="down">Small → large, downward</option>
+                  <option value="up">Small → large, upward</option>
+                  <option value="right">Small → large, rightward</option>
+                  <option value="left">Small → large, leftward</option>
+                </select>
+              </label>
+              {[
+                ["columns", "Motif density", 4, 22, 1],
+                ["strength", "Fade strength", 0.3, 3, 0.1],
+                ["minimum", "Smallest motif", 0, 0.6, 0.01],
+                ["gap", "Lattice gap", 0.01, 0.35, 0.01],
+                ["start", "Fade start", 0, 0.9, 0.01],
+                ["end", "Fade end", 0.1, 1, 0.01],
+              ].map(([key, label, min, max, step]) => (
+                <label key={key}>
+                  {label}
+                  <div className="pe-fade-range">
+                    <input
+                      aria-label={label}
+                      type="range"
+                      min={min}
+                      max={max}
+                      step={step}
+                      value={doc.fade[key]}
+                      onChange={(e) =>
+                        commit(
+                          rebuildCollectionFade(doc, {
+                            [key]: +e.target.value,
+                          }),
+                        )
+                      }
+                    />
+                    <output>{doc.fade[key]}</output>
+                  </div>
+                </label>
+              ))}
+              <label className="pe-check">
+                <input
+                  type="checkbox"
+                  aria-label="Loop fade seamlessly"
+                  checked={doc.fade.loop}
+                  onChange={(e) =>
+                    commit(
+                      rebuildCollectionFade(doc, { loop: e.target.checked }),
+                    )
+                  }
+                />{" "}
+                Loop fade seamlessly
+              </label>
+              <p className="pe-hint">
+                {doc.fade.loop
+                  ? "Mirrored density envelope: repeats on both axes."
+                  : "One-way border: repeats across the fade, not along it. The terminal edges are clamped in 3D."}{" "}
+                Geometry controls regenerate the facet layers; existing colors
+                and finishes are retained.
+              </p>
+            </div>
+          )}
+
           <div className="pe-section">
             <span className="pe-kicker">03 — SURFACE & REPEAT</span>
             <label>
@@ -846,6 +964,7 @@ export default function PatternEditor({
               Repeat layout
               <select
                 aria-label="Repeat layout"
+                disabled={doc.tileAxes !== "xy"}
                 value={doc.repeat}
                 onChange={(e) => update({ repeat: e.target.value })}
               >
@@ -1130,7 +1249,10 @@ export default function PatternEditor({
                 patternDownload(patternSVG(doc), "pattern.svg", "image/svg+xml")
               }
             >
-              <Download size={14} /> Export seamless SVG
+              <Download size={14} />{" "}
+              {doc.tileAxes === "xy"
+                ? "Export seamless SVG"
+                : "Export border SVG"}
             </button>
             <button
               className="pe-wide"

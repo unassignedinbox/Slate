@@ -8,6 +8,7 @@ import {
 const previewShapes = [
   "Shader ball",
   "Panel",
+  "Rug",
   "Draped cloth",
   "Leather swatch",
   "Rounded cube",
@@ -15,9 +16,12 @@ const previewShapes = [
   "Teapot",
 ];
 export default function PatternMaterialPreview({ doc, target, initialShape }) {
-  const preferredShape = previewShapes.includes(initialShape)
-    ? initialShape
-    : patternPreviewShape(target);
+  const preferredShape =
+    doc.presentation === "rug" && target.category === "Fabric"
+      ? "Rug"
+      : previewShapes.includes(initialShape)
+        ? initialShape
+        : patternPreviewShape(target);
   const [renderDoc, setRenderDoc] = useState(doc),
     [shape, setShape] = useState(preferredShape),
     [environment, setEnvironment] = useState("Studio softbox");

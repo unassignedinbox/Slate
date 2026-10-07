@@ -353,6 +353,40 @@ test("standalone page renders, edits and exports without external assets", async
   expect(decorated.userData.params.pattern.layers.length).toBeGreaterThan(10);
   expect(decorated.userData.params.recipeId).toBe("pottery");
   decorated.dispose();
+  // New collections must also work in the embedded page and independent export.
+  await page
+    .getByRole("button", { name: "Pattern studio", exact: true })
+    .click();
+  await page.getByLabel("Pattern collection").selectOption("Fading");
+  await page
+    .getByRole("button", { name: "Golden Cube Fade", exact: true })
+    .click();
+  await page.getByLabel("Fade direction").selectOption("right");
+  await page.getByRole("button", { name: /Apply to material/ }).click();
+  await frame(page);
+  const fadeSource = await downloadText(page, /Three.js procedural shader/);
+  const fadeFactory = fadeSource
+    .replace(/import \* as THREE from ['"]three['"];?/, "")
+    .replace(
+      /export default createMaterial\(preset\);/,
+      "return createMaterial(preset);",
+    )
+    .replace(/export /g, "");
+  const fadeMaterial = new Function("THREE", fadeFactory)(THREE);
+  expect(fadeMaterial.userData.params.pattern.fade.direction).toBe("right");
+  const fadeShader = {
+    uniforms: {},
+    vertexShader: THREE.ShaderLib.physical.vertexShader,
+    fragmentShader: THREE.ShaderLib.physical.fragmentShader,
+  };
+  fadeMaterial.onBeforeCompile(fadeShader);
+  expect(fadeShader.uniforms.uPatternColor.value.wrapS).toBe(
+    THREE.ClampToEdgeWrapping,
+  );
+  expect(fadeShader.uniforms.uPatternColor.value.wrapT).toBe(
+    THREE.RepeatWrapping,
+  );
+  fadeMaterial.dispose();
   if (process.env.ALLOY_CAPTURE === "patterns") {
     await page.getByRole("button", { name: "Fit", exact: true }).click();
     await frame(page);
@@ -361,7 +395,7 @@ test("standalone page renders, edits and exports without external assets", async
       .getByRole("button", { name: "Pattern studio", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "Medallion rug", exact: true })
+      .getByRole("button", { name: "African Diamond Carpet", exact: true })
       .click();
     await page
       .getByLabel("Pattern base material")
@@ -372,11 +406,11 @@ test("standalone page renders, edits and exports without external assets", async
     await expect(
       page.getByRole("status", { name: "Material preview status" }),
     ).toContainText("Live material · ready");
-    await page.getByLabel("Pattern preview object").selectOption("Panel");
+    await page.getByLabel("Pattern preview object").selectOption("Rug");
     await expect(
       page.getByRole("status", { name: "Material preview status" }),
     ).toContainText("Live material · ready");
-    await page.getByLabel("Pattern preview zoom").fill("220");
+    await page.getByLabel("Pattern preview zoom").fill("180");
     await page.evaluate(
       () =>
         new Promise((r) =>

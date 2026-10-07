@@ -30,6 +30,8 @@ export function composePatternMaterial(target, pattern) {
   };
 }
 export function patternPreviewShape(target) {
+  if (target.pattern?.presentation === "rug" && target.category === "Fabric")
+    return "Rug";
   return target.potterySurface
     ? "Teapot"
     : target.category === "Fabric"
