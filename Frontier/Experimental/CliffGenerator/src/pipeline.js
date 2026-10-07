@@ -1,0 +1,77 @@
+// End-to-end heightfield pipeline. Pure JS, no DOM — runs in the worker and under Node for checks.
+//
+//   synthesizeBase → applyStrata (+hardness) → thermal pre-settle → hydraulic erosion → thermal
+//   → derived maps (deposit, flow, cavity, slope) packed for the vertex attributes.
+
+import { synthesizeBase, applyStrata, computeCavity, computeSlopeMap } from './heightfield.js';
+import { hydraulicErosion, thermalErosion, blurField } from './erosion.js';
+
+export function generateTerrain(params, progress = () => {}) {
+  const N = params.resolution;
+  const cell = params.worldSize / (N - 1);
+  const t0 = now();
+
+  progress({ phase: 'Synthesising base relief', fraction: 0 });
+  const height = synthesizeBase(params, (f) => progress({ phase: 'Synthesising base relief', fraction: f }));
+
+  progress({ phase: 'Layering strata', fraction: 0 });
+  const hardness = applyStrata(height, params, (f) => progress({ phase: 'Layering strata', fraction: f }));
+
+  const erosionParams = { ...params, heightScale: Math.max(1, params.mountainHeight) };
+
+  progress({ phase: 'Thermal settling', fraction: 0 });
+  thermalErosion(height, hardness, { ...erosionParams, thermalIterations: Math.ceil(params.thermalIterations * 0.3) },
+    (f) => progress({ phase: 'Thermal settling', fraction: f }));
+
+  progress({ phase: 'Hydraulic erosion', fraction: 0 });
+  const { flow, delta } = hydraulicErosion(height, hardness, erosionParams,
+    (f) => progress({ phase: 'Hydraulic erosion', fraction: f }));
+
+  progress({ phase: 'Scree slumping', fraction: 0 });
+  const slumped = thermalErosion(height, hardness, erosionParams,
+    (f) => progress({ phase: 'Scree slumping', fraction: f }));
+
+  progress({ phase: 'Deriving shading maps', fraction: 0 });
+
+  // Deposit: hydraulic sediment + thermally slumped material → scree/gravel aprons.
+  const depositRaw = new Float32Array(N * N);
+  for (let i = 0; i < N * N; i++) depositRaw[i] = Math.max(0, delta[i]) + slumped[i] * 0.6;
+  const deposit = normalisePercentile(blurField(depositRaw, N, 2), 0.985);
+
+  // Flow accumulation on a log scale → wet streaks, darkened gully floors.
+  const flowRaw = new Float32Array(N * N);
+  for (let i = 0; i < N * N; i++) flowRaw[i] = Math.log1p(flow[i]);
+  const flowNorm = normalisePercentile(blurField(flowRaw, N, 1), 0.995);
+
+  const cavityRaw = computeCavity(height, N, cell);
+  const cavity = new Float32Array(N * N);
+  for (let i = 0; i < N * N; i++) cavity[i] = Math.max(-1, Math.min(1, cavityRaw[i] * 1.5));
+
+  const slope = computeSlopeMap(height, N, cell);
+
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < N * N; i++) {
+    if (height[i] < min) min = height[i];
+    if (height[i] > max) max = height[i];
+  }
+
+  progress({ phase: 'Done', fraction: 1 });
+  return {
+    resolution: N,
+    worldSize: params.worldSize,
+    height, hardness, deposit, flow: flowNorm, cavity, slope,
+    stats: { min, max, elapsedMs: now() - t0 },
+  };
+}
+
+function normalisePercentile(field, pct) {
+  const sorted = Float32Array.from(field).sort();
+  const hi = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * pct))] || 1e-6;
+  const out = new Float32Array(field.length);
+  for (let i = 0; i < field.length; i++) out[i] = Math.min(1, field[i] / hi);
+  return out;
+}
+
+function now() {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
