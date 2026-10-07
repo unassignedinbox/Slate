@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101713" />
+    <meta
+      name="description"
+      content="Terrain Forge — a procedural cliff and landscape mesh generator."
+    />
+    <title>Terrain Forge — Cliff Mesh Studio</title>
+  </head>
+  <body>
+    <div id="app">
+      <div id="scene-shell" aria-label="Interactive generated terrain preview">
+        <canvas id="terrain-canvas"></canvas>
+        <div class="sky-glow sky-glow-one"></div>
+        <div class="sky-glow sky-glow-two"></div>
+        <div class="scene-vignette"></div>
+      </div>
+
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Terrain Forge home">
+          <span class="brand-mark" aria-hidden="true">
+            <i></i><i></i><i></i>
+          </span>
+          <span class="brand-lockup">
+            <strong>TERRAIN<span>FORGE</span></strong>
+            <small>PROCEDURAL LANDSCAPES</small>
+          </span>
+        </a>
+
+        <div class="topbar-center" aria-label="Current generator profile">
+          <span class="live-dot"></span>
+          <span id="profile-name">ALPINE ESCARPMENT</span>
+          <span class="topbar-divider"></span>
+          <span class="mesh-readout" id="top-mesh-readout">—</span>
+        </div>
+
+        <div class="top-actions">
+          <button class="icon-button" id="help-button" type="button" aria-label="Show shortcuts" title="Shortcuts">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 5.72 1.25c-.77 1.14-1.86 1.47-2.47 2.46-.25.4-.35.78-.35 1.29M12 17.3v.1"/></svg>
+          </button>
+          <button class="icon-button" id="fullscreen-button" type="button" aria-label="Toggle fullscreen preview" title="Fullscreen preview">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 3.5H3.5v5M15.5 3.5h5v5M20.5 15.5v5h-5M3.5 15.5v5h5"/></svg>
+          </button>
+          <button class="export-button" id="export-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11M8 10l4 4 4-4M4 17v3.5h16V17"/></svg>
+            EXPORT MESH
+          </button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="control-dock" aria-label="Terrain controls">
+          <div class="dock-head">
+            <div>
+              <p class="eyebrow">GENERATOR</p>
+              <h1>Terrain study</h1>
+            </div>
+            <button class="random-button" id="random-button" type="button" title="Randomize seed">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16.8 3 4.2 4.2-4.2 4.2M3 7.2h17.5M7.2 21 3 16.8l4.2-4.2M21 16.8H3.5"/></svg>
+              RANDOM
+            </button>
+          </div>
+
+          <section class="control-section preset-section" aria-labelledby="preset-title">
+            <div class="section-label-row">
+              <span class="section-icon landscape-icon" aria-hidden="true"></span>
+              <h2 id="preset-title">Landscape profile</h2>
+            </div>
+            <div class="preset-grid" role="group" aria-label="Landscape preset">
+              <button class="preset active" type="button" data-preset="alpine"><span class="preset-art alpine-art"></span><span>Alpine</span></button>
+              <button class="preset" type="button" data-preset="coastal"><span class="preset-art coastal-art"></span><span>Coastal</span></button>
+              <button class="preset" type="button" data-preset="canyon"><span class="preset-art canyon-art"></span><span>Canyon</span></button>
+            </div>
+          </section>
+
+          <section class="control-section" aria-labelledby="form-title">
+            <div class="section-label-row">
+              <span class="section-icon form-icon" aria-hidden="true"></span>
+              <h2 id="form-title">Landform</h2>
+            </div>
+            <div class="range-row">
+              <label for="height">Elevation <output id="height-output">62 m</output></label>
+              <input id="height" type="range" min="20" max="100" value="62" step="1" />
+            </div>
+            <div class="range-row">
+              <label for="roughness">Surface roughness <output id="roughness-output">0.68</output></label>
+              <input id="roughness" type="range" min="0" max="1" value="0.68" step="0.01" />
+            </div>
+            <div class="range-row">
+              <label for="scale">Feature scale <output id="scale-output">1.10×</output></label>
+              <input id="scale" type="range" min="0.55" max="1.8" value="1.1" step="0.01" />
+            </div>
+          </section>
+
+          <section class="control-section" aria-labelledby="cliff-title">
+            <div class="section-label-row">
+              <span class="section-icon cliff-icon" aria-hidden="true"></span>
+              <h2 id="cliff-title">Cliff generator</h2>
+              <span class="pro-pill">MESH</span>
+            </div>
+            <div class="range-row">
+              <label for="cliffness">Face intensity <output id="cliffness-output">84%</output></label>
+              <input id="cliffness" type="range" min="0" max="1" value="0.84" step="0.01" />
+            </div>
+            <div class="range-row">
+              <label for="strata">Strata definition <output id="strata-output">0.58</output></label>
+              <input id="strata" type="range" min="0" max="1" value="0.58" step="0.01" />
+            </div>
+            <div class="range-row">
+              <label for="erosion">Erosion pass <output id="erosion-output">0.46</output></label>
+              <input id="erosion" type="range" min="0" max="1" value="0.46" step="0.01" />
+            </div>
+          </section>
+
+          <section class="control-section material-section" aria-labelledby="material-title">
+            <div class="section-label-row">
+              <span class="section-icon material-icon" aria-hidden="true"></span>
+              <h2 id="material-title">Biome material</h2>
+            </div>
+            <div class="biome-options" role="radiogroup" aria-label="Biome material">
+              <button type="button" class="biome-option active" data-biome="highland" role="radio" aria-checked="true"><span class="biome-swatch highland-swatch"></span>Highland</button>
+              <button type="button" class="biome-option" data-biome="badlands" role="radio" aria-checked="false"><span class="biome-swatch badlands-swatch"></span>Badlands</button>
+              <button type="button" class="biome-option" data-biome="basalt" role="radio" aria-checked="false"><span class="biome-swatch basalt-swatch"></span>Basalt</button>
+            </div>
+          </section>
+
+          <div class="seed-row">
+            <label for="seed">SEED</label>
+            <input id="seed" type="text" inputmode="numeric" value="184720" maxlength="9" aria-label="Terrain seed" />
+            <button id="seed-refresh" type="button" title="Generate with seed" aria-label="Generate with seed">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0 1 4M20 4v7h-7"/></svg>
+            </button>
+          </div>
+
+          <button class="generate-button" id="generate-button" type="button">
+            <span class="generate-icon"><i></i><i></i><i></i></span>
+            <span>GENERATE TERRAIN</span>
+            <kbd>G</kbd>
+          </button>
+        </aside>
+
+        <section class="viewer-hud" aria-label="Terrain viewer information">
+          <div class="hud-top-row">
+            <div class="view-mode-switcher" role="group" aria-label="View mode">
+              <button type="button" class="view-mode active" data-view="beauty">BEAUTY</button>
+              <button type="button" class="view-mode" data-view="albedo">ALBEDO</button>
+              <button type="button" class="view-mode" data-view="wire">WIREFRAME</button>
+            </div>
+            <button class="camera-reset" id="camera-reset" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.35-5.65L4 8.7M4 4v4.7h4.7"/></svg>
+              RESET VIEW
+            </button>
+          </div>
+
+          <div class="terrain-label">
+            <span class="terrain-label-line"></span>
+            <div>
+              <p>ACTIVE FORMATION</p>
+              <strong id="formation-name">Northern shelf</strong>
+              <span id="formation-copy">Layered sandstone cliff / 61 m</span>
+            </div>
+          </div>
+
+          <div class="viewer-bottom">
+            <div class="coordinates-card">
+              <span class="coordinates-title"><i></i> ORBITAL CAMERA</span>
+              <div class="coordinate-values">
+                <span>ALT <strong id="camera-alt">—</strong></span>
+                <span>AZ <strong id="camera-az">—</strong></span>
+                <span>FOV <strong>38°</strong></span>
+              </div>
+            </div>
+            <div class="mesh-card">
+              <p>DISPLACED MESH</p>
+              <strong id="mesh-stats">—</strong>
+              <span id="mesh-resolution">—</span>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer-status">
+        <span><i class="status-led"></i> PROCEDURAL MESH READY</span>
+        <span>DRAG TO ORBIT <b>·</b> SCROLL TO DOLLY <b>·</b> <kbd>G</kbd> GENERATE</span>
+        <span id="render-status">LIGHTING: GOLDEN HOUR</span>
+      </footer>
+
+      <div class="modal-backdrop" id="help-modal" hidden>
+        <section class="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title">
+          <button class="modal-close" id="help-close" type="button" aria-label="Close shortcuts">×</button>
+          <p class="eyebrow">QUICK CONTROLS</p>
+          <h2 id="help-title">Make a landscape yours.</h2>
+          <dl>
+            <div><dt><kbd>Drag</kbd></dt><dd>Orbit around the generated mesh</dd></div>
+            <div><dt><kbd>Scroll</kbd></dt><dd>Dolly in and out</dd></div>
+            <div><dt><kbd>G</kbd></dt><dd>Generate from the current controls</dd></div>
+            <div><dt><kbd>R</kbd></dt><dd>Randomize a new terrain seed</dd></div>
+          </dl>
+          <p class="modal-note">Export creates an OBJ heightfield mesh ready for your 3D package.</p>
+        </section>
+      </div>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
