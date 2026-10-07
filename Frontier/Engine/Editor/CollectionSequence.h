@@ -24,7 +24,9 @@ struct CollectionSequence
     uint64_t                  SelectedKey = 0;
     uint32_t                  Total = 0, Direct = 0, Visible = 0, Locked = 0, Folders = 0, MaximumDepth = 0;
     uint32_t                  Categories[static_cast<unsigned>(EditorInstanceCategory::Count)]{};
-    int                       Page = 0, PageSize = 25, Visibility = 0, Category = 0, Sort = 0;
+    uint32_t                  Glyphs[static_cast<unsigned>(EditorGlyph::Count)]{};
+    uint32_t                  AutoCategories[static_cast<unsigned>(EditorInstanceCategory::Count)]{};
+    int                       Page = 0, PageSize = 25, Visibility = 0, Category = 0, GlyphFilter = 0, Sort = 0;
     bool                      DirectOnly = false;
     char                      Search[96]{};
     std::vector<RowSelection> Matches;
@@ -51,13 +53,15 @@ struct CollectionSequence
     {
         Total = Direct = Visible = Locked = Folders = MaximumDepth = 0;
         std::fill(std::begin(Categories), std::end(Categories), 0u);
+        std::fill(std::begin(Glyphs), std::end(Glyphs), 0u);
+        std::fill(std::begin(AutoCategories), std::end(AutoCategories), 0u);
         Matches.clear();
         EnclosingRows.clear();
         if (!Rows || Selected >= Count) return;
         if (SelectedKey != Rows[Selected].InspectorKey)
         {
             SelectedKey = Rows[Selected].InspectorKey;
-            Page = Category = Visibility = Sort = 0;
+            Page = Category = GlyphFilter = Visibility = Sort = 0;
             DirectOnly = false;
             Search[0] = 0;
         }
@@ -80,8 +84,11 @@ struct CollectionSequence
                 MaximumDepth = std::max(MaximumDepth, Distance);
                 const unsigned Group = static_cast<unsigned>(Row.Category);
                 if (Group < static_cast<unsigned>(EditorInstanceCategory::Count)) ++Categories[Group];
+                const unsigned Glyph = static_cast<unsigned>(Row.Glyph);
+                if (Glyph < static_cast<unsigned>(EditorGlyph::Count)) ++Glyphs[Glyph];
+                if (Row.Glyph == EditorGlyph::Auto && Group < static_cast<unsigned>(EditorInstanceCategory::Count)) ++AutoCategories[Group];
                 if ((!DirectOnly || Distance == 1) && (!Category || Group + 1 == unsigned(Category)) &&
-                    (!Visibility || Effective == (Visibility == 1)) && Contains(Row.Label, Search))
+                    (!Visibility || Effective == (Visibility == 1)) && (!GlyphFilter || int(Glyph) == GlyphFilter) && Contains(Row.Label, Search))
                     Matches.push_back({Index, Effective});
             }
             EnclosingRows.push_back({Index, Effective});
