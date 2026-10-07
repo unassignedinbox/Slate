@@ -13,9 +13,13 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-**V7.8 — Geometric Set 02.** The immutable release link is pinned after the rebuilt standalone artifact is verified.
+**[Open v7.8 — Geometric Set 02](https://raw.githack.com/unassignedinbox/Slate/758623ccf1679f04bcd28bcdc1362dd36b4814a1/site/index.html?material=natural-cotton&studio=pattern&pattern=linked-racetrack-loops)** · **[Hexagon-square junctions](https://raw.githack.com/unassignedinbox/Slate/758623ccf1679f04bcd28bcdc1362dd36b4814a1/site/index.html?material=natural-cotton&studio=pattern&pattern=hexagon-square-junctions)** · **[Ruled saddle lattice](https://raw.githack.com/unassignedinbox/Slate/758623ccf1679f04bcd28bcdc1362dd36b4814a1/site/index.html?material=natural-cotton&studio=pattern&pattern=ruled-saddle-lattice)**
+
+In **Geometric constructions**, search **Set 02** to isolate the eight new designs.
 
 Choose **Open the page** if GitHack shows its notice. Publication verification compares the GitHub artifact byte-for-byte; it does not substitute for a hosted-browser check. Functional tests do not certify visual realism.
+
+V7.8 passed nine set-specific checks, 21 existing regression checks and the final offline standalone test. Publication verification matched **1,953,650 bytes**, SHA-256 `d29f7f9b82dd892d08652f190aecccc2c2c6662ca6683dea85114f3b9a7a9f04`.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
