@@ -1,10 +1,28 @@
-# Pattern studio — v7.3
+# Pattern studio — v7.4
 
 This is a **hybrid vector/procedural material workflow**, not the previous zero-input-map claim. Existing paint, scratch and botanical families remain analytic. All five leather presets now share one generated SVG height atlas; pattern documents can contain vector shapes, sanitized SVG groups and embedded user images. No reference photographs are shipped as leather maps.
 
-## New in v7.3: textile library, palettes and stitch overlays
+## New in v7.4: 108 detailed rug and textile compositions
 
-**233 pattern presets + Blank** are available. This count includes colorways: the expansion is **54 new construction/design families × four named palettes = 216 presets**, plus the previous 17 designs. It is not a claim of 233 distinct weave constructions.
+This update prioritizes different layouts and richer ornament—not more palette variants. **36 African-inspired compositions, 36 Islamic-style carpets and 36 rug designs** have explicit blueprints with field structures, primary/secondary motifs, focal ornaments and border systems. They are original reference-informed vector studies, not museum-image decals or authenticated historical replicas.
+
+Open **108 detailed compositions** above the library filters. Browse all 108, or select **African compositions**, **Islamic carpets** or **Rug atelier**. The catalogue remains searchable and paginated. The broader count is now 341 named entries plus Blank, including the earlier colorways and compatibility aliases; that is **not** the unique-design count.
+
+- The old **African Diamond Carpet** now opens the richer Chromatic Diamond Tapestry geometry. **Islamic Medallion Carpet** and **Islamic Garden Carpet** likewise use the new Arabesque Medallion and Palmette Garden designs. These three aliases do not add to the 108 composition count.
+- The **Composition designer** provides detail level, border width, patterned-field visibility, ornamental borders and applicable focal/corner controls. Fine stems, buds, inlay marks, nested guard bands and unequal patchwork accompany the larger structures.
+- Matching generated-layer palette and finish assignments survive regeneration, as do custom non-generated motifs and stitch overlays. Manual edits to generated paths are replaced; undo is available. At most 61 generated layers leave room for a three-layer stitch overlay. More custom layers can reach the document cap and produce a non-destructive error.
+- New framed compositions use `tileAxes: "none"`: no SVG wrap copies and clamp-to-edge on both runtime texture axes. **Export rug SVG** exports one finite composition. Mapping/repeat scaling can crop the artwork or stretch edge pixels; it does not turn a finite rug into a seamless fabric repeat.
+- The Rug camera starts centered and more frontal. Cotton backing and wool relief/sheen are retained; there is no groomed yarn mesh or manufacturing-knot simulation.
+
+[**Reference sources, full design notes and limitations**](rug-references.md). Live rendering remains finite-resolution; detailed SVG remains scalable. All designs keep the shared JSON, shader export and six-channel baking workflow.
+
+Example links: `?material=natural-cotton&studio=pattern&pattern=chromatic-diamond-tapestry`, `?material=natural-cotton&studio=pattern&pattern=saffron-rosette-court&view=3d` and `?material=natural-cotton&studio=pattern&pattern=hooked-diamond-caravan`.
+
+Validation: **21 targeted pattern/library/editor/composition tests plus one offline standalone test**. This includes all 108 color-independent geometry signatures, complete serialization, dense geometry limits, finite sampling, material/stitch preservation, live preview, wool channel baking and independent shader exports. Existing leather, scratch, plant and analytic fabric shader kernels were not changed.
+
+## Retained from v7.3: textile library, palettes and stitch overlays
+
+**V7.3 introduced 233 pattern presets + Blank.** This count includes colorways: the expansion is **54 new construction/design families × four named palettes = 216 presets**, plus the previous 17 designs. It is not a claim of 233 distinct weave constructions.
 
 | New collection | Families | Colorways | Presets |
 | --- | ---: | ---: | ---: |

@@ -140,10 +140,12 @@ export function attachSurfaceSources(material, p) {
       ];
     });
     for (const texture of pattern.textures) {
-      texture.wrapS =
-        doc.tileAxes === "y" ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
-      texture.wrapT =
-        doc.tileAxes === "x" ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+      texture.wrapS = ["y", "none"].includes(doc.tileAxes)
+        ? THREE.ClampToEdgeWrapping
+        : THREE.RepeatWrapping;
+      texture.wrapT = ["x", "none"].includes(doc.tileAxes)
+        ? THREE.ClampToEdgeWrapping
+        : THREE.RepeatWrapping;
     }
     resources.push(pattern);
   }

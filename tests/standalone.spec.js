@@ -431,6 +431,61 @@ test("standalone page renders, edits and exports without external assets", async
   )(THREE);
   expect(rebuilt.userData.params.pattern.library.family).toBe("Plain weave");
   rebuilt.dispose();
+  await page
+    .getByRole("button", { name: "Pattern studio", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "108 detailed compositions ↗", exact: true })
+    .click();
+  await page.getByLabel("Search patterns").fill("Saffron Rosette Court");
+  await page
+    .getByRole("button", { name: "Saffron Rosette Court", exact: true })
+    .click();
+  await page.getByLabel("Rug detail level").selectOption("3");
+  await page.getByRole("button", { name: "3D material", exact: true }).click();
+  await expect(
+    page.getByRole("status", { name: "Material preview status" }),
+  ).toContainText("Live material · ready");
+  await page.getByRole("button", { name: /Apply to material/ }).click();
+  await frame(page);
+  const rugSource = await downloadText(page, /Three.js procedural shader/);
+  const rugFactory = rugSource
+    .replace(/import \* as THREE from ['"]three['"];?/, "")
+    .replace(
+      /export default createMaterial\(preset\);/,
+      "return createMaterial(preset);",
+    )
+    .replace(/export /g, "");
+  const rugMaterial = new Function("THREE", rugFactory)(THREE);
+  expect(rugMaterial.userData.params.pattern.ornament).toMatchObject({
+    id: "saffron-rosette-court",
+    detail: 3,
+  });
+  expect(rugMaterial.userData.params.pattern.tileAxes).toBe("none");
+  const rugShader = {
+    uniforms: {},
+    vertexShader: THREE.ShaderLib.physical.vertexShader,
+    fragmentShader: THREE.ShaderLib.physical.fragmentShader,
+  };
+  rugMaterial.onBeforeCompile(rugShader);
+  expect(rugShader.uniforms.uPatternColor.value.wrapS).toBe(
+    THREE.ClampToEdgeWrapping,
+  );
+  expect(rugShader.uniforms.uPatternColor.value.wrapT).toBe(
+    THREE.ClampToEdgeWrapping,
+  );
+  rugMaterial.dispose();
+  const rugHelper = new Function(
+    "THREE",
+    rugFactory.replace(
+      "return createMaterial(preset);",
+      "return createMaterial({...preset,pattern:patternStarter('Raffia Labyrinth Panels')});",
+    ),
+  )(THREE);
+  expect(rugHelper.userData.params.pattern.ornament.id).toBe(
+    "raffia-labyrinth-panels",
+  );
+  rugHelper.dispose();
   if (process.env.ALLOY_CAPTURE === "patterns") {
     await page.getByRole("button", { name: "Fit", exact: true }).click();
     await frame(page);
@@ -438,6 +493,9 @@ test("standalone page renders, edits and exports without external assets", async
     await page
       .getByRole("button", { name: "Pattern studio", exact: true })
       .click();
+    await page
+      .getByLabel("Pattern collection")
+      .selectOption("African-inspired");
     await page
       .getByRole("button", { name: "African Diamond Carpet", exact: true })
       .click();

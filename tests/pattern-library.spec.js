@@ -21,9 +21,9 @@ import {
 } from "../src/patternStitches.js";
 import { rebuildCollectionFade } from "../src/patternCollections.js";
 
-test("233 presets plus Blank: 54 distinct new constructions, four explicit colorways each", () => {
-  expect(patternStarterCatalog).toHaveLength(234);
-  expect(new Set(patternStarterCatalog.map((p) => p.name)).size).toBe(234);
+test("341 presets plus Blank: 54 distinct new constructions, four explicit colorways each", () => {
+  expect(patternStarterCatalog).toHaveLength(342);
+  expect(new Set(patternStarterCatalog.map((p) => p.name)).size).toBe(342);
   expect(textileLibraryEntries).toHaveLength(216);
   const structures = new Map();
   for (const p of textileLibraryEntries) {
@@ -160,7 +160,7 @@ test("search, paging, palette edits, stitch overlays, undo and portable saved do
   });
   await page.goto("/?material=natural-cotton&studio=pattern");
   await expect(page.locator(".pe-library-count")).toContainText(
-    "233 presets + Blank",
+    "341 presets + Blank",
   );
   await expect(page.locator(".pe-starters button")).toHaveCount(24);
   await page.getByLabel("Pattern collection").selectOption("Fabric weaves");

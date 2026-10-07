@@ -1,3 +1,5 @@
+import { rugDesignCatalog } from "./rugDesigns.js";
+import { richRugPattern, normalizeRugComposition } from "./rugCompositions.js";
 import { textileLibraryEntries, textilePattern } from "./patternLibrary.js";
 import { normalizeStitches } from "./patternStitches.js";
 import {
@@ -59,7 +61,9 @@ export function validatePattern(input) {
     throw new Error("Pattern document exceeds 12 MB.");
   if (input.layers.length > 64)
     throw new Error("A pattern supports up to 64 layers.");
-  const tileAxes = ["x", "y"].includes(input.tileAxes) ? input.tileAxes : "xy";
+  const tileAxes = ["x", "y", "none"].includes(input.tileAxes)
+    ? input.tileAxes
+    : "xy";
   return {
     schema: "alloy.pattern.v1",
     name: String(input.name || "Untitled pattern").slice(0, 80),
@@ -69,6 +73,9 @@ export function validatePattern(input) {
     ...(input.presentation === "rug" ? { presentation: "rug" } : {}),
     ...(input.fade ? { fade: normalizeCollectionFade(input.fade) } : {}),
     tileAxes,
+    ...(input.ornament
+      ? { ornament: normalizeRugComposition(input.ornament) }
+      : {}),
     ...(input.library && typeof input.library === "object"
       ? {
           library: {
@@ -129,6 +136,9 @@ export function validatePattern(input) {
         width: patternNumber(l.width, 100, 1, 1024),
         height: patternNumber(l.height, 100, 1, 1024),
         rotation: patternNumber(l.rotation, 0, -360, 360),
+        ...(l.ornamentRole
+          ? { ornamentRole: String(l.ornamentRole).slice(0, 60) }
+          : {}),
         ...(l.fillRule === "evenodd" ? { fillRule: "evenodd" } : {}),
         ...(["holes", "thread", "highlight"].includes(l.stitchRole)
           ? { stitchRole: l.stitchRole }
@@ -179,9 +189,11 @@ export const patternStarterNames = [
   ...collectionPatterns.map((p) => p.name),
   "Blank",
   ...textileLibraryEntries.map((p) => p.name),
+  ...rugDesignCatalog.map((p) => p.name),
 ];
 export const patternStarterCatalog = patternStarterNames.map(
   (name) =>
+    rugDesignCatalog.find((p) => p.name === name) ||
     textileLibraryEntries.find((p) => p.name === name) || {
       name,
       group:
@@ -190,7 +202,8 @@ export const patternStarterCatalog = patternStarterNames.map(
     },
 );
 export function patternStarter(name = "Diamond weave") {
-  const collection = textilePattern(name) || collectionPattern(name);
+  const collection =
+    richRugPattern(name) || textilePattern(name) || collectionPattern(name);
   if (collection) return validatePattern(collection);
   const d = {
     schema: "alloy.pattern.v1",
@@ -463,8 +476,8 @@ export function patternSVG(input, mode = "color") {
     for (let col = -4; col <= 4; col++)
       for (let row = -4; row <= 4; row++) {
         if (
-          (d.tileAxes === "x" && row !== 0) ||
-          (d.tileAxes === "y" && col !== 0)
+          ((d.tileAxes === "x" || d.tileAxes === "none") && row !== 0) ||
+          ((d.tileAxes === "y" || d.tileAxes === "none") && col !== 0)
         )
           continue;
         const mirror = d.repeat === "mirror",

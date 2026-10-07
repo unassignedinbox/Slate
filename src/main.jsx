@@ -1,3 +1,5 @@
+import rugDesignModuleSource from "./rugDesigns.js?raw";
+import rugCompositionModuleSource from "./rugCompositions.js?raw";
 import stitchModuleSource from "./patternStitches.js?raw";
 import textileModuleSource from "./patternLibrary.js?raw";
 import collectionModuleSource from "./patternCollections.js?raw";
@@ -66,6 +68,10 @@ import architectureModuleSource from "./architecturalKernels.js?raw";
 import BakePanel from "./BakePanel";
 const shaderSource =
   stitchModuleSource +
+  "\n" +
+  rugDesignModuleSource +
+  "\n" +
+  rugCompositionModuleSource.replace(/^import[\s\S]*?;\s*/gm, "") +
   "\n" +
   textileModuleSource.replace(/^import[\s\S]*?;\s*/gm, "") +
   "\n" +
@@ -435,7 +441,7 @@ function App() {
           <span>Automotive essentials</span>
           <ChevronRight size={13} />
           <strong>Material explorer</strong>
-          <span className="version-badge">v7.3</span>
+          <span className="version-badge">v7.4</span>
         </div>
         <div className="project-actions">
           <span className="saved-state">

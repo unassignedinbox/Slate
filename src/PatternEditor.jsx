@@ -1,3 +1,4 @@
+import RugCompositionControls from "./RugCompositionControls.jsx";
 import PatternTextileTools from "./PatternTextileTools.jsx";
 import { textilePalettes } from "./patternLibrary.js";
 import { rebuildCollectionFade } from "./patternCollections.js";
@@ -54,6 +55,7 @@ const StarterThumb = React.memo(function StarterThumb({ name }) {
 });
 const libraryGroups = [
   "All patterns",
+  "Detailed compositions",
   ...new Set(patternStarterCatalog.map((p) => p.group)),
 ];
 
@@ -93,7 +95,9 @@ export default function PatternEditor({
     [grid, setGrid] = useState(0),
     [aspect, setAspect] = useState(false),
     [ring, setRing] = useState({ count: 6, radius: 160 });
-  const [collectionFilter, setCollectionFilter] = useState("All patterns");
+  const [collectionFilter, setCollectionFilter] = useState(() =>
+    doc.ornament ? "Detailed compositions" : "All patterns",
+  );
   const [librarySearch, setLibrarySearch] = useState(""),
     [libraryPalette, setLibraryPalette] = useState("All colorways"),
     [libraryPage, setLibraryPage] = useState(0);
@@ -102,10 +106,11 @@ export default function PatternEditor({
       patternStarterCatalog.filter(
         (p) =>
           (collectionFilter === "All patterns" ||
+            (collectionFilter === "Detailed compositions" && p.detailed) ||
             p.group === collectionFilter) &&
           (libraryPalette === "All colorways" ||
             p.palette === libraryPalette) &&
-          `${p.name} ${p.group}`
+          `${p.name} ${p.group} ${p.description || ""} ${p.study || ""}`
             .toLowerCase()
             .includes(librarySearch.trim().toLowerCase()),
       ),
@@ -495,6 +500,16 @@ export default function PatternEditor({
       <div className="pe-body">
         <aside className="pe-library">
           <span className="pe-kicker">START WITH A STRUCTURE</span>
+          <button
+            className="pe-wide pe-rich-library"
+            onClick={() => {
+              setCollectionFilter("Detailed compositions");
+              setLibraryPalette("All colorways");
+              setLibrarySearch("");
+            }}
+          >
+            108 detailed compositions ↗
+          </button>
           <select
             className="pe-collection-filter"
             aria-label="Pattern collection"
@@ -518,11 +533,14 @@ export default function PatternEditor({
             value={libraryPalette}
             onChange={(e) => setLibraryPalette(e.target.value)}
           >
-            {["All colorways", "Original", ...Object.keys(textilePalettes)].map(
-              (p) => (
-                <option key={p}>{p}</option>
-              ),
-            )}
+            {[
+              "All colorways",
+              "Original",
+              "Designed composition",
+              ...Object.keys(textilePalettes),
+            ].map((p) => (
+              <option key={p}>{p}</option>
+            ))}
           </select>
           <p className="pe-library-count" aria-live="polite">
             {libraryMatches.length} results · {patternStarterCatalog.length - 1}{" "}
@@ -575,8 +593,9 @@ export default function PatternEditor({
             </button>
           </div>
           <p className="pe-hint">
-            54 new construction/design families × 4 colorways, plus the original
-            17 designs. Colorways are palette variations, not different weaves.
+            108 detailed compositions, not recolors. Plus 54 textile families in
+            4 colorways and the earlier starters. The original African Diamond
+            Carpet is now rebuilt in detail.
           </p>
           <div className="pe-section">
             <h3>Generate a layout</h3>
@@ -745,9 +764,11 @@ export default function PatternEditor({
           <div className="pe-canvas-heading">
             <div>
               <span className="pe-kicker">
-                {doc.tileAxes === "xy"
-                  ? "REPEAT TILE / 512 UNITS"
-                  : "ONE-WAY BORDER / 512 UNITS"}
+                {doc.tileAxes === "none"
+                  ? "FINITE RUG / 512 UNITS"
+                  : doc.tileAxes === "xy"
+                    ? "REPEAT TILE / 512 UNITS"
+                    : "ONE-WAY BORDER / 512 UNITS"}
               </span>
               <input
                 aria-label="Pattern name"
@@ -917,7 +938,9 @@ export default function PatternEditor({
             <small>
               {doc.tileAxes === "xy"
                 ? "Edges wrap automatically • drag motifs across boundaries"
-                : "One-way border • repeat across the fade only"}
+                : doc.tileAxes === "none"
+                  ? "Finite rug composition • edges do not wrap"
+                  : "One-way border • repeat across the fade only"}
             </small>
           </div>
           <div
@@ -925,20 +948,25 @@ export default function PatternEditor({
             aria-label="Repeated pattern preview"
             style={{
               backgroundImage: `url("${preview}")`,
+              backgroundPosition: "center",
               backgroundRepeat:
-                doc.tileAxes === "x"
-                  ? "repeat-x"
-                  : doc.tileAxes === "y"
-                    ? "repeat-y"
-                    : "repeat",
+                doc.tileAxes === "none"
+                  ? "no-repeat"
+                  : doc.tileAxes === "x"
+                    ? "repeat-x"
+                    : doc.tileAxes === "y"
+                      ? "repeat-y"
+                      : "repeat",
               backgroundSize:
-                doc.tileAxes !== "xy"
-                  ? "160px 160px"
-                  : doc.repeat === "mirror"
-                    ? "240px 240px"
-                    : doc.repeat === "half-drop"
-                      ? "240px 120px"
-                      : "120px 120px",
+                doc.tileAxes === "none"
+                  ? "contain"
+                  : doc.tileAxes !== "xy"
+                    ? "160px 160px"
+                    : doc.repeat === "mirror"
+                      ? "240px 240px"
+                      : doc.repeat === "half-drop"
+                        ? "240px 120px"
+                        : "120px 120px",
             }}
           />
           {error && (
@@ -949,6 +977,11 @@ export default function PatternEditor({
           {busy && <p role="status">Preparing embedded source…</p>}
         </main>
         <aside className="pe-inspector">
+          <RugCompositionControls
+            doc={doc}
+            commit={commit}
+            onError={setError}
+          />
           <PatternTextileTools doc={doc} commit={commit} onError={setError} />
 
           {doc.fade && (
@@ -1334,9 +1367,11 @@ export default function PatternEditor({
               }
             >
               <Download size={14} />{" "}
-              {doc.tileAxes === "xy"
-                ? "Export seamless SVG"
-                : "Export border SVG"}
+              {doc.tileAxes === "none"
+                ? "Export rug SVG"
+                : doc.tileAxes === "xy"
+                  ? "Export seamless SVG"
+                  : "Export border SVG"}
             </button>
             <button
               className="pe-wide"

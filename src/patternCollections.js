@@ -1,3 +1,4 @@
+import { richRugPattern } from "./rugCompositions.js";
 import { applyStitches } from "./patternStitches.js";
 // Original vector constructions inspired by the user's references. No reference
 // raster or stock watermark is embedded. This module is also in shader exports.
@@ -83,6 +84,24 @@ const collectionLayer = (kind, color, finish, props = {}) => ({
 export function collectionPattern(name, settings) {
   const spec = collectionPatterns.find((p) => p.name === name);
   if (!spec) return null;
+  if (name === "Islamic Medallion Carpet")
+    return {
+      ...richRugPattern("Azure Arabesque Medallion"),
+      name,
+      collection: spec.group,
+    };
+  if (name === "Islamic Garden Carpet")
+    return {
+      ...richRugPattern("Ivory Palmette Garden"),
+      name,
+      collection: spec.group,
+    };
+  if (name === "African Diamond Carpet")
+    return {
+      ...richRugPattern("Chromatic Diamond Tapestry"),
+      name,
+      collection: spec.group,
+    };
   const d = {
     schema: "alloy.pattern.v1",
     name,

@@ -555,7 +555,16 @@ export default function Viewport({
       e.specimen.geometry = new TeapotGeometry(1.05, 20);
       e.specimen.position.y = 1.4;
     }
+    if (e.previousShape === "Rug" && shape !== "Rug") {
+      e.camera.position.set(4.1, 3.25, 6.8);
+      e.controls.target.set(0, 1.65, 0);
+      e.controls.update();
+    }
+    e.previousShape = shape;
     if (shape === "Rug") {
+      e.camera.position.set(1.6, 2.4, 6.8);
+      e.controls.target.set(0, 1.35, 0);
+      e.controls.update();
       e.specimen.geometry = createLeatherSwatchGeometry({ rug: true });
       e.specimen.rotation.set(-0.2, -0.16, 0);
       e.specimen.position.y = 1.35;
@@ -707,8 +716,13 @@ export default function Viewport({
   useEffect(() => {
     const e = engine.current;
     if (!e) return;
-    e.camera.position.set(4.1, 3.25, 6.8);
-    e.controls.target.set(0, 1.65, 0);
+    if (e.renderer.domElement.dataset.previewShape === "Rug") {
+      e.camera.position.set(1.6, 2.4, 6.8);
+      e.controls.target.set(0, 1.35, 0);
+    } else {
+      e.camera.position.set(4.1, 3.25, 6.8);
+      e.controls.target.set(0, 1.65, 0);
+    }
     e.setZoom(1);
     e.controls.update();
   }, [resetToken]);
