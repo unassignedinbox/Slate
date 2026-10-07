@@ -200,7 +200,7 @@ test("public UI removes rejected filters, exposes one yarn control and saves dra
   await expect(page.getByLabel("Pattern collection")).toHaveValue(
     "Geometric constructions",
   );
-  await expect(page.locator(".pe-starters button")).toHaveCount(14);
+  await expect(page.locator(".pe-starters button")).toHaveCount(22);
   const options = await page
     .getByLabel("Pattern collection")
     .locator("option")

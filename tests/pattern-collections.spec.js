@@ -17,7 +17,7 @@ import { createMaterial, materials } from "../src/materials.js";
 import { createLeatherSwatchGeometry } from "../src/leatherGeometry.js";
 
 test("all ten collections are bounded editable vectors, including maximum-density fades", () => {
-  expect(patternStarterNames).toHaveLength(67);
+  expect(patternStarterNames).toHaveLength(75);
   for (const p of collectionPatterns) {
     const raw = collectionPattern(p.name),
       doc = patternStarter(p.name);

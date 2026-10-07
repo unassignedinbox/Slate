@@ -1,4 +1,4 @@
-import { geometricSetTwo } from "../src/geometricConstructions.js";
+import { geometricSetTwo, geometricSetThree } from "../src/geometricConstructions.js";
 import { patternStarter } from "../src/patternDocument.js";
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
@@ -529,6 +529,7 @@ test("standalone page renders, edits and exports without external assets", async
     "Truchet circuits",
     "Satin weave",
     ...geometricSetTwo.map((p) => p.name),
+    ...geometricSetThree.map((p) => p.name),
   ]) {
     const made = new Function(
       "THREE",

@@ -1,8 +1,28 @@
-# Pattern studio — v7.8
+# Pattern studio — v7.9
 
 This is a **hybrid vector/procedural material workflow**, not the previous zero-input-map claim. Existing paint, scratch and botanical families remain analytic. All five leather presets now share one generated SVG height atlas; pattern documents can contain vector shapes, sanitized SVG groups and embedded user images. No reference photographs are shipped as leather maps.
 
-## V7.8 — Geometric Set 02
+## V7.9 — Geometric Set 03
+
+Eight new constructions join the 14 already approved. Choose **Geometric constructions** and search **Set 03**. The prior Set 02 remains separately searchable; the original six and all eight Set 02 documents are regression-checked for exact preservation. These additions do not modify stitches, weaves or material shader kernels.
+
+| Construction | Geometric rule |
+| --- | --- |
+| Elongated triangle lattice | Alternating square rows and equilateral-triangle bands; square and triangle edge lengths agree in physical aspect. |
+| Descartes circle packing | Periodic triangular circle lattice with three levels of tangent-circle insertion from Descartes’ theorem. |
+| Pythagorean branch lattice | Four generations of paired child squares at 45°; each joint is an exact right-isosceles triangle. |
+| Fibonacci square spiral | Six consecutive square sizes 1, 1, 2, 3, 5, 8 partition a 13-by-8 rectangle exactly; four copies form the repeat tile. |
+| Rhodonea rose lattice | Eight-petal polar harmonic, r = R cos(4θ), with an offset inlay and radial construction axes. |
+| Epicycloid gear lattice | Five-cusp rolling-circle curve at a 5:1 fixed-to-rolling radius ratio, with spokes and a hub. |
+| Decagram chord lattice | Regular ten-vertex orbit with a step-three decagram, both pentagram circuits and an inner tenfold ring. |
+| Harmonic wave lattice | Two orthogonal sine families of 128-unit period, 18-unit amplitude and coordinated repeat phases. |
+
+The paths are generated procedurally; no photos, external images or cultural collection labels are used. Individual colors and finishes are editable details, not design identities.
+
+Ten focused geometry/vector and browser-editor tests passed, including coverage, circle tangencies, non-overlap, closed-curve checks, a raster comparison of repeated harmonic-wave edges to the unwrapped field, all eight card saves, color edit/undo and JSON import. The separate live 3D preview test is environment-skipped because the available headless browser does not expose WebGL. The conventional production build passed. These are targeted checks, not a claim that the full historical suite passed.
+
+## V7.8 — Geometric Set 02 (retained)
+
 
 Eight additional geometric constructions join the existing six. Choose **Geometric constructions**, then search **Set 02** to isolate the new cards. The original six documents are regression-checked against the approved V7.7 release. Stitches, weaves and existing material shaders are unchanged.
 
@@ -25,7 +45,7 @@ Checks cover full path preservation, JSON and shader exports, the original six r
 
 Rejected rug, African and Islamic collections are removed, including African Diamond Carpet, Islamic Medallion Carpet, Medallion rug and Golden Cube Fade. Old starter URLs no longer resolve to these designs. The 200-structure claim and filters are withdrawn; no smaller quota is presented as completion of the earlier request.
 
-The current library has 66 nonblank family cards plus Blank: fourteen geometric constructions, ten weave families, ten stitches, and the retained geometric/printed/original starters, including Diamond Dissolve. This is a transparent inventory, not a claim that all entries are equally complex or user-approved. Backgrounds, palettes and settings do not create extra cards.
+At v7.8, the library had 66 nonblank family cards plus Blank and fourteen geometric constructions. V7.9 now has 74 nonblank cards plus Blank and 22 geometric constructions (six original, eight in Set 02, eight in Set 03), alongside ten weave families and ten stitch families. The retained geometric/printed/original starters still include Diamond Dissolve. This is a transparent inventory, not a claim that all entries are equally complex or user-approved. Backgrounds, palettes and settings do not create extra cards.
 
 ### Geometric additions
 
@@ -150,7 +170,7 @@ The six-channel ZIP includes the embedded document in `material.json`. Patterned
 
 ## Checks
 
-V7.8 validation passed nine Set 02 checks, 21 existing document/textile/compatibility checks, and the rebuilt offline standalone test. This includes factory construction of all eight new designs from the independent shader export. The new previews were also inspected visually. This is targeted validation, not a claim that the entire historical suite was rerun.
+At the V7.8 release, nine Set 02 checks, 21 existing document/textile/compatibility checks and the offline standalone test passed. That historical result is retained; it is not a validation claim for V7.9.
 
 
 V7.7 validation completed 21 document/construction checks and seven targeted browser checks: library/palette/stitch editing; the monochrome weave/draft UI; saved-rug Apply behavior; stitch height/normal baking; image/SVG imports with save/undo/shader export; deep links/focus/generation; and saved-composition editing/roundtrips. The final rebuilt standalone page also passed its offline rendering/export test with external assets blocked. This is a targeted selection, not the complete historical test suite.

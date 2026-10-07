@@ -47,6 +47,55 @@ export const geometricSetTwo = [
   set: 2,
 }));
 
+// Set 03 adds eight constructions with independent geometric rules.
+export const geometricSetThree = [
+  [
+    "Elongated triangle lattice",
+    "elongated-triangle-lattice",
+    "Alternating square courses and exact equilateral-triangle bands tile the plane.",
+  ],
+  [
+    "Descartes circle packing",
+    "descartes-circle-packing",
+    "A triangular lattice of tangent circles with three recursive Descartes insertion levels.",
+  ],
+  [
+    "Pythagorean branch lattice",
+    "pythagorean-branch-lattice",
+    "Right-isosceles joints spawn paired squares whose areas obey the Pythagorean relation.",
+  ],
+  [
+    "Fibonacci square spiral",
+    "fibonacci-square-spiral",
+    "Six consecutive Fibonacci squares exactly pack a 13-by-8 rectangle; four copies form the tile.",
+  ],
+  [
+    "Rhodonea rose lattice",
+    "rhodonea-rose-lattice",
+    "Eight-petal harmonic roses repeat on a square lattice with concentric construction rings.",
+  ],
+  [
+    "Epicycloid gear lattice",
+    "epicycloid-gear-lattice",
+    "Five-cusp rolling-circle curves nest within a periodic field of analytic gear profiles.",
+  ],
+  [
+    "Decagram chord lattice",
+    "decagram-chord-lattice",
+    "Ten-vertex star polygons, decagon chords and a measured inner ring form each orbit cell.",
+  ],
+  [
+    "Harmonic wave lattice",
+    "harmonic-wave-lattice",
+    "Orthogonal sinusoidal families meet with periodic phase and continuous repeat edges.",
+  ],
+].map(([name, id, description]) => ({
+  name,
+  id,
+  description: "Set 03 — " + description,
+  set: 3,
+}));
+
 // Small, explicit geometric constructions. No rug borders or cultural labels.
 export const geometricCatalog = [
   {
@@ -86,11 +135,13 @@ export const geometricCatalog = [
       "A third-order continuous square-grid curve with nested turns and no self-crossings.",
   },
   ...geometricSetTwo,
+  ...geometricSetThree,
 ].map((p) => ({ ...p, group: "Geometric constructions" }));
 export function geometricPattern(name) {
   const spec = geometricCatalog.find((p) => p.name === name || p.id === name);
   if (!spec) return null;
   if (spec.set === 2) return geometricSetTwoPattern(spec);
+  if (spec.set === 3) return geometricSetThreePattern(spec);
   const d = {
     schema: "alloy.pattern.v1",
     name: spec.name,
@@ -595,6 +646,461 @@ function geometricSetTwoPattern(spec) {
       }
     add(paths[0], gold, "Opposed gold line fans", 1.35);
     add(paths[1], cream, "Opposed ivory line fans", 1.35);
+  }
+  return d;
+}
+
+// The positive Descartes root inserts the circle inside a bounded gap between
+// three pairwise externally tangent circles. Coordinates share their units.
+export function descartesGapCircle(triple) {
+  if (
+    !Array.isArray(triple) ||
+    triple.length !== 3 ||
+    triple.some(
+      (c) =>
+        !Number.isFinite(c?.x) ||
+        !Number.isFinite(c?.y) ||
+        !Number.isFinite(c?.r) ||
+        c.r <= 0,
+    )
+  )
+    throw new Error("A Descartes gap needs three finite positive circles.");
+  const [a, b, c] = triple,
+    ka = 1 / a.r,
+    kb = 1 / b.r,
+    kc = 1 / c.r,
+    k = ka + kb + kc + 2 * Math.sqrt(ka * kb + kb * kc + kc * ka),
+    r = 1 / k;
+  const dx1 = b.x - a.x,
+    dy1 = b.y - a.y,
+    dx2 = c.x - a.x,
+    dy2 = c.y - a.y,
+    rhs1 =
+      b.x * b.x +
+      b.y * b.y -
+      a.x * a.x -
+      a.y * a.y -
+      (b.r * b.r - a.r * a.r) -
+      2 * r * (b.r - a.r),
+    rhs2 =
+      c.x * c.x +
+      c.y * c.y -
+      a.x * a.x -
+      a.y * a.y -
+      (c.r * c.r - a.r * a.r) -
+      2 * r * (c.r - a.r),
+    det = 4 * (dx1 * dy2 - dy1 * dx2);
+  if (Math.abs(det) < 1e-12)
+    throw new Error("The three Descartes circles must not be collinear.");
+  const x = (2 * dy2 * rhs1 - 2 * dy1 * rhs2) / det,
+    y = (2 * dx1 * rhs2 - 2 * dx2 * rhs1) / det;
+  return { x, y, r };
+}
+
+function geometricSetThreePattern(spec) {
+  const d = {
+    schema: "alloy.pattern.v1",
+    name: spec.name,
+    construction: spec.id,
+    collection: "Geometric constructions",
+    background: "#233b44",
+    repeat: "straight",
+    repeats: 1,
+    mapping: "uv",
+    layers: [],
+  };
+  const n = (v) => Number((v / 5.12).toFixed(4));
+  const xy = (x, y) => [n(x), n(y)];
+  const poly = (pts, project = xy) =>
+    pts
+      .map(([x, y], i) => {
+        const [X, Y] = project(x, y);
+        return (i ? "L" : "M") + X + " " + Y;
+      })
+      .join("") + "Z";
+  const line = (pts, project = xy) =>
+    pts
+      .map(([x, y], i) => {
+        const [X, Y] = project(x, y);
+        return (i ? "L" : "M") + X + " " + Y;
+      })
+      .join("");
+  const add = (path, color, name, width = 0, fillRule) => {
+    if (path)
+      d.layers.push({
+        kind: "path",
+        path,
+        color,
+        name,
+        x: 256,
+        y: 256,
+        width: 512,
+        height: 512,
+        finish: "cotton",
+        roughness: 0.83,
+        metalness: 0,
+        relief: 0.03,
+        strokeWidth: width / 5.12,
+        ...(fillRule ? { fillRule } : {}),
+      });
+  };
+  const dark = "#233b44",
+    cream = "#eddfc3",
+    gold = "#d6b879",
+    teal = "#457e82",
+    coral = "#b9664d";
+  if (spec.id === "elongated-triangle-lattice") {
+    const a = 112,
+      h = (a * Math.sqrt(3)) / 2,
+      W = 2 * a,
+      H = 2 * (a + h),
+      project = (x, y) => [n((x * 512) / W), n((y * 512) / H)];
+    d.designAspect = W / H;
+    d.background = dark;
+    const blocks = ["", ""];
+    let up = "",
+      down = "",
+      joints = "";
+    const insetPath = (p, t = 0.91) => {
+      const cx = p.reduce((s, v) => s + v[0], 0) / p.length,
+        cy = p.reduce((s, v) => s + v[1], 0) / p.length;
+      return poly(p.map(([x, y]) => [cx + (x - cx) * t, cy + (y - cy) * t]));
+    };
+    const inTile = (cx, cy) => cx >= 0 && cx < W && cy >= 0 && cy < H;
+    for (let row = 0; row < 2; row++) {
+      const phase = row * (a / 2),
+        y = row * (a + h);
+      for (let col = -2; col <= 3; col++) {
+        const x = phase + col * a,
+          square = [
+            [x, y],
+            [x + a, y],
+            [x + a, y + a],
+            [x, y + a],
+          ],
+          lo = y + a,
+          hi = lo + h,
+          upTri = [
+            [x, lo],
+            [x + a, lo],
+            [x + a / 2, hi],
+          ],
+          downTri = [
+            [x + a / 2, hi],
+            [x + 1.5 * a, hi],
+            [x + a, lo],
+          ];
+        if (inTile(x + a / 2, y + a / 2)) {
+          blocks[((row + col) % 2 + 2) % 2] += poly(square, project);
+          joints += insetPath(square, 0.91);
+        }
+        if (inTile(x + a / 2, lo + h / 3)) {
+          up += poly(upTri, project);
+          joints += insetPath(upTri, 0.91);
+        }
+        if (inTile(x + a, lo + (2 * h) / 3)) {
+          down += poly(downTri, project);
+          joints += insetPath(downTri, 0.91);
+        }
+      }
+    }
+    add(blocks[0], teal, "Square course A");
+    add(blocks[1], coral, "Square course B");
+    add(up, gold, "Upward equilateral triangles");
+    add(down, cream, "Downward equilateral triangles");
+    add(joints, dark, "Individual tile joints", 1.35);
+  } else if (spec.id === "descartes-circle-packing") {
+    const R = 1,
+      W = 2 * R,
+      H = 2 * Math.sqrt(3) * R,
+      project = (x, y) => [n((x * 512) / W), n((y * 512) / H)];
+    d.designAspect = W / H;
+    d.background = "#f0e7d4";
+    const layers = ["", "", "", ""],
+      inTile = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
+    const circlePath = ({ x, y, r }) => {
+      const [X, Y] = project(x, y),
+        rx = n((r * 512) / W),
+        ry = n((r * 512) / H);
+      return `M${(X + rx).toFixed(4)} ${Y}a${rx} ${ry} 0 1 0 ${(-2 * rx).toFixed(4)} 0a${rx} ${ry} 0 1 0 ${(2 * rx).toFixed(4)} 0Z`;
+    };
+    const fill = (triple, depth) => {
+      const circle = descartesGapCircle(triple);
+      layers[depth] += circlePath(circle);
+      if (depth < 3)
+        for (let i = 0; i < 3; i++)
+          fill([triple[i], triple[(i + 1) % 3], circle], depth + 1);
+    };
+    const center = (i, j) => ({
+      x: 2 * i + j,
+      y: Math.sqrt(3) * j,
+      r: R,
+    });
+    // A 2-by-2√3 rectangle is a fundamental domain of the triangular circle
+    // lattice; include each circle/gap once and let SVG repetition close it.
+    for (let row = -1; row <= 2; row++)
+      for (let col = -2; col <= 2; col++) {
+        const c = center(col, row);
+        if (inTile(c.x, c.y)) layers[0] += circlePath(c);
+      }
+    for (let row = -2; row <= 3; row++)
+      for (let col = -3; col <= 3; col++) {
+        const a = center(col, row),
+          b = center(col + 1, row),
+          c = center(col, row + 1),
+          e = center(col + 1, row + 1);
+        for (const triple of [
+          [a, b, c],
+          [b, e, c],
+        ]) {
+          const x = triple.reduce((s, p) => s + p.x, 0) / 3,
+            y = triple.reduce((s, p) => s + p.y, 0) / 3;
+          if (inTile(x, y)) fill(triple, 1);
+        }
+      }
+    add(layers[0], "#31545c", "Triangular lattice circle faces");
+    add(layers[0], dark, "Tangent circle boundaries", 1.05);
+    add(layers[1], teal, "First Descartes fills");
+    add(layers[1], dark, "First circle inlays", 0.85);
+    add(layers[2], gold, "Second Descartes fills");
+    add(layers[2], dark, "Second circle inlays", 0.7);
+    add(layers[3], coral, "Third Descartes fills");
+    add(layers[3], dark, "Third circle inlays", 0.55);
+  } else if (spec.id === "pythagorean-branch-lattice") {
+    d.background = dark;
+    const squares = Array.from({ length: 5 }, () => ""),
+      triangles = Array.from({ length: 4 }, () => "");
+    let joints = "";
+    const length = (v) => Math.hypot(v[0], v[1]),
+      scale = (v, t) => [v[0] * t, v[1] * t],
+      addv = (a, b) => [a[0] + b[0], a[1] + b[1]],
+      sub = (a, b) => [a[0] - b[0], a[1] - b[1]],
+      away = (a, b, reference) => {
+        const v = sub(b, a),
+          l = length(v),
+          m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        let normal = [-v[1] / l, v[0] / l];
+        if (
+          normal[0] * (reference[0] - m[0]) +
+            normal[1] * (reference[1] - m[1]) >
+          0
+        )
+          normal = scale(normal, -1);
+        return normal;
+      };
+    const grow = (a, b, interior, depth, root = false) => {
+      const v = sub(b, a),
+        side = length(v),
+        squareA = addv(a, scale(interior, side)),
+        squareB = addv(b, scale(interior, side)),
+        square = [a, b, squareB, squareA];
+      squares[depth] += poly(square);
+      const cx = square.reduce((s, p) => s + p[0], 0) / 4,
+        cy = square.reduce((s, p) => s + p[1], 0) / 4;
+      joints += poly(
+        square.map(([x, y]) => [cx + (x - cx) * 0.94, cy + (y - cy) * 0.94]),
+      );
+      if (!depth) return;
+      // The root's triangle attaches directly to the square's upper edge.
+      // Descendant squares attach on a triangle leg, so their next triangle
+      // grows from the far edge, continuing away from the preceding joint.
+      const triA = root ? a : squareA,
+        triB = root ? b : squareB,
+        out = scale(interior, root ? -1 : 1),
+        unit = scale(sub(triB, triA), 1 / side),
+        apex = addv(triA, addv(scale(unit, side / 2), scale(out, side / 2))),
+        tri = [triA, triB, apex],
+        centroid = [
+          tri.reduce((s, p) => s + p[0], 0) / 3,
+          tri.reduce((s, p) => s + p[1], 0) / 3,
+        ];
+      triangles[depth - 1] += poly(tri);
+      grow(triA, apex, away(triA, apex, centroid), depth - 1);
+      grow(apex, triB, away(apex, triB, centroid), depth - 1);
+    };
+    grow([214, 402], [298, 402], [0, 1], 4, true);
+    squares.forEach((path, i) =>
+      add(path, [gold, teal, coral, cream, gold][i], `Branch squares · level ${i + 1}`),
+    );
+    triangles.forEach((path, i) =>
+      add(path, [coral, gold, teal, cream][i], `Right-angle joints · level ${i + 1}`),
+    );
+    add(joints, dark, "Square inset joints", 1.2);
+  } else if (spec.id === "fibonacci-square-spiral") {
+    d.background = "#1e343e";
+    const squares = ["", "", "", ""];
+    let joints = "",
+      progressions = "";
+    const tiles = [
+      [0, 0, 1],
+      [1, 0, 1],
+      [0, -2, 2],
+      [-3, -2, 3],
+      [-3, 1, 5],
+      [2, -2, 8],
+    ];
+    const scale = 18.5;
+    for (const cy of [128, 384])
+      for (const cx of [128, 384]) {
+        const project = (x, y) => [
+          n(cx - (13 * scale) / 2 + (x + 3) * scale),
+          n(cy - (8 * scale) / 2 + (y + 2) * scale),
+        ];
+        const centers = [];
+        tiles.forEach(([x, y, side], i) => {
+          const p = [
+            [x, y],
+            [x + side, y],
+            [x + side, y + side],
+            [x, y + side],
+          ];
+          squares[i % 4] += poly(p, project);
+          const mx = x + side / 2,
+            my = y + side / 2;
+          centers.push([mx, my]);
+          joints += poly(
+            p.map(([px, py]) => [mx + (px - mx) * 0.91, my + (py - my) * 0.91]),
+            project,
+          );
+        });
+        progressions += line(centers, project);
+      }
+    squares.forEach((path, i) =>
+      add(path, [teal, coral, gold, "#39545d"][i], `Fibonacci square class ${i + 1}`),
+    );
+    add(joints, cream, "Twenty-four inset square outlines", 1.2);
+    add(progressions, gold, "Square-center construction line", 1.35);
+  } else if (spec.id === "rhodonea-rose-lattice") {
+    d.background = "#243c45";
+    let outer = "",
+      inner = "",
+      rays = "",
+      rings = "";
+    for (const cy of [128, 384])
+      for (const cx of [128, 384]) {
+        const rose = (radius, phase = 0) => {
+          const pts = Array.from({ length: 513 }, (_, i) => {
+            const t = (i * Math.PI * 2) / 512,
+              r = radius * Math.cos(4 * t + phase);
+            return [cx + r * Math.cos(t), cy + r * Math.sin(t)];
+          });
+          return line(pts) + "Z";
+        };
+        outer += rose(70);
+        inner += rose(44, Math.PI / 8);
+        for (let k = 0; k < 8; k++) {
+          const t = (k * Math.PI) / 4,
+            r = 70 * Math.cos(4 * t);
+          rays += line([
+            [cx, cy],
+            [cx + r * Math.cos(t), cy + r * Math.sin(t)],
+          ]);
+        }
+        rings += `M${n(cx + 13)} ${n(cy)}a${n(13)} ${n(13)} 0 1 0 ${n(-26)} 0a${n(13)} ${n(13)} 0 1 0 ${n(26)} 0Z`;
+      }
+    add(outer, teal, "Eight-lobed rhodonea curves", 2.25);
+    add(inner, gold, "Offset inner harmonic", 1.5);
+    add(rays, cream, "Petal construction radii", 1.05);
+    add(rings, coral, "Central orbit rings", 1.2);
+  } else if (spec.id === "epicycloid-gear-lattice") {
+    d.background = "#203741";
+    let faces = "",
+      teeth = "",
+      hubs = "",
+      spokes = "";
+    const q = 5,
+      count = q * 160;
+    for (const cy of [128, 384])
+      for (const cx of [128, 384]) {
+        const gear = (radius) => {
+          const pts = Array.from({ length: count + 1 }, (_, i) => {
+            const t = (i * Math.PI * 2) / count,
+              s = radius / q,
+              x = s * ((q + 1) * Math.cos(t) - Math.cos((q + 1) * t)),
+              y = s * ((q + 1) * Math.sin(t) - Math.sin((q + 1) * t));
+            return [cx + x, cy + y];
+          });
+          return line(pts) + "Z";
+        };
+        faces += gear(71);
+        teeth += gear(71);
+        hubs += `M${n(cx + 15)} ${n(cy)}a${n(15)} ${n(15)} 0 1 0 ${n(-30)} 0a${n(15)} ${n(15)} 0 1 0 ${n(30)} 0Z`;
+        for (let k = 0; k < q; k++) {
+          const t = (2 * Math.PI * k) / q,
+            radius = 70;
+          spokes += line([
+            [cx, cy],
+            [cx + radius * Math.cos(t), cy + radius * Math.sin(t)],
+          ]);
+        }
+      }
+    add(faces, teal, "Five-cusp rolling-circle profiles");
+    add(teeth, gold, "Profile edge", 1.6);
+    add(spokes, cream, "Five radial tooth axes", 1.1);
+    add(hubs, coral, "Gear hubs", 1.35);
+  } else if (spec.id === "decagram-chord-lattice") {
+    d.background = dark;
+    let faces = "",
+      decagons = "",
+      star = "",
+      pentagrams = "",
+      rings = "";
+    for (const cy of [128, 384])
+      for (const cx of [128, 384]) {
+        const v = Array.from({ length: 10 }, (_, i) => {
+          const a = -Math.PI / 2 + (2 * Math.PI * i) / 10;
+          return [cx + 70 * Math.cos(a), cy + 70 * Math.sin(a)];
+        });
+        faces += poly(v);
+        decagons += poly(v);
+        const cycle = [];
+        let index = 0;
+        do {
+          cycle.push(v[index]);
+          index = (index + 3) % 10;
+        } while (index !== 0);
+        star += line(cycle) + "Z";
+        for (let start = 0; start < 2; start++) {
+          const p = [];
+          for (let j = 0; j < 5; j++) p.push(v[(start + j * 2) % 10]);
+          pentagrams += line(p) + "Z";
+        }
+        rings += `M${n(cx + 21)} ${n(cy)}a${n(21)} ${n(21)} 0 1 0 ${n(-42)} 0a${n(21)} ${n(21)} 0 1 0 ${n(42)} 0Z`;
+      }
+    add(faces, "#36545b", "Decagon fields");
+    add(decagons, gold, "Ten equal chord intervals", 1.25);
+    add(star, cream, "Regular decagram chords", 1.7);
+    add(pentagrams, coral, "Crossed pentagram chords", 1.15);
+    add(rings, teal, "Inner tenfold rings", 1.25);
+  } else if (spec.id === "harmonic-wave-lattice") {
+    d.background = "#203741";
+    let horizontal = "",
+      vertical = "";
+    const period = 128,
+      amplitude = 18,
+      step = 4;
+    for (let row = -1; row <= 5; row++) {
+      const phase = (row * Math.PI) / 2,
+        pts = [];
+      for (let x = 0; x <= 512; x += step)
+        pts.push([
+          x,
+          row * period + amplitude * Math.sin((2 * Math.PI * x) / period + phase),
+        ]);
+      horizontal += line(pts);
+    }
+    for (let col = -1; col <= 5; col++) {
+      const phase = (col * Math.PI) / 2,
+        pts = [];
+      for (let y = 0; y <= 512; y += step)
+        pts.push([
+          col * period + amplitude * Math.sin((2 * Math.PI * y) / period + phase),
+          y,
+        ]);
+      vertical += line(pts);
+    }
+    add(horizontal, teal, "Horizontal harmonic rows", 1.35);
+    add(vertical, gold, "Vertical harmonic columns", 1.35);
   }
   return d;
 }

@@ -458,7 +458,7 @@ function App() {
           <span>Automotive essentials</span>
           <ChevronRight size={13} />
           <strong>Material explorer</strong>
-          <span className="version-badge">v7.8</span>
+          <span className="version-badge">v7.9</span>
         </div>
         <div className="project-actions">
           <span className="saved-state">
