@@ -21,9 +21,9 @@ import {
 } from "../src/patternStitches.js";
 import { rebuildCollectionFade } from "../src/patternCollections.js";
 
-test("175 catalog entries plus Blank: colorways remain compatible but do not multiply cards", () => {
-  expect(patternStarterCatalog).toHaveLength(176);
-  expect(new Set(patternStarterCatalog.map((p) => p.name)).size).toBe(176);
+test("238 catalog entries plus Blank: colorways remain compatible but do not multiply cards", () => {
+  expect(patternStarterCatalog).toHaveLength(239);
+  expect(new Set(patternStarterCatalog.map((p) => p.name)).size).toBe(239);
   expect(textileLibraryEntries).toHaveLength(216);
   const structures = new Map();
   for (const p of textileLibraryEntries) {
@@ -160,7 +160,7 @@ test("search, paging, palette edits, stitch overlays, undo and portable saved do
   });
   await page.goto("/?material=natural-cotton&studio=pattern");
   await expect(page.locator(".pe-library-count")).toContainText(
-    "175 catalog entries + Blank",
+    "238 catalog entries + Blank",
   );
   await expect(page.locator(".pe-starters button")).toHaveCount(4);
   await page.getByLabel("Pattern collection").selectOption("Fabric weaves");

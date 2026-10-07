@@ -49,7 +49,8 @@ const rugRadial = (n, r = 1, inner = null, phase = -Math.PI / 2) =>
 export function richRugPattern(name, settings) {
   const spec = rugDesignCatalog.find((p) => p.name === name || p.id === name);
   if (!spec) return null;
-  if (spec.name === "Chromatic Diamond Tapestry") return referenceDiamondPattern();
+  if (spec.name === "Chromatic Diamond Tapestry")
+    return referenceDiamondPattern();
   const opts = normalizeRugComposition({ ...settings, id: spec.id });
   const colorKey =
     spec.study === "reference" || spec.study === "strip"
@@ -290,94 +291,152 @@ export function richRugPattern(name, settings) {
             6,
           );
     } else if (
-      type === "chevron" ||
-      type === "comb" ||
-      type === "stripe" ||
-      type === "checks"
+      ["chevron", "comb", "stripe", "checks", "rings", "dots"].includes(type)
     ) {
-      if (type === "checks") {
-        for (let j = 0; j < 6; j++)
-          for (let i = 0; i < 6; i++)
-            if ((i + j) % 2 === 0)
-              p(0, k, rugBox(-0.9 + i * 0.3, -0.9 + j * 0.3, 0.28, 0.28));
-      } else if (type === "stripe") {
-        for (let j = 0; j < 9; j++)
-          p(
-            0,
-            j % 3 ? k : next,
-            rugBox(-0.95, -0.9 + j * 0.21, 1.9, j % 3 ? 0.07 : 0.13),
-          );
-      } else if (type === "chevron") {
-        for (let j = 0; j < 5; j++)
+      // Compound inlay / embroidery cells replace sparse dots and zigzag rows.
+      // Retain the legacy recipe keys so saved composition controls still load.
+      const diamond = (s, c, cx, cy, rr) =>
+        p(s, c, [
+          [cx, cy - rr],
+          [cx + rr, cy],
+          [cx, cy + rr],
+          [cx - rr, cy],
+        ]);
+      if (type === "rings" || type === "dots") {
+        const n = type === "rings" ? 8 : 4;
+        p(0, k, rugRadial(n, 1, 0.72));
+        p(1, bg, rugRadial(n, 0.86, 0.72));
+        for (let q = 0; q < n; q++) {
+          const a = (q * Math.PI * 2) / n,
+            xx = Math.cos(a) * 0.55,
+            yy = Math.sin(a) * 0.55;
+          diamond(2, next, xx, yy, 0.26);
+          diamond(3, bg, xx, yy, 0.16);
           line(
-            0,
-            j % 2 ? k : next,
-            [
-              [-1, -0.9 + j * 0.36],
-              [0, -0.4 + j * 0.36],
-              [1, -0.9 + j * 0.36],
-            ],
-            0.11,
-          );
-      } else {
-        line(
-          0,
-          k,
-          [
-            [-0.85, -0.9],
-            [-0.85, 0.9],
-          ],
-          0.09,
-        );
-        line(
-          0,
-          k,
-          [
-            [0.85, -0.9],
-            [0.85, 0.9],
-          ],
-          0.09,
-        );
-        for (let j = 0; j < 7; j++) {
-          line(
-            0,
+            4,
             k,
             [
-              [-0.85, -0.9 + j * 0.3],
-              [0.3, -0.9 + j * 0.3],
+              [xx - 0.11, yy],
+              [xx, yy - 0.11],
+              [xx + 0.11, yy],
+              [xx, yy + 0.11],
+              [xx - 0.11, yy],
             ],
-            0.085,
-          );
-          line(
-            1,
-            next,
-            [
-              [0.85, -0.75 + j * 0.3],
-              [-0.3, -0.75 + j * 0.3],
-            ],
-            0.055,
+            0.03,
           );
         }
-      }
-    } else if (type === "rings" || type === "dots") {
-      if (type === "rings") {
-        for (let j = 0; j < 4; j++)
-          circle(j, j % 2 ? bg : k, 0, 0, 1 - j * 0.2, 24);
-        for (let j = 0; j < 12; j++)
-          circle(
-            4,
-            next,
-            Math.cos((j * Math.PI) / 6) * 0.79,
-            Math.sin((j * Math.PI) / 6) * 0.79,
-            0.045,
-            6,
-          );
+        diamond(2, k, 0, 0, 0.31);
+        diamond(3, bg, 0, 0, 0.22);
+        diamond(4, next, 0, 0, 0.12);
+      } else if (type === "checks") {
+        for (let j = 0; j < 3; j++)
+          for (let i = 0; i < 3; i++) {
+            const xx = -0.64 + i * 0.64,
+              yy = -0.64 + j * 0.64;
+            p(0, k, rugBox(xx - 0.3, yy - 0.3, 0.6, 0.6));
+            diamond(1, bg, xx, yy, 0.29);
+            diamond(2, next, xx, yy, 0.2);
+            p(3, bg, [
+              [xx, yy],
+              [xx + 0.17, yy],
+              [xx, yy + 0.17],
+            ]);
+          }
+      } else if (type === "stripe" || type === "comb") {
+        const vertical = type === "comb",
+          swap = (pts) => (vertical ? pts.map(([a, b]) => [b, a]) : pts);
+        for (let j = 0; j < 3; j++) {
+          const yy = -0.62 + j * 0.62;
+          p(0, k, swap(rugBox(-0.98, yy - 0.26, 1.96, 0.52)));
+          p(1, bg, swap(rugBox(-0.91, yy - 0.2, 1.82, 0.4)));
+          for (let q = -1; q <= 1; q++) {
+            const pts = [
+              [q * 0.6, yy - 0.19],
+              [q * 0.6 + 0.25, yy],
+              [q * 0.6, yy + 0.19],
+              [q * 0.6 - 0.25, yy],
+            ];
+            p(2, next, swap(pts));
+            p(
+              3,
+              bg,
+              swap(
+                pts.map(([a, b]) => [
+                  q * 0.6 + (a - q * 0.6) * 0.52,
+                  yy + (b - yy) * 0.52,
+                ]),
+              ),
+            );
+          }
+          for (let q = 0; q < 9; q++)
+            line(
+              4,
+              k,
+              swap([
+                [-0.86 + q * 0.21, yy - 0.2],
+                [-0.86 + q * 0.21, yy + 0.2],
+              ]),
+              0.015,
+            );
+        }
       } else {
-        for (let j = -2; j <= 2; j++)
-          for (let i = -2; i <= 2; i++)
-            if (Math.abs(i) + Math.abs(j) < 4)
-              circle(0, (i + j) % 2 ? k : next, i * 0.36, j * 0.36, 0.07, 6);
-        circle(1, k, 0, 0, 0.15, 8);
+        for (let q = 0; q < 4; q++) {
+          const a = (q * Math.PI) / 2,
+            rotate = (pts) =>
+              pts.map(([u, v]) => [
+                u * Math.cos(a) - v * Math.sin(a),
+                u * Math.sin(a) + v * Math.cos(a),
+              ]);
+          p(
+            0,
+            k,
+            rotate([
+              [-0.98, -0.98],
+              [0.98, -0.98],
+              [0, 0],
+            ]),
+          );
+          p(
+            1,
+            bg,
+            rotate([
+              [-0.77, -0.85],
+              [0.77, -0.85],
+              [0, -0.11],
+            ]),
+          );
+          p(
+            2,
+            next,
+            rotate([
+              [-0.49, -0.73],
+              [0.49, -0.73],
+              [0, -0.24],
+            ]),
+          );
+          line(
+            3,
+            bg,
+            rotate([
+              [-0.6, -0.79],
+              [0, -0.39],
+              [0.6, -0.79],
+            ]),
+            0.055,
+          );
+          line(
+            4,
+            k,
+            rotate([
+              [-0.95, -0.98],
+              [-0.95, -0.6],
+              [-0.6, -0.6],
+              [-0.6, -0.3],
+              [-0.3, -0.3],
+            ]),
+            0.035,
+          );
+        }
       }
     } else if (type === "star8" || type === "star12" || type === "knot") {
       const n = type === "star12" ? 12 : 8,

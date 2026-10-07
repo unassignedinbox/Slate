@@ -36,6 +36,7 @@ async function frame(page) {
 test("standalone page renders, edits and exports without external assets", async ({
   page,
 }, testInfo) => {
+  test.setTimeout(600000);
   const html = await readFile(htmlPath, "utf8");
   const url = publicURL || localURL;
   const errors = [],
@@ -452,16 +453,28 @@ test("standalone page renders, edits and exports without external assets", async
     84, 64, 0.004,
   ]);
   beaded.dispose();
+  const inlay = new Function(
+    "THREE",
+    stitchFactory.replace(
+      "return createMaterial(preset);",
+      "return createMaterial({...preset,pattern:patternStarter('Four Gate Marquetry')});",
+    ),
+  )(THREE);
+  expect(inlay.userData.params.pattern.construction).toBe(
+    "four-gate-marquetry",
+  );
+  expect(inlay.userData.params.pattern.layers.length).toBeGreaterThan(15);
+  inlay.dispose();
 
   await page
     .getByRole("button", { name: "Pattern studio", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "4 reference-led rebuilds ↗", exact: true })
+    .getByRole("button", { name: "Reference studies ↗", exact: true })
     .click();
   await page
     .getByLabel("Pattern collection")
-    .selectOption("Legacy / Islamic carpets");
+    .selectOption("Compositions / Islamic carpets");
   await page.getByLabel("Search patterns").fill("Saffron Rosette Court");
   await page
     .getByRole("button", { name: "Saffron Rosette Court", exact: true })

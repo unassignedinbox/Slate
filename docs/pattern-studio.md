@@ -1,26 +1,30 @@
-# Pattern studio — v7.5
+# Pattern studio — v7.6
 
 This is a **hybrid vector/procedural material workflow**, not the previous zero-input-map claim. Existing paint, scratch and botanical families remain analytic. All five leather presets now share one generated SVG height atlas; pattern documents can contain vector shapes, sanitized SVG groups and embedded user images. No reference photographs are shipped as leather maps.
 
-## V7.5: corrected inventory and four reference studies
+## V7.6: 200 counted structures, without colorway padding
 
-The catalog now has **175 entries plus Blank**. This is a card inventory, **not** a certification that 175 designs satisfy the requested complexity or that the 200-design target is complete. The prior palette-expanded count has been withdrawn. One ombre family has one card, regardless of color. Tiny dots and stripe-width variants are not separate cards; ink/gold cube fades share a public entry. Older names and deep links remain loadable for compatibility.
+**174 ornamental compositions + 16 weave constructions + 10 stitch constructions = 200.** These are not 200 different carpet layouts or 200 unrelated renderers. The public catalog also retains 38 elementary/legacy starters plus Blank, excluded from the 200. Colorways, border-only changes, repeat density, scale, seeds and rotation do not create new counted designs. Ombre has one basic card. Historical aliases and palette-bearing names remain loadable without multiplying public cards.
 
-The initial library filter is **Reference studies**. **4 reference-led rebuilds** opens:
+Use **200 structures · no colorway counts** to browse only the counted inventory. **Ornamental compositions** selects the 174 decorative entries. The new **African inlay**, **Islamic networks** and **Ornamental carpets** groups each contain 21 constructions (63 additions). A construction description appears above the canvas; card tooltips expose the same basis. [The complete construction ledger](pattern-structure-ledger.md) lists every counted identity.
+
+The older 108 composition recipes retain their IDs and controls, but six sparse field vocabularies have been replaced by compound inlays, brocaded bands, stepped/quartered panels and resist rosettes. Those replacements do not add to the count. The new graph-based designs use clipped cubic foliage and geometric inlays rather than just changing a palette or a random seed. Concave compartment clipping is supported through triangulation. New `construction` metadata survives ordinary JSON save/reload and shader exports.
+
+The initial library filter is **Reference studies**. **Reference studies** opens:
 
 - **Chromatic Diamond Tapestry**: replacement of the existing design, with a 640:360 artboard, nested shields, staircase contours, patterned outline bands, split rectangular fields and narrow selvedges.
 - **Beaded Diamond Weave**: thousands of individually authored oval bead polygons arranged in a staggered lattice. Color is assigned per bead; highlights, edge shading and pierced centers remain vector geometry. Analytical rounded relief and gap roughness are shared by live materials and baking.
 - **Turquoise Faceted Vault**: a flat decorative study of a fan of connected panels, alternating cream/navy/turquoise grounds, gold ribs and clipped floral infill. It is not actual vaulted/muqarnas mesh geometry.
 - **Crimson Star and Cross Carpet**: a continuous eightfold star/cross arrangement with branching leaf, scroll, blossom and palmette infill—not disconnected star stamps.
 
-The three new studies and one replacement are not advertised as resolving the outstanding quantity requirement. Older studies remain in **Legacy / …**, while elementary repeats are in **Basic / …**. **Legacy compositions** is a convenience filter, not a quality approval.
+These four studies are counted once. Older, now-revised recipes are under **Compositions / …**; elementary repeats remain under **Basic / …** and are excluded from the 200. None of these labels claims historical authentication or user approval.
 
 ### Editing and rendering
 
 - All four studies are ordinary editable `alloy.pattern.v1` path layers with pigment and finish assignments. They reserve room for a three-layer stitch overlay. Semantic groups, rather than each individual bead or blossom, are layers.
 - `designAspect` retains wide-artboard proportions in the editor, exported SVG and the Rug preview. Old documents without it retain their old dimensions. Other preview objects use their own UV aspect.
 - The designs use `tileAxes: "none"`, clamp-to-edge sampling and one finite composition. Increasing repeat count crops/stretches edge pixels; it does not make a framed rug seamless.
-- The fixed studies intentionally do not show the old generic Composition designer. The older recipes retain their regeneration controls and preservation behavior.
+- The reference studies and 63 graph-based constructions do not show the old generic Composition designer. They are editable compound-path documents; the older recipes retain regeneration controls and preservation behavior.
 - Bead relief uses a fixed staggered grid in document coordinates. Individual bead-layer geometry transformations do not move that procedural grid; use document-level mapping/rotation/repeats to transform the complete beaded surface coherently. Beads are shader relief, not separate glass meshes or transmission simulation.
 - SVG is scalable; live source maps remain finite resolution. Tiny ornament can become subpixel. The reference studies are original vector interpretations, not scans or exact photographic reconstructions.
 

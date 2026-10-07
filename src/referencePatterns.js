@@ -1,3 +1,4 @@
+import { ornamentalInfill } from "./ornamentDrawing.js";
 // Reference-led geometry. Four colorways never make four designs.
 // The catalogue records topology + infill, not palette or seed variants.
 const referencePlans = [
@@ -24,14 +25,16 @@ export const referenceDesignCatalog = referencePlans.map(
   }),
 );
 
-function referenceBuilder(width = 512, height = 512, palette) {
+export function referenceBuilder(width = 512, height = 512, palette) {
   const parts = new Map();
-  let clipPolygon = null;
+  let clipPolygon = null,
+    clipPieces = null,
+    pointTransform = null;
   const cross = (a, b, c) =>
     (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
-  function clipped(points) {
-    if (!clipPolygon) return points;
-    const clip = clipPolygon,
+  function clipped(points, polygon = clipPolygon) {
+    if (!polygon) return points;
+    const clip = polygon,
       sign =
         Math.sign(
           clip.reduce((a, p, i) => {
@@ -59,12 +62,66 @@ function referenceBuilder(width = 512, height = 512, palette) {
     }
     return result;
   }
+  function clipTriangles(polygon) {
+    const area = polygon.reduce((s, p, i) => {
+      const q = polygon[(i + 1) % polygon.length];
+      return s + p[0] * q[1] - q[0] * p[1];
+    }, 0);
+    const points = area < 0 ? [...polygon].reverse() : [...polygon];
+    if (
+      points.every(
+        (p, i) =>
+          cross(
+            p,
+            points[(i + 1) % points.length],
+            points[(i + 2) % points.length],
+          ) >= -1e-8,
+      )
+    )
+      return [polygon];
+    const triangles = [];
+    let guard = 0;
+    while (points.length > 3 && guard++ < polygon.length * polygon.length) {
+      let found = false;
+      for (let i = 0; i < points.length; i++) {
+        const a = points[(i + points.length - 1) % points.length],
+          b = points[i],
+          c = points[(i + 1) % points.length];
+        if (cross(a, b, c) <= 1e-8) continue;
+        if (
+          points.some(
+            (p) =>
+              p !== a &&
+              p !== b &&
+              p !== c &&
+              cross(a, b, p) > -1e-8 &&
+              cross(b, c, p) > -1e-8 &&
+              cross(c, a, p) > -1e-8,
+          )
+        )
+          continue;
+        triangles.push([a, b, c]);
+        points.splice(i, 1);
+        found = true;
+        break;
+      }
+      if (!found) break;
+    }
+    if (points.length === 3) triangles.push(points);
+    if (points.length > 3)
+      throw new Error("Non-simple ornament clipping polygon.");
+    return triangles;
+  }
   const clip = (polygon, draw) => {
+    const old = clipPolygon,
+      oldPieces = clipPieces;
     clipPolygon = polygon;
+    clipPieces = clipTriangles(polygon);
     try {
       draw();
     } finally {
-      clipPolygon = null;
+      clipPolygon = old;
+      clipPieces = oldPieces;
     }
   };
   const point = ([x, y]) =>
@@ -72,18 +129,23 @@ function referenceBuilder(width = 512, height = 512, palette) {
   const path = (pts) =>
     pts.map((p, i) => (i ? "L" : "M") + point(p)).join("") + "Z";
   const add = (z, k, pts) => {
-    pts = clipped(pts);
-    if (
-      pts.length < 3 ||
-      pts.every((p) => p[0] < 0) ||
-      pts.every((p) => p[1] < 0) ||
-      pts.every((p) => p[0] > width) ||
-      pts.every((p) => p[1] > height)
-    )
-      return;
-    const key = z + ":" + k;
-    if (!parts.has(key)) parts.set(key, []);
-    parts.get(key).push(path(pts));
+    if (pointTransform) pts = pts.map(pointTransform);
+    const fragments = clipPieces
+      ? clipPieces.map((poly) => clipped(pts, poly))
+      : [pts];
+    for (const fragment of fragments) {
+      if (
+        fragment.length < 3 ||
+        fragment.every((p) => p[0] < 0) ||
+        fragment.every((p) => p[1] < 0) ||
+        fragment.every((p) => p[0] > width) ||
+        fragment.every((p) => p[1] > height)
+      )
+        continue;
+      const key = z + ":" + k;
+      if (!parts.has(key)) parts.set(key, []);
+      parts.get(key).push(path(fragment));
+    }
   };
   const rect = (z, k, x, y, w, h) =>
     add(z, k, [
@@ -178,75 +240,14 @@ function referenceBuilder(width = 512, height = 512, palette) {
     );
   }
   function ornament(kind, x, y, r, z = 5) {
-    const branches = kind === "palmette" ? 7 : 8;
-    for (let j = 0; j < branches; j++) {
-      const a = (j / branches) * Math.PI * 2,
-        co = Math.cos(a),
-        si = Math.sin(a);
-      const stem = Array.from({ length: 24 }, (_, i) => {
-        const t = i / 23;
-        return [
-          x + co * r * t + Math.sin(t * Math.PI) * si * r * 0.22,
-          y + si * r * t - Math.sin(t * Math.PI) * co * r * 0.22,
-        ];
-      });
-      line(z, 3, stem, r * 0.023);
-      for (const t of [0.25, 0.42, 0.59, 0.76, 0.91]) {
-        const xx = x + co * r * t,
-          yy = y + si * r * t;
-        leaf(z + 1, j % 2 ? 4 : 5, xx, yy, r * 0.13, a + (j % 2 ? 0.7 : -0.7));
-      }
-      if (kind === "scroll")
-        spiral(
-          z + 2,
-          1,
-          x + co * r * 0.64,
-          y + si * r * 0.64,
-          r * 0.25,
-          a + 0.7,
-          1.3,
-        );
-      else if (kind === "palmette")
-        for (let k = -2; k <= 2; k++)
-          leaf(
-            z + 2,
-            k % 2 ? 1 : 3,
-            x + co * r * 0.68,
-            y + si * r * 0.68,
-            r * 0.19,
-            a + k * 0.22,
-          );
-      else
-        flower(
-          z + 2,
-          j % 2 ? 1 : 2,
-          x + co * r * 0.7,
-          y + si * r * 0.7,
-          r * 0.17,
-          kind === "lotus" ? 7 : 5,
-        );
-      flower(
-        z + 2,
-        2,
-        x + co * r * 0.36 + si * r * 0.17,
-        y + si * r * 0.36 - co * r * 0.17,
-        r * 0.065,
-        5,
-      );
-    }
-    flower(z + 3, 3, x, y, r * 0.22, 8);
-    for (let j = 0; j < 12; j++) {
-      const a = (j * Math.PI) / 6;
-      spiral(
-        z + 1,
-        3,
-        x + Math.cos(a) * r * 0.89,
-        y + Math.sin(a) * r * 0.89,
-        r * 0.1,
-        a,
-        1,
-      );
-    }
+    ornamentalInfill(
+      { add, line, star, flower, disk, leaf },
+      kind === "scroll" ? "vine" : kind === "lotus" ? "rosette" : kind,
+      x,
+      y,
+      r,
+      z,
+    );
   }
   function layers(finish = "wool") {
     const result = [];
@@ -290,6 +291,15 @@ function referenceBuilder(width = 512, height = 512, palette) {
   }
   return {
     clip,
+    transform: (fn, draw) => {
+      const prior = pointTransform;
+      pointTransform = fn;
+      try {
+        draw();
+      } finally {
+        pointTransform = prior;
+      }
+    },
     add,
     rect,
     radial,
@@ -564,8 +574,8 @@ export function referencePattern(name) {
   if (vault) {
     const n = 16,
       cx = 256,
-      cy = 88,
-      radii = [43, 92, 162, 247, 347, 474, 640];
+      cy = -18,
+      radii = [18, 63, 125, 191, 258, 352, 460, 610];
     const polar = (ring, j) => [
       cx +
         Math.cos((j * Math.PI * 2) / n + ((ring % 2) * Math.PI) / n) *
@@ -590,7 +600,11 @@ export function referencePattern(name) {
           x + (a - x) * 0.95,
           y + (c - y) * 0.95,
         ]);
-        b.add(2, [1, 0, 2][(ring + j) % 3], inset);
+        b.add(
+          2,
+          ring < 3 ? 2 : ring === 3 ? 1 : [0, 0, 2, 0, 2, 1][(ring + j) % 6],
+          inset,
+        );
         b.outline(3, 1, inset, 0.7);
         b.clip(inset, () => {
           const r = (radii[ring + 1] - radii[ring]) * 0.65;
@@ -670,13 +684,27 @@ export function referencePattern(name) {
         );
         b.add(
           3,
-          2,
-          pts.map(([a, c]) => [x + (a - x) * 0.78, y + (c - y) * 0.78]),
+          0,
+          pts.map(([a, c]) => [x + (a - x) * 0.7, y + (c - y) * 0.7]),
         );
-        b.ornament(d.infill, x, y, r * 0.74, 5);
+        b.add(
+          4,
+          2,
+          pts.map(([a, c]) => [x + (a - x) * 0.6, y + (c - y) * 0.6]),
+        );
+        b.ornament("palmette", x, y, r * 0.56, 5);
         b.star(12, 3, x, y, r * 0.25, 8, 0.76);
         b.star(13, 0, x, y, r * 0.21, 8, 0.76);
         b.flower(14, 1, x, y, r * 0.17, 8);
+        const strap = [
+          [x - r * 0.78, y - r * 0.78],
+          [x + r * 0.78, y - r * 0.78],
+          [x + r * 0.78, y + r * 0.78],
+          [x - r * 0.78, y + r * 0.78],
+        ];
+        b.outline(15, 0, strap, 3.8);
+        b.outline(16, 3, strap, 2.4);
+        b.outline(17, 1, strap, 0.6);
         b.ornament("palmette", col * size, row * size, size * 0.24, 5);
         for (let q = 0; q < 8; q++) {
           const a = (q * Math.PI) / 4;
@@ -748,8 +776,8 @@ function referenceBeadPattern(spec) {
     "#edbb17",
     "#133f9a",
     "#147f54",
-    "#ffffff",
-    "#4a555c",
+    "#ef6817",
+    "#666979",
   ];
   const b = referenceBuilder(512, 512, palette),
     columns = 84,
@@ -757,34 +785,53 @@ function referenceBeadPattern(spec) {
     dx = 512 / columns,
     dy = 512 / rows;
   b.rect(0, 0, 0, 0, 512, 512);
-  const bands = [
-    [0, 5],
-    [1, 8],
-    [4, 30],
-    [1, 8],
-    [0, 5],
-    [3, 25],
-    [0, 5],
-    [1, 8],
-    [5, 28],
-    [0, 5],
-    [2, 35],
-  ];
-  const period = bands.reduce((s, a) => s + a[1], 0);
   for (let j = -1; j <= rows; j++)
     for (let i = -1; i <= columns; i++) {
       const x = (i + 0.5 + (j % 2) * 0.5) * dx,
         y = (j + 0.5) * dy;
-      const distance = Math.abs((x - 300) / 1.05) + Math.abs((y - 246) / 1.2);
-      let t = distance % period,
-        k = 2;
-      for (const [color, width] of bands) {
-        if (t < width) {
-          k = color;
-          break;
+      const centers = [
+        [256, 255, 6],
+        [13, 340, 5],
+        [500, 302, 1],
+        [57, -88, 4],
+        [465, -84, 2],
+      ];
+      let closest = centers[0],
+        distance = Infinity;
+      for (const c of centers) {
+        const t = Math.abs((x - c[0]) / 145) + Math.abs((y - c[1]) / 260);
+        if (t < distance) {
+          distance = t;
+          closest = c;
         }
-        t -= width;
       }
+      // Dotted black/white beads are a narrow outline, not an empty field filler.
+      let k =
+        distance < 0.2
+          ? 0
+          : distance < 0.44
+            ? 1
+            : distance < 0.7
+              ? closest[2]
+              : distance < 0.76
+                ? (i + j) % 2
+                  ? 0
+                  : 1
+                : distance < 0.84
+                  ? 0
+                  : distance < 1.02
+                    ? 1
+                    : distance < 1.28
+                      ? y < 255
+                        ? 4
+                        : 5
+                      : distance < 1.34
+                        ? (i + j) % 2
+                          ? 0
+                          : 1
+                        : 0;
+      if (closest[0] === 500 && distance < 0.22) k = 3;
+      if (closest[0] === 13 && distance < 0.18) k = 2;
       const wobble = Math.sin(i * 37 + j * 19),
         cx = x + wobble * 0.18,
         cy = y + Math.cos(i * 13 + j * 23) * 0.15;

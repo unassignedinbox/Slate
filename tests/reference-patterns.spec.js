@@ -12,13 +12,16 @@ import { createMaterial, materials } from "../src/materials.js";
 import { createLeatherSwatchGeometry } from "../src/leatherGeometry.js";
 
 const references = patternStarterCatalog.filter((p) => p.reference);
-test("catalog audit: one ombre, no palette or compatibility-alias cards; no 200-design claim", () => {
+test("catalog audit: one ombre, no palette or compatibility-alias cards; no primitive/colorway padding", () => {
   expect(references).toHaveLength(4);
   expect(patternInventory).toEqual({
     target: 200,
     referenceStudies: 4,
-    catalogEntries: 175,
-    targetMet: false,
+    catalogEntries: 238,
+    ornamental: 174,
+    textile: 26,
+    designs: 200,
+    targetMet: true,
   });
   expect(
     patternStarterCatalog.filter((p) => p.name.startsWith("Ombre")),

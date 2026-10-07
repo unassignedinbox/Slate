@@ -1,4 +1,8 @@
 import {
+  ornamentalCatalog,
+  ornamentalPattern,
+} from "./ornamentalConstructions.js";
+import {
   referenceDesignCatalog,
   referencePattern,
   referenceDiamondPattern,
@@ -84,6 +88,9 @@ export function validatePattern(input) {
     tileAxes,
     ...(input.designAspect
       ? { designAspect: patternNumber(input.designAspect, 1, 0.5, 2) }
+      : {}),
+    ...(input.construction
+      ? { construction: String(input.construction).slice(0, 80) }
       : {}),
     ...(input.referenceDesign
       ? { referenceDesign: String(input.referenceDesign).slice(0, 80) }
@@ -221,21 +228,29 @@ export const canonicalTextileEntries = textileLibraryEntries
     colorways: Object.keys(textilePalettes),
   }));
 export const patternStarterCatalog = [
+  ...ornamentalCatalog.map((p) => ({ ...p, countedDesign: true })),
   {
     ...rugDesignCatalog.find((p) => p.name === "Chromatic Diamond Tapestry"),
     group: "Reference studies",
     reference: true,
+    countedDesign: true,
   },
   ...referenceDesignCatalog.map((p) => ({
     ...p,
     group: "Reference studies",
     reference: true,
+    countedDesign: true,
   })),
   ...rugDesignCatalog
     .filter((p) => p.name !== "Chromatic Diamond Tapestry")
-    .map((p) => ({ ...p, group: "Legacy / " + p.group })),
+    .map((p) => ({
+      ...p,
+      group: "Compositions / " + p.group,
+      countedDesign: true,
+    })),
   ...canonicalTextileEntries.map((p) => ({
     ...p,
+    countedDesign: ["Fabric weaves", "Stitch patterns"].includes(p.group),
     group: ["Fabric weaves", "Stitch patterns"].includes(p.group)
       ? p.group
       : "Basic / " + p.group,
@@ -262,14 +277,37 @@ export function resolvePatternStarterName(slug) {
     ...patternAliases,
   ].find((name) => name.toLowerCase().replaceAll(" ", "-") === slug);
 }
-// This is a reference-rebuild progress count, NOT a claim that old compositions
-// or elementary repeats satisfy the requested 200 detailed distinct designs.
+// Count whole compositions and actual weave/stitch constructions. Elementary
+// repeats, aliases and palette variants never contribute to this quota.
 export const patternInventory = {
   target: 200,
   referenceStudies: 4,
   catalogEntries: patternStarterCatalog.length - 1,
-  targetMet: false,
+  ornamental: patternStarterCatalog.filter((p) => p.countedDesign && p.detailed)
+    .length,
+  textile: patternStarterCatalog.filter((p) => p.countedDesign && !p.detailed)
+    .length,
+  designs: patternStarterCatalog.filter((p) => p.countedDesign).length,
+  targetMet: patternStarterCatalog.filter((p) => p.countedDesign).length >= 200,
 };
+// Human-readable construction ledger. Borders, palette names, density, seed,
+// uniform scale and overall rotation are deliberately absent from these keys.
+export const patternStructureManifest = patternStarterCatalog
+  .filter((p) => p.countedDesign)
+  .map((p) => ({
+    name: p.name,
+    group: p.group,
+    structure:
+      p.structureKey ||
+      (p.reference
+        ? `reference:${p.id}`
+        : p.layout
+          ? `composition:${p.layout}/${p.motif}/${p.secondary}/${p.center}`
+          : `textile:${p.family}`),
+    basis:
+      p.description ||
+      `${p.family}: yarn interlacement or thread-path construction`,
+  }));
 export function patternStarter(name = "Diamond weave", colorway = "Indigo") {
   if (
     [
@@ -291,6 +329,7 @@ export function patternStarter(name = "Diamond weave", colorway = "Indigo") {
       " - " +
       (family.colorways.includes(colorway) ? colorway : "Indigo");
   const collection =
+    ornamentalPattern(name) ||
     referencePattern(name) ||
     richRugPattern(name) ||
     textilePattern(name) ||

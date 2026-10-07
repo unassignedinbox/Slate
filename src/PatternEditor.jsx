@@ -31,6 +31,7 @@ import {
   patternStarter,
   resolvePatternStarterName,
   patternStarterCatalog,
+  patternInventory,
   generatePatternLayout,
   patternLayer,
   patternSVG,
@@ -55,7 +56,8 @@ const StarterThumb = React.memo(function StarterThumb({ name, palette }) {
 });
 const libraryGroups = [
   "All patterns",
-  "Legacy compositions",
+  "200 structures",
+  "Ornamental compositions",
   ...new Set(patternStarterCatalog.map((p) => p.group)),
 ];
 
@@ -97,7 +99,7 @@ export default function PatternEditor({
     doc.referenceDesign || doc.name === "Chromatic Diamond Tapestry"
       ? "Reference studies"
       : doc.ornament
-        ? "Legacy compositions"
+        ? "Ornamental compositions"
         : "Reference studies",
   );
   const [librarySearch, setLibrarySearch] = useState(""),
@@ -108,9 +110,8 @@ export default function PatternEditor({
       patternStarterCatalog.filter(
         (p) =>
           (collectionFilter === "All patterns" ||
-            (collectionFilter === "Legacy compositions" &&
-              p.detailed &&
-              !p.reference) ||
+            (collectionFilter === "Ornamental compositions" && p.detailed) ||
+            (collectionFilter === "200 structures" && p.countedDesign) ||
             p.group === collectionFilter) &&
           `${p.name} ${p.group} ${p.description || ""} ${p.study || ""}`
             .toLowerCase()
@@ -510,7 +511,16 @@ export default function PatternEditor({
               setLibrarySearch("");
             }}
           >
-            4 reference-led rebuilds ↗
+            Reference studies ↗
+          </button>
+          <button
+            className="pe-wide pe-rich-library"
+            onClick={() => {
+              setCollectionFilter("200 structures");
+              setLibrarySearch("");
+            }}
+          >
+            200 structures · no colorway counts ↗
           </button>
           <select
             className="pe-collection-filter"
@@ -545,7 +555,8 @@ export default function PatternEditor({
           </select>
           <p className="pe-library-count" aria-live="polite">
             {libraryMatches.length} results · {patternStarterCatalog.length - 1}{" "}
-            catalog entries + Blank · colorways excluded
+            catalog entries + Blank · {patternInventory.designs} counted
+            structures
           </p>
           <div
             className="pe-starters"
@@ -553,9 +564,10 @@ export default function PatternEditor({
           >
             {libraryMatches
               .slice(pageIndex * 24, pageIndex * 24 + 24)
-              .map(({ name }) => (
+              .map(({ name, description }) => (
                 <button
                   key={name}
+                  title={description || name}
                   onClick={() => {
                     const next = patternStarter(name, libraryPalette);
                     commit(next);
@@ -594,10 +606,10 @@ export default function PatternEditor({
             </button>
           </div>
           <p className="pe-hint">
-            Colorways share one card. Basic repeats and legacy compositions are
-            separate from the reference rebuilds. Catalog entries are not a
-            quality-approved design count. The 200 distinct-design target
-            remains unfinished.
+            174 ornamental compositions + 16 weave constructions + 10 stitch
+            constructions. Colorways, aliases and the 38 basic/legacy starters
+            are excluded from the 200. Select a card to inspect its
+            construction.
           </p>
           <div className="pe-section">
             <h3>Generate a layout</h3>
@@ -763,6 +775,16 @@ export default function PatternEditor({
               Same shader as the workspace · updates after editing pauses
             </span>
           </div>
+          {patternStarterCatalog.find((p) => p.name === doc.name)
+            ?.description && (
+            <p className="pe-hint" style={{ margin: "12px 0 0" }}>
+              Construction:{" "}
+              {
+                patternStarterCatalog.find((p) => p.name === doc.name)
+                  .description
+              }
+            </p>
+          )}
           <div className="pe-canvas-heading">
             <div>
               <span className="pe-kicker">

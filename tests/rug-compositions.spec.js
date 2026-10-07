@@ -34,7 +34,7 @@ const signature = (d) =>
 
 test("108 legacy blueprints: bounds, determinism, complete serialization", () => {
   expect(rugDesignCatalog).toHaveLength(108);
-  expect(patternStarterCatalog).toHaveLength(176);
+  expect(patternStarterCatalog).toHaveLength(239);
   for (const group of [
     "African compositions",
     "Islamic carpets",
@@ -182,7 +182,7 @@ test("detailed library navigation, composition controls, undo, SVG/JSON and actu
   await expect(page.locator(".pe-library-count")).toContainText("4 results");
   await page
     .getByLabel("Pattern collection")
-    .selectOption("Legacy / Islamic carpets");
+    .selectOption("Compositions / Islamic carpets");
   await expect(page.locator(".pe-library-count")).toContainText("36 results");
   await page.getByRole("button", { name: "Next pattern page" }).click();
   await expect(page.locator(".pe-library-paging")).toContainText("Page 2 / 2");
@@ -221,7 +221,7 @@ test("detailed library navigation, composition controls, undo, SVG/JSON and actu
   await page.screenshot({ path: ".playwright/final-ornate-islamic-rug.png" });
   await page.getByRole("button", { name: "Design tile", exact: true }).click();
   await page
-    .getByRole("button", { name: "4 reference-led rebuilds ↗", exact: true })
+    .getByRole("button", { name: "Reference studies ↗", exact: true })
     .click();
   await page.getByLabel("Pattern collection").selectOption("Reference studies");
   await page

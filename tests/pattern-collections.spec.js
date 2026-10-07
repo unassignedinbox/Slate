@@ -17,7 +17,7 @@ import { createMaterial, materials } from "../src/materials.js";
 import { createLeatherSwatchGeometry } from "../src/leatherGeometry.js";
 
 test("all ten collections are bounded editable vectors, including maximum-density fades", () => {
-  expect(patternStarterNames).toHaveLength(176);
+  expect(patternStarterNames).toHaveLength(239);
   for (const p of collectionPatterns) {
     const raw = collectionPattern(p.name),
       doc = patternStarter(p.name);
@@ -248,7 +248,7 @@ test("rug live preview renders a wool surface and applies the dedicated rug mesh
   await page.screenshot({ path: ".playwright/final-african-rug.png" });
   await page
     .getByLabel("Pattern collection")
-    .selectOption("Legacy / Islamic carpets");
+    .selectOption("Compositions / Islamic carpets");
   await page.getByLabel("Search patterns").fill("Azure Arabesque Medallion");
   await page
     .getByRole("button", { name: "Azure Arabesque Medallion", exact: true })

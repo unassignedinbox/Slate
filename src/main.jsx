@@ -1,3 +1,5 @@
+import ornamentDrawingSource from "./ornamentDrawing.js?raw";
+import ornamentalSource from "./ornamentalConstructions.js?raw";
 import referenceModuleSource from "./referencePatterns.js?raw";
 import rugDesignModuleSource from "./rugDesigns.js?raw";
 import rugCompositionModuleSource from "./rugCompositions.js?raw";
@@ -68,7 +70,11 @@ import botanicalModuleSource from "./botanicalKernels.js?raw";
 import architectureModuleSource from "./architecturalKernels.js?raw";
 import BakePanel from "./BakePanel";
 const shaderSource =
-  referenceModuleSource +
+  ornamentDrawingSource +
+  "\n" +
+  referenceModuleSource.replace(/^import[\s\S]*?;\s*/gm, "") +
+  "\n" +
+  ornamentalSource.replace(/^import[\s\S]*?;\s*/gm, "") +
   "\n" +
   stitchModuleSource +
   "\n" +
@@ -444,7 +450,7 @@ function App() {
           <span>Automotive essentials</span>
           <ChevronRight size={13} />
           <strong>Material explorer</strong>
-          <span className="version-badge">v7.5</span>
+          <span className="version-badge">v7.6</span>
         </div>
         <div className="project-actions">
           <span className="saved-state">

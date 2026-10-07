@@ -1,10 +1,12 @@
-# Rug and textile studies — v7.5
+# Rug and textile studies — v7.6
 
 ## Scope and originality
 
-The user rejected the V7.4 output as too simple and rejected recolors being counted as designs. **The earlier count and geometry-hash argument did not establish reference fidelity.** This pass separates the accounting correction from the unfinished quantity/quality target.
+Earlier revisions relied on palette-expanded counts and geometry hashes, which did not establish reference fidelity. V7.6 distinguishes structural accounting, actual rendering checks and historical authenticity.
 
-The public catalog has **175 entries plus Blank**: four reference studies, 107 older composition entries, 51 canonical textile/basic families and 13 other starters. Colorways, compatibility aliases, ink/gold versions of cube fade and dot/stripe size variants no longer multiply cards. This inventory is not an approved distinct-design count. **The requested 200 detailed distinct designs are not complete.** No palette, seed or motif permutation batch was added to conceal the deficit.
+**The counted inventory is 200: 174 ornamental compositions, 16 weave constructions and 10 stitch constructions.** It is not a claim of 200 carpet layouts or unrelated algorithms. The total catalog has 238 entries plus Blank; the other 38 elementary/legacy starters are explicitly excluded. Palette variants, compatibility aliases, ink/gold cube-fade duplicates, dot-size and stripe-width variations do not contribute. [The full ledger](pattern-structure-ledger.md) identifies each counted construction without using palettes, density, seed, rotation or scale as an identity.
+
+63 additions supply 21 African-inspired inlays, 21 Islamic geometric/floral networks and 21 garden/compartment carpets. Each has an explicit compartment plan and interior construction. Shared vocabulary is intentional: the difference is the whole panel/connection arrangement and its ornament, not a claim that every leaf requires a separate renderer. Existing sparse dot, ring, stripe, check, ladder and chevron fields in the older 108 blueprints were replaced by compound ornament; those replacements are not new entries.
 
 The four reference studies correspond to the four distinct visual subjects in the supplied images; repeated woven-rug images are not counted separately. **Chromatic Diamond Tapestry is replaced**, not counted twice. Beaded Diamond Weave, Turquoise Faceted Vault and Crimson Star and Cross Carpet are three additions. They are contemporary vector studies, not authenticated traditional works, loom-ready instructions or exact replicas. No reference pixels, museum photographs, watermarks or external assets are shipped in the artwork.
 
@@ -46,17 +48,19 @@ The earlier vivid nested-diamond study has been replaced by the new wide-format 
 
 ## Implementation and editing
 
+`src/ornamentalConstructions.js` defines the 63 new compartment plans and their interior constructions; `src/ornamentDrawing.js` supplies cubic foliage, strapwork and compound inlays. The shared path builder clips concave and convex panels, fits local ornament and preserves semantic depth order.
+
 `src/referencePatterns.js` contains the four hand-authored reference studies, including explicit wide-format shield/panel coordinates, the faceted polar construction with convex polygon clipping, the connected star/cross field and bead geometry. There are no runtime network requests, random variation packs or embedded photographs. Paths are grouped by drawing stage and pigment; stage order is retained so outlines and knockouts are not destroyed by color bucketing.
 
-`src/patternDocument.js` owns the canonical public catalog. `src/patternLibrary.js` retains historical colorway constructors for loading old saved inputs. These compatibility constructors are not public cards or additional designs. `src/rugDesigns.js` / `src/rugCompositions.js` retain the older blueprints, explicitly classified as Legacy; the Chromatic recipe now dispatches to the new reconstruction.
+`src/patternDocument.js` owns the canonical public catalog. `src/patternLibrary.js` retains historical colorway constructors for loading old saved inputs. These compatibility constructors are not public cards or additional designs. `src/rugDesigns.js` / `src/rugCompositions.js` retain the older blueprints, revised in place and classified under Compositions; the Chromatic recipe now dispatches to the new reconstruction.
 
 The reference studies are fixed, editable path documents. The legacy Composition designer is deliberately absent for them rather than pretending its generic controls describe the new art. Palette, material assignments, layer editing, stitches, undo, save/import, SVG, shader exports and baking remain available. Generated compound paths represent semantic pigment/depth groups, not one layer per blossom or bead. Maximum generated layer count remains below 61, leaving room for three stitch layers.
 
 `designAspect` changes the physical artboard and Rug preview while preserving normalized document coordinates. New fields are validated and survive JSON roundtrips. Old documents retain default behavior. Other mesh previews still use their own UVs.
 
-## Rendering limits and unfinished work
+## Rendering limits and interpretation
 
-- The requested 200 distinct detailed-design target remains open. Basic primitives, recolors and unaudited legacy arrangements must not be used to claim it is complete.
+- The inventory includes 26 textile constructions as well as 174 ornamental designs. It must not be advertised as 200 carpets. Count identity and passing tests do not establish subjective artistic quality or historical authenticity.
 - The SVG artwork remains scalable, but live color/parameter/finish maps are finite resolution. Very fine ornament needs a close view and sufficiently large bakes.
 - Bead relief is a derivative-filtered fixed lattice, not separate physical glass bead meshes, transmission or thread simulation. Moving individual pigment layers does not move that procedural relief grid; transform the complete document for coherent beadwork.
 - The vault design is flat ornament, not a muqarnas/dome model. Wool uses relief and sheen, not groomed fibers, antique wear, fringe or loom simulation.
@@ -65,7 +69,10 @@ The reference studies are fixed, editable path documents. The legacy Composition
 
 See `tests/reference-patterns.spec.js` for explicit card-accounting, legacy loading, full path/metadata serialization, artboard aspect, actual bead preview and baked-channel checks. Existing regression tests remain useful for functionality; unique hashes or passing tests are not proof of visual quality.
 
-
 ## Validation of this revision
 
-25 targeted tests passed across the main run (24 passed, one old navigation selector failed) and the corrected-selector rerun (one passed). The offline standalone check also passed with external assets blocked, including construction of the bead generator and its uniforms from the exported shader helpers. The generated standalone artifact was rebuilt. Test scope includes the legacy pattern regressions, not the full historical material suite. SVG and actual 3D screenshots were inspected separately from the automated checks.
+28 distinct targeted tests passed across the construction/library/composition run and the editor/import/fade/reference regression run. The four reference tests were repeated after final visual adjustments. The offline standalone check also passed with external assets blocked, including construction of the new inlay generator and beadwork from exported shader helpers. SVG galleries, studio screenshots and actual 3D views were inspected separately; sparse and incorrectly fitted compartment decoration was revised during that inspection. These are targeted checks, not the full historical material suite or an endorsement of every design's aesthetic merit.
+
+Additional primary research: the Met's **Double Prestige Panel** describes interlocking geometric raffia designs and irregular/asymmetrical arrangement. It informs the compound angular vocabulary and unequal older patchwork studies, not a claim that the new regular inlay grids reproduce a particular Kuba object. [2](https://www.metmuseum.org/art/collection/search/318398)
+
+The Met's **Islamic Art and Geometric Design** teaching publication discusses circle/grid construction and the combination of geometric and vegetal ornament. It informed the distinction between a connected panel framework and its curved infill. [5](https://resources.metmuseum.org/resources/metpublications/pdf/Islamic_Art_and_Geometric_Design_Activities_for_Learning.pdf)
