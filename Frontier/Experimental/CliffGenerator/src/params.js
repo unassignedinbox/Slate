@@ -88,20 +88,20 @@ export const defaults = {
   flakeSheen: 0.35,
   flakeDensity: 0.78,
   flakeLayers: 3,
-  flakeEdge: 0.6,
+  flakeEdge: 0.3,
   // Exfoliation & joints
   peelOn: 1,
   peelStrength: 0.5,
   peelScale: 2.6,           // [m]
   peelLift: 0.6,
-  peelCoverage: 0.3,
+  peelCoverage: 0.25,
   peelThickness: 1,
   peelBedding: 0.5,
   peelFresh: 0.8,
   peelOcclusion: 0.7,
   peelSmall: 0.6,
-  jointsOn: 1,
-  jointStrength: 0.25,
+  jointsOn: 0,
+  jointStrength: 0.3,
   jointScale: 4,            // [m]
   jointWidth: 0.04,
   jointDepth: 0.6,
@@ -144,6 +144,7 @@ export const defaults = {
   wireframe: 0,
   showRocks: 1,
   autoRotate: 0,
+  debugView: 0,
 };
 
 export const presets = {
@@ -151,7 +152,7 @@ export const presets = {
     palette: 'granite', mountainHeight: 560, baseFrequency: 1.7, ridgeSharpness: 2.2, peakPower: 1.4, warpStrength: 0.6,
     strataBand: 26, strataStrength: 0.6, strataDip: 6, hardnessContrast: 0.7, plateauStrength: 0, canyonDepth: 0,
     snowLine: 430, vegetation: 0.6, seaLevel: 0, waterEnabled: 1, talusSoft: 34, talusHard: 80, droplets: 180000,
-    screeDensity: 0.7, cliffBlockDensity: 0.5, torDensity: 0.5, peelStrength: 0.45, peelCoverage: 0.3, flakeStrength: 0.65, flakeScale: 1.0, jointStrength: 0.2,
+    screeDensity: 0.7, cliffBlockDensity: 0.5, torDensity: 0.5, peelStrength: 0.45, peelCoverage: 0.3, flakeStrength: 0.65, flakeScale: 1.0, jointsOn: 0, jointStrength: 0.2,
   },
   'Sandstone mesa': {
     palette: 'sandstone', mountainHeight: 320, baseElevation: 60, baseFrequency: 1.3, ridgeSharpness: 1.4, peakPower: 1.0, warpStrength: 0.45,
@@ -172,14 +173,14 @@ export const presets = {
     reliefContrast: 0.9, strataBand: 22, strataStrength: 0.85, strataDip: 8, strataDipDirection: 120, hardnessContrast: 0.9,
     plateauStrength: 0.5, plateauHeight: 220, canyonDepth: 0, snowLine: 5000, vegetation: 0.9, mossiness: 0.8, seaLevel: 70, waterEnabled: 1,
     talusSoft: 35, talusHard: 84, droplets: 150000, screeDensity: 0.6, cliffBlockDensity: 0.7, torDensity: 0.3,
-    peelStrength: 0.5, peelScale: 1.8, flakeStrength: 0.7, jointStrength: 0.4, jointScale: 2.5, sunElevation: 18, sunAzimuth: 290, turbidity: 3, fogDensity: 0.5,
+    peelStrength: 0.5, peelScale: 1.8, flakeStrength: 0.7, jointsOn: 1, jointStrength: 0.4, jointScale: 2.5, sunElevation: 18, sunAzimuth: 290, turbidity: 3, fogDensity: 0.5,
   },
   'Limestone escarpment': {
     palette: 'limestone', mountainHeight: 420, baseElevation: 30, baseFrequency: 1.2, ridgeSharpness: 1.7, peakPower: 1.2, warpStrength: 0.7,
     reliefContrast: 0.95, strataBand: 30, strataStrength: 0.9, strataDip: 10, strataDipDirection: 300, hardnessContrast: 0.9,
     plateauStrength: 0.35, plateauHeight: 400, canyonDepth: 0, snowLine: 5000, vegetation: 0.75, mossiness: 0.5, seaLevel: 0, waterEnabled: 0,
     talusSoft: 33, talusHard: 82, droplets: 170000, screeDensity: 0.8, cliffBlockDensity: 0.8, torDensity: 0.4,
-    peelStrength: 0.55, peelScale: 2.4, flakeStrength: 0.5, jointStrength: 0.35, sunElevation: 28, sunAzimuth: 160, turbidity: 4,
+    peelStrength: 0.55, peelScale: 2.4, flakeStrength: 0.5, jointsOn: 1, jointStrength: 0.35, sunElevation: 28, sunAzimuth: 160, turbidity: 4,
   },
 };
 
@@ -346,10 +347,10 @@ export const groups = [
     ],
   },
   {
-    id: 'exfoliation', name: 'Exfoliation & joints', type: 'Peeling sheets & fractures', stage: 'live', color: '#c9a37c',
+    id: 'exfoliation', name: 'Cell layers', type: 'Peeling sheets & joint cells', stage: 'live', color: '#c9a37c',
     cards: [
       { title: 'Peeling sheets', controls: [
-        ['peelOn', 'Enable peeling', 0, 1, 1, '', ''],
+        ['peelOn', 'Enable peeling', 0, 1, 1, '', 'Voronoi sheets in patches: intact (cracked outline), lifting, or spalled'],
         ['peelStrength', 'Peel strength', 0, 1, 0.05, '', 'Onion-skin sheets lifting and spalling off exposed rock'],
         ['peelCoverage', 'Coverage', 0, 1, 0.05, '', 'Fraction of the rock covered by peeling patches'],
         ['peelScale', 'Sheet size', 0.5, 12, 0.1, 'm', ''],
@@ -360,9 +361,9 @@ export const groups = [
         ['peelFresh', 'Fresh contrast', 0, 1, 0.05, '', 'How pale the freshly exposed rock is'],
         ['peelOcclusion', 'Shadow depth', 0, 1, 0.05, '', 'Darkening under lifted edges and in cracks'],
       ] },
-      { title: 'Joint network', controls: [
-        ['jointsOn', 'Enable joints', 0, 1, 1, '', ''],
-        ['jointStrength', 'Joint darkness', 0, 1, 0.05, '', 'Dark fracture lines across exposed rock'],
+      { title: 'Joint cells (Voronoi)', controls: [
+        ['jointsOn', 'Enable joint cells', 0, 1, 1, '', 'Cellular crack network over all exposed rock — off by default'],
+        ['jointStrength', 'Crack darkness', 0, 1, 0.05, '', 'Dark fracture lines along the cell borders'],
         ['jointScale', 'Block size', 0.5, 20, 0.1, 'm', 'Average spacing of the fractures'],
         ['jointWidth', 'Line width', 0.01, 0.2, 0.005, '', 'Width relative to block size'],
         ['jointDepth', 'Groove depth', 0, 1, 0.05, '', 'Relief of the fracture in the normal'],
@@ -437,6 +438,9 @@ export const groups = [
         ['wireframe', 'Wireframe', 0, 1, 1, '', ''],
         ['showRocks', 'Show rocks', 0, 1, 1, '', ''],
         ['autoRotate', 'Auto-rotate', 0, 1, 1, '', ''],
+      ] },
+      { title: 'Isolate layer', controls: [
+        ['debugView', 'Show only', 0, 7, 1, 'enum', 'Off|Strata|Grain|Flakes|Peeling|Joint cells|Cover|Masks'],
       ] },
       { title: 'Export', kind: 'export' },
     ],

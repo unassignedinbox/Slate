@@ -48,7 +48,7 @@ uniform float uVegetation, uVegScale, uVegSlope, uVegPatchiness, uDryness;
 uniform float uMossiness, uMossScale;
 uniform float uSnowLine, uSnowSlopeCos, uSnowSoftness, uSnowRoughness;
 uniform float uBumpScale, uBaseRoughness;
-uniform float uSeaLevel, uSeed, uIsRock;
+uniform float uSeaLevel, uSeed, uIsRock, uDebugView;
 
 float cgHash( uvec3 q ) {
   uint h = q.x * 1597334677u ^ q.y * 3812015801u ^ q.z * 2798796415u;
@@ -372,6 +372,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
   float seam = ( 1.0 - smoothstep( 0.0, uSeamWidth, min( bf, 1.0 - bf ) ) ) * seamNoise;
   bandCol *= 1.0 - uSeamStrength * seam;
   vec3 rock = mix( uRockA, bandCol, uStrataContrast );
+  vec3 strataOnly = rock;
   // terrain beds carry the erosion hardness: caprock paler and cleaner, soft beds darker and warmer
   rock = mix( rock, rock * 1.12 + uRockC * 0.06, hardness * uHardnessTint * ( 1.0 - uIsRock ) );
   rock = mix( rock, rock * vec3( 0.86, 0.78, 0.7 ), ( 1.0 - hardness ) * 0.6 * uHardnessTint * ( 1.0 - uIsRock ) );
@@ -446,6 +447,21 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
   s.normalW = nFinal;
   s.roughness = clamp( roughness, 0.2, 1.0 );
   s.ao = ao;
+  if ( uDebugView > 0.5 ) {
+    // Isolate one layer so its contribution can be judged on its own (lit, flat normal).
+    vec3 dbg = vec3( 0.0 );
+    if ( uDebugView < 1.5 ) dbg = strataOnly;
+    else if ( uDebugView < 2.5 ) dbg = vec3( 0.5 + 0.5 * grain.x ) * ( 1.0 - uGrainContrast * 0.5 + uGrainContrast * ( 0.5 + 0.5 * grainFine.x ) ) * ( 0.3 + 0.7 * uGrainStrength );
+    else if ( uDebugView < 3.5 ) dbg = mix( vec3( 0.12 ), mix( vec3( 0.5 + 0.5 * flakeCol.x ), flakeCol, uFlakeColor ) + vec3( 0.25 ) * clamp( flakeEdge, 0.0, 1.0 ) * uFlakeEdge, flakeCover );
+    else if ( uDebugView < 4.5 ) dbg = vec3( 0.15 ) + vec3( 0.0, 0.7, 0.9 ) * clamp( fresh, 0.0, 1.0 ) + vec3( 0.9, 0.2, 0.1 ) * clamp( crack, 0.0, 1.0 ) + vec3( 0.0, 0.0, 0.5 ) * clamp( occl, 0.0, 1.0 );
+    else if ( uDebugView < 5.5 ) dbg = vec3( 0.75 ) * ( 1.0 - joint ) + vec3( 0.9, 0.3, 0.0 ) * joint;
+    else if ( uDebugView < 6.5 ) dbg = vec3( 0.12 ) + vec3( 0.1, 0.7, 0.1 ) * veg + vec3( 0.05, 0.3, 0.15 ) * moss + vec3( 0.9 ) * snow + vec3( 0.5, 0.4, 0.3 ) * gravelMix;
+    else dbg = vec3( rockMask, wet, hardness );
+    s.albedo = dbg;
+    s.normalW = n;
+    s.roughness = 1.0;
+    s.ao = 1.0;
+  }
   return s;
 }
 `;
@@ -479,7 +495,7 @@ const scalarKeys = {
   uVegetation: ['vegetation', 'vegOn'], uVegScale: ['vegScale'], uVegPatchiness: ['vegPatchiness'], uDryness: ['dryness'],
   uMossiness: ['mossiness', 'mossOn'], uMossScale: ['mossScale'],
   uSnowSoftness: ['snowSoftness'], uSnowRoughness: ['snowRoughness'],
-  uBumpScale: ['bumpScale'], uBaseRoughness: ['baseRoughness'],
+  uBumpScale: ['bumpScale'], uBaseRoughness: ['baseRoughness'], uDebugView: ['debugView'],
 };
 
 export function makeSurfaceUniforms() {

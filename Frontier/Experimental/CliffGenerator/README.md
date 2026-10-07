@@ -67,7 +67,7 @@ python3 -m http.server 5173 --bind 0.0.0.0     # or: npm install && npm run dev
 Outliner rows map to inspector groups: **Landform / Strata / Erosion** rebuild the heightfield
 (press *Generate* or Ctrl+Enter; the worker reports progress), **Rocks** re‑scatter automatically,
 **Cliff depth** rebuilds the mesh live, and everything under **Rock material / Mineral flakes /
-Exfoliation & joints / Ground cover / Sun & atmosphere / Viewport** is live. Presets: Alpine
+Cell layers / Ground cover / Sun & atmosphere / Viewport** is live. Presets: Alpine
 granite, Sandstone mesa, Canyon, Sea cliffs, Limestone escarpment.
 
 Every texture layer is fully exposed: each has an **enable** toggle, its own **scale**,
@@ -77,10 +77,13 @@ Every texture layer is fully exposed: each has an **enable** toggle, its own **s
 | --- | --- | --- |
 | Rock material | palette → five editable colour swatches; strata; grain; oxide; cavity | bed contrast, band scale, laminae, bed shading, seam darkness/width, caprock tint, grain size/relief/mottle/fineness, oxide amount/scale, cavity shading, bump strength, base roughness |
 | Mineral flakes | 1–3 cellular plate layers | coverage, size (5 cm – 8 m), layer count, density, colour variation, raised plates, rim highlight, sheen |
-| Exfoliation & joints | peeling sheets; joint network | peel strength, coverage, sheet size/thickness, edge lift, small sheets, follow bedding, fresh contrast, shadow depth; joint darkness, block size, line width, groove depth, bedding bias |
+| Cell layers | peeling sheets; joint cells (Voronoi, off by default) | peel strength, coverage, sheet size/thickness, edge lift, small sheets, follow bedding, fresh contrast, shadow depth; joint darkness, block size, line width, groove depth, bedding bias |
 | Ground cover | runoff; gravel; vegetation; moss; snow | wetness, face streaks + scale; gravel amount/scale/colour; vegetation amount, slope limit, patch scale, patchiness, dry grass + three colours; moss amount/scale/colour; snow line, slope limit, transition, roughness, colour |
 
 Picking a rock type fills the colour swatches; they can be edited freely afterwards.
+
+**Viewport → Isolate layer** renders a single layer on its own (Strata / Grain / Flakes / Peeling /
+Joint cells / Cover / Masks) so each pattern and its scale can be judged before tuning it.
 
 Exports (all maps share the heightmap's top‑down frame): OBJ / GLB (displaced terrain block +
 all rock instances), 16‑bit packed heightmap PNG, **satmap** PNG (top‑down lit colour render at

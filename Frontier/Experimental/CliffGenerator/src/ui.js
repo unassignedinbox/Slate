@@ -120,6 +120,10 @@ export class Editor {
           </div>`;
       } else {
         body = card.controls.map(([key, label, min, max, step, unit, hint]) => {
+          if (unit === 'enum') {
+            const opts = hint.split('|');
+            return `<div class="control"><div class="control-line"><span>${label}</span></div><div class="pill-row">${opts.map((o, i) => `<button class="enabled-pill ${Number(v[key]) === i ? '' : 'disabled'}" data-enum="${key}" data-index="${i}"><span></span>${o}</button>`).join('')}</div><p class="muted">Renders a single layer on its own so its pattern and scale can be judged; set back to Off for the full material.</p></div>`;
+          }
           if (unit === 'color') {
             return `<div class="control-line color-line"><span>${label}${hint ? `<small> · ${hint}</small>` : ''}</span><label class="color-chip" style="--chip:${v[key]}"><input type="color" data-color="${key}" value="${v[key]}" aria-label="${label}"><code>${v[key]}</code></label></div>`;
           }
@@ -175,6 +179,10 @@ export class Editor {
         this.onChange(key, input.value);
       });
     });
+    this.content.querySelectorAll('[data-enum]').forEach((btn) => btn.addEventListener('click', () => {
+      this.onChange(btn.dataset.enum, Number(btn.dataset.index));
+      this.renderInspector();
+    }));
     this.content.querySelectorAll('[data-preset]').forEach((btn) => btn.addEventListener('click', () => {
       this.activePreset = btn.dataset.preset;
       this.onPreset(btn.dataset.preset);
