@@ -26,11 +26,11 @@ export function icon(name, size = 16, strokeWidth = 1.5) {
 }
 
 export const groupIcons = {
-  landform: 'mountain', strata: 'strata', erosion: 'droplets', rocks: 'box', surface: 'palette', sun: 'sun', viewport: 'monitor',
+  landform: 'mountain', strata: 'strata', relief: 'layers', erosion: 'droplets', rocks: 'box', surface: 'palette', sun: 'sun', viewport: 'monitor',
 };
 export const cardIcons = {
   'Preset': 'sparkles', 'Elevation': 'mountain', 'Relief': 'wind', 'Mesa & canyon': 'strata', 'Grid': 'grid',
-  'Bedding': 'strata', 'Geological dip': 'sliders', 'Hydraulic erosion': 'droplets', 'Thermal weathering': 'mountain',
+  'Bedding': 'strata', 'Face displacement': 'layers', 'Geological dip': 'sliders', 'Hydraulic erosion': 'droplets', 'Thermal weathering': 'mountain',
   'Placement pattern': 'box', 'Rock shape': 'gem', 'Rock type': 'palette', 'Strata & grain': 'strata', 'Mineral flakes': 'gem',
   'Exfoliation': 'layers', 'Cover': 'sparkles', 'Sun direction': 'sun', 'Atmosphere': 'wind', 'Water': 'waves', 'Display': 'monitor', 'Export': 'download',
 };

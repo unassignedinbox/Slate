@@ -139,9 +139,25 @@ export class CliffScene {
 
   // ---- terrain ----------------------------------------------------------------------------------
   setField(field, v) {
+    const first = !this.field || this.field !== field;
     this.field = field;
+    this.buildTerrainMeshes(v);
+    if (first) this.frameCamera(v);
+    this.setSky(v);
+    this.setWater(v);
+  }
+
+  // Rebuild only the surface mesh (face displacement changed) and re-seat the rocks.
+  rebuildMesh(v) {
+    if (!this.field) return;
+    this.buildTerrainMeshes(v);
+    this.setRocks(v);
+  }
+
+  buildTerrainMeshes(v) {
+    const field = this.field;
     this.disposeGroup(this.terrainGroup);
-    const geometry = buildTerrainGeometry(field);
+    const geometry = buildTerrainGeometry(field, v);
     const floorY = field.stats.min - Math.max(40, (field.stats.max - field.stats.min) * 0.12);
     const skirt = buildSkirtGeometry(field, floorY);
     const terrain = new THREE.Mesh(geometry, this.terrainMaterial);
@@ -154,9 +170,6 @@ export class CliffScene {
     this.terrainGroup.add(terrain, skirtMesh);
     this.terrain = terrain;
     this.stats.triangles = geometry.index.count / 3;
-    this.frameCamera(v);
-    this.setSky(v);
-    this.setWater(v);
   }
 
   frameCamera(v) {
@@ -250,6 +263,98 @@ export class CliffScene {
     }
     ctx.putImageData(img, 0, 0);
     canvas.toBlob((blob) => downloadBlob(blob, `heightmap-${N}-min${stats.min.toFixed(0)}-max${stats.max.toFixed(0)}.png`));
+  }
+
+  // Top-down orthographic render of the lit terrain (rocks included) in the heightmap frame.
+  exportSatmap(resolution = 2048) {
+    if (!this.field) return;
+    const size = this.field.worldSize;
+    const cam = new THREE.OrthographicCamera(-size / 2, size / 2, size / 2, -size / 2, 1, size * 4);
+    cam.position.set(0, this.field.stats.max + size, 0);
+    cam.up.set(0, 0, -1);
+    cam.lookAt(0, 0, 0);
+    const target = new THREE.WebGLRenderTarget(resolution, resolution, { type: THREE.FloatType, colorSpace: THREE.LinearSRGBColorSpace });
+    const fog = this.scene.fog;
+    const skyVisible = this.sky.visible;
+    this.scene.fog = null;
+    this.sky.visible = false;
+    this.renderer.setRenderTarget(target);
+    this.renderer.setClearColor(0x000000, 1);
+    this.renderer.clear();
+    this.renderer.render(this.scene, cam);
+    const pixels = new Float32Array(resolution * resolution * 4);
+    this.renderer.readRenderTargetPixels(target, 0, 0, resolution, resolution, pixels);
+    this.renderer.setRenderTarget(null);
+    this.scene.fog = fog;
+    this.sky.visible = skyVisible;
+    target.dispose();
+
+    // Apply the same exposure / ACES / sRGB chain the viewport uses.
+    const exposure = this.renderer.toneMappingExposure;
+    const aces = (x) => Math.min(1, Math.max(0, (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14)));
+    const srgb = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
+    const canvas = document.createElement('canvas');
+    canvas.width = resolution; canvas.height = resolution;
+    const ctx = canvas.getContext('2d');
+    const img = ctx.createImageData(resolution, resolution);
+    for (let y = 0; y < resolution; y++) {
+      const srcRow = (resolution - 1 - y) * resolution;    // GL rows are bottom-up
+      for (let x = 0; x < resolution; x++) {
+        const si = (srcRow + x) * 4, di = (y * resolution + x) * 4;
+        img.data[di] = Math.round(srgb(aces(pixels[si] * exposure)) * 255);
+        img.data[di + 1] = Math.round(srgb(aces(pixels[si + 1] * exposure)) * 255);
+        img.data[di + 2] = Math.round(srgb(aces(pixels[si + 2] * exposure)) * 255);
+        img.data[di + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    canvas.toBlob((blob) => downloadBlob(blob, `satmap-${resolution}.png`));
+  }
+
+  // Material masks in the heightmap frame: R exposed rock, G scree/gravel, B wetness/flow, A hardness.
+  exportMasks() {
+    if (!this.field) return;
+    const { resolution: N, slope, deposit, flow, hardness } = this.field;
+    const canvas = document.createElement('canvas');
+    canvas.width = N; canvas.height = N;
+    const ctx = canvas.getContext('2d');
+    const img = ctx.createImageData(N, N);
+    for (let i = 0; i < N * N; i++) {
+      const angle = Math.atan(slope[i]);
+      const rock = Math.min(1, Math.max(0, (angle - 0.5) / 0.5));
+      img.data[i * 4] = Math.round(rock * 255);
+      img.data[i * 4 + 1] = Math.round(Math.min(1, deposit[i]) * 255);
+      img.data[i * 4 + 2] = Math.round(Math.min(1, flow[i]) * 255);
+      img.data[i * 4 + 3] = Math.round(Math.min(1, hardness[i]) * 255);
+    }
+    ctx.putImageData(img, 0, 0);
+    canvas.toBlob((blob) => downloadBlob(blob, `splat-masks-${N}.png`));
+  }
+
+  exportNormalMap() {
+    if (!this.field) return;
+    const { resolution: N, height, worldSize } = this.field;
+    const cell = worldSize / (N - 1);
+    const canvas = document.createElement('canvas');
+    canvas.width = N; canvas.height = N;
+    const ctx = canvas.getContext('2d');
+    const img = ctx.createImageData(N, N);
+    for (let j = 0; j < N; j++) {
+      const j0 = Math.max(0, j - 1), j1 = Math.min(N - 1, j + 1);
+      for (let i = 0; i < N; i++) {
+        const i0 = Math.max(0, i - 1), i1 = Math.min(N - 1, i + 1);
+        const dx = (height[j * N + i1] - height[j * N + i0]) / ((i1 - i0) * cell);
+        const dz = (height[j1 * N + i] - height[j0 * N + i]) / ((j1 - j0) * cell);
+        const l = 1 / Math.hypot(dx, 1, dz);
+        const k = (j * N + i) * 4;
+        img.data[k] = Math.round((-dx * l * 0.5 + 0.5) * 255);
+        img.data[k + 1] = Math.round((dz * l * 0.5 + 0.5) * 255);   // +Y up in texture space = -Z world
+        img.data[k + 2] = Math.round((l * 0.5 + 0.5) * 255);
+        img.data[k + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    canvas.toBlob((blob) => downloadBlob(blob, `normalmap-${N}.png`));
   }
 
   screenshot() {

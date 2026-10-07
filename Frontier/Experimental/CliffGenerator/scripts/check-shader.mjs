@@ -30,7 +30,7 @@ for (const isRock of [false, true]) {
   const parameters = {
     shaderType: 'MeshStandardMaterial', shaderName: 'MeshStandardMaterial', defines: { STANDARD: '' },
     vertexShader: shader.vertexShader, fragmentShader: shader.fragmentShader, glslVersion: null, precision: 'highp',
-    instancing: isRock, shadowMapEnabled: true, shadowMapType: THREE.PCFSoftShadowMap, envMap: true, envMapMode: THREE.CubeUVReflectionMapping,
+    instancing: isRock, instancingColor: isRock, shadowMapEnabled: true, shadowMapType: THREE.PCFSoftShadowMap, envMap: true, envMapMode: THREE.CubeUVReflectionMapping,
     envMapCubeUVHeight: 256, combine: THREE.MultiplyOperation, useFog: true, fog: true, fogExp2: true, toneMapping: THREE.ACESFilmicToneMapping,
     outputColorSpace: THREE.SRGBColorSpace, opaque: true, numDirLights: 1, numDirLightShadows: 1, numPointLights: 0, numSpotLights: 0, numSpotLightMaps: 0,
     numSpotLightShadowsWithMaps: 0, numRectAreaLights: 0, numHemiLights: 1, numPointLightShadows: 0, numSpotLightShadows: 0, numClippingPlanes: 0, numClipIntersection: 0,

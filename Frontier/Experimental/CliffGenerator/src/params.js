@@ -52,13 +52,21 @@ export const defaults = {
   rockAngularity: 0.7,
   rockEmbed: 0.45,
   rockBedding: 0.8,
+  rockProtrude: 0.5,
+  // Cliff depth (mesh displacement)
+  overhang: 3.5,            // [m]
+  buttress: 0.5,
+  ledgeNoise: 0.6,
   // Surface
   palette: 'granite',
   strataContrast: 0.7,
   grainSize: 0.9,           // [m]
   grainStrength: 0.6,
   flakeStrength: 0.6,
-  flakeScale: 0.35,         // [m]
+  flakeScale: 1.2,          // [m]
+  flakeColor: 0.45,
+  flakeRelief: 0.6,
+  flakeSheen: 0.35,
   peelStrength: 0.7,
   peelScale: 2.2,           // [m]
   peelLift: 0.6,
@@ -86,7 +94,7 @@ export const presets = {
     palette: 'granite', mountainHeight: 560, baseFrequency: 1.7, ridgeSharpness: 2.2, peakPower: 1.4, warpStrength: 0.6,
     strataBand: 26, strataStrength: 0.6, strataDip: 6, hardnessContrast: 0.7, plateauStrength: 0, canyonDepth: 0,
     snowLine: 430, vegetation: 0.6, seaLevel: 0, waterEnabled: 1, talusSoft: 34, talusHard: 80, droplets: 180000,
-    screeDensity: 0.7, cliffBlockDensity: 0.5, torDensity: 0.5, peelStrength: 0.55, flakeStrength: 0.65,
+    screeDensity: 0.7, cliffBlockDensity: 0.5, torDensity: 0.5, peelStrength: 0.55, flakeStrength: 0.65, flakeScale: 1.0,
   },
   'Sandstone mesa': {
     palette: 'sandstone', mountainHeight: 320, baseElevation: 60, baseFrequency: 1.3, ridgeSharpness: 1.4, peakPower: 1.0, warpStrength: 0.45,
@@ -172,6 +180,16 @@ export const groups = [
     ],
   },
   {
+    id: 'relief', name: 'Cliff depth', type: 'Overhangs & ledges', stage: 'mesh', color: '#b9a3d6',
+    cards: [
+      { title: 'Face displacement', controls: [
+        ['overhang', 'Caprock overhang', 0, 8, 0.25, 'm', 'Hard beds pushed out of the face, soft beds recessed — real overhangs a heightmap cannot hold (capped at ~85% of the grid cell)'],
+        ['buttress', 'Buttress bulge', 0, 1, 0.05, '', 'Large-scale swelling of the faces into ribs and alcoves'],
+        ['ledgeNoise', 'Ledge irregularity', 0, 1, 0.05, '', 'Breaks ledges into blocks and notches'],
+      ] },
+    ],
+  },
+  {
     id: 'erosion', name: 'Erosion', type: 'Hydraulic & thermal', stage: 'terrain', color: '#81b8c8',
     cards: [
       { title: 'Hydraulic erosion', controls: [
@@ -199,7 +217,8 @@ export const groups = [
         ['screeDensity', 'Scree aprons', 0, 1, 0.05, '', 'Loose debris where sediment collected below cliffs'],
         ['cliffBlockDensity', 'Cliff blocks', 0, 1, 0.05, '', 'Blocks embedded along resistant beds on faces'],
         ['torDensity', 'Summit tors', 0, 1, 0.05, '', 'Large blocks perched on crests'],
-        ['rockBedding', 'Bed alignment', 0, 1, 0.05, '', 'Rotate blocks to follow the strata dip'],
+        ['rockBedding', 'Bed alignment', 0, 1, 0.05, '', 'Rotate blocks to follow the strata dip and snap them into bed rows'],
+        ['rockProtrude', 'Face protrusion', 0, 1, 0.05, '', 'How far cliff blocks stand out of the face'],
       ] },
       { title: 'Rock shape', controls: [
         ['rockSizeMin', 'Smallest rock', 0.3, 6, 0.1, 'm', ''],
@@ -220,12 +239,15 @@ export const groups = [
         ['grainStrength', 'Grain relief', 0, 1, 0.05, '', 'Bump strength of the grain'],
       ] },
       { title: 'Mineral flakes', controls: [
-        ['flakeStrength', 'Flake coverage', 0, 1, 0.05, '', 'Layered cellular mineral plates'],
-        ['flakeScale', 'Flake size', 0.08, 1.5, 0.01, 'm', ''],
+        ['flakeStrength', 'Flake coverage', 0, 1, 0.05, '', 'Three stacked layers of angular mineral plates — basal chips, laminae, fine flecks'],
+        ['flakeScale', 'Flake size', 0.05, 8, 0.05, 'm', 'Size of the mid layer; chips are 1.65× and flecks 0.2× this'],
+        ['flakeColor', 'Colour variation', 0, 1, 0.05, '', 'Geology tint → independent hue per plate'],
+        ['flakeRelief', 'Raised plates', 0, 1, 0.05, '', 'Fraction of plates with tilted / bevelled normals'],
+        ['flakeSheen', 'Plate sheen', 0, 1, 0.05, '', 'Lower roughness on plates so they catch light'],
       ] },
       { title: 'Exfoliation', controls: [
-        ['peelStrength', 'Peeling sheets', 0, 1, 0.05, '', 'Onion-skin sheets lifting and spalling off the face'],
-        ['peelScale', 'Sheet size', 0.5, 6, 0.1, 'm', ''],
+        ['peelStrength', 'Peeling sheets', 0, 1, 0.05, '', 'Onion-skin sheets lifting and spalling off the face, in patches on exposed rock'],
+        ['peelScale', 'Sheet size', 0.5, 12, 0.1, 'm', ''],
         ['peelLift', 'Edge lift', 0, 1, 0.05, '', 'How far sheet edges curl away from the rock'],
       ] },
       { title: 'Cover', controls: [
@@ -266,6 +288,12 @@ export const groups = [
       { title: 'Export', kind: 'export' },
     ],
   },
+];
+
+export const outlinerSections = [
+  { label: 'TERRAIN', ids: ['landform', 'strata', 'relief', 'erosion'] },
+  { label: 'DRESSING', ids: ['rocks', 'surface'] },
+  { label: 'ENVIRONMENT', ids: ['sun', 'viewport'] },
 ];
 
 export function paramsForStage(values, stage) {

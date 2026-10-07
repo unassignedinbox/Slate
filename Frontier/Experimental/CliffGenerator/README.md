@@ -28,23 +28,30 @@ python3 -m http.server 5173 --bind 0.0.0.0     # or: npm install && npm run dev
    Outputs: height, deposit, flow (log accumulation), hardness, cavity, slope.
 4. **Mesh** (`src/terrain-geometry.js`) — indexed grid with alternating diagonals, per‑vertex
    normals and an `aux` attribute `(deposit, flow, hardness, cavity)`; a skirt turns the tile
-   into a cut block of ground.
+   into a cut block of ground. **Cliff depth**: steep vertices are displaced horizontally along
+   the face normal — hard beds out, soft beds in, plus buttress/alcove noise — so the mesh has
+   genuine overhangs, ledges and recesses that the heightfield itself cannot represent. Rocks
+   are seated on the displaced surface.
 5. **Rocks** (`src/rock-geometry.js`, `src/rock-placement.js`) — eight archetypes per seed
    (boulder / block / slab / shard): displaced icosphere, anisotropic stretch, then clipped by
    bedding + joint‑set planes, crease‑aware normals. Placed with three patterns read from the
-   erosion maps: scree aprons (deposit), cliff blocks along resistant beds (hardness × slope,
-   aligned to the strata dip) and summit tors (convexity × elevation). Rendered as
-   `InstancedMesh` with the same surface shader.
+   erosion maps: scree aprons (deposit), cliff blocks snapped into bed rows along resistant
+   layers (hardness × slope, aligned to the strata dip, protruding from the face) and summit
+   tors (convexity × elevation). Rendered as `InstancedMesh` with per‑instance tone variation
+   and the same surface shader.
 6. **Surface** (`src/surface-shader.js`) — analytic, world‑space, texture‑free material injected
    into `MeshStandardMaterial` so Three's PBR, shadows, sky environment and fog still apply:
    - strata colour bands with dip, bed seams, oxide pockets, aggregate grain (3D value noise
      with analytic gradient);
-   - **mineral flakes** — two stacked cellular plate layers with per‑plate tint, tilt and bevel;
+   - **mineral flakes** — three stacked, independently seeded layers of angular plates (basal
+     chips, laminae, fine flecks); the front plate occludes those behind; per‑plate colour,
+     tilt/bevel relief and sheen are separate controls, size from 5 cm to 8 m;
    - **exfoliation (“peeling rock”)** — Voronoi sheets in three states: *intact* (joint cracks),
      *lifting* (sheet tilted so one edge curls off the face, shadowed underside) and *spalled*
      (sheet gone: recessed pale fresh rock with a dark rim); two octaves (sheets and small
-     flakes). All layers contribute height **and** an analytic gradient, combined triplanarly
-     into one perturbed normal — no finite differences, no texture reads;
+     flakes). Sheets only grow on exposed rock, in patches, and are stretched along bedding on
+     vertical faces. All layers contribute height **and** an analytic gradient, combined
+     triplanarly into one perturbed normal — no finite differences, no texture reads;
    - cover: runoff staining from the flow map, gravel on deposits, vegetation on gentle ground,
      moss in concavities, slope‑limited snow above the snow line.
 7. **Lighting** — `Sky` with PMREM environment, shadowed directional sun, exponential fog,
@@ -55,8 +62,13 @@ python3 -m http.server 5173 --bind 0.0.0.0     # or: npm install && npm run dev
 Outliner rows map to inspector groups: **Landform / Strata / Erosion** rebuild the heightfield
 (press *Generate* or Ctrl+Enter; the worker reports progress), **Rocks** re‑scatter automatically,
 **Surface / Sun & atmosphere / Viewport** are live. Presets: Alpine granite, Sandstone mesa,
-Canyon, Sea cliffs, Limestone escarpment. Export OBJ / GLB (terrain block + all rock instances),
-16‑bit packed heightmap PNG, viewport screenshot. Settings persist in `localStorage`.
+Canyon, Sea cliffs, Limestone escarpment. **Cliff depth** rebuilds the mesh live.
+
+Exports (all maps share the heightmap's top‑down frame): OBJ / GLB (displaced terrain block +
+all rock instances), 16‑bit packed heightmap PNG, **satmap** PNG (top‑down lit colour render at
+2048², rocks and shadows included, same exposure/ACES chain as the viewport), splat masks PNG
+(R rock · G scree · B wetness · A hardness), normal map PNG, viewport screenshot. Settings persist
+in `localStorage`.
 
 ## Checks
 

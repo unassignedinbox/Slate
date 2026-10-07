@@ -8,10 +8,10 @@ import { GradientNoise3, mulberry32 } from './noise.js';
 
 export const ROCK_FAMILIES = {
   // [bedding flatness, joint sharpness, roundness]
-  boulder: { flatten: 0.85, planes: 6, bedBias: 0.3, roundness: 0.55 },
-  block:   { flatten: 0.65, planes: 10, bedBias: 0.75, roundness: 0.15 },
-  slab:    { flatten: 0.38, planes: 8, bedBias: 0.9, roundness: 0.2 },
-  shard:   { flatten: 0.55, planes: 12, bedBias: 0.2, roundness: 0.05 },
+  boulder: { flatten: 1.0, planes: 5, bedBias: 0.25, roundness: 0.6, cut: 0.82 },
+  block:   { flatten: 0.9, planes: 9, bedBias: 0.7, roundness: 0.15, cut: 0.7 },
+  slab:    { flatten: 0.62, planes: 7, bedBias: 0.9, roundness: 0.2, cut: 0.72 },
+  shard:   { flatten: 0.85, planes: 11, bedBias: 0.2, roundness: 0.05, cut: 0.66 },
 };
 
 export function buildRockGeometry({ seed = 1, family = 'block', angularity = 0.7, detail = 3 } = {}) {
@@ -23,9 +23,9 @@ export function buildRockGeometry({ seed = 1, family = 'block', angularity = 0.7
   const count = pos.count;
 
   // Anisotropic stretch — bedding makes rocks wider than tall.
-  const sx = 0.8 + rand() * 0.7;
-  const sz = 0.8 + rand() * 0.7;
-  const sy = (0.6 + rand() * 0.5) * spec.flatten;
+  const sx = 0.85 + rand() * 0.6;
+  const sz = 0.75 + rand() * 0.7;
+  const sy = (0.7 + rand() * 0.5) * spec.flatten;
 
   // Cleavage planes. Bedding planes cluster around ±Y, joints around two azimuths.
   const planeCount = Math.round(spec.planes * (0.4 + angularity * 0.8)) + 2;
@@ -48,8 +48,15 @@ export function buildRockGeometry({ seed = 1, family = 'block', angularity = 0.7
       n = new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5);
     }
     n.normalize();
-    const d = 0.55 + rand() * 0.4;
+    const d = spec.cut + rand() * (1.0 - spec.cut);
     planes.push({ n, d });
+  }
+  // A few open joints: narrow grooves cut across the block where it will eventually split.
+  const joints = [];
+  const jointCount = Math.round(rand() * 2 + angularity * 2);
+  for (let k = 0; k < jointCount; k++) {
+    const n = new THREE.Vector3(rand() - 0.5, (rand() - 0.5) * 0.4, rand() - 0.5).normalize();
+    joints.push({ n, d: (rand() - 0.5) * 0.8, w: 0.03 + rand() * 0.04, depth: 0.04 + rand() * 0.06 });
   }
 
   const v = new THREE.Vector3();
@@ -75,16 +82,21 @@ export function buildRockGeometry({ seed = 1, family = 'block', angularity = 0.7
     // roundness pulls a little back towards the uncut shape (bevelled edges)
     v.lerp(original, roundness * 0.25);
 
-    // Fine chipping after the cut so faces are not perfectly planar.
-    const chip = noise.fbm(v.x * 7 + 21, v.y * 7, v.z * 7 - 4, 2, 2, 0.5);
-    v.addScaledVector(dir, chip * 0.02);
+    // Joint grooves and fine chipping after the cut so faces are not perfectly planar.
+    for (const { n, d, w, depth } of joints) {
+      const t = Math.abs(v.dot(n) - d);
+      if (t < w) v.addScaledVector(dir, -depth * (1 - t / w));
+    }
+    const chip = noise.fbm(v.x * 7 + 21, v.y * 7, v.z * 7 - 4, 3, 2, 0.5);
+    const pit = noise.fbm(v.x * 14 + 3, v.y * 14, v.z * 14, 2, 2, 0.5);
+    v.addScaledVector(dir, chip * 0.045 + Math.min(0, pit) * 0.03);
 
     out[i * 3] = v.x; out[i * 3 + 1] = v.y; out[i * 3 + 2] = v.z;
   }
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(out, 3));
-  computeCreaseNormals(geometry, 38);
+  computeCreaseNormals(geometry, 34);
   geometry.setAttribute('aux', new THREE.BufferAttribute(new Float32Array(count * 4), 4));
 
   // Normalise: unit bounding radius, centre at origin, remember bottom extent.
@@ -142,7 +154,7 @@ function computeCreaseNormals(geometry, creaseDegrees) {
 
 // A small library of archetypes shared by all placements. Low detail for scree, higher for blocks.
 export function buildRockLibrary(seed, angularity) {
-  const families = ['block', 'block', 'boulder', 'slab', 'shard', 'block', 'boulder', 'slab'];
+  const families = ['block', 'block', 'boulder', 'slab', 'shard', 'block', 'boulder', 'block', 'slab', 'boulder'];
   return {
     large: families.map((family, i) => buildRockGeometry({ seed: seed * 10 + i, family, angularity, detail: 3 })),
     small: families.map((family, i) => buildRockGeometry({ seed: seed * 10 + i + 50, family, angularity, detail: 1 })),

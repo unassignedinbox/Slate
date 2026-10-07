@@ -26,6 +26,7 @@ const editor = new Editor(document.getElementById('root'), {
     const stage = stageOf(key);
     if (stage === 'terrain') editor.setPending(true);
     else if (stage === 'rocks') scheduleRocks();
+    else if (stage === 'mesh') scheduleMesh();
     else applyLive();
     // some live keys also affect rock placement (water) or need camera re-frame (nothing yet)
     if (key === 'seaLevel' || key === 'waterEnabled') scheduleRocks();
@@ -43,6 +44,7 @@ const editor = new Editor(document.getElementById('root'), {
     persist();
     if (group.stage === 'terrain') editor.setPending(true);
     else if (group.stage === 'rocks') scheduleRocks();
+    else if (group.stage === 'mesh') scheduleMesh();
     else applyLive();
   },
   onAction(action) {
@@ -52,6 +54,9 @@ const editor = new Editor(document.getElementById('root'), {
     if (action === 'export-obj') scene.exportOBJ(true);
     if (action === 'export-glb') scene.exportGLB(true);
     if (action === 'export-heightmap') scene.exportHeightmap();
+    if (action === 'export-satmap') scene.exportSatmap(2048);
+    if (action === 'export-masks') scene.exportMasks();
+    if (action === 'export-normal') scene.exportNormalMap();
   },
 });
 
@@ -75,6 +80,16 @@ function scheduleRocks() {
     scene.setRocks(values);
     updateStats({ rockMs: performance.now() - t0 });
   }, 350);
+}
+
+let meshTimer = 0;
+function scheduleMesh() {
+  clearTimeout(meshTimer);
+  meshTimer = setTimeout(() => {
+    if (!scene || !lastField) return;
+    scene.rebuildMesh(values);
+    updateStats();
+  }, 400);
 }
 
 const statCache = {};

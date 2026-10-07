@@ -38,7 +38,7 @@ varying vec3 vWorldPos;
 uniform vec3 uRockA, uRockB, uRockC, uFresh, uOxide;
 uniform float uStrataBand, uStrataContrast, uDipX, uDipZ;
 uniform float uGrainSize, uGrainStrength;
-uniform float uFlakeStrength, uFlakeScale;
+uniform float uFlakeStrength, uFlakeScale, uFlakeColor, uFlakeRelief, uFlakeSheen;
 uniform float uPeelStrength, uPeelScale, uPeelLift;
 uniform float uWetness, uSnowLine, uSnowSlopeCos, uVegetation, uMossiness;
 uniform float uSeaLevel, uSeed, uIsRock;
@@ -115,6 +115,7 @@ PeelOut peelLayer( vec2 p, float scale, float lift, float aa, float seed ) {
     // intact sheet: flush, shallow joint groove
     o.h = 1.0 - 0.3 * ( 1.0 - e );
     o.g = 0.3 * ge;
+    o.crack *= 0.35;
   } else if ( state < 0.80 ) {
     // lifting sheet: anchored on one side, edge curled up on the other
     float ang = cgHash2( id1, seed + 11.0 ) * 6.2831853;
@@ -137,9 +138,10 @@ PeelOut peelLayer( vec2 p, float scale, float lift, float aa, float seed ) {
 }
 
 // ---- mineral flakes ------------------------------------------------------------------------
-struct FlakeOut { float cover; vec2 g; float tint; float finish; };
+// Overlapping angular plates; the front-most plate wins so plates occlude rather than add.
+struct FlakeOut { float cover; vec2 g; vec3 color; float finish; float edge; float relief; };
 FlakeOut flakeLayer( vec2 p, float scale, float aa, float seed ) {
-  FlakeOut o; o.cover = 0.0; o.g = vec2( 0.0 ); o.tint = 0.5; o.finish = 0.5;
+  FlakeOut o; o.cover = 0.0; o.g = vec2( 0.0 ); o.color = vec3( 0.5 ); o.finish = 0.5; o.edge = 0.0; o.relief = 0.0;
   vec2 q = p / scale;
   ivec2 cell = ivec2( floor( q ) );
   vec2 f = fract( q );
@@ -147,32 +149,55 @@ FlakeOut flakeLayer( vec2 p, float scale, float aa, float seed ) {
   for ( int y = -1; y <= 1; y++ ) for ( int x = -1; x <= 1; x++ ) {
     ivec2 c = cell + ivec2( x, y );
     float pr = cgHash2( c, seed );
-    if ( pr < 0.3 ) continue;
+    if ( pr < 0.22 ) continue;
     vec2 centre = vec2( x, y ) + vec2( cgHash2( c, seed + 1.0 ), cgHash2( c, seed + 2.0 ) );
     float ang = cgHash2( c, seed + 3.0 ) * 6.2831853;
     float ca = cos( ang ), sa = sin( ang );
     mat2 R = mat2( ca, sa, -sa, ca );
     vec2 local = R * ( f - centre );
     float h4 = cgHash2( c, seed + 4.0 ), h5 = cgHash2( c, seed + 5.0 );
-    vec2 axes = vec2( 0.8 + h4 * 0.6, 0.75 + pr * 0.8 );
+    vec2 axes = vec2( 0.8 + h4 * 0.65, 0.75 + pr * 0.8 );
     vec2 d = abs( local ) * axes;
+    // six irregular edges: box, bevel diagonal and one oblique cut → angular chips, not pebbles
     float bevel = dot( d, vec2( 0.6 + pr * 0.25, 0.55 + h5 * 0.35 ) );
-    float dist = max( max( d.x, d.y ), bevel );
-    float radius = 0.28 + h4 * 0.36;
+    float cut = dot( local, normalize( vec2( pr - 0.35, 0.65 ) ) ) * 1.18;
+    float dist = max( max( d.x, d.y ), max( bevel, cut ) );
+    float radius = 0.27 + h4 * 0.38;
     float cover = 1.0 - smoothstep( radius - aa, radius + aa, dist );
     if ( cover > 0.001 && pr > front ) {
       front = pr;
       o.cover = cover;
-      vec2 tilt = ( vec2( h5, cgHash2( c, seed + 6.0 ) ) - 0.5 ) * 1.6;
+      vec2 tilt = ( vec2( h5, cgHash2( c, seed + 6.0 ) ) - 0.5 ) * 2.0;
       vec2 edgeDir = transpose( R ) * ( sign( local ) * axes );
-      float te = clamp( ( dist - radius + aa ) / ( 2.0 * aa ), 0.0, 1.0 );
-      float dcover = -6.0 * te * ( 1.0 - te ) / ( 2.0 * aa );
-      o.g = ( transpose( R ) * tilt * cover * 5.0 + edgeDir * dcover * 0.6 ) / scale;
-      o.tint = cgHash2( c, seed + 8.0 );
-      o.finish = cgHash2( c, seed + 9.0 );
+      float edge = 1.0 - smoothstep( aa, aa + 0.06, abs( dist - radius ) );
+      o.edge = edge * cover;
+      o.relief = step( 1.0 - uFlakeRelief, cgHash2( c, seed + 7.0 ) );
+      // plate tilt plus a bevel at the rim
+      o.g = ( transpose( R ) * tilt * cover * 4.0 + edgeDir * o.edge * 3.0 ) / scale * o.relief;
+      o.color = vec3( cgHash2( c, seed + 8.0 ), cgHash2( c, seed + 9.0 ), cgHash2( c, seed + 10.0 ) );
+      o.finish = cgHash2( c, seed + 11.0 );
     }
   }
   return o;
+}
+// Three independently seeded layers: basal chips, mid laminae, fine flecks. Foreground covers background.
+FlakeOut flakeStack( vec2 p, float scale, float footprint, float seed ) {
+  FlakeOut r; r.cover = 0.0; r.g = vec2( 0.0 ); r.color = vec3( 0.5 ); r.finish = 0.5; r.edge = 0.0; r.relief = 0.0;
+  for ( int layer = 0; layer < 3; layer++ ) {
+    float s = layer == 0 ? 1.65 : ( layer == 1 ? 0.6 : 0.21 );
+    float ls = scale * s;
+    float vis = 1.0 - smoothstep( 0.12, 0.5, footprint / ls );
+    if ( vis < 0.001 ) continue;
+    FlakeOut f = flakeLayer( p + vec2( float( layer ) * 19.0, 7.0 ), ls, max( 0.025, 1.3 * footprint / ls ), seed + float( layer ) * 71.0 );
+    float alpha = f.cover * vis * ( layer == 0 ? 0.8 : ( layer == 1 ? 0.75 : 0.55 ) );
+    r.cover = mix( r.cover, 1.0, alpha );
+    r.g = mix( r.g, f.g, alpha );
+    r.color = mix( r.color, f.color, alpha );
+    r.finish = mix( r.finish, f.finish, alpha );
+    r.edge = mix( r.edge, f.edge, alpha );
+    r.relief = mix( r.relief, f.relief, alpha );
+  }
+  return r;
 }
 
 struct Surface { vec3 albedo; vec3 normalW; float roughness; float ao; };
@@ -180,79 +205,95 @@ struct Surface { vec3 albedo; vec3 normalW; float roughness; float ao; };
 Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
   float deposit = aux.x * ( 1.0 - uIsRock );
   float flow = aux.y * ( 1.0 - uIsRock );
+  float hardness = aux.z;
   float cavity = aux.w;
   float footprint = max( length( dFdx( wp ) ), length( dFdy( wp ) ) ) + 1e-5;
+  float wall = 1.0 - abs( n.y );
+
+  // ---- cover masks first, so rock micro-detail only grows where rock is exposed ----------------
+  float speckle = cgNoise3( wp * 2.3 ).x;
+  float flatness = smoothstep( 0.6, 0.86, n.y );
+  float vegNoise = cgNoise3( wp * 0.008 ).x * 0.5 + cgNoise3( wp * 0.045 + 2.0 ).x * 0.5;
+  float belowSnow = 1.0 - smoothstep( uSnowLine - 160.0, uSnowLine - 20.0, wp.y );
+  float aboveWater = smoothstep( uSeaLevel + 1.0, uSeaLevel + 7.0, wp.y );
+  float gravelMix = smoothstep( 0.1, 0.6, deposit ) * 0.9;
+  float veg = uVegetation * flatness * smoothstep( 0.3, 0.6, vegNoise + uVegetation * 0.35 - 0.15 ) * ( 1.0 - gravelMix * 0.8 ) * ( 1.0 - uIsRock * 0.9 ) * belowSnow * aboveWater;
+  veg = clamp( veg, 0.0, 1.0 );
+  float snowNoise = cgNoise3( wp * 0.02 ).x * 70.0;
+  float snowAlt = smoothstep( uSnowLine - 45.0 + snowNoise, uSnowLine + 45.0 + snowNoise, wp.y );
+  float rockMask = ( 1.0 - veg ) * ( 1.0 - gravelMix ) * ( 1.0 - snowAlt * smoothstep( uSnowSlopeCos - 0.2, uSnowSlopeCos + 0.1, n.y ) );
 
   // Triplanar weights
   vec3 w = pow( abs( n ), vec3( 5.0 ) );
   w /= dot( w, vec3( 1.0 ) );
 
   vec3 G = vec3( 0.0 );
-  float fresh = 0.0, crack = 0.0, occl = 0.0, flakeCover = 0.0, flakeTint = 0.0, flakeFinish = 0.0;
+  float fresh = 0.0, crack = 0.0, occl = 0.0, flakeCover = 0.0, flakeFinish = 0.0, flakeEdge = 0.0;
+  vec3 flakeCol = vec3( 0.0 );
 
-  float peelThick = 0.045 * uPeelStrength;
-  float peelThick2 = 0.015 * uPeelStrength;
-  float flakeH = 0.006 * uFlakeStrength;
+  // exfoliation happens in patches, mostly on faces; sheets are stretched along bedding
+  float peelPatch = smoothstep( 0.42, 0.62, cgNoise3( wp * 0.03 + 13.0 ).x * 0.65 + cgNoise3( wp * 0.11 ).x * 0.35 + uPeelStrength * 0.25 - 0.1 );
+  float peelAmount = uPeelStrength * rockMask * peelPatch;
+  float peelThick = 0.05 * peelAmount;
+  float peelThick2 = 0.016 * peelAmount;
+  float flakeAmount = uFlakeStrength * rockMask;
+  float flakeH = 0.012 * flakeAmount;
+  float cellVar = 0.75 + 0.6 * cgNoise3( wp * 0.05 + 31.0 ).x;   // non-uniform sheet sizes
+  vec3 warp3 = vec3( cgNoise3( wp * 0.35 ).x, cgNoise3( wp * 0.35 + 17.0 ).x, cgNoise3( wp * 0.35 + 41.0 ).x ) - 0.5;
 
   for ( int axis = 0; axis < 3; axis++ ) {
     float wa = axis == 0 ? w.x : ( axis == 1 ? w.y : w.z );
     if ( wa < 0.02 ) continue;
-    vec2 pp = axis == 0 ? wp.yz : ( axis == 1 ? wp.xz : wp.xy );
+    vec3 wq = wp + warp3 * uPeelScale * 0.25;
+    vec2 pp = axis == 0 ? wq.yz : ( axis == 1 ? wq.xz : wq.xy );
     pp += vec2( float( axis ) * 37.0, uSeed );
     vec2 g2 = vec2( 0.0 );
 
-    if ( uPeelStrength > 0.0 ) {
-      float fade = 1.0 - smoothstep( 0.08, 0.35, footprint / uPeelScale );
+    if ( peelAmount > 0.003 ) {
+      // vertical projections: compress the up axis so sheets follow bedding
+      vec2 stretch = axis == 1 ? vec2( 1.0 ) : ( axis == 0 ? vec2( 0.6, 1.4 ) : vec2( 1.4, 0.6 ) );
+      float sc = uPeelScale * cellVar;
+      float fade = 1.0 - smoothstep( 0.08, 0.35, footprint / sc );
       if ( fade > 0.0 ) {
-        PeelOut a = peelLayer( pp, uPeelScale, uPeelLift, max( 0.02, 1.5 * footprint / uPeelScale ), uSeed + float( axis ) * 13.0 );
-        g2 += a.g * peelThick * fade;
-        fresh += a.fresh * fade * wa;
-        crack += a.crack * fade * wa;
-        occl += a.occl * fade * wa;
-        float fade2 = 1.0 - smoothstep( 0.08, 0.35, footprint / ( uPeelScale * 0.27 ) );
+        PeelOut a = peelLayer( pp * stretch, sc, uPeelLift, max( 0.02, 1.5 * footprint / sc ), uSeed + float( axis ) * 13.0 );
+        g2 += a.g * stretch * peelThick * fade;
+        fresh += a.fresh * fade * wa * peelPatch;
+        crack += a.crack * fade * wa * peelPatch;
+        occl += a.occl * fade * wa * peelPatch;
+        float sc2 = sc * 0.27;
+        float fade2 = 1.0 - smoothstep( 0.08, 0.35, footprint / sc2 );
         if ( fade2 > 0.0 ) {
-          PeelOut b = peelLayer( pp + vec2( 31.0, 17.0 ), uPeelScale * 0.27, uPeelLift * 0.6, max( 0.02, 1.5 * footprint / ( uPeelScale * 0.27 ) ), uSeed + 101.0 + float( axis ) * 13.0 );
+          PeelOut b = peelLayer( pp * stretch + vec2( 31.0, 17.0 ), sc2, uPeelLift * 0.6, max( 0.02, 1.5 * footprint / sc2 ), uSeed + 101.0 + float( axis ) * 13.0 );
           float keep = 1.0 - a.fresh * 0.6;
-          g2 += b.g * peelThick2 * fade2 * keep;
-          fresh += b.fresh * fade2 * wa * 0.5 * keep;
-          crack += b.crack * fade2 * wa * 0.5 * keep;
-          occl += b.occl * fade2 * wa * 0.5 * keep;
+          g2 += b.g * stretch * peelThick2 * fade2 * keep;
+          fresh += b.fresh * fade2 * wa * 0.5 * keep * peelPatch;
+          crack += b.crack * fade2 * wa * 0.5 * keep * peelPatch;
+          occl += b.occl * fade2 * wa * 0.5 * keep * peelPatch;
         }
       }
     }
 
-    if ( uFlakeStrength > 0.0 ) {
-      float fadeA = 1.0 - smoothstep( 0.1, 0.45, footprint / uFlakeScale );
-      if ( fadeA > 0.0 ) {
-        FlakeOut fa = flakeLayer( pp, uFlakeScale, max( 0.03, 1.2 * footprint / uFlakeScale ), uSeed + 211.0 + float( axis ) * 7.0 );
-        float alpha = fa.cover * fadeA * 0.85;
-        g2 += fa.g * flakeH * fadeA;
-        flakeCover += alpha * wa;
-        flakeTint += fa.tint * alpha * wa;
-        flakeFinish += fa.finish * alpha * wa;
-        float fadeB = 1.0 - smoothstep( 0.1, 0.45, footprint / ( uFlakeScale * 0.33 ) );
-        if ( fadeB > 0.0 ) {
-          FlakeOut fb = flakeLayer( pp + vec2( 5.0, 23.0 ), uFlakeScale * 0.33, max( 0.03, 1.2 * footprint / ( uFlakeScale * 0.33 ) ), uSeed + 307.0 + float( axis ) * 7.0 );
-          float alphaB = fb.cover * fadeB * 0.6;
-          g2 += fb.g * flakeH * 0.6 * fadeB;
-          flakeCover += alphaB * wa * ( 1.0 - alpha );
-          flakeTint += fb.tint * alphaB * wa * ( 1.0 - alpha );
-          flakeFinish += fb.finish * alphaB * wa * ( 1.0 - alpha );
-        }
-      }
+    if ( flakeAmount > 0.003 ) {
+      FlakeOut fs = flakeStack( pp, uFlakeScale, footprint, uSeed + 211.0 + float( axis ) * 7.0 );
+      g2 += fs.g * flakeH;
+      flakeCover += fs.cover * wa;
+      flakeCol += fs.color * fs.cover * wa;
+      flakeFinish += fs.finish * fs.cover * wa;
+      flakeEdge += fs.edge * wa;
     }
 
     vec3 g3 = axis == 0 ? vec3( 0.0, g2.x, g2.y ) : ( axis == 1 ? vec3( g2.x, 0.0, g2.y ) : vec3( g2.x, g2.y, 0.0 ) );
     G += g3 * wa;
   }
-  flakeTint = flakeCover > 1e-4 ? flakeTint / flakeCover : 0.5;
+  flakeCol = flakeCover > 1e-4 ? flakeCol / flakeCover : vec3( 0.5 );
   flakeFinish = flakeCover > 1e-4 ? flakeFinish / flakeCover : 0.5;
+  flakeCover = clamp( flakeCover * flakeAmount, 0.0, 1.0 );
 
   // Aggregate grain (3D, no projection needed)
   float grainFade = 1.0 - smoothstep( 0.15, 0.6, footprint / uGrainSize );
   vec4 grain = cgFbm3( wp / uGrainSize, 4 );
   vec4 grainFine = cgFbm3( wp / ( uGrainSize * 0.23 ) + 11.0, 3 );
-  float grainAmp = 0.035 * uGrainStrength * grainFade;
+  float grainAmp = 0.035 * uGrainStrength * grainFade * ( 0.3 + 0.7 * rockMask );
   G += ( grain.yzw / uGrainSize * grainAmp + grainFine.yzw / ( uGrainSize * 0.23 ) * grainAmp * 0.25 * ( 1.0 - smoothstep( 0.15, 0.6, footprint / ( uGrainSize * 0.23 ) ) ) );
 
   // Normal perturbation from the composite height gradient
@@ -260,6 +301,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
   vec3 nW = normalize( n - Gt );
 
   // ---- colour --------------------------------------------------------------------------------
+  // strata: beds of varying thickness in the dipped frame, wavy, with soft broken seams
   float bandY = wp.y + uDipX * wp.x + uDipZ * wp.z;
   float warp = cgNoise3( wp * 0.012 ).x * 9.0 + cgNoise3( wp * 0.07 + 3.0 ).x * 1.6;
   float tb = ( bandY + warp ) / uStrataBand;
@@ -267,12 +309,20 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
   float bf = fract( tb );
   float bh = cgHash( uvec3( ivec3( int( bi ) + 2048, 17, int( uSeed ) ) ) );
   float bh2 = cgHash( uvec3( ivec3( int( bi ) + 2048, 29, int( uSeed ) ) ) );
+  float bh3 = cgHash( uvec3( ivec3( int( bi ) + 2048, 43, int( uSeed ) ) ) );
+  // sub-beds: some beds are laminated into 2–4 thinner layers
+  float lam = floor( bh3 * 3.0 ) + 1.0;
+  float sf = fract( bf * lam );
   vec3 bandCol = mix( uRockA, uRockB, smoothstep( 0.3, 0.7, bh ) );
   bandCol = mix( bandCol, uRockC, smoothstep( 0.72, 0.95, bh2 ) * 0.85 );
-  bandCol *= 1.0 - 0.2 * ( 1.0 - bf );
-  float seam = 1.0 - smoothstep( 0.0, 0.07, min( bf, 1.0 - bf ) );
-  bandCol *= 1.0 - 0.35 * seam;
+  bandCol *= 1.0 - 0.12 * ( 1.0 - bf ) - 0.06 * ( 1.0 - sf );
+  float seamNoise = smoothstep( 0.35, 0.7, cgNoise3( wp * vec3( 0.09, 0.4, 0.09 ) ).x );
+  float seam = ( 1.0 - smoothstep( 0.0, 0.05, min( bf, 1.0 - bf ) ) ) * seamNoise;
+  bandCol *= 1.0 - 0.22 * seam;
   vec3 rock = mix( uRockA, bandCol, uStrataContrast );
+  // terrain beds carry the erosion hardness: caprock paler and cleaner, soft beds darker and warmer
+  rock = mix( rock, rock * 1.12 + uRockC * 0.06, hardness * 0.6 * ( 1.0 - uIsRock ) );
+  rock = mix( rock, rock * vec3( 0.86, 0.78, 0.7 ), ( 1.0 - hardness ) * 0.35 * ( 1.0 - uIsRock ) * uStrataContrast );
 
   // mottle & grain tint
   rock *= 0.82 + 0.36 * ( grain.x * 0.5 + 0.5 );
@@ -284,36 +334,31 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
 
   // exfoliation colour: pale fresh rock in spalls, dark joints, shadow under lifted edges
   rock = mix( rock, uFresh, clamp( fresh, 0.0, 1.0 ) * 0.85 );
-  rock *= 1.0 - clamp( crack, 0.0, 1.0 ) * 0.5;
+  rock *= 1.0 - clamp( crack, 0.0, 1.0 ) * 0.3;
   rock *= 1.0 - clamp( occl, 0.0, 1.0 ) * 0.55;
 
-  // flakes: per-plate tint
-  rock = mix( rock, rock * ( 0.7 + 0.6 * flakeTint ), clamp( flakeCover, 0.0, 1.0 ) * 0.75 );
+  // flakes: per-plate colour (geology tint → independent hue as uFlakeColor rises) and rim highlight
+  vec3 plateTint = mix( vec3( 0.65 + 0.7 * flakeCol.x ), 0.4 + 1.2 * flakeCol, uFlakeColor );
+  rock = mix( rock, rock * plateTint, flakeCover * 0.85 );
+  rock += vec3( 0.06 ) * clamp( flakeEdge, 0.0, 1.0 ) * flakeAmount;
 
   // cavity / convexity
   rock *= 1.0 + cavity * 0.22;
 
   // runoff staining
-  float wall = 1.0 - abs( n.y );
   float streak = cgNoise3( vec3( wp.x * 0.3, wp.y * 0.015, wp.z * 0.3 ) ).x * 0.6 + cgNoise3( vec3( wp.x * 1.1, wp.y * 0.03, wp.z * 1.1 ) + 5.0 ).x * 0.4;
   streak = smoothstep( 0.56, 0.78, streak );
   float wet = clamp( uWetness * ( flow * 0.9 + streak * wall * 0.7 ), 0.0, 1.0 );
   rock *= 1.0 - wet * 0.5;
 
   // scree gravel on deposits
-  float speckle = cgNoise3( wp * 2.3 ).x;
   vec3 gravel = mix( uRockC, uRockA, 0.5 ) * ( 0.75 + 0.5 * speckle );
-  float gravelMix = smoothstep( 0.1, 0.6, deposit ) * 0.9;
   rock = mix( rock, gravel, gravelMix );
 
-  // vegetation on gentle ground
-  float flatness = smoothstep( 0.6, 0.86, n.y );
-  float vegNoise = cgNoise3( wp * 0.008 ).x * 0.5 + cgNoise3( wp * 0.045 + 2.0 ).x * 0.5;
-  float belowSnow = 1.0 - smoothstep( uSnowLine - 160.0, uSnowLine - 20.0, wp.y );
-  float aboveWater = smoothstep( uSeaLevel + 1.0, uSeaLevel + 7.0, wp.y );
-  float veg = uVegetation * flatness * smoothstep( 0.3, 0.6, vegNoise + uVegetation * 0.35 - 0.15 ) * ( 1.0 - gravelMix * 0.8 ) * ( 1.0 - uIsRock * 0.9 ) * belowSnow * aboveWater;
-  veg = clamp( veg, 0.0, 1.0 );
+  // vegetation: grass with dry patches and bare soil
+  float dry = smoothstep( 0.45, 0.7, cgNoise3( wp * 0.02 + 23.0 ).x );
   vec3 grass = mix( vec3( 0.16, 0.22, 0.08 ), vec3( 0.40, 0.37, 0.16 ), cgNoise3( wp * 0.12 ).x * 0.7 + 0.15 );
+  grass = mix( grass, vec3( 0.42, 0.34, 0.2 ), dry * 0.6 );
   grass *= 0.85 + 0.3 * speckle;
 
   // moss in sheltered concavities
@@ -325,27 +370,27 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
   color = mix( color, vec3( 0.14, 0.2, 0.07 ) * ( 0.8 + 0.4 * speckle ), moss * 0.7 );
 
   // snow
-  float snowNoise = cgNoise3( wp * 0.02 ).x * 70.0;
-  float snow = smoothstep( uSnowLine - 45.0 + snowNoise, uSnowLine + 45.0 + snowNoise, wp.y ) * smoothstep( uSnowSlopeCos - 0.12, uSnowSlopeCos + 0.1, nW.y );
+  float snow = snowAlt * smoothstep( uSnowSlopeCos - 0.12, uSnowSlopeCos + 0.1, nW.y );
   snow = clamp( snow * ( 1.0 + deposit * 0.6 + max( 0.0, -cavity ) * 0.4 ), 0.0, 1.0 );
   color = mix( color, vec3( 0.86, 0.88, 0.93 ), snow );
 
   // wet sand below water
   color *= mix( 0.55, 1.0, smoothstep( uSeaLevel - 1.5, uSeaLevel + 2.5, wp.y ) );
 
-  float roughness = 0.93 - clamp( flakeCover, 0.0, 1.0 ) * 0.3 * flakeFinish - wet * 0.4 - fresh * 0.05;
+  float roughness = 0.93 - wet * 0.4 - fresh * 0.05;
+  roughness = mix( roughness, mix( 0.75, 0.3, flakeFinish ) , flakeCover * uFlakeSheen );
   roughness = mix( roughness, 0.95, veg );
   roughness = mix( roughness, 0.72, snow );
 
-  float ao = ( 1.0 - clamp( crack, 0.0, 1.0 ) * 0.45 ) * ( 1.0 - clamp( occl, 0.0, 1.0 ) * 0.6 ) * ( 1.0 - max( 0.0, -cavity ) * 0.35 );
+  float ao = ( 1.0 - clamp( crack, 0.0, 1.0 ) * 0.35 ) * ( 1.0 - clamp( occl, 0.0, 1.0 ) * 0.6 ) * ( 1.0 - max( 0.0, -cavity ) * 0.35 );
   ao = mix( ao, 1.0, snow * 0.6 );
 
-  vec3 nFinal = normalize( mix( nW, n, max( snow, veg * 0.6 ) ) );
+  vec3 nFinal = normalize( mix( nW, n, max( snow, veg * 0.8 ) ) );
 
   Surface s;
   s.albedo = color;
   s.normalW = nFinal;
-  s.roughness = clamp( roughness, 0.3, 1.0 );
+  s.roughness = clamp( roughness, 0.25, 1.0 );
   s.ao = ao;
   return s;
 }
@@ -356,6 +401,9 @@ const fragmentBody = /* glsl */`
   vec3 geomN = inverseTransformDirection( normal, viewMatrix );
   Surface s = evaluateCliffSurface( vWorldPos, geomN, vAux );
   diffuseColor.rgb = s.albedo;
+  #ifdef USE_COLOR
+    diffuseColor.rgb *= vColor.rgb;
+  #endif
   roughnessFactor = s.roughness;
   normal = normalize( ( viewMatrix * vec4( s.normalW, 0.0 ) ).xyz );
   cgAO = s.ao;
@@ -368,7 +416,7 @@ export function makeSurfaceUniforms() {
     uFresh: { value: new THREE.Color() }, uOxide: { value: new THREE.Color() },
     uStrataBand: { value: 26 }, uStrataContrast: { value: 0.7 }, uDipX: { value: 0 }, uDipZ: { value: 0 },
     uGrainSize: { value: 0.9 }, uGrainStrength: { value: 0.6 },
-    uFlakeStrength: { value: 0.6 }, uFlakeScale: { value: 0.35 },
+    uFlakeStrength: { value: 0.6 }, uFlakeScale: { value: 0.35 }, uFlakeColor: { value: 0.5 }, uFlakeRelief: { value: 0.6 }, uFlakeSheen: { value: 0.4 },
     uPeelStrength: { value: 0.7 }, uPeelScale: { value: 2.2 }, uPeelLift: { value: 0.6 },
     uWetness: { value: 0.6 }, uSnowLine: { value: 430 }, uSnowSlopeCos: { value: Math.cos((48 * Math.PI) / 180) },
     uVegetation: { value: 0.6 }, uMossiness: { value: 0.5 },
@@ -392,6 +440,9 @@ export function updateSurfaceUniforms(uniforms, v) {
   uniforms.uGrainStrength.value = v.grainStrength;
   uniforms.uFlakeStrength.value = v.flakeStrength;
   uniforms.uFlakeScale.value = v.flakeScale;
+  uniforms.uFlakeColor.value = v.flakeColor;
+  uniforms.uFlakeRelief.value = v.flakeRelief;
+  uniforms.uFlakeSheen.value = v.flakeSheen;
   uniforms.uPeelStrength.value = v.peelStrength;
   uniforms.uPeelScale.value = v.peelScale;
   uniforms.uPeelLift.value = v.peelLift;

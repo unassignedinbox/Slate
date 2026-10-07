@@ -3,13 +3,51 @@
 
 import * as THREE from 'three';
 
-export function buildTerrainGeometry(field) {
+import { SimplexNoise } from './noise.js';
+
+// Face displacement: moves vertices horizontally along the outward face normal so that hard beds
+// stand proud of the face and soft beds are recessed. Because this is applied to the mesh (not the
+// heightfield) it produces genuine overhangs, ledges and alcoves that a heightmap cannot represent.
+export function makeDisplacement(field, v) {
+  const { resolution: N, worldSize: size } = field;
+  const cell = size / (N - 1);
+  const noise = new SimplexNoise((v.seed || 1) * 13 + 5);
+  const overhang = v.overhang || 0;
+  const buttress = v.buttress || 0;
+  const ledge = v.ledgeNoise || 0;
+  // Keep displacement below the cell size so the grid never folds over itself.
+  const limit = cell * 0.85;
+  return {
+    limit,
+    // returns horizontal offset (dx, dz) and a small vertical sag for a grid vertex
+    at(i, j, nx, ny, nz, hardness, x, z, h) {
+      const steep = Math.min(1, Math.max(0, (1 - ny - 0.25) / 0.45)); // 0 below ~40°, 1 above ~70°
+      if (steep <= 0 || overhang + buttress <= 0) return [0, 0, 0];
+      const hl = Math.hypot(nx, nz) || 1e-6;
+      const ox = nx / hl, oz = nz / hl;
+      // caprock out, soft beds in; notch the ledges with noise so they are not continuous shelves
+      let bed = (hardness - 0.45) * 2;
+      const notch = noise.fbm(x * 0.03 + h * 0.05, z * 0.03, 3);
+      bed *= 1 - ledge * 0.6 * Math.max(0, notch);
+      let d = bed * overhang;
+      // large buttresses / alcoves
+      d += buttress * noise.fbm(x * 0.006, z * 0.006 + h * 0.004, 3) * limit * 1.4;
+      d = Math.max(-limit, Math.min(limit, d)) * steep;
+      // a lip sags slightly under its own weight
+      const sag = Math.min(0, -Math.max(0, d) * 0.15);
+      return [ox * d, oz * d, sag];
+    },
+  };
+}
+
+export function buildTerrainGeometry(field, v = {}) {
   const { resolution: N, worldSize: size, height, deposit, flow, hardness, cavity } = field;
   const cell = size / (N - 1);
   const count = N * N;
   const positions = new Float32Array(count * 3);
   const normals = new Float32Array(count * 3);
   const aux = new Float32Array(count * 4);
+  const disp = makeDisplacement(field, v);
 
   for (let j = 0; j < N; j++) {
     const z = (j / (N - 1) - 0.5) * size;
@@ -17,19 +55,19 @@ export function buildTerrainGeometry(field) {
     for (let i = 0; i < N; i++) {
       const idx = j * N + i;
       const x = (i / (N - 1) - 0.5) * size;
-      positions[idx * 3] = x;
-      positions[idx * 3 + 1] = height[idx];
-      positions[idx * 3 + 2] = z;
-
       const i0 = Math.max(0, i - 1), i1 = Math.min(N - 1, i + 1);
       const dx = (height[j * N + i1] - height[j * N + i0]) / ((i1 - i0) * cell);
       const dz = (height[j1 * N + i] - height[j0 * N + i]) / ((j1 - j0) * cell);
       const nx = -dx, ny = 1, nz = -dz;
       const inv = 1 / Math.hypot(nx, ny, nz);
+      const edge = i === 0 || j === 0 || i === N - 1 || j === N - 1;
+      const [ox, oz, sag] = edge ? [0, 0, 0] : disp.at(i, j, nx * inv, ny * inv, nz * inv, hardness[idx], x, z, height[idx]);
+      positions[idx * 3] = x + ox;
+      positions[idx * 3 + 1] = height[idx] + sag;
+      positions[idx * 3 + 2] = z + oz;
       normals[idx * 3] = nx * inv;
       normals[idx * 3 + 1] = ny * inv;
       normals[idx * 3 + 2] = nz * inv;
-
       aux[idx * 4] = deposit[idx];
       aux[idx * 4 + 1] = flow[idx];
       aux[idx * 4 + 2] = hardness[idx];
@@ -58,6 +96,17 @@ export function buildTerrainGeometry(field) {
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute('aux', new THREE.BufferAttribute(aux, 4));
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+  if ((v.overhang || 0) + (v.buttress || 0) > 0) {
+    // displaced faces need true mesh normals; blend with the heightfield normal to keep them smooth
+    const smooth = normals.slice();
+    geometry.computeVertexNormals();
+    const mesh = geometry.getAttribute('normal').array;
+    for (let n = 0; n < mesh.length; n += 3) {
+      const x = mesh[n] * 0.75 + smooth[n] * 0.25, y = mesh[n + 1] * 0.75 + smooth[n + 1] * 0.25, z = mesh[n + 2] * 0.75 + smooth[n + 2] * 0.25;
+      const l = 1 / (Math.hypot(x, y, z) || 1);
+      mesh[n] = x * l; mesh[n + 1] = y * l; mesh[n + 2] = z * l;
+    }
+  }
   geometry.computeBoundingSphere();
   geometry.computeBoundingBox();
   return geometry;
@@ -121,5 +170,15 @@ export function makeSampler(field) {
       return [nx * inv, inv, nz * inv];
     },
     map: (name, x, z) => { const [gx, gz] = toGrid(x, z); return bilinear(field[name], gx, gz); },
+    // horizontal offset the face displacement applies near (x, z)
+    displaced(x, z, v) {
+      if (!v || ((v.overhang || 0) + (v.buttress || 0)) <= 0) return [x, z];
+      if (!this._disp || this._disp.v !== v) { this._disp = makeDisplacement(field, v); this._disp.v = v; }
+      const [gx, gz] = toGrid(x, z);
+      const h = bilinear(field.height, gx, gz);
+      const n = this.normal(x, z);
+      const [ox, oz] = this._disp.at(0, 0, n[0], n[1], n[2], bilinear(field.hardness, gx, gz), x, z, h);
+      return [x + ox, z + oz];
+    },
   };
 }

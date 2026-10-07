@@ -1,14 +1,9 @@
 // Frontier Editor-style chrome: outliner (left) · viewport (centre) · inspector cards (right).
 // Vanilla DOM so the page runs straight from a static host with no build step.
 
-import { groups, presets, palettes } from './params.js';
+import { groups, presets, palettes, outlinerSections } from './params.js';
 import { icon, groupIcons, cardIcons } from './icons.js';
 
-const outlinerSections = [
-  { label: 'TERRAIN', ids: ['landform', 'strata', 'erosion'] },
-  { label: 'DRESSING', ids: ['rocks', 'surface'] },
-  { label: 'ENVIRONMENT', ids: ['sun', 'viewport'] },
-];
 
 export class Editor {
   constructor(root, { values, onChange, onPreset, onGenerate, onReset, onAction }) {
@@ -112,11 +107,14 @@ export class Editor {
         body = `<p class="muted">Lithology drives the colour family of beds, fresh breaks and oxide staining.</p>
           <div class="pill-row">${Object.entries(palettes).map(([key, p]) => `<button class="enabled-pill ${v.palette === key ? '' : 'disabled'}" data-palette="${key}"><span style="background:rgb(${p.rockA.map((c) => Math.round(Math.pow(c, 1 / 2.2) * 255)).join(',')})"></span>${p.name}</button>`).join('')}</div>`;
       } else if (card.kind === 'export') {
-        body = `<p class="muted">Geometry exports include the terrain block and every rock instance. The heightmap PNG packs 16-bit height into R·G with an 8-bit preview in B.</p>
+        body = `<p class="muted">Geometry exports include the displaced terrain block and every rock instance. Map exports share the same top-down frame so heightmap, satmap, splat masks and normal map line up pixel-for-pixel.</p>
           <div class="export-list">
             <button data-action="export-obj">${icon('download', 14)}<span>Export OBJ</span><small>Wavefront · metres · Y-up</small></button>
             <button data-action="export-glb">${icon('download', 14)}<span>Export GLB</span><small>Binary glTF</small></button>
-            <button data-action="export-heightmap">${icon('download', 14)}<span>Heightmap PNG</span><small>16-bit packed</small></button>
+            <button data-action="export-heightmap">${icon('download', 14)}<span>Heightmap PNG</span><small>16-bit packed · R·G high/low byte</small></button>
+            <button data-action="export-satmap">${icon('download', 14)}<span>Satmap PNG</span><small>Top-down lit colour, 2048², rocks included</small></button>
+            <button data-action="export-masks">${icon('download', 14)}<span>Splat masks PNG</span><small>R rock · G scree · B wetness · A hardness</small></button>
+            <button data-action="export-normal">${icon('download', 14)}<span>Normal map PNG</span><small>Tangent-space, Y-up heightfield</small></button>
             <button data-action="screenshot">${icon('camera', 14)}<span>Screenshot</span><small>Viewport PNG</small></button>
           </div>`;
       } else {
@@ -136,11 +134,11 @@ export class Editor {
       return `<section class="card" style="--card-icon:${g.color}"><div class="card-heading"><span>${icon(cardIcons[card.title] || 'sliders', 16)}${card.title}</span>${card.controls ? `<span class="small-pill">${card.controls.length}</span>` : ''}</div><div class="card-body">${body}</div></section>`;
     }).join('');
 
-    const stageNote = g.stage === 'terrain' ? 'Press Generate to rebuild the heightfield' : g.stage === 'rocks' ? 'Rocks re-scatter automatically' : 'Changes apply in real time';
+    const stageNote = g.stage === 'terrain' ? 'Press Generate to rebuild the heightfield' : g.stage === 'rocks' ? 'Rocks re-scatter automatically' : g.stage === 'mesh' ? 'Mesh rebuilds automatically' : 'Changes apply in real time';
     this.content.innerHTML = `
       <div class="object-header">
         <div class="object-title"><div class="object-icon" style="--accent:${g.color}">${icon(groupIcons[g.id], 30, 1.25)}</div><div><div class="eyebrow">${g.type}</div><h1>${g.name}</h1></div></div>
-        <div class="object-actions"><button class="reset" data-reset>${icon('rotate', 12)} Reset group</button><span class="enabled-pill"><span></span>${g.stage === 'terrain' ? 'Heightfield' : g.stage === 'rocks' ? 'Scatter' : 'Live'}</span></div>
+        <div class="object-actions"><button class="reset" data-reset>${icon('rotate', 12)} Reset group</button><span class="enabled-pill"><span></span>${g.stage === 'terrain' ? 'Heightfield' : g.stage === 'rocks' ? 'Scatter' : g.stage === 'mesh' ? 'Mesh' : 'Live'}</span></div>
       </div>
       <div class="section-label"><span>PROPERTIES</span><span>${controlCount} controls</span></div>
       <div class="cards">${cards}</div>
