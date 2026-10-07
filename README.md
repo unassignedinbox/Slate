@@ -13,13 +13,15 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-**V7.9 — Geometric Set 03.** The immutable release URL is pinned after the self-contained artifact is committed and verified.
+**[Open v7.9 — Geometric Set 03](https://raw.githack.com/unassignedinbox/Slate/e18e8eb9ca77ba65a3d8e8a671b90e1f3bf4a0f2/site/index.html?material=natural-cotton&studio=pattern&pattern=elongated-triangle-lattice)** · **[Harmonic wave lattice](https://raw.githack.com/unassignedinbox/Slate/e18e8eb9ca77ba65a3d8e8a671b90e1f3bf4a0f2/site/index.html?material=natural-cotton&studio=pattern&pattern=harmonic-wave-lattice)** · **[Fibonacci square spiral](https://raw.githack.com/unassignedinbox/Slate/e18e8eb9ca77ba65a3d8e8a671b90e1f3bf4a0f2/site/index.html?material=natural-cotton&studio=pattern&pattern=fibonacci-square-spiral)**
 
 Open **Geometric constructions** and search **Set 03** for eight new constructions: elongated triangle lattice, Descartes circle packing, Pythagorean branch lattice, Fibonacci square spiral, Rhodonea rose lattice, epicycloid gear lattice, decagram chord lattice and harmonic wave lattice. Search **Set 02** for the previous eight. The original six remain unchanged.
 
 Choose **Open the page** if GitHack shows its notice. Publication verification compares the GitHub artifact byte-for-byte; it does not substitute for a hosted-browser check. Functional tests do not certify visual realism.
 
 Ten focused V7.9 geometry/vector and browser-editor tests pass, covering exact tessellation, Descartes tangencies, non-overlap, curve closure, harmonic repeat edges, serialization, all eight card saves, color edit/undo and JSON import. The separate live-3D check is skipped because this container’s headless browser has no WebGL context; this is not a full-suite result.
+
+The GitHub artifact at commit `e18e8eb9ca77ba65a3d8e8a671b90e1f3bf4a0f2` was verified byte-for-byte: **1,979,548 bytes**, SHA-256 `beba33bbfdab000d83b7a1a173c318e27e8706eb409c29da70c4ff0c68d72344`. This verifies the repository file, not GitHack’s live response.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
