@@ -1,8 +1,41 @@
-# Pattern studio — v7.2
+# Pattern studio — v7.3
 
 This is a **hybrid vector/procedural material workflow**, not the previous zero-input-map claim. Existing paint, scratch and botanical families remain analytic. All five leather presets now share one generated SVG height atlas; pattern documents can contain vector shapes, sanitized SVG groups and embedded user images. No reference photographs are shipped as leather maps.
 
-## New in v7.2: rugs, geometric collections and size fades
+## New in v7.3: textile library, palettes and stitch overlays
+
+**233 pattern presets + Blank** are available. This count includes colorways: the expansion is **54 new construction/design families × four named palettes = 216 presets**, plus the previous 17 designs. It is not a claim of 233 distinct weave constructions.
+
+| New collection | Families | Colorways | Presets |
+| --- | ---: | ---: | ---: |
+| Fabric weaves | 16 | 4 | 64 |
+| Stitch patterns | 10 | 4 | 40 |
+| Geometric designs | 16 | 4 | 64 |
+| Color patterns | 12 | 4 | 48 |
+
+The four starting palettes are **Indigo, Earth, Studio and Mulberry**. Search by name or collection, filter by collection and colorway, and move through 24-card pages. Only mounted cards generate thumbnail SVGs; images are lazy-loaded. Switching to a starter replaces the current document, with undo available. New textile presets select cotton backing by default; a reopened existing document preserves the current material.
+
+### Weaves and printed designs
+
+- Weave drafts: plain, basket 2×2/3×3, twill 2/1, 2/2 and 3/1, reverse twill, herringbone, broken/diamond/point twill, five-/eight-shaft satin, warp/weft rib and waffle. Warp/weft underlays and float masks use different editable layer colors and relief. Complete draft periods fit the tile, including 30 yarns for five-shaft satin. The names describe representative visual draft constructions, not loom-ready manufacturing files or a full yarn-contact simulation.
+- Geometric designs: dots, rings, hexagons, triangles, chevrons, zigzags, scallops, Greek keys, pinwheels, interlocking squares, flowers, petals, diamonds, brick bond and waves.
+- Color patterns: gingham, tartan, windowpane, madras, pinstripes, awning/candy stripes, color blocks, harlequin, houndstooth, argyle and looping ombre bands.
+- **Design palette** edits all matching vector colors at once, preserving shapes, transforms and finish assignments. Image/grouped-SVG internal colors remain untouched. The library metadata records the starting family/colorway; recoloring does not create an additional catalogue entry.
+- These vector drafts coexist with the main material inspector's existing analytic fabric weave modes. They do not replace or alter those kernels. Use pattern **Repeats**, mapping and layer transforms to control the overall artwork scale; fine details are filtered by the finite-resolution GPU maps.
+
+### Stitch an existing design
+
+Expand **Stitch overlay**, then enable **Stitch this design**. Choose running, backstitch, chain, cross, zigzag, blanket, herringbone, feather, couching or satin-bar stitching. Place it in repeating rows, columns, a diagonal field or an inset border. Adjust thread color, spacing (16–64 tile units), width (1–8), border inset (12–96) and relief (0–1 mm). Spacing is rounded to whole repeats to avoid broken edges. Border placement repeats a bordered tile; it does not detect arbitrary mesh boundaries or automatically follow a hand-drawn path.
+
+An overlay reserves **three editable vector layers**: recessed needle-entry marks, raised cotton thread and a narrow highlight. The recesses follow stitch endpoints/turns. These feed the same color, roughness, finish, height and normal workflow as other patterns. They are shader relief—not literal mesh holes, thread strand geometry or a sewing-machine simulation.
+
+Controls rebuild only layers marked with `stitchRole`; the underlying design's edits are preserved. Rebuilding replaces manual path edits to generated stitch layers. Disable removes those three layers while retaining the controls for later use. **Rebuild stitch layers** restores manually deleted stitch components. Adding stitches to a full document produces an explicit layer-cap error without changing the design. Fade regeneration retains the stitch overlay. Undo/redo, pattern JSON, local material presets, SVG and independent shader exports all retain the applicable settings/geometry. In SVG, even-odd paths keep rings and frame interiors open; procedural controls themselves live in JSON, not SVG.
+
+Deep links: `?material=natural-cotton&studio=pattern&pattern=chain-stitch---indigo` and `?material=natural-cotton&studio=pattern&pattern=herringbone-weave---earth&view=3d`. The three hyphens arise from the ` - ` separator in preset names.
+
+**Validation:** 17 targeted pattern/library/editor tests plus one standalone test with external assets blocked. Checks include all 216 new documents, 54 distinct geometry signatures with four consistent colorways each, maximum-density stitch bounds, weave-period boundaries, non-destructive overlay regeneration, search/pagination, palette edits, save/reload/undo, live rendering, changed height/normal bakes and independent shader construction. These are targeted checks, not the complete historical suite or a claim of measured textile realism. Leather, scratch, plant and analytic fabric shader kernels are unchanged.
+
+## Retained from v7.2: rugs, geometric collections and size fades
 
 **Ten new editable starters** join the seven existing designs (17 designs plus Blank). Filter the library with **Pattern collection**:
 

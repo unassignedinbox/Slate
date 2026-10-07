@@ -1,3 +1,5 @@
+import stitchModuleSource from "./patternStitches.js?raw";
+import textileModuleSource from "./patternLibrary.js?raw";
 import collectionModuleSource from "./patternCollections.js?raw";
 import {
   resolvePatternBase,
@@ -63,7 +65,11 @@ import botanicalModuleSource from "./botanicalKernels.js?raw";
 import architectureModuleSource from "./architecturalKernels.js?raw";
 import BakePanel from "./BakePanel";
 const shaderSource =
-  collectionModuleSource +
+  stitchModuleSource +
+  "\n" +
+  textileModuleSource.replace(/^import[\s\S]*?;\s*/gm, "") +
+  "\n" +
+  collectionModuleSource.replace(/^import[\s\S]*?;\s*/gm, "") +
   "\n" +
   patternImportSource +
   "\n" +
@@ -429,7 +435,7 @@ function App() {
           <span>Automotive essentials</span>
           <ChevronRight size={13} />
           <strong>Material explorer</strong>
-          <span className="version-badge">v7.2</span>
+          <span className="version-badge">v7.3</span>
         </div>
         <div className="project-actions">
           <span className="saved-state">

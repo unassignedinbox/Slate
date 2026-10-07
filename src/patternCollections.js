@@ -1,3 +1,4 @@
+import { applyStitches } from "./patternStitches.js";
 // Original vector constructions inspired by the user's references. No reference
 // raster or stock watermark is embedded. This module is also in shader exports.
 export const collectionPatterns = [
@@ -416,7 +417,7 @@ export function rebuildCollectionFade(doc, patch) {
         }
       : l;
   });
-  return {
+  const result = {
     ...next,
     name: doc.name,
     background: doc.background,
@@ -425,4 +426,5 @@ export function rebuildCollectionFade(doc, patch) {
     rotation: doc.rotation,
     repeats: doc.repeats,
   };
+  return doc.stitch ? applyStitches(result, doc.stitch) : result;
 }

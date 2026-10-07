@@ -387,6 +387,50 @@ test("standalone page renders, edits and exports without external assets", async
     THREE.RepeatWrapping,
   );
   fadeMaterial.dispose();
+  await page
+    .getByRole("button", { name: "Pattern studio", exact: true })
+    .click();
+  await page.getByLabel("Pattern collection").selectOption("Stitch patterns");
+  await page.getByLabel("Pattern colorway").selectOption("Indigo");
+  await page.getByLabel("Search patterns").fill("Chain");
+  await page
+    .getByRole("button", { name: "Chain stitch - Indigo", exact: true })
+    .click();
+  await page.getByLabel("Stitch placement").selectOption("diagonal");
+  await page.getByRole("button", { name: "3D material", exact: true }).click();
+  await expect(
+    page.getByRole("status", { name: "Material preview status" }),
+  ).toContainText("Live material · ready");
+  await page.getByRole("button", { name: /Apply to material/ }).click();
+  await frame(page);
+  const stitchSource = await downloadText(page, /Three.js procedural shader/);
+  const stitchFactory = stitchSource
+    .replace(/import \* as THREE from ['"]three['"];?/, "")
+    .replace(
+      /export default createMaterial\(preset\);/,
+      "return createMaterial(preset);",
+    )
+    .replace(/export /g, "");
+  const stitched = new Function("THREE", stitchFactory)(THREE);
+  expect(stitched.userData.params.pattern.stitch).toMatchObject({
+    type: "Chain stitch",
+    layout: "diagonal",
+    enabled: true,
+  });
+  expect(
+    stitched.userData.params.pattern.layers.filter((l) => l.stitchRole),
+  ).toHaveLength(3);
+  stitched.dispose();
+  // Ensure exported helpers, not only the serialized preset, are self-contained.
+  const rebuilt = new Function(
+    "THREE",
+    stitchFactory.replace(
+      "return createMaterial(preset);",
+      "return createMaterial({...preset,pattern:patternStarter('Plain weave - Earth')});",
+    ),
+  )(THREE);
+  expect(rebuilt.userData.params.pattern.library.family).toBe("Plain weave");
+  rebuilt.dispose();
   if (process.env.ALLOY_CAPTURE === "patterns") {
     await page.getByRole("button", { name: "Fit", exact: true }).click();
     await frame(page);

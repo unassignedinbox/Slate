@@ -1,4 +1,4 @@
-# Alloy 07.2 — Pattern & Material Studio
+# Alloy 07.3 — Pattern & Material Studio
 
 A real-time procedural material editor built with React, Vite and Three.js. Most library surfaces are analytic. **V7 adds a generated SVG leather atlas and editable SVG/image pattern sources**, with procedural material shading. No external HDRIs or downloaded 3D assets are required. The charcoal interface uses rounded panels and desaturated accents. Fonts are self-hosted.
 
@@ -117,9 +117,11 @@ Shader variants now compile the material-family ID as a constant, so drivers can
 
 ## Pattern studio and vector leather (v7)
 
-Open **Pattern studio** in the top navigation (or append `?studio=pattern`). Design with vector motifs, freehand/SVG paths, grouped SVG imports and embedded PNG/JPEG/WebP images. Seventeen original floral/geometric starters plus Blank, seeded layout generators, straight/half-drop/mirror repeats, transform/layer controls and undo/redo are included.
+Open **Pattern studio** in the top navigation (or append `?studio=pattern`). Design with vector motifs, freehand/SVG paths, grouped SVG imports and embedded PNG/JPEG/WebP images. **233 pattern presets plus Blank** (including explicitly labeled colorways), seeded layout generators, straight/half-drop/mirror repeats, transform/layer controls and undo/redo are included.
 
-**V7.2 adds ten patterns**: four Islamic-style star/rosette and carpet designs, three African-inspired rugs/weaves, and gold/black cube fades plus a diamond dissolve. Collection filters, an actual **Rug** preview mesh, and geometric fade controls are included. Fades change motif size, not just alpha. One-way fades clamp at their ends; optional loop mode repeats in both directions. Colors, finishes, relief and fade settings remain editable and exportable.
+**V7.3 adds a textile library and stitch designer:** 54 new construction/design families in four colorways each (216 presets), alongside the existing 17 patterns. The new catalogue includes 16 weave drafts, 10 stitch types, 16 geometric designs and 12 check/stripe/color layouts. Search, collection/colorway filters, pagination and lazy thumbnails keep the library browsable. A shared design palette recolors matching vector layers without altering geometry. Stitch overlays work on existing designs with row, column, diagonal and border placements; adjust thread color, spacing, width, inset and actual surface relief. These are 233 **presets**, not 233 different weave constructions. All remain editable vector/material documents.
+
+**V7.2 added ten patterns**: four Islamic-style star/rosette and carpet designs, three African-inspired rugs/weaves, and gold/black cube fades plus a diamond dissolve. Collection filters, an actual **Rug** preview mesh, and geometric fade controls are included. Fades change motif size, not just alpha. One-way fades clamp at their ends; optional loop mode repeats in both directions. Colors, finishes, relief and fade settings remain editable and exportable.
 
 **V7.1 added an in-editor live 3D material view** with lighting, orbit and macro zoom, plus resize/rotate handles, grid snapping, keyboard nudging, reflections and radial arrays. New banded, medallion-rug and graduated-lattice compositions are editable vector layers, not baked preview pictures. Preview and Apply share the same material resolver and shader. See the guide below for gesture shortcuts and limits.
 

@@ -1,3 +1,5 @@
+import PatternTextileTools from "./PatternTextileTools.jsx";
+import { textilePalettes } from "./patternLibrary.js";
 import { rebuildCollectionFade } from "./patternCollections.js";
 import PatternMaterialPreview from "./PatternMaterialPreview.jsx";
 import { resolvePatternBase } from "./patternSurface.js";
@@ -27,6 +29,7 @@ import {
 import {
   patternStarter,
   patternStarterNames,
+  patternStarterCatalog,
   generatePatternLayout,
   patternLayer,
   patternSVG,
@@ -39,13 +42,20 @@ import { rasterPatternSVG, patternImage } from "./patternRuntime.js";
 import { leatherSourceSVG } from "./leatherSource.js";
 import "./patternEditor.css";
 
-// The starter artwork is immutable; do not rebuild eight SVG documents on
-// every pointer move or each background library-thumbnail notification.
-const starterPreviews = patternStarterNames.map((name) => ({
-  name,
-  group: patternStarter(name).collection || "Originals",
-  src: `data:image/svg+xml,${encodeURIComponent(patternSVG(patternStarter(name)))}`,
-}));
+// Only mounted page cards generate SVG. Hundreds of presets must not block
+// startup, pointer moves or background material-thumbnail updates.
+const StarterThumb = React.memo(function StarterThumb({ name }) {
+  const src = useMemo(
+    () =>
+      `data:image/svg+xml,${encodeURIComponent(patternSVG(patternStarter(name)))}`,
+    [name],
+  );
+  return <img src={src} alt="" loading="lazy" decoding="async" />;
+});
+const libraryGroups = [
+  "All patterns",
+  ...new Set(patternStarterCatalog.map((p) => p.group)),
+];
 
 function patternDownload(text, name, type) {
   const a = document.createElement("a"),
@@ -84,6 +94,29 @@ export default function PatternEditor({
     [aspect, setAspect] = useState(false),
     [ring, setRing] = useState({ count: 6, radius: 160 });
   const [collectionFilter, setCollectionFilter] = useState("All patterns");
+  const [librarySearch, setLibrarySearch] = useState(""),
+    [libraryPalette, setLibraryPalette] = useState("All colorways"),
+    [libraryPage, setLibraryPage] = useState(0);
+  const libraryMatches = useMemo(
+    () =>
+      patternStarterCatalog.filter(
+        (p) =>
+          (collectionFilter === "All patterns" ||
+            p.group === collectionFilter) &&
+          (libraryPalette === "All colorways" ||
+            p.palette === libraryPalette) &&
+          `${p.name} ${p.group}`
+            .toLowerCase()
+            .includes(librarySearch.trim().toLowerCase()),
+      ),
+    [collectionFilter, libraryPalette, librarySearch],
+  );
+  const libraryPages = Math.max(1, Math.ceil(libraryMatches.length / 24));
+  const pageIndex = Math.min(libraryPage, libraryPages - 1);
+  useEffect(
+    () => setLibraryPage(0),
+    [collectionFilter, libraryPalette, librarySearch],
+  );
   const [generator, setGenerator] = useState({
     seed: 17,
     style: "geometric",
@@ -119,7 +152,9 @@ export default function PatternEditor({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [base, setBase] = useState(() =>
-      !initial && doc.presentation === "rug" ? "natural-cotton" : "current",
+      !initial && (doc.presentation === "rug" || doc.library)
+        ? "natural-cotton"
+        : "current",
     );
   const previewTarget = useMemo(
     () => resolvePatternBase(currentMaterial, base),
@@ -466,38 +501,83 @@ export default function PatternEditor({
             value={collectionFilter}
             onChange={(e) => setCollectionFilter(e.target.value)}
           >
-            {[
-              "All patterns",
-              "Islamic geometry",
-              "African-inspired",
-              "Fading",
-              "Originals",
-            ].map((g) => (
+            {libraryGroups.map((g) => (
               <option key={g}>{g}</option>
             ))}
           </select>
-          <div className="pe-starters">
-            {starterPreviews
-              .filter(
-                (p) =>
-                  collectionFilter === "All patterns" ||
-                  p.group === collectionFilter,
-              )
-              .map(({ name, src }) => (
+          <input
+            className="pe-library-search"
+            type="search"
+            aria-label="Search patterns"
+            placeholder="Search weaves, stitches, checks…"
+            value={librarySearch}
+            onChange={(e) => setLibrarySearch(e.target.value)}
+          />
+          <select
+            aria-label="Pattern colorway"
+            value={libraryPalette}
+            onChange={(e) => setLibraryPalette(e.target.value)}
+          >
+            {["All colorways", "Original", ...Object.keys(textilePalettes)].map(
+              (p) => (
+                <option key={p}>{p}</option>
+              ),
+            )}
+          </select>
+          <p className="pe-library-count" aria-live="polite">
+            {libraryMatches.length} results · {patternStarterCatalog.length - 1}{" "}
+            presets + Blank
+          </p>
+          <div
+            className="pe-starters"
+            key={`${collectionFilter}-${libraryPalette}-${librarySearch}-${pageIndex}`}
+          >
+            {libraryMatches
+              .slice(pageIndex * 24, pageIndex * 24 + 24)
+              .map(({ name }) => (
                 <button
                   key={name}
                   onClick={() => {
                     const next = patternStarter(name);
                     commit(next);
-                    if (next.presentation === "rug") setBase("natural-cotton");
+                    if (next.presentation === "rug" || !!next.library)
+                      setBase("natural-cotton");
                     setSelection(0);
                   }}
                 >
-                  <img src={src} alt="" />
+                  <StarterThumb name={name} />
                   <span>{name}</span>
                 </button>
               ))}
           </div>
+          {!libraryMatches.length && (
+            <p className="pe-hint">
+              No matches. Try another collection or colorway.
+            </p>
+          )}
+          <div className="pe-library-paging">
+            <button
+              aria-label="Previous pattern page"
+              disabled={pageIndex === 0}
+              onClick={() => setLibraryPage(pageIndex - 1)}
+            >
+              ←
+            </button>
+            <span>
+              Page {pageIndex + 1} / {libraryPages}
+            </span>
+            <button
+              aria-label="Next pattern page"
+              disabled={pageIndex + 1 >= libraryPages}
+              onClick={() => setLibraryPage(pageIndex + 1)}
+            >
+              →
+            </button>
+          </div>
+          <p className="pe-hint">
+            54 new construction/design families × 4 colorways, plus the original
+            17 designs. Colorways are palette variations, not different weaves.
+          </p>
           <div className="pe-section">
             <h3>Generate a layout</h3>
             <select
@@ -835,7 +915,9 @@ export default function PatternEditor({
           <div className="pe-repeat-heading">
             <span>02 — Repeat inspection</span>
             <small>
-              Edges wrap automatically • drag motifs across boundaries
+              {doc.tileAxes === "xy"
+                ? "Edges wrap automatically • drag motifs across boundaries"
+                : "One-way border • repeat across the fade only"}
             </small>
           </div>
           <div
@@ -867,6 +949,8 @@ export default function PatternEditor({
           {busy && <p role="status">Preparing embedded source…</p>}
         </main>
         <aside className="pe-inspector">
+          <PatternTextileTools doc={doc} commit={commit} onError={setError} />
+
           {doc.fade && (
             <div className="pe-section pe-fade-controls">
               <span className="pe-kicker">GEOMETRIC FADING</span>

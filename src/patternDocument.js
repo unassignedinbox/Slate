@@ -1,3 +1,5 @@
+import { textileLibraryEntries, textilePattern } from "./patternLibrary.js";
+import { normalizeStitches } from "./patternStitches.js";
 import {
   collectionPatterns,
   collectionPattern,
@@ -67,6 +69,15 @@ export function validatePattern(input) {
     ...(input.presentation === "rug" ? { presentation: "rug" } : {}),
     ...(input.fade ? { fade: normalizeCollectionFade(input.fade) } : {}),
     tileAxes,
+    ...(input.library && typeof input.library === "object"
+      ? {
+          library: {
+            family: String(input.library.family || "").slice(0, 60),
+            palette: String(input.library.palette || "").slice(0, 30),
+          },
+        }
+      : {}),
+    ...(input.stitch ? { stitch: normalizeStitches(input.stitch) } : {}),
     background: patternColor(input.background, "#eee8dc"),
     backgroundOpacity: patternNumber(input.backgroundOpacity, 1, 0, 1),
     repeat:
@@ -118,6 +129,10 @@ export function validatePattern(input) {
         width: patternNumber(l.width, 100, 1, 1024),
         height: patternNumber(l.height, 100, 1, 1024),
         rotation: patternNumber(l.rotation, 0, -360, 360),
+        ...(l.fillRule === "evenodd" ? { fillRule: "evenodd" } : {}),
+        ...(["holes", "thread", "highlight"].includes(l.stitchRole)
+          ? { stitchRole: l.stitchRole }
+          : {}),
         flipX: l.flipX === true,
         flipY: l.flipY === true,
         opacity: patternNumber(l.opacity, 1, 0, 1),
@@ -163,9 +178,19 @@ export const patternStarterNames = [
   "Graduated lattice",
   ...collectionPatterns.map((p) => p.name),
   "Blank",
+  ...textileLibraryEntries.map((p) => p.name),
 ];
+export const patternStarterCatalog = patternStarterNames.map(
+  (name) =>
+    textileLibraryEntries.find((p) => p.name === name) || {
+      name,
+      group:
+        collectionPatterns.find((p) => p.name === name)?.group || "Originals",
+      palette: "Original",
+    },
+);
 export function patternStarter(name = "Diamond weave") {
-  const collection = collectionPattern(name);
+  const collection = textilePattern(name) || collectionPattern(name);
   if (collection) return validatePattern(collection);
   const d = {
     schema: "alloy.pattern.v1",
@@ -402,7 +427,7 @@ export function patternDimensions(doc) {
   ];
 }
 export function patternShape(l, fill) {
-  const style = `fill="${fill}" stroke="${l.strokeWidth ? fill : "none"}" stroke-width="${l.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"`;
+  const style = `fill-rule="${l.fillRule === "evenodd" ? "evenodd" : "nonzero"}" fill="${fill}" stroke="${l.strokeWidth ? fill : "none"}" stroke-width="${l.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"`;
   if (l.kind === "svg")
     return l.svg
       .replace(/id="([^"]+)"/g, `id="${l.id}-$1"`)
