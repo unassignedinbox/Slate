@@ -15,5 +15,5 @@ METRIC single_bounce_reference_rms 83.1477
 ARTIFACT rendered matte-subdivided
 METRIC subdivision_rms 0
 
-Execution seconds: 41.04
+Execution seconds: 276.78
 Exit code: 0
