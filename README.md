@@ -13,9 +13,9 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-**[Open v7.1 — Live rug editor](https://raw.githack.com/unassignedinbox/Slate/7c07a81c8f8575e6d1f16ebc2d371e95057efd1b/site/index.html?material=natural-cotton&studio=pattern&pattern=medallion-rug&view=3d)** · **[Pattern design](https://raw.githack.com/unassignedinbox/Slate/7c07a81c8f8575e6d1f16ebc2d371e95057efd1b/site/index.html?material=natural-cotton&studio=pattern)**
+**[Open v7.2 — Live rug editor](https://raw.githack.com/unassignedinbox/Slate/3cb8d5857ca5bd6bdffd0057a5c962ba8283a70b/site/index.html?material=natural-cotton&studio=pattern&pattern=african-diamond-carpet&view=3d)** · **[Islamic carpet](https://raw.githack.com/unassignedinbox/Slate/3cb8d5857ca5bd6bdffd0057a5c962ba8283a70b/site/index.html?material=natural-cotton&studio=pattern&pattern=islamic-medallion-carpet&view=3d)** · **[Fading cube designer](https://raw.githack.com/unassignedinbox/Slate/3cb8d5857ca5bd6bdffd0057a5c962ba8283a70b/site/index.html?studio=pattern&pattern=golden-cube-fade)**
 
-Choose **Open the page** if GitHack shows its notice. Nine targeted pattern/editor and standalone tests passed in this revision, including actual live-preview rendering, map-channel checks and independent shader exports. Publication verification matched all 1,650,953 bytes (SHA-256 `c1ecbe484c3f7ea51ac46f95b05a5cdd134e1dc56c429a786062866f009a6e05`). This verifies the GitHub artifact, not hosted-browser execution or visual realism. Run `npm run verify:published` to repeat verification.
+Choose **Open the page** if GitHack shows its notice. Fourteen targeted collection/pattern/editor and standalone tests passed in this revision, including actual live-preview rendering, map-channel checks and independent shader exports. Publication verification matched all 1,676,582 bytes (SHA-256 `79a53acf9ef1b4356aa91b511c923628980356e2885b2c220317bb4f9a0eaad3`). This verifies the GitHub artifact, not hosted-browser execution or visual realism. Run `npm run verify:published` to repeat verification.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
