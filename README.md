@@ -1,4 +1,4 @@
-# Alloy 07.9 — Pattern & Material Studio
+# Alloy 07.10 — Pattern & Material Studio
 
 A real-time procedural material editor built with React, Vite and Three.js. Most library surfaces are analytic. **V7 adds a generated SVG leather atlas and editable SVG/image pattern sources**, with procedural material shading. No external HDRIs or downloaded 3D assets are required. The charcoal interface uses rounded panels and desaturated accents. Fonts are self-hosted.
 
@@ -13,15 +13,17 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-**[Open v7.9 — Geometric Set 03](https://raw.githack.com/unassignedinbox/Slate/e18e8eb9ca77ba65a3d8e8a671b90e1f3bf4a0f2/site/index.html?material=natural-cotton&studio=pattern&pattern=elongated-triangle-lattice)** · **[Harmonic wave lattice](https://raw.githack.com/unassignedinbox/Slate/e18e8eb9ca77ba65a3d8e8a671b90e1f3bf4a0f2/site/index.html?material=natural-cotton&studio=pattern&pattern=harmonic-wave-lattice)** · **[Fibonacci square spiral](https://raw.githack.com/unassignedinbox/Slate/e18e8eb9ca77ba65a3d8e8a671b90e1f3bf4a0f2/site/index.html?material=natural-cotton&studio=pattern&pattern=fibonacci-square-spiral)**
+**[Open V7.10 — Poincaré geodesic lattice](https://raw.githack.com/unassignedinbox/Slate/121a0787cadc925ba4de0a98ff577d286f3dc998/site/index.html?material=natural-cotton&studio=pattern&pattern=poincare-geodesic-lattice)** · **[Dual-hexagon overlay](https://raw.githack.com/unassignedinbox/Slate/121a0787cadc925ba4de0a98ff577d286f3dc998/site/index.html?material=natural-cotton&studio=pattern&pattern=dual-hexagon-overlay)** · **[Periodic Voronoi mosaic](https://raw.githack.com/unassignedinbox/Slate/121a0787cadc925ba4de0a98ff577d286f3dc998/site/index.html?material=natural-cotton&studio=pattern&pattern=periodic-voronoi-mosaic)**
 
-Open **Geometric constructions** and search **Set 03** for eight new constructions: elongated triangle lattice, Descartes circle packing, Pythagorean branch lattice, Fibonacci square spiral, Rhodonea rose lattice, epicycloid gear lattice, decagram chord lattice and harmonic wave lattice. Search **Set 02** for the previous eight. The original six remain unchanged.
+Open **Geometric constructions** and search **Set 04** for eight new constructions: dual-hexagon overlay, Poincaré geodesics, periodic Voronoi mosaic, Koch snowflake field, Archimedean counterspirals, superellipse contour field, Bernoulli lemniscates and a torus-knot projection. **Sets 02 and 03** and the original six remain unchanged.
 
 Choose **Open the page** if GitHack shows its notice. Publication verification compares the GitHub artifact byte-for-byte; it does not substitute for a hosted-browser check. Functional tests do not certify visual realism.
 
-Ten focused V7.9 geometry/vector and browser-editor tests pass, covering exact tessellation, Descartes tangencies, non-overlap, curve closure, harmonic repeat edges, serialization, all eight card saves, color edit/undo and JSON import. The separate live-3D check is skipped because this container’s headless browser has no WebGL context; this is not a full-suite result.
+**V7.10 targeted verification:** Set 04 **12/12**; Set 02/03 regressions **19 passed**, plus the separately run Set 02 live-3D preview; inventory audit **5 passed**; self-contained offline page **1 passed** with external assets blocked. `npm ci`, `npm run build` and `npm run test:standalone` completed. Set 04's browser checks include a live WebGL Poincaré material preview. This is targeted coverage, not a full-suite claim; the 87-test suite exceeded the sandbox's 25-minute command window during the legacy saved-composition preview.
 
-The GitHub artifact at commit `e18e8eb9ca77ba65a3d8e8a671b90e1f3bf4a0f2` was verified byte-for-byte: **1,979,548 bytes**, SHA-256 `beba33bbfdab000d83b7a1a173c318e27e8706eb409c29da70c4ff0c68d72344`. This verifies the repository file, not GitHack’s live response.
+**Previous V7.9 artifact:** commit `e18e8eb9ca77ba65a3d8e8a671b90e1f3bf4a0f2`; **1,979,548 bytes**, SHA-256 `beba33bbfdab000d83b7a1a173c318e27e8706eb409c29da70c4ff0c68d72344`. This checksum records the repository file, not GitHack's live response.
+
+**V7.10 artifact:** `site/index.html` is **2,009,753 bytes**, SHA-256 `57da7849a1ea18b11cf07b18d60480858d54a64962ecdd8954495f5d6fbf3e08`. The immutable GitHub link above points to commit `121a0787cadc925ba4de0a98ff577d286f3dc998`, which contains this built page.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
@@ -125,7 +127,9 @@ Shader variants now compile the material-family ID as a constant, so drivers can
 
 Open **Pattern studio** in the top navigation (or append `?studio=pattern`). Design with vector motifs, freehand/SVG paths, grouped SVG imports and embedded PNG/JPEG/WebP images. Transform/layer controls, undo/redo, material assignments and portable exports remain available.
 
-**V7.9 adds Geometric Set 03: eight constructions.** Search **Set 03** in **Geometric constructions** for the square/triangle course tessellation; recursively packed tangent circles; a right-isosceles branch tree; exact Fibonacci square packings; harmonic rose and rolling-circle profiles; ten-vertex chord stars; and an orthogonal sinusoidal field. Every design is editable vector geometry with color, finish, repeat, SVG/JSON and material export. No new rug collections or palette-count variants were added.
+**V7.10 adds Geometric Set 04: eight constructions.** Search **Set 04** in **Geometric constructions** for crossed hexagon nets, Poincaré-disk geodesics, an exact periodic Voronoi tessellation, level-three Koch islands, Archimedean counterspirals, fourth/sixth-power superellipses, Bernoulli figure-eights and a depth-coded torus-knot projection. Every design is editable vector geometry with color, finish, repeat, SVG/JSON and material export. No rug collections or palette-count variants were added.
+
+**V7.9 Set 03** remains searchable via **Set 03**; **Set 02** and the original six geometric designs remain as well.
 
 **V7.8 Set 02** remains available via search **Set 02**: linked racetrack loops, hexagon-square junctions, pinwheel squares, tangram, Sierpinski lace, vesica net, stepped corner inlay and ruled saddle lattice. The six earlier geometric constructions are unchanged.
 
