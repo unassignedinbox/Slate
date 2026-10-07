@@ -16,7 +16,9 @@ import * as THREE from 'three';
 
 const vertexHead = /* glsl */`
 attribute vec4 aux;
+attribute vec4 aux2;
 varying vec4 vAux;
+varying vec4 vAux2;
 varying vec3 vWorldPos;
 `;
 
@@ -28,13 +30,16 @@ const vertexBody = /* glsl */`
   #endif
   vWorldPos = ( modelMatrix * wp4 ).xyz;
   vAux = aux;
+  vAux2 = aux2;
 }
 `;
 
 const fragmentHead = /* glsl */`
 varying vec4 vAux;
+varying vec4 vAux2;
 varying vec3 vWorldPos;
-uniform vec3 uRockA, uRockB, uRockC, uFresh, uOxide, uGrassA, uGrassB, uDry, uMoss, uSnow, uGravel;
+uniform vec3 uRockA, uRockB, uRockC, uFresh, uOxide, uGrassA, uGrassB, uDry, uMoss, uSnow, uGravel, uRoad, uSilt;
+uniform float uShoreWet, uRoadOn, uBedOn;
 uniform float uStrataBand, uStrataContrast, uDipX, uDipZ, uSeamStrength, uSeamWidth, uLaminae, uBedGradient, uHardnessTint;
 uniform float uGrainSize, uGrainStrength, uGrainContrast, uGrainFineness;
 uniform float uOxideAmount, uOxideScale;
@@ -238,7 +243,13 @@ JointOut jointLayer( vec2 p, float scale, float width, float aa, float seed ) {
 
 struct Surface { vec3 albedo; vec3 normalW; float roughness; float ao; };
 
-Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
+Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
+  float road = aux2.x * ( 1.0 - uIsRock ) * uRoadOn;
+  float riverBed = aux2.y * ( 1.0 - uIsRock ) * uBedOn;
+  float lakeBed = aux2.z * ( 1.0 - uIsRock ) * uBedOn;
+  float localWater = mix( -1.0e6, aux2.w, 1.0 - uIsRock );
+  float waterLine = max( uSeaLevel, localWater );
+  float bedCover = clamp( max( road, max( riverBed, lakeBed ) ), 0.0, 1.0 );
   float deposit = aux.x * ( 1.0 - uIsRock );
   float flow = aux.y * ( 1.0 - uIsRock );
   float hardness = aux.z;
@@ -256,10 +267,10 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
   float gravelMix = smoothstep( 0.1, 0.6, deposit ) * uGravelAmount;
   float vegThreshold = mix( 0.25, 0.6, uVegPatchiness );
   float veg = uVegetation * flatness * smoothstep( vegThreshold - 0.15, vegThreshold + 0.15, vegNoise + uVegetation * 0.35 - 0.15 ) * ( 1.0 - gravelMix * 0.8 ) * ( 1.0 - uIsRock * 0.9 ) * belowSnow * aboveWater;
-  veg = clamp( veg, 0.0, 1.0 );
+  veg = clamp( veg, 0.0, 1.0 ) * ( 1.0 - smoothstep( 0.15, 0.6, bedCover ) );
   float snowNoise = cgNoise3( wp * 0.02 ).x * 70.0 * uSnowSoftness;
   float snowAlt = smoothstep( uSnowLine - 45.0 * uSnowSoftness + snowNoise, uSnowLine + 45.0 * uSnowSoftness + snowNoise, wp.y );
-  float rockMask = ( 1.0 - veg ) * ( 1.0 - gravelMix ) * ( 1.0 - snowAlt * smoothstep( uSnowSlopeCos - 0.2, uSnowSlopeCos + 0.1, n.y ) );
+  float rockMask = ( 1.0 - veg ) * ( 1.0 - gravelMix ) * ( 1.0 - snowAlt * smoothstep( uSnowSlopeCos - 0.2, uSnowSlopeCos + 0.1, n.y ) ) * ( 1.0 - smoothstep( 0.2, 0.7, bedCover ) );
 
   // Triplanar weights
   vec3 w = pow( abs( n ), vec3( 5.0 ) );
@@ -410,6 +421,18 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
   vec3 gravel = uGravel * ( 0.7 + 0.6 * gravelSpeckle );
   rock = mix( rock, gravel, gravelMix );
 
+  // drawn features: river beds (cobbles → silt towards the banks), lake beds (silt), roads
+  float cobble = cgNoise3( wp * 2.6 ).x * 0.5 + cgNoise3( wp * 9.0 + 3.0 ).x * 0.5;
+  vec3 bedCol = mix( uSilt, uGravel * ( 0.65 + 0.7 * cobble ), smoothstep( 0.45, 0.95, riverBed ) );
+  bedCol = mix( bedCol, uSilt * ( 0.9 + 0.2 * speckle ), lakeBed * ( 1.0 - riverBed ) );
+  float bedMix = smoothstep( 0.05, 0.5, max( riverBed, lakeBed ) );
+  rock = mix( rock, bedCol, bedMix );
+  float roadSurf = smoothstep( 0.5, 0.75, road );
+  float shoulder = smoothstep( 0.1, 0.4, road ) * ( 1.0 - roadSurf );
+  vec3 roadCol = uRoad * ( 0.9 + 0.2 * cgNoise3( wp * 1.7 ).x ) * ( 0.94 + 0.12 * cgNoise3( wp * 14.0 ).x );
+  rock = mix( rock, mix( uGravel, uDry, 0.4 ) * ( 0.85 + 0.3 * speckle ), shoulder );
+  rock = mix( rock, roadCol, roadSurf );
+
   // vegetation: grass with dry patches and bare soil
   float dry = smoothstep( 0.45, 0.7, cgNoise3( wp / uVegScale * 2.5 + 23.0 ).x ) * uDryness;
   vec3 grass = mix( uGrassA, uGrassB, cgNoise3( wp * 0.12 ).x * 0.7 + 0.15 );
@@ -429,10 +452,14 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
   snow = clamp( snow * ( 1.0 + deposit * 0.6 + max( 0.0, -cavity ) * 0.4 ), 0.0, 1.0 );
   color = mix( color, uSnow, snow );
 
-  // wet sand below water
-  color *= mix( 0.55, 1.0, smoothstep( uSeaLevel - 1.5, uSeaLevel + 2.5, wp.y ) );
+  // wet band at the shoreline and darker, cooler ground under water
+  float shore = 1.0 - smoothstep( waterLine - 0.3, waterLine + 1.2 * uShoreWet + 0.3, wp.y );
+  color *= mix( 1.0, 0.62, shore * uShoreWet );
+  float under = 1.0 - smoothstep( waterLine - 2.5, waterLine, wp.y );
+  color = mix( color, color * vec3( 0.55, 0.62, 0.62 ), under );
 
-  float roughness = uBaseRoughness - wet * 0.4 - fresh * 0.05;
+  float roughness = uBaseRoughness - wet * 0.4 - fresh * 0.05 - shore * 0.35 * uShoreWet;
+  roughness = mix( roughness, 0.95, roadSurf );
   roughness = mix( roughness, mix( 0.75, 0.3, flakeFinish ), flakeCover * uFlakeSheen );
   roughness = mix( roughness, 0.95, veg );
   roughness = mix( roughness, uSnowRoughness, snow );
@@ -456,7 +483,8 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
     else if ( uDebugView < 4.5 ) dbg = vec3( 0.15 ) + vec3( 0.0, 0.7, 0.9 ) * clamp( fresh, 0.0, 1.0 ) + vec3( 0.9, 0.2, 0.1 ) * clamp( crack, 0.0, 1.0 ) + vec3( 0.0, 0.0, 0.5 ) * clamp( occl, 0.0, 1.0 );
     else if ( uDebugView < 5.5 ) dbg = vec3( 0.75 ) * ( 1.0 - joint ) + vec3( 0.9, 0.3, 0.0 ) * joint;
     else if ( uDebugView < 6.5 ) dbg = vec3( 0.12 ) + vec3( 0.1, 0.7, 0.1 ) * veg + vec3( 0.05, 0.3, 0.15 ) * moss + vec3( 0.9 ) * snow + vec3( 0.5, 0.4, 0.3 ) * gravelMix;
-    else dbg = vec3( rockMask, wet, hardness );
+    else if ( uDebugView < 7.5 ) dbg = vec3( rockMask, wet, hardness );
+    else dbg = vec3( road, riverBed, lakeBed ) + vec3( 0.0, 0.0, 0.4 ) * under;
     s.albedo = dbg;
     s.normalW = n;
     s.roughness = 1.0;
@@ -469,7 +497,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux ) {
 const fragmentBody = /* glsl */`
 {
   vec3 geomN = inverseTransformDirection( normal, viewMatrix );
-  Surface s = evaluateCliffSurface( vWorldPos, geomN, vAux );
+  Surface s = evaluateCliffSurface( vWorldPos, geomN, vAux, vAux2 );
   diffuseColor.rgb = s.albedo;
   #ifdef USE_COLOR
     diffuseColor.rgb *= vColor.rgb;
@@ -480,7 +508,7 @@ const fragmentBody = /* glsl */`
 }
 `;
 
-const colorKeys = { uRockA: 'rockA', uRockB: 'rockB', uRockC: 'rockC', uFresh: 'fresh', uOxide: 'oxide', uGrassA: 'grassA', uGrassB: 'grassB', uDry: 'dryColor', uMoss: 'mossColor', uSnow: 'snowColor', uGravel: 'gravelColor' };
+const colorKeys = { uRoad: 'roadColor', uSilt: 'siltColor', uRockA: 'rockA', uRockB: 'rockB', uRockC: 'rockC', uFresh: 'fresh', uOxide: 'oxide', uGrassA: 'grassA', uGrassB: 'grassB', uDry: 'dryColor', uMoss: 'mossColor', uSnow: 'snowColor', uGravel: 'gravelColor' };
 
 // uniform → [value key, enable key (optional), scale]
 const scalarKeys = {
@@ -495,7 +523,7 @@ const scalarKeys = {
   uVegetation: ['vegetation', 'vegOn'], uVegScale: ['vegScale'], uVegPatchiness: ['vegPatchiness'], uDryness: ['dryness'],
   uMossiness: ['mossiness', 'mossOn'], uMossScale: ['mossScale'],
   uSnowSoftness: ['snowSoftness'], uSnowRoughness: ['snowRoughness'],
-  uBumpScale: ['bumpScale'], uBaseRoughness: ['baseRoughness'], uDebugView: ['debugView'],
+  uBumpScale: ['bumpScale'], uBaseRoughness: ['baseRoughness'], uDebugView: ['debugView'], uShoreWet: ['shoreWet'], uRoadOn: ['roadShading'], uBedOn: ['bedShading'],
 };
 
 export function makeSurfaceUniforms() {

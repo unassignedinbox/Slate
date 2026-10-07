@@ -6,7 +6,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { buildTerrainGeometry, buildSkirtGeometry, refineField } from './terrain-geometry.js';
+import { buildTerrainGeometry, buildSkirtGeometry, refineField, buildWaterGeometry, makeSampler } from './terrain-geometry.js';
+import { sampleSpline } from './features.js';
 import { buildRockLibrary } from './rock-geometry.js';
 import { placeRocks, buildRockMeshes } from './rock-placement.js';
 import { makeSurfaceUniforms, updateSurfaceUniforms, makeSurfaceMaterial } from './surface-shader.js';
@@ -66,6 +67,13 @@ export class CliffScene {
     this.water.rotation.x = -Math.PI / 2;
     this.water.receiveShadow = true;
     this.scene.add(this.water);
+    // rivers & lakes share the sea material; feature guide lines live in their own group
+    this.waterBodies = new THREE.Mesh(new THREE.BufferGeometry(), this.water.material);
+    this.waterBodies.receiveShadow = true;
+    this.waterBodies.visible = false;
+    this.scene.add(this.waterBodies);
+    this.featureGroup = new THREE.Group();
+    this.scene.add(this.featureGroup);
 
     this.field = null;
     this.rockLibrary = null;
@@ -135,6 +143,106 @@ export class CliffScene {
     const extent = this.field ? this.field.worldSize : 2048;
     this.water.scale.set(extent * 4, extent * 4, 1);
     this.water.position.y = v.seaLevel;
+    this.water.material.color.setStyle(v.waterColor || '#15303c');
+    this.water.material.opacity = v.waterOpacity == null ? 0.9 : v.waterOpacity;
+  }
+
+  // River / lake water surfaces from the refined field's water-level map.
+  buildWaterBodies() {
+    if (this.waterBodies.geometry) this.waterBodies.geometry.dispose();
+    const geometry = this.meshField ? buildWaterGeometry(this.meshField) : null;
+    this.waterBodies.geometry = geometry || new THREE.BufferGeometry();
+    this.waterBodies.visible = !!geometry;
+  }
+
+  // ---- drawn features ----------------------------------------------------------------------------
+  // Ray → heightfield intersection by marching (no BVH needed for a 4 M-triangle mesh).
+  pickTerrain(ndcX, ndcY, v) {
+    const field = this.meshField || this.field;
+    if (!field) return null;
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.camera);
+    const o = ray.ray.origin, d = ray.ray.direction;
+    const sampler = makeSampler(field);
+    const half = field.worldSize * 0.5;
+    const cell = field.worldSize / (field.resolution - 1);
+    const inside = (p) => Math.abs(p.x) <= half && Math.abs(p.z) <= half;
+    // march from the camera (or from the tile's top plane) in steps of one cell
+    let t = 0;
+    const top = field.stats.max + 50;
+    if (o.y > top && d.y < 0) t = (top - o.y) / d.y;
+    const p = new THREE.Vector3();
+    const maxT = field.worldSize * 6;
+    let prevT = t, prevAbove = true;
+    for (; t < maxT; t += cell * 0.75) {
+      p.copy(o).addScaledVector(d, t);
+      if (p.y < field.stats.min - 5 && d.y <= 0) return null;
+      if (!inside(p)) { prevT = t; prevAbove = true; continue; }
+      const above = p.y > sampler.height(p.x, p.z);
+      if (!above) {
+        if (!prevAbove) return null;
+        // refine by bisection
+        let a = prevT, b = t;
+        for (let it = 0; it < 18; it++) {
+          const m = (a + b) * 0.5;
+          p.copy(o).addScaledVector(d, m);
+          if (p.y > sampler.height(p.x, p.z)) a = m; else b = m;
+        }
+        p.copy(o).addScaledVector(d, (a + b) * 0.5);
+        return { x: p.x, y: sampler.height(p.x, p.z), z: p.z };
+      }
+      prevT = t; prevAbove = above;
+    }
+    return null;
+  }
+
+  // Guide lines for roads / rivers / lakes plus the line being drawn.
+  setFeatureOverlay(v, draft = null) {
+    this.disposeGroup(this.featureGroup);
+    const field = this.meshField || this.field;
+    if (!field) return;
+    this.featureGroup.visible = !!v.showFeatureLines || !!draft;
+    const sampler = makeSampler(field);
+    const lift = Math.max(1.5, field.worldSize / 1500);
+    const addLine = (points, color, dashed = false, width = 1) => {
+      if (points.length < 2) return;
+      const samples = sampleSpline(points, Math.max(1, field.worldSize / 800));
+      const arr = new Float32Array(samples.length * 3);
+      samples.forEach(([x, z], i) => { arr[i * 3] = x; arr[i * 3 + 1] = sampler.height(x, z) + lift; arr[i * 3 + 2] = z; });
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      const mat = dashed ? new THREE.LineDashedMaterial({ color, dashSize: lift * 3, gapSize: lift * 2, depthTest: false, transparent: true, opacity: 0.9 })
+        : new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.85, linewidth: width });
+      const line = new THREE.Line(g, mat);
+      if (dashed) line.computeLineDistances();
+      line.renderOrder = 10;
+      this.featureGroup.add(line);
+    };
+    const addMarker = (x, z, color, r) => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 }));
+      m.position.set(x, sampler.height(x, z) + lift, z);
+      m.renderOrder = 11;
+      this.featureGroup.add(m);
+    };
+    const addRing = (x, z, y, color, r) => {
+      const seg = 48, arr = new Float32Array((seg + 1) * 3);
+      for (let i = 0; i <= seg; i++) { const a = (i / seg) * Math.PI * 2; arr[i * 3] = x + Math.cos(a) * r; arr[i * 3 + 1] = y + lift; arr[i * 3 + 2] = z + Math.sin(a) * r; }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      const line = new THREE.Line(g, new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 }));
+      line.renderOrder = 10;
+      this.featureGroup.add(line);
+    };
+    const f = v.features || {};
+    if (v.showFeatureLines) {
+      for (const road of f.roads || []) addLine(road.points, 0xf2e6c8);
+      for (const river of f.rivers || []) addLine(river.points, 0x6fc3ff);
+      for (const lake of f.lakes || []) { addRing(lake.x, lake.z, lake.level, 0x6fc3ff, Math.max(6, field.worldSize / 120)); addMarker(lake.x, lake.z, 0x6fc3ff, lift * 0.8); }
+    }
+    if (draft && draft.points && draft.points.length) {
+      const color = draft.type === 'river' ? 0x6fc3ff : 0xffd37a;
+      addLine(draft.points, color, true);
+      for (const [x, z] of draft.points) addMarker(x, z, color, lift * 0.9);
+    }
   }
 
   // ---- terrain ----------------------------------------------------------------------------------
@@ -171,6 +279,8 @@ export class CliffScene {
     this.terrainGroup.add(terrain, skirtMesh);
     this.terrain = terrain;
     this.stats.triangles = geometry.index.count / 3;
+    this.buildWaterBodies();
+    this.setFeatureOverlay(v);
   }
 
   frameCamera(v) {
@@ -219,6 +329,7 @@ export class CliffScene {
       group.remove(child);
       if (child.geometry && !child.isInstancedMesh) child.geometry.dispose();
       if (child.isInstancedMesh) child.dispose();
+      if (child.material && child.material !== this.terrainMaterial && child.material !== this.rockMaterial && child.material !== this.water.material) child.material.dispose();
     }
   }
 
@@ -247,7 +358,7 @@ export class CliffScene {
 
   exportHeightmap() {
     if (!this.field) return;
-    const { resolution: N, height, stats } = this.field;
+    const { resolution: N, height, stats } = this.meshField || this.field;
     const canvas = document.createElement('canvas');
     canvas.width = N; canvas.height = N;
     const ctx = canvas.getContext('2d');
@@ -315,7 +426,7 @@ export class CliffScene {
   // Material masks in the heightmap frame: R exposed rock, G scree/gravel, B wetness/flow, A hardness.
   exportMasks() {
     if (!this.field) return;
-    const { resolution: N, slope, deposit, flow, hardness } = this.field;
+    const { resolution: N, slope, deposit, flow, hardness } = this.meshField || this.field;
     const canvas = document.createElement('canvas');
     canvas.width = N; canvas.height = N;
     const ctx = canvas.getContext('2d');
@@ -334,7 +445,7 @@ export class CliffScene {
 
   exportNormalMap() {
     if (!this.field) return;
-    const { resolution: N, height, worldSize } = this.field;
+    const { resolution: N, height, worldSize } = this.meshField || this.field;
     const cell = worldSize / (N - 1);
     const canvas = document.createElement('canvas');
     canvas.width = N; canvas.height = N;

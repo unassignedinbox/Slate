@@ -4,7 +4,7 @@ import { Editor } from './ui.js';
 import { CliffScene } from './scene.js';
 
 const STORAGE_KEY = 'frontier-cliff-generator';
-const SCHEMA = 3; // bump when parameter semantics change so stale saved values do not override new defaults
+const SCHEMA = 4; // bump when parameter semantics change so stale saved values do not override new defaults
 
 function readStored() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
@@ -13,6 +13,7 @@ function readStored() {
 const stored = readStored();
 const storedValues = stored.schema === SCHEMA ? stored.values || {} : {};
 const values = { ...defaults, ...presets['Alpine granite'], ...storedValues };
+values.features = { roads: [], rivers: [], lakes: [], ...(storedValues.features || {}) };
 
 function applyPalette(name) {
   const p = palettes[name];
@@ -33,6 +34,7 @@ const editor = new Editor(document.getElementById('root'), {
     values[key] = val;
     if (key === 'palette') applyPalette(val);
     persist();
+    if (key === 'showFeatureLines') { scene && scene.setFeatureOverlay(values, draft.type && draft.type !== 'lake' ? draft : null); return; }
     const stage = stageOf(key);
     if (stage === 'terrain') editor.setPending(true);
     else if (stage === 'rocks') scheduleRocks();
@@ -42,7 +44,9 @@ const editor = new Editor(document.getElementById('root'), {
     if (key === 'seaLevel' || key === 'waterEnabled') scheduleRocks();
   },
   onPreset(name) {
+    const features = values.features;
     Object.assign(values, defaults, presets[name]);
+    values.features = features;
     applyPalette(values.palette);
     persist();
     applyLive();
@@ -58,8 +62,27 @@ const editor = new Editor(document.getElementById('root'), {
     else if (group.stage === 'mesh') scheduleMesh();
     else applyLive();
   },
-  onAction(action) {
+  onAction(action, data) {
     if (!scene) return;
+    if (action === 'tool') return setTool(data);
+    if (action === 'tool-finish') return finishDraft();
+    if (action === 'tool-undo') { draft.points.pop(); return refreshDraft(); }
+    if (action === 'tool-cancel') return setTool(null);
+    if (action === 'feature-delete') {
+      const [kind, id] = data.split(':');
+      values.features[kind] = values.features[kind].filter((f) => String(f.id) !== id);
+      return featuresChanged(kind);
+    }
+    if (action === 'feature-clear') {
+      const hadRivers = values.features.rivers.length > 0;
+      values.features = { roads: [], rivers: [], lakes: [] };
+      return featuresChanged(hadRivers ? 'rivers' : 'roads');
+    }
+    if (action === 'lake-level') {
+      const lake = values.features.lakes.find((l) => String(l.id) === String(data.id));
+      if (lake) { lake.level = data.level; featuresChanged('lakes'); }
+      return;
+    }
     if (action === 'frame') scene.frameCamera(values);
     if (action === 'screenshot') scene.screenshot();
     if (action === 'export-obj') scene.exportOBJ(true);
@@ -155,6 +178,85 @@ function generate() {
   ensureWorker().postMessage({ id: generation, params });
 }
 
+// ---- drawing roads / rivers / lakes ------------------------------------------------------------
+const draft = { type: null, points: [] };
+let nextFeatureId = Date.now() % 1000000;
+
+function setTool(tool) {
+  draft.type = tool;
+  draft.points = [];
+  editor.setTool(tool, 0);
+  if (scene) scene.setFeatureOverlay(values, null);
+  if (tool) editor.select('features');
+}
+
+function refreshDraft() {
+  editor.setTool(draft.type, draft.points.length);
+  if (scene) scene.setFeatureOverlay(values, draft.type && draft.type !== 'lake' ? draft : null);
+}
+
+function featuresChanged(kind) {
+  persist();
+  editor.setTool(draft.type, draft.points.length);
+  if (kind === 'rivers') { editor.setPending(true); generate(); }
+  else scheduleMesh();
+  if (editor.selected === 'features') editor.renderInspector();
+}
+
+function finishDraft() {
+  if (!draft.type || draft.type === 'lake') return setTool(null);
+  if (draft.points.length >= 2) {
+    const feature = { id: nextFeatureId++, points: draft.points.map((p) => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]) };
+    const kind = draft.type === 'road' ? 'roads' : 'rivers';
+    values.features[kind].push(feature);
+    const type = draft.type;
+    draft.points = [];
+    featuresChanged(kind);
+    // stay in the tool so several roads / rivers can be drawn in a row
+    draft.type = type;
+    refreshDraft();
+  } else {
+    setTool(null);
+  }
+}
+
+function canvasClick(event) {
+  if (!draft.type || !scene || !lastField) return;
+  const rect = editor.canvas.getBoundingClientRect();
+  const nx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  const ny = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+  const hit = scene.pickTerrain(nx, ny, values);
+  if (!hit) return;
+  if (draft.type === 'lake') {
+    values.features.lakes.push({ id: nextFeatureId++, x: Math.round(hit.x * 10) / 10, z: Math.round(hit.z * 10) / 10, level: Math.round((hit.y + values.lakeLevelOffset) * 10) / 10 });
+    featuresChanged('lakes');
+    return;
+  }
+  draft.points.push([hit.x, hit.z]);
+  refreshDraft();
+}
+
+function bindDrawing() {
+  const canvas = editor.canvas;
+  let down = null;
+  canvas.addEventListener('pointerdown', (e) => { if (e.button === 0) down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+  canvas.addEventListener('pointerup', (e) => {
+    if (!down || e.button !== 0) return;
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    const quick = performance.now() - down.t < 600;
+    down = null;
+    if (moved < 5 && quick) canvasClick(e);
+  });
+  canvas.addEventListener('dblclick', (e) => { if (draft.type) { e.preventDefault(); finishDraft(); } });
+  window.addEventListener('keydown', (e) => {
+    if (!draft.type) return;
+    const typing = /INPUT|TEXTAREA/.test(document.activeElement && document.activeElement.tagName);
+    if (e.key === 'Escape') { e.preventDefault(); setTool(null); }
+    else if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); finishDraft(); }
+    else if (e.key === 'Backspace' && !typing) { e.preventDefault(); draft.points.pop(); refreshDraft(); }
+  });
+}
+
 function boot() {
   try {
     scene = new CliffScene(editor.canvas);
@@ -163,6 +265,7 @@ function boot() {
     return;
   }
   applyLive();
+  bindDrawing();
   generate();
 }
 

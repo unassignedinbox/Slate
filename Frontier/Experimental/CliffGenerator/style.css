@@ -179,3 +179,25 @@ h1{font-size:30px}
 
 @media(max-width:1280px){.shell{grid-template-columns:232px minmax(0,1fr) 360px}.inspector-content{padding:22px 18px}.inspector-top{padding:0 18px}}
 @media(max-width:980px){.shell{grid-template-columns:minmax(0,1fr);grid-template-rows:60vh auto;height:auto}html,body{overflow:auto}.outliner{display:none}.inspector{height:auto}.viewport{border-right:0;border-bottom:1px solid #262626}}
+
+/* ---- drawing tools -------------------------------------------------------------------------- */
+.draw-bar{position:absolute;left:18px;top:14px;display:flex;align-items:center;gap:4px;padding:5px;background:#141414cc;border:1px solid #2e2e2e;border-radius:12px;backdrop-filter:blur(8px);z-index:3}
+.draw-bar button{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;background:transparent;color:#bdbdbd;font-size:11px;letter-spacing:.02em;transition:background .15s,color .15s}
+.draw-bar button:hover{background:#262626;color:#fff}
+.draw-bar button.on{background:#e6e6e6;color:#111}
+.draw-bar .draw-sep{width:1px;height:18px;background:#333;margin:0 4px}
+.draw-bar [data-tool-action]{display:none}
+.draw-bar.active [data-tool-action]{display:inline-flex}
+.draw-bar .draw-hint{display:none;font-size:11px;color:#8d8d8d;padding:0 10px 0 6px;white-space:nowrap}
+.draw-bar.active .draw-hint{display:inline}
+.draw-bar:not(.active) .draw-sep{display:none}
+#viewport-canvas.drawing{cursor:crosshair}
+.feature-list{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.feature-row{display:grid;grid-template-columns:10px 1fr auto;align-items:center;gap:10px;padding:7px 10px;background:#1b1b1b;border:1px solid #2a2a2a;border-radius:9px;font-size:12px}
+.feature-row.lake{grid-template-columns:10px auto 1fr auto auto}
+.feature-row small{display:block;font-size:10px;color:#8a8a8a;margin-top:2px}
+.feature-row code{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#b4b4b4}
+.feature-row input[type=range]{width:100%;min-width:60px;margin:0}
+.feature-row button{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:#9a9a9a}
+.feature-row button:hover{background:#2c2c2c;color:#fff}
+.feature-swatch{width:10px;height:10px;border-radius:3px}

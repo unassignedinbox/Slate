@@ -25,12 +25,19 @@ export function icon(name, size = 16, strokeWidth = 1.5) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 }
 
+const extra = {
+  route: '<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+};
+Object.assign(paths, extra);
+
 export const groupIcons = {
-  landform: 'mountain', strata: 'strata', relief: 'layers', erosion: 'droplets', rocks: 'box', material: 'palette', flakes: 'sparkles', exfoliation: 'layers', cover: 'droplets', sun: 'sun', viewport: 'monitor',
+  landform: 'mountain', strata: 'strata', relief: 'layers', erosion: 'droplets', features: 'route', water: 'waves', rocks: 'box', material: 'palette', flakes: 'sparkles', exfoliation: 'layers', cover: 'droplets', sun: 'sun', viewport: 'monitor',
 };
 export const cardIcons = {
   'Preset': 'sparkles', 'Elevation': 'mountain', 'Relief': 'wind', 'Mesa & canyon': 'strata', 'Grid': 'grid',
   'Bedding': 'strata', 'Face displacement': 'layers', 'Geological dip': 'sliders', 'Hydraulic erosion': 'droplets', 'Thermal weathering': 'mountain',
-  'Scatter': 'box', 'Mesh detail': 'grid', 'Rock shape': 'gem', 'Rock type': 'palette', 'Colours': 'palette', 'Strata': 'strata', 'Grain': 'grid', 'Oxide & cavity': 'droplets', 'Material response': 'sliders',
+  'Scatter': 'box', 'Draw': 'route', 'Features': 'layers', 'Rivers': 'waves', 'Roads': 'route', 'Lakes': 'droplets', 'Water in channels': 'waves', 'Sea level': 'waves', 'Appearance': 'palette', 'Mesh detail': 'grid', 'Rock shape': 'gem', 'Rock type': 'palette', 'Colours': 'palette', 'Strata': 'strata', 'Grain': 'grid', 'Oxide & cavity': 'droplets', 'Material response': 'sliders',
   'Flakes': 'gem', 'Plate look': 'sparkles', 'Peeling sheets': 'layers', 'Joint cells (Voronoi)': 'grid', 'Isolate layer': 'layers', 'Runoff': 'droplets', 'Gravel': 'box', 'Vegetation': 'sparkles', 'Moss': 'sparkles', 'Snow': 'wind', 'Sun direction': 'sun', 'Atmosphere': 'wind', 'Water': 'waves', 'Display': 'monitor', 'Export': 'download',
 };

@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 
 import { SimplexNoise, GradientNoise3 } from './noise.js';
+import { applyRoads, applyLakes, upsampleWaterLevel, NO_WATER } from './features.js';
 
 // Face displacement: moves vertices horizontally along the outward face normal so that hard beds
 // stand proud of the face and soft beds are recessed. Because this is applied to the mesh (not the
@@ -72,13 +73,27 @@ function upsampleMap(src, N, k, smoothOnly) {
   }
   return out;
 }
+function featureKey(v) {
+  const f = v.features || {};
+  return JSON.stringify([f.roads || [], f.lakes || [], v.roadWidth, v.roadShoulder, v.roadSmoothing, v.roadCut, v.roadFill, v.lakeDepth, v.lakeWater, v.riverWater]);
+}
+
+// Refine the simulated field for the mesh: bicubic upsample (k×), then the post-erosion features
+// (roads, lakes) and the merged water level. Cached on the field by (k, feature key).
 export function refineField(field, v) {
   const k = meshSubdivision(field, v);
-  if (k <= 1) return field;
-  if (field._refined && field._refined.k === k) return field._refined.field;
+  const key = `${k}|${featureKey(v)}`;
+  if (field._refined && field._refined.key === key) return field._refined.field;
   const N = field.resolution;
-  const fine = {
-    resolution: (N - 1) * k + 1,
+  const M = (N - 1) * k + 1;
+  const empty = () => new Float32Array(N * N);
+  const fine = k <= 1 ? {
+    resolution: N, worldSize: field.worldSize,
+    height: field.height.slice(), hardness: field.hardness, deposit: field.deposit, flow: field.flow, cavity: field.cavity, slope: field.slope,
+    river: field.river || empty(), waterLevel: (field.waterLevel || empty().fill(NO_WATER)).slice(),
+    stats: field.stats, base: field,
+  } : {
+    resolution: M,
     worldSize: field.worldSize,
     height: upsampleMap(field.height, N, k, false),
     hardness: upsampleMap(field.hardness, N, k, true),
@@ -86,10 +101,20 @@ export function refineField(field, v) {
     flow: upsampleMap(field.flow, N, k, true),
     cavity: upsampleMap(field.cavity, N, k, true),
     slope: upsampleMap(field.slope, N, k, true),
+    river: upsampleMap(field.river || empty(), N, k, true),
+    waterLevel: upsampleWaterLevel(field.waterLevel || empty().fill(NO_WATER), N, k),
     stats: field.stats,
     base: field,
   };
-  field._refined = { k, field: fine };
+  if (!v.riverWater) fine.waterLevel.fill(NO_WATER);
+  const features = v.features || {};
+  const { roadMask } = applyRoads(fine.height, fine.resolution, fine.worldSize, features.roads, {
+    width: v.roadWidth, shoulder: v.roadShoulder, smoothing: v.roadSmoothing, cutAngle: v.roadCut, fillAngle: v.roadFill,
+  });
+  const { lakeMask } = applyLakes(fine.height, fine.resolution, fine.worldSize, features.lakes, { depth: v.lakeDepth, water: !!v.lakeWater }, fine.waterLevel);
+  fine.road = roadMask;
+  fine.lake = lakeMask;
+  field._refined = { key, field: fine };
   return fine;
 }
 
@@ -119,11 +144,13 @@ export function makeDetail(field, v) {
 
 export function buildTerrainGeometry(field, v = {}) {
   const { resolution: N, worldSize: size, height, deposit, flow, hardness, cavity } = field;
+  const road = field.road, river = field.river, lake = field.lake, waterLevel = field.waterLevel;
   const cell = size / (N - 1);
   const count = N * N;
   const positions = new Float32Array(count * 3);
   const normals = new Float32Array(count * 3);
   const aux = new Float32Array(count * 4);
+  const aux2 = new Float32Array(count * 4);
   const disp = makeDisplacement(field, v);
   const detail = makeDetail(field, v);
   const fadeCells = 3;
@@ -156,6 +183,15 @@ export function buildTerrainGeometry(field, v = {}) {
       aux[idx * 4 + 1] = flow[idx];
       aux[idx * 4 + 2] = hardness[idx];
       aux[idx * 4 + 3] = cavity[idx];
+      const rd = road ? road[idx] : 0;
+      aux2[idx * 4] = rd;
+      aux2[idx * 4 + 1] = river ? river[idx] : 0;
+      aux2[idx * 4 + 2] = lake ? lake[idx] : 0;
+      aux2[idx * 4 + 3] = waterLevel ? waterLevel[idx] : NO_WATER;
+      if (rd > 0.5) {
+        // roads are flat: strip the normal-space detail off the carriageway
+        positions[idx * 3] = x + ox; positions[idx * 3 + 1] = height[idx] + sag; positions[idx * 3 + 2] = z + oz;
+      }
     }
   }
 
@@ -179,6 +215,7 @@ export function buildTerrainGeometry(field, v = {}) {
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute('aux', new THREE.BufferAttribute(aux, 4));
+  geometry.setAttribute('aux2', new THREE.BufferAttribute(aux2, 4));
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   if ((v.overhang || 0) + (v.buttress || 0) + (v.detailRelief || 0) > 0) {
     // displaced faces need true mesh normals; blend with the heightfield normal to keep them smooth
@@ -205,7 +242,7 @@ export function buildSkirtGeometry(field, floorY) {
     { count: N, at: (t) => [0, N - 1 - t], normal: [-1, 0, 0] },    // west   (i = 0)
     { count: N, at: (t) => [N - 1, t], normal: [1, 0, 0] },         // east   (i = N-1)
   ];
-  const positions = [], normals = [], aux = [], indices = [];
+  const positions = [], normals = [], aux = [], aux2 = [], indices = [];
   let base = 0;
   for (const edge of edges) {
     for (let t = 0; t < edge.count; t++) {
@@ -216,6 +253,7 @@ export function buildSkirtGeometry(field, floorY) {
       positions.push(x, height[idx], z, x, floorY, z);
       normals.push(...edge.normal, ...edge.normal);
       aux.push(0, 0, hardness[idx], 0, 0, 0, hardness[idx], 0);
+      aux2.push(0, 0, 0, NO_WATER, 0, 0, 0, NO_WATER);
     }
     for (let t = 0; t < edge.count - 1; t++) {
       const a = base + t * 2, b = a + 1, c = a + 2, d = a + 3;
@@ -227,6 +265,7 @@ export function buildSkirtGeometry(field, floorY) {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   geometry.setAttribute('aux', new THREE.Float32BufferAttribute(aux, 4));
+  geometry.setAttribute('aux2', new THREE.Float32BufferAttribute(aux2, 4));
   geometry.setIndex(indices);
   geometry.computeBoundingSphere();
   return geometry;
@@ -283,4 +322,42 @@ export function makeSampler(field) {
       return [x + ox, z + oz];
     },
   };
+}
+
+// Water surface for rivers and lakes: grid cells whose water level stands above the ground.
+export function buildWaterGeometry(field) {
+  const { resolution: N, worldSize: size, height, waterLevel } = field;
+  if (!waterLevel) return null;
+  const index = new Int32Array(N * N).fill(-1);
+  const positions = [];
+  const indices = [];
+  const level = (idx) => waterLevel[idx];
+  const wet = (idx) => waterLevel[idx] > NO_WATER * 0.5 && waterLevel[idx] > height[idx] - 0.5;
+  const vertex = (i, j, idx, lvl) => {
+    if (index[idx] >= 0) return index[idx];
+    const x = (i / (N - 1) - 0.5) * size, z = (j / (N - 1) - 0.5) * size;
+    positions.push(x, lvl, z);
+    index[idx] = positions.length / 3 - 1;
+    return index[idx];
+  };
+  for (let j = 0; j < N - 1; j++) {
+    for (let i = 0; i < N - 1; i++) {
+      const a = j * N + i, b = a + 1, c = a + N, d = c + 1;
+      const anyWet = wet(a) || wet(b) || wet(c) || wet(d);
+      if (!anyWet) continue;
+      const lvl = Math.max(level(a), level(b), level(c), level(d));
+      if (lvl <= NO_WATER * 0.5) continue;
+      // every corner must be under (or at) the water to avoid a sheet poking through ridges
+      if (height[a] > lvl + 1.5 && height[b] > lvl + 1.5 && height[c] > lvl + 1.5 && height[d] > lvl + 1.5) continue;
+      const va = vertex(i, j, a, lvl), vb = vertex(i + 1, j, b, lvl), vc = vertex(i, j + 1, c, lvl), vd = vertex(i + 1, j + 1, d, lvl);
+      indices.push(va, vc, vb, vb, vc, vd);
+    }
+  }
+  if (!indices.length) return null;
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
 }

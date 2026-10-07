@@ -49,13 +49,27 @@ export function hydraulicErosion(height, hardness, params, progress = () => {}) 
 
   const rand = mulberry32(params.seed * 31 + 9);
   const reportEvery = Math.max(1, Math.floor(droplets / 40));
+  // River sources: a share of the droplets start on the drawn river lines carrying more water,
+  // so the rivers cut their own beds and the slopes drain towards them.
+  const sources = params.sources || [];
+  const sourceCount = sources.length / 2;
+  const sourceFraction = sourceCount > 0 ? Math.min(0.9, params.sourceFraction || 0) : 0;
+  const sourceWater = params.sourceWater || 3;
 
   for (let d = 0; d < droplets; d++) {
-    let px = rand() * (N - 1);
-    let py = rand() * (N - 1);
+    let px, py, water;
+    if (sourceFraction > 0 && rand() < sourceFraction) {
+      const k = Math.floor(rand() * sourceCount) * 2;
+      px = sources[k] + (rand() - 0.5) * 2.5;
+      py = sources[k + 1] + (rand() - 0.5) * 2.5;
+      water = sourceWater;
+    } else {
+      px = rand() * (N - 1);
+      py = rand() * (N - 1);
+      water = 1;
+    }
     let dx = 0, dy = 0;
     let speed = params.initialSpeed;
-    let water = 1;
     let sediment = 0;
 
     for (let life = 0; life < maxLifetime; life++) {

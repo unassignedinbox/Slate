@@ -5,6 +5,7 @@
 
 import { synthesizeBase, applyStrata, computeCavity, computeSlopeMap } from './heightfield.js';
 import { hydraulicErosion, thermalErosion, blurField } from './erosion.js';
+import { carveRivers, NO_WATER } from './features.js';
 
 export function generateTerrain(params, progress = () => {}) {
   const N = params.resolution;
@@ -23,6 +24,21 @@ export function generateTerrain(params, progress = () => {}) {
   thermalErosion(height, hardness, { ...erosionParams, thermalIterations: Math.ceil(params.thermalIterations * 0.3) },
     (f) => progress({ phase: 'Thermal settling', fraction: f }));
 
+  // Drawn rivers: carve the channel first so the slopes drain into it, and seed the erosion with it.
+  const rivers = (params.features && params.features.rivers) || [];
+  const riverOpts = {
+    width: params.riverWidth, depth: params.riverDepth, bankAngle: params.riverBank, maxBank: params.riverMaxBank, meander: params.riverMeander,
+    water: true, waterDepth: params.riverWaterDepth,
+  };
+  let riverResult = { riverMask: new Float32Array(N * N), waterLevel: new Float32Array(N * N).fill(NO_WATER), sources: [] };
+  if (rivers.length) {
+    progress({ phase: 'Carving rivers', fraction: 0 });
+    riverResult = carveRivers(height, N, params.worldSize, rivers, riverOpts, params.seed);
+    erosionParams.sources = riverResult.sources;
+    erosionParams.sourceFraction = 0.6 * params.riverErosion;
+    erosionParams.sourceWater = 1.5 + 4 * params.riverErosion;
+  }
+
   progress({ phase: 'Hydraulic erosion', fraction: 0 });
   const { flow, delta } = hydraulicErosion(height, hardness, erosionParams,
     (f) => progress({ phase: 'Hydraulic erosion', fraction: f }));
@@ -30,6 +46,12 @@ export function generateTerrain(params, progress = () => {}) {
   progress({ phase: 'Scree slumping', fraction: 0 });
   const slumped = thermalErosion(height, hardness, erosionParams,
     (f) => progress({ phase: 'Scree slumping', fraction: f }));
+
+  if (rivers.length) {
+    // Restore the bed to its profile after erosion/slumping and take the final mask + water level.
+    progress({ phase: 'Settling river beds', fraction: 0 });
+    riverResult = carveRivers(height, N, params.worldSize, rivers, riverOpts, params.seed);
+  }
 
   progress({ phase: 'Deriving shading maps', fraction: 0 });
 
@@ -60,6 +82,7 @@ export function generateTerrain(params, progress = () => {}) {
     resolution: N,
     worldSize: params.worldSize,
     height, hardness, deposit, flow: flowNorm, cavity, slope,
+    river: riverResult.riverMask, waterLevel: riverResult.waterLevel,
     stats: { min, max, elapsedMs: now() - t0 },
   };
 }

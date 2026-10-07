@@ -44,6 +44,8 @@ export function placeRocks(field, params, library) {
       if (Math.abs(x) > size * 0.495 || Math.abs(z) > size * 0.495) continue;
       const h = sampler.height(x, z);
       if (params.waterEnabled && h < params.seaLevel - 1) continue;
+      if (field.road && sampler.map('road', x, z) > 0.2) continue;
+      if (field.waterLevel && sampler.map('waterLevel', x, z) > h + 0.3) continue;
       const slope = sampler.map('slope', x, z);          // tan(angle)
       const inWindow = smoothstep(slopeLo * 0.7, slopeLo + 0.02, slope) * (1 - smoothstep(slopeHi, slopeHi * 1.35 + 0.05, slope));
       if (inWindow <= 0.001) continue;

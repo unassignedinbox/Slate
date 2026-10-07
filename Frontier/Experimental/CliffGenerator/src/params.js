@@ -137,6 +137,33 @@ export const defaults = {
   snowSoftness: 1,
   snowRoughness: 0.75,
   snowColor: '#eef1f7',
+  // Drawn features (roads · rivers · lakes)
+  features: { roads: [], rivers: [], lakes: [] },
+  showFeatureLines: 1,
+  roadWidth: 6,             // [m]
+  roadShoulder: 2,          // [m]
+  roadSmoothing: 60,        // [m]
+  roadCut: 60,              // [°]
+  roadFill: 34,             // [°]
+  roadColor: '#5f5b55',
+  roadShading: 1,
+  riverWidth: 14,           // [m]
+  riverDepth: 4,            // [m]
+  riverBank: 35,            // [°]
+  riverMaxBank: 30,         // [m]
+  riverMeander: 0.4,
+  riverErosion: 0.6,
+  riverWater: 1,
+  riverWaterDepth: 1.2,     // [m]
+  lakeDepth: 6,             // [m]
+  lakeLevelOffset: 6,       // [m]
+  lakeWater: 1,
+  // Water
+  waterColor: '#15303c',
+  waterOpacity: 0.9,
+  shoreWet: 0.7,
+  bedShading: 1,
+  siltColor: '#b9ad94',
   // Sun & sky
   sunAzimuth: 215,          // [°]
   sunElevation: 24,         // [°]
@@ -187,6 +214,51 @@ export const presets = {
     peelStrength: 0.55, peelScale: 2.4, flakeStrength: 0.5, jointsOn: 1, jointStrength: 0.35, sunElevation: 28, sunAzimuth: 160, turbidity: 4,
   },
 };
+
+Object.assign(presets, {
+  'Fjord': {
+    palette: 'slate', mountainHeight: 720, baseElevation: -140, baseFrequency: 1.1, ridgeSharpness: 2.6, peakPower: 1.5, warpStrength: 0.7,
+    reliefContrast: 0.95, strataBand: 40, strataStrength: 0.4, strataDip: 8, hardnessContrast: 0.5, plateauStrength: 0, canyonDepth: 0,
+    snowOn: 1, snowLine: 520, vegetation: 0.5, mossiness: 0.7, seaLevel: 0, waterEnabled: 1, talusSoft: 36, talusHard: 84, droplets: 160000,
+    rockDensity: 0.3, peelStrength: 0.35, sunElevation: 20, sunAzimuth: 300, turbidity: 3, fogDensity: 0.55,
+  },
+  'Badlands': {
+    palette: 'sandstone', mountainHeight: 180, baseElevation: 80, baseFrequency: 2.6, ridgeSharpness: 1.3, peakPower: 0.9, warpStrength: 0.5,
+    reliefFrequency: 2.2, reliefContrast: 0.5, strataBand: 9, strataStrength: 1, strataDip: 1, hardnessContrast: 0.9, plateauStrength: 0.6, plateauHeight: 220,
+    canyonDepth: 0, snowOn: 0, vegetation: 0.05, mossiness: 0.1, waterEnabled: 0, seaLevel: -100, droplets: 320000, erodeSpeed: 0.6, sedimentCapacity: 7, evaporation: 0.01,
+    talusSoft: 32, talusHard: 80, rockDensity: 0.15, oxideAmount: 0.8, peelStrength: 0.3, sunElevation: 40, sunAzimuth: 215, turbidity: 7, fogDensity: 0.25,
+  },
+  'Dolomite towers': {
+    palette: 'limestone', mountainHeight: 650, baseElevation: 120, baseFrequency: 2.0, ridgeSharpness: 3.2, peakPower: 1.9, warpStrength: 0.45,
+    reliefContrast: 1, strataBand: 34, strataStrength: 0.9, strataDip: 3, hardnessContrast: 1, plateauStrength: 0, canyonDepth: 0,
+    snowOn: 1, snowLine: 560, vegetation: 0.7, mossiness: 0.3, waterEnabled: 0, seaLevel: -100, talusSoft: 35, talusHard: 88, droplets: 150000,
+    overhang: 5, rockDensity: 0.35, jointsOn: 1, jointStrength: 0.3, jointScale: 6, sunElevation: 30, sunAzimuth: 190, turbidity: 4, fogDensity: 0.3,
+  },
+  'Desert buttes': {
+    palette: 'sandstone', mountainHeight: 240, baseElevation: 40, baseFrequency: 1.0, ridgeSharpness: 1.2, peakPower: 1.6, warpStrength: 0.3,
+    reliefFrequency: 1.8, reliefContrast: 1, plateauStrength: 1, plateauHeight: 230, canyonDepth: 0, strataBand: 14, strataStrength: 1, hardnessContrast: 1,
+    snowOn: 0, vegetation: 0.03, mossiness: 0, waterEnabled: 0, seaLevel: -100, talusSoft: 31, talusHard: 88, droplets: 120000, thermalIterations: 40,
+    rockDensity: 0.4, oxideAmount: 0.7, sunElevation: 48, sunAzimuth: 230, turbidity: 8, fogDensity: 0.2,
+  },
+  'Volcanic island': {
+    palette: 'basalt', mountainHeight: 520, baseElevation: -90, baseFrequency: 0.8, ridgeSharpness: 1.5, peakPower: 1.8, warpStrength: 0.5,
+    reliefFrequency: 0.8, reliefContrast: 1, strataBand: 22, strataStrength: 0.5, hardnessContrast: 0.6, plateauStrength: 0, canyonDepth: 0,
+    snowOn: 0, vegetation: 0.9, mossiness: 0.8, seaLevel: 0, waterEnabled: 1, droplets: 240000, erodeSpeed: 0.45, talusSoft: 33, talusHard: 80,
+    rockDensity: 0.3, jointsOn: 1, jointStrength: 0.4, jointScale: 2, fogDensity: 0.4, turbidity: 5, sunElevation: 35, sunAzimuth: 120,
+  },
+  'Highland glens': {
+    palette: 'granite', mountainHeight: 380, baseElevation: 20, baseFrequency: 1.3, ridgeSharpness: 1.6, peakPower: 1.1, warpStrength: 0.8,
+    reliefContrast: 0.7, strataBand: 30, strataStrength: 0.35, hardnessContrast: 0.5, plateauStrength: 0, canyonDepth: 0,
+    snowOn: 0, vegetation: 0.95, mossiness: 0.8, dryness: 0.6, seaLevel: -10, waterEnabled: 1, droplets: 220000, talusSoft: 34, talusHard: 78,
+    rockDensity: 0.5, peelStrength: 0.3, sunElevation: 22, sunAzimuth: 250, turbidity: 4, fogDensity: 0.5,
+  },
+  'Karst pinnacles': {
+    palette: 'limestone', mountainHeight: 300, baseElevation: 30, baseFrequency: 3.2, ridgeSharpness: 3.0, peakPower: 1.7, warpStrength: 0.4,
+    reliefFrequency: 2.4, reliefContrast: 0.9, strataBand: 20, strataStrength: 0.5, hardnessContrast: 0.8, plateauStrength: 0, canyonDepth: 0,
+    snowOn: 0, vegetation: 0.85, mossiness: 0.9, waterEnabled: 1, seaLevel: 0, droplets: 200000, talusSoft: 36, talusHard: 88,
+    overhang: 4, rockDensity: 0.25, jointsOn: 1, jointStrength: 0.45, jointScale: 3, sunElevation: 45, sunAzimuth: 170, turbidity: 6, fogDensity: 0.45,
+  },
+});
 
 export const palettes = {
   granite:   { name: 'Granite',   rockA: '#b3b1ae', rockB: '#94918f', rockC: '#c7c2ba', fresh: '#d6d3cd', oxide: '#ac947b' },
@@ -276,6 +348,42 @@ export const groups = [
         ['talusSoft', 'Repose angle · soft', 20, 45, 1, '°', 'Scree settles to this slope'],
         ['talusHard', 'Repose angle · hard', 45, 89, 1, '°', 'Caprock holds faces up to this angle'],
         ['thermalRate', 'Slump rate', 0.1, 1, 0.05, '', 'Fraction of excess moved per pass'],
+      ] },
+    ],
+  },
+  {
+    id: 'features', name: 'Roads, rivers & lakes', type: 'Drawn features', stage: 'mesh', color: '#7fb3d5',
+    cards: [
+      { title: 'Draw', kind: 'draw' },
+      { title: 'Features', kind: 'featureList' },
+      { title: 'Rivers', stage: 'terrain', controls: [
+        ['riverWidth', 'Channel width', 2, 120, 1, 'm', 'Width of the carved channel'],
+        ['riverDepth', 'Channel depth', 0.5, 40, 0.5, 'm', 'Incision below the smoothed valley profile'],
+        ['riverBank', 'Bank angle', 10, 80, 1, '°', 'Slope of the cut banks'],
+        ['riverMaxBank', 'Bank height', 2, 200, 1, 'm', 'Banks are shaped up to this height; higher ground is cut as a gorge with steep walls'],
+        ['riverMeander', 'Meander', 0, 1, 0.05, '', 'Lateral sinuosity added to the drawn line'],
+        ['riverErosion', 'Water erosion', 0, 1, 0.05, '', 'Share of erosion droplets that start in the river and how much water they carry — carves the bed and drains the slopes into it. Rivers flow from their higher end'],
+        ['riverWaterDepth', 'Water depth', 0.2, 10, 0.1, 'm', 'Depth of water standing in the channel'],
+      ] },
+      { title: 'Roads', controls: [
+        ['roadWidth', 'Road width', 2, 30, 0.5, 'm', '6 m ≈ two-lane; 3.5 m ≈ track'],
+        ['roadShoulder', 'Shoulder', 0, 10, 0.5, 'm', 'Bare verge either side'],
+        ['roadSmoothing', 'Grade smoothing', 10, 300, 5, 'm', 'Length over which the road profile is averaged'],
+        ['roadCut', 'Cut slope', 30, 85, 1, '°', 'Rock cut above the road'],
+        ['roadFill', 'Fill slope', 20, 60, 1, '°', 'Embankment below the road'],
+        ['roadShading', 'Road surface', 0, 1, 1, '', 'Shade the carriageway (off = bare carved ground)'],
+        ['roadColor', 'Road colour', 0, 0, 0, 'color', ''],
+      ] },
+      { title: 'Lakes', controls: [
+        ['lakeLevelOffset', 'Level above click', 0, 60, 1, 'm', 'New lakes fill to the clicked ground height plus this'],
+        ['lakeDepth', 'Bed depth', 1, 40, 0.5, 'm', 'Flat silt bed this far below the level'],
+      ] },
+      { title: 'Water in channels', controls: [
+        ['riverWater', 'Water in rivers', 0, 1, 1, '', 'Off = dried river beds (cobbles and silt)'],
+        ['lakeWater', 'Water in lakes', 0, 1, 1, '', 'Off = dried lake beds'],
+      ] },
+      { title: 'Display', controls: [
+        ['showFeatureLines', 'Show feature lines', 0, 1, 1, '', 'Guide lines over roads, rivers and lake markers'],
       ] },
     ],
   },
@@ -437,9 +545,21 @@ export const groups = [
         ['fogDensity', 'Valley fog', 0, 1, 0.05, '', 'Distance haze strength'],
         ['exposure', 'Exposure', 0.1, 1.5, 0.05, '', ''],
       ] },
-      { title: 'Water', controls: [
-        ['waterEnabled', 'Water plane', 0, 1, 1, '', ''],
-        ['seaLevel', 'Water level', -200, 600, 5, 'm', ''],
+    ],
+  },
+  {
+    id: 'water', name: 'Water', type: 'Sea level & water bodies', stage: 'live', color: '#5aa7c9',
+    cards: [
+      { title: 'Sea level', controls: [
+        ['waterEnabled', 'Sea', 0, 1, 1, '', 'Global water plane'],
+        ['seaLevel', 'Sea level', -200, 800, 1, 'm', 'Everything below this is flooded — live'],
+      ] },
+      { title: 'Appearance', controls: [
+        ['waterColor', 'Water colour', 0, 0, 0, 'color', ''],
+        ['waterOpacity', 'Opacity', 0.2, 1, 0.05, '', ''],
+        ['shoreWet', 'Shoreline wetness', 0, 1, 0.05, '', 'Dark wet band just above the waterline'],
+        ['bedShading', 'Bed shading', 0, 1, 1, '', 'Silt / cobble shading on river and lake beds'],
+        ['siltColor', 'Silt colour', 0, 0, 0, 'color', ''],
       ] },
     ],
   },
@@ -452,7 +572,7 @@ export const groups = [
         ['autoRotate', 'Auto-rotate', 0, 1, 1, '', ''],
       ] },
       { title: 'Isolate layer', controls: [
-        ['debugView', 'Show only', 0, 7, 1, 'enum', 'Off|Strata|Grain|Flakes|Peeling|Joint cells|Cover|Masks'],
+        ['debugView', 'Show only', 0, 8, 1, 'enum', 'Off|Strata|Grain|Flakes|Peeling|Joint cells|Cover|Masks|Features'],
       ] },
       { title: 'Export', kind: 'export' },
     ],
@@ -460,21 +580,22 @@ export const groups = [
 ];
 
 export const outlinerSections = [
-  { label: 'TERRAIN', ids: ['landform', 'strata', 'relief', 'erosion'] },
+  { label: 'TERRAIN', ids: ['landform', 'strata', 'relief', 'erosion', 'features'] },
   { label: 'DRESSING', ids: ['rocks', 'material', 'flakes', 'exfoliation', 'cover'] },
-  { label: 'ENVIRONMENT', ids: ['sun', 'viewport'] },
+  { label: 'ENVIRONMENT', ids: ['sun', 'water', 'viewport'] },
 ];
 
 export function paramsForStage(values, stage) {
   const keys = new Set();
-  for (const g of groups) if (g.stage === stage) for (const c of g.cards) for (const ctl of c.controls || []) keys.add(ctl[0]);
+  for (const g of groups) for (const c of g.cards) if ((c.stage || g.stage) === stage) for (const ctl of c.controls || []) keys.add(ctl[0]);
   const out = {};
   for (const k of keys) out[k] = values[k];
   return out;
 }
 
 export function stageOf(key) {
-  for (const g of groups) for (const c of g.cards) for (const ctl of c.controls || []) if (ctl[0] === key) return g.stage;
+  for (const g of groups) for (const c of g.cards) for (const ctl of c.controls || []) if (ctl[0] === key) return c.stage || g.stage;
   if (key === 'palette') return 'live';
+  if (key === 'features') return 'mesh';
   return 'terrain';
 }

@@ -69,7 +69,20 @@ overhangs are limited to roughly one grid cell. True 3‑D (voxel / SDF) terrain
      gentle ground, moss in concavities, slope‑limited snow above the snow line.
    All layers contribute height **and** an analytic gradient, combined triplanarly into one
    perturbed normal — no finite differences, no texture reads.
-7. **Lighting** — `Sky` with PMREM environment, shadowed directional sun, exponential fog,
+7. **Drawn features** (`src/features.js`) — splines and points drawn in the viewport:
+   - **rivers** (terrain stage): Catmull‑Rom line → meander → smoothed, monotone‑downhill bed
+     profile (flowing from the higher end) → channel carved with sloped banks up to a bank
+     height, gorge walls above that. Carved before hydraulic erosion, and a share of the droplets
+     start *in* the river carrying extra water, so the water erodes its own bed and the slopes
+     drain into it; carved again after slumping so the final bed matches. Outputs a bed mask
+     and a water level. Water can be switched off for dried beds (cobbles → silt).
+   - **roads** (mesh stage, instant): smoothed grade profile along the spline, flat carriageway,
+     cut slopes above / fill embankments below, shoulder verge; proper widths (3.5 m track …
+     30 m), computed on the refined mesh grid so a 6 m road is resolved.
+   - **lakes** (mesh stage, instant): flood fill from the clicked point up to a level (adjustable
+     per lake), flat silt bed below, water surface; off = dried lake bed.
+   River / lake water is a mesh built from the water‑level map; the sea is the live level plane.
+8. **Lighting** — `Sky` with PMREM environment, shadowed directional sun, exponential fog,
    ACES tone mapping, water plane.
 
 ## Controls
@@ -78,7 +91,8 @@ Outliner rows map to inspector groups: **Landform / Strata / Erosion** rebuild t
 (press *Generate* or Ctrl+Enter; the worker reports progress), **Rocks** re‑scatter automatically,
 **Cliff depth** rebuilds the mesh live, and everything under **Rock material / Mineral flakes /
 Cell layers / Ground cover / Sun & atmosphere / Viewport** is live. Presets: Alpine
-granite, Sandstone mesa, Canyon, Sea cliffs, Limestone escarpment.
+granite, Sandstone mesa, Canyon, Sea cliffs, Limestone escarpment, Fjord, Badlands, Dolomite towers,
+Desert buttes, Volcanic island, Highland glens, Karst pinnacles.
 
 Every texture layer is fully exposed: each has an **enable** toggle, its own **scale**,
 **strength** and **colour** controls —
@@ -91,6 +105,13 @@ Every texture layer is fully exposed: each has an **enable** toggle, its own **s
 | Ground cover | runoff; gravel; vegetation; moss; snow | wetness, face streaks + scale; gravel amount/scale/colour; vegetation amount, slope limit, patch scale, patchiness, dry grass + three colours; moss amount/scale/colour; snow line, slope limit, transition, roughness, colour |
 
 Picking a rock type fills the colour swatches; they can be edited freely afterwards.
+
+**Drawing**: the toolbar over the viewport (or *Roads, rivers & lakes → Draw*) has Road / River /
+Lake. Click points on the terrain; Enter or double‑click finishes a spline, Backspace removes the
+last point, Esc cancels; a lake is one click. Drawn features are listed in the inspector with
+delete buttons and per‑lake level sliders, persist with the settings, and survive preset changes.
+**Water** (own outliner row) has the live sea‑level slider, colour, opacity, shoreline wetness and
+the dried‑bed toggles.
 
 **Viewport → Isolate layer** renders a single layer on its own (Strata / Grain / Flakes / Peeling /
 Joint cells / Cover / Masks) so each pattern and its scale can be judged before tuning it.
