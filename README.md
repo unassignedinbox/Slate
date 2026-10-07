@@ -13,9 +13,11 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-**V7.7 publication link will be pinned after the standalone build is verified.**
+**[Open v7.7 — Geometric constructions](https://raw.githack.com/unassignedinbox/Slate/6352aeb409684398d414f5d56f85e18decff0640/site/index.html?material=natural-cotton&studio=pattern&pattern=truchet-circuits)** · **[Single-color stitches](https://raw.githack.com/unassignedinbox/Slate/6352aeb409684398d414f5d56f85e18decff0640/site/index.html?material=natural-cotton&studio=pattern&pattern=chain-stitch)** · **[Single-color weaves](https://raw.githack.com/unassignedinbox/Slate/6352aeb409684398d414f5d56f85e18decff0640/site/index.html?material=natural-cotton&studio=pattern&pattern=basket-weave&view=3d)**
 
 Choose **Open the page** if GitHack shows its notice. The previous rug collections and the 200-design claim have been withdrawn. Functional tests are not a certificate of visual realism or user approval. `npm run verify:published` checks the committed GitHub artifact byte-for-byte, not hosted-browser execution.
+
+V7.7 passed 21 construction/document checks, seven targeted browser checks and the final offline standalone test. Publication verification matched **1,934,770 bytes**, SHA-256 `eebb33bb263186da6fb75d1086d741839751ae2cc5696d59a15f5577e3937e3f`.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
