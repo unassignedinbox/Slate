@@ -19,6 +19,11 @@ export const defaults = {
   plateauHeight: 380,       // [m]
   canyonDepth: 0,           // [m]
   canyonWidth: 260,         // [m]
+  duneAmount: 0,            // [m]
+  duneWavelength: 140,      // [m]
+  duneDirection: 30,        // [°]
+  duneAsymmetry: 0.68,
+  duneCoverage: 0.6,
   // Strata
   strataBand: 26,           // [m]
   strataStrength: 0.75,
@@ -57,6 +62,19 @@ export const defaults = {
   pebblesOn: 1,
   pebbleDensity: 0.45,
   pebbleSize: 0.45,         // [m]
+  // True-3D cliffs (SDF chunks)
+  sdfOn: 1,
+  sdfAngle: 58,             // [°]
+  sdfBlend: 2,              // [cells]
+  sdfChunk: 16,             // [cells]
+  sdfVoxel: 1,              // voxels per cell
+  sdfUndercut: 6,           // [m]
+  sdfBedContrast: 1,
+  sdfPockets: 12,           // [m]
+  sdfPits: 0.3,
+  sdfJoints: 0.5,
+  sdfRough: 0.5,
+  sdfMaxChunks: 400,
   // Cliff depth (mesh displacement)
   overhang: 3.5,            // [m]
   buttress: 0.5,
@@ -154,6 +172,18 @@ export const defaults = {
   riverErosion: 0.6,
   riverWater: 1,
   riverWaterDepth: 1.2,     // [m]
+  // Simulated drainage
+  riverSim: 1,
+  riverCatchment: 0.04,     // [km²]
+  riverWidthScale: 40,      // [m per √km²]
+  riverMaxWidth: 150,       // [m]
+  riverDepthScale: 1.0,
+  riverWaterFrac: 0.6,
+  riverBraiding: 0.35,
+  riverLakes: 1,
+  riverLakeFill: 0.8,
+  riverLakeMin: 0.01,       // [km²]
+  riverGuideFlow: 1.0,      // [km²]
   lakeDepth: 6,             // [m]
   lakeLevelOffset: 6,       // [m]
   lakeWater: 1,
@@ -225,7 +255,7 @@ Object.assign(presets, {
     palette: 'sandstone', mountainHeight: 180, baseElevation: 80, baseFrequency: 2.6, ridgeSharpness: 1.3, peakPower: 0.9, warpStrength: 0.5,
     reliefFrequency: 2.2, reliefContrast: 0.5, strataBand: 9, strataStrength: 1, strataDip: 1, hardnessContrast: 0.9, plateauStrength: 0.6, plateauHeight: 220,
     canyonDepth: 0, snowOn: 0, vegetation: 0.05, mossiness: 0.1, waterEnabled: 0, seaLevel: -100, droplets: 320000, erodeSpeed: 0.6, sedimentCapacity: 7, evaporation: 0.01,
-    talusSoft: 32, talusHard: 80, rockDensity: 0.15, oxideAmount: 0.8, peelStrength: 0.3, sunElevation: 40, sunAzimuth: 215, turbidity: 7, fogDensity: 0.25,
+    talusSoft: 32, talusHard: 80, rockDensity: 0.15, oxideAmount: 0.8, peelStrength: 0.3, sunElevation: 40, sunAzimuth: 215, turbidity: 7, fogDensity: 0.25, riverWater: 0, riverLakes: 0, riverCatchment: 0.08,
   },
   'Dolomite towers': {
     palette: 'limestone', mountainHeight: 650, baseElevation: 120, baseFrequency: 2.0, ridgeSharpness: 3.2, peakPower: 1.9, warpStrength: 0.45,
@@ -237,7 +267,7 @@ Object.assign(presets, {
     palette: 'sandstone', mountainHeight: 240, baseElevation: 40, baseFrequency: 1.0, ridgeSharpness: 1.2, peakPower: 1.6, warpStrength: 0.3,
     reliefFrequency: 1.8, reliefContrast: 1, plateauStrength: 1, plateauHeight: 230, canyonDepth: 0, strataBand: 14, strataStrength: 1, hardnessContrast: 1,
     snowOn: 0, vegetation: 0.03, mossiness: 0, waterEnabled: 0, seaLevel: -100, talusSoft: 31, talusHard: 88, droplets: 120000, thermalIterations: 40,
-    rockDensity: 0.4, oxideAmount: 0.7, sunElevation: 48, sunAzimuth: 230, turbidity: 8, fogDensity: 0.2,
+    rockDensity: 0.4, oxideAmount: 0.7, sunElevation: 48, sunAzimuth: 230, turbidity: 8, fogDensity: 0.2, riverWater: 0, riverLakes: 0, riverCatchment: 0.08,
   },
   'Volcanic island': {
     palette: 'basalt', mountainHeight: 520, baseElevation: -90, baseFrequency: 0.8, ridgeSharpness: 1.5, peakPower: 1.8, warpStrength: 0.5,
@@ -284,7 +314,46 @@ Object.assign(presets, {
     plateauStrength: 0.9, plateauHeight: 440, canyonDepth: 360, canyonWidth: 520, strataBand: 20, strataStrength: 1, strataDip: 2, hardnessContrast: 1,
     snowOn: 0, vegetation: 0.08, mossiness: 0.05, seaLevel: -20, waterEnabled: 0, droplets: 170000, thermalIterations: 50, thermalRate: 0.7, talusSoft: 33, talusHard: 87,
     rockDensity: 0.9, rockSlopeMin: 10, rockSlopeMax: 55, rockClustering: 0.3, rockSizeMin: 0.8, rockSizeMax: 14, pebbleDensity: 0.8, pebbleSize: 0.6, gravelAmount: 1,
-    peelStrength: 0.6, peelScale: 3, oxideAmount: 0.7, sunElevation: 40, sunAzimuth: 205, turbidity: 6, fogDensity: 0.2,
+    peelStrength: 0.6, peelScale: 3, oxideAmount: 0.7, sunElevation: 40, sunAzimuth: 205, turbidity: 6, fogDensity: 0.2, riverWater: 0, riverLakes: 0, riverCatchment: 0.08,
+  },
+  'Rocky mountains': {
+    palette: 'granite', mountainHeight: 900, baseElevation: 60, baseFrequency: 1.5, ridgeSharpness: 2.8, peakPower: 1.6, warpStrength: 0.7,
+    reliefFrequency: 1.1, reliefContrast: 0.85, strataBand: 34, strataStrength: 0.7, strataDip: 8, hardnessContrast: 0.9, plateauStrength: 0, canyonDepth: 0,
+    snowOn: 1, snowLine: 700, snowSlope: 50, vegetation: 0.45, vegSlope: 38, mossiness: 0.3, seaLevel: -100, waterEnabled: 0, droplets: 220000, erodeSpeed: 0.4, thermalIterations: 40, talusSoft: 35, talusHard: 84,
+    rockDensity: 0.7, rockSlopeMax: 50, rockSizeMin: 1, rockSizeMax: 14, pebbleDensity: 0.6, gravelAmount: 0.9,
+    sdfOn: 1, sdfAngle: 56, sdfUndercut: 8, sdfJoints: 0.7, overhang: 3, riverCatchment: 0.05, riverBraiding: 0.2, riverLakes: 1,
+    peelStrength: 0.5, flakeStrength: 0.7, sunElevation: 32, sunAzimuth: 215, turbidity: 3, fogDensity: 0.3,
+  },
+  'Sand dunes': {
+    palette: 'sandstone', rockA: '#e3c49a', rockB: '#d2ab7c', rockC: '#f0d9b5', fresh: '#f6e4c4', oxide: '#c89a6e', gravelColor: '#d9b98f',
+    mountainHeight: 120, baseElevation: 60, baseFrequency: 1.2, ridgeSharpness: 1.0, peakPower: 0.8, warpStrength: 0.4, reliefFrequency: 1.0, reliefContrast: 0.25,
+    duneAmount: 32, duneWavelength: 170, duneDirection: 40, duneAsymmetry: 0.72, duneCoverage: 0.75,
+    strataStrength: 0, strataBand: 60, hardnessContrast: 0.2, plateauStrength: 0, canyonDepth: 0,
+    droplets: 20000, erodeSpeed: 0.15, thermalIterations: 60, thermalRate: 0.8, talusSoft: 31, talusHard: 34,
+    snowOn: 0, vegOn: 0, vegetation: 0, mossOn: 0, mossiness: 0, oxideAmount: 0.15, waterEnabled: 0, seaLevel: -100,
+    rocksEnabled: 0, pebblesOn: 0, gravelAmount: 0, peelOn: 0, flakeStrength: 0.25, flakeSize3: 0.08, flakeCrystal3: 0.5, flakeSparkle: 1.2,
+    sdfOn: 0, overhang: 0, detailRelief: 0.15, riverSim: 0, riverWater: 0, riverLakes: 0, streakAmount: 0, wetness: 0.1,
+    sunElevation: 28, sunAzimuth: 250, turbidity: 8, fogDensity: 0.15,
+  },
+  'Icelandic highlands': {
+    palette: 'basalt', rockA: '#5d5a56', rockB: '#3f3d3b', rockC: '#7a756d', fresh: '#8d8a84', oxide: '#8a6a4e', gravelColor: '#4a4846', mossColor: '#6f7f3f', grassA: '#6b7a3c', grassB: '#9a9a5a', dryColor: '#7f7a5a',
+    mountainHeight: 620, baseElevation: 120, baseFrequency: 1.3, ridgeSharpness: 1.6, peakPower: 1.1, warpStrength: 0.7, reliefFrequency: 1.0, reliefContrast: 0.55,
+    plateauStrength: 0.45, plateauHeight: 560, canyonDepth: 0, strataBand: 22, strataStrength: 0.9, strataDip: 2, hardnessContrast: 1.0,
+    droplets: 260000, erodeSpeed: 0.45, sedimentCapacity: 6, thermalIterations: 40, talusSoft: 34, talusHard: 86,
+    snowOn: 1, snowLine: 520, snowSlope: 42, snowSoftness: 2.5, vegetation: 0.5, vegSlope: 30, vegPatchiness: 0.8, dryness: 0.3, mossiness: 0.9, mossScale: 6,
+    waterEnabled: 0, seaLevel: -100, riverCatchment: 0.03, riverWidthScale: 55, riverMaxWidth: 220, riverBraiding: 0.8, riverLakes: 1, riverLakeFill: 0.9,
+    rockDensity: 0.4, rockSizeMax: 6, pebbleDensity: 0.6, gravelAmount: 1, sdfOn: 1, sdfAngle: 60, sdfUndercut: 5,
+    oxideAmount: 0.6, peelStrength: 0.35, flakeStrength: 0.5, sunElevation: 22, sunAzimuth: 200, turbidity: 4, fogDensity: 0.5,
+  },
+  'Icelandic river plains': {
+    palette: 'basalt', rockA: '#5a5753', rockB: '#3d3b39', rockC: '#77726a', fresh: '#8a8781', oxide: '#86684d', gravelColor: '#3f3d3b', mossColor: '#6c7c3c', grassA: '#66753a', grassB: '#9b9a5c', dryColor: '#7b765a',
+    mountainHeight: 420, baseElevation: 30, baseFrequency: 1.1, ridgeSharpness: 1.5, peakPower: 1.2, warpStrength: 0.6, reliefFrequency: 0.9, reliefContrast: 0.75,
+    plateauStrength: 0.2, plateauHeight: 420, canyonDepth: 0, strataBand: 20, strataStrength: 0.8, strataDip: 1.5, hardnessContrast: 0.9,
+    droplets: 280000, erodeSpeed: 0.5, sedimentCapacity: 7, depositSpeed: 0.35, thermalIterations: 36, talusSoft: 33, talusHard: 84,
+    snowOn: 1, snowLine: 380, snowSlope: 40, snowSoftness: 3, vegetation: 0.55, vegSlope: 28, vegPatchiness: 0.85, dryness: 0.35, mossiness: 0.85, mossScale: 7,
+    waterEnabled: 1, seaLevel: 0, riverCatchment: 0.02, riverWidthScale: 70, riverMaxWidth: 300, riverDepthScale: 0.8, riverBraiding: 1.0, riverLakes: 1, riverLakeFill: 0.95, riverGuideFlow: 2,
+    rockDensity: 0.25, rockSizeMax: 5, pebbleDensity: 0.8, pebbleSize: 0.5, gravelAmount: 1, sdfOn: 1, sdfAngle: 60, sdfUndercut: 4,
+    oxideAmount: 0.5, peelStrength: 0.3, flakeStrength: 0.45, sunElevation: 26, sunAzimuth: 190, turbidity: 5, fogDensity: 0.45,
   },
   'Karst pinnacles': {
     palette: 'limestone', mountainHeight: 300, baseElevation: 30, baseFrequency: 3.2, ridgeSharpness: 3.0, peakPower: 1.7, warpStrength: 0.4,
@@ -313,6 +382,13 @@ export const groups = [
         ['mountainHeight', 'Mountain height', 100, 1200, 10, 'm', 'Peak elevation above the datum'],
         ['baseElevation', 'Base elevation', -200, 400, 5, 'm', 'Elevation of the plains'],
         ['worldSize', 'World size', 1024, 4096, 128, 'm', 'Side length of the generated tile'],
+      ] },
+      { title: 'Dunes', controls: [
+        ['duneAmount', 'Dune height', 0, 80, 1, 'm', 'Transverse sand dunes added to the relief: long windward slope, short slip face'],
+        ['duneWavelength', 'Dune spacing', 30, 600, 5, 'm', ''],
+        ['duneDirection', 'Wind direction', 0, 360, 5, '°', ''],
+        ['duneAsymmetry', 'Asymmetry', 0.5, 0.9, 0.01, '', 'Position of the crest along the wavelength (0.5 symmetric, 0.9 steep slip face)'],
+        ['duneCoverage', 'Coverage', 0, 1, 0.05, '', 'Fraction of the tile with dune fields'],
       ] },
       { title: 'Relief', controls: [
         ['baseFrequency', 'Ridge frequency', 0.6, 4, 0.05, '', 'Number of ridge systems across the tile'],
@@ -349,8 +425,22 @@ export const groups = [
     ],
   },
   {
-    id: 'relief', name: 'Cliff depth', type: 'Overhangs, ledges & mesh detail', stage: 'mesh', color: '#b9a3d6',
+    id: 'relief', name: 'Cliff depth', type: 'True-3D cliffs, overhangs & mesh detail', stage: 'mesh', color: '#b9a3d6',
     cards: [
+      { title: 'True-3D cliffs (SDF chunks)', controls: [
+        ['sdfOn', 'Enable 3D cliffs', 0, 1, 1, '', 'Steep parts of the terrain are re-meshed from a 3D field (heightfield distance + strata carving) in chunks that are watertight with the heightfield mesh — real undercuts, overhangs, notches and shelters'],
+        ['sdfAngle', 'Cliff angle', 35, 80, 1, '°', 'Cells steeper than this get a 3D chunk'],
+        ['sdfUndercut', 'Undercut depth', 0, 20, 0.5, 'm', 'How far soft strata beds are carved back under hard beds (follows the strata model: band, dip, hardness)'],
+        ['sdfBedContrast', 'Bed contrast', 0.3, 3, 0.1, '', 'Higher = only the softest beds recede'],
+        ['sdfPockets', 'Pocket scale', 3, 40, 1, 'm', 'Scale of the 3D noise that breaks undercuts into alcoves'],
+        ['sdfJoints', 'Joints', 0, 1.5, 0.05, '', 'Near-vertical joint cuts and chimneys'],
+        ['sdfPits', 'Pits', 0, 1, 0.05, '', 'Weathering hollows'],
+        ['sdfRough', 'Roughness', 0, 1.5, 0.05, '', 'Fine 3D roughness on the carved faces'],
+        ['sdfBlend', 'Blend margin', 1, 5, 1, 'cells', 'Cells over which the 3D field fades back to the plain heightfield'],
+        ['sdfChunk', 'Chunk size', 8, 32, 8, 'cells', ''],
+        ['sdfVoxel', 'Voxels per cell', 1, 3, 1, '', 'Voxel resolution relative to the mesh grid (2 = 8× the work)'],
+        ['sdfMaxChunks', 'Chunk budget', 50, 2000, 50, '', 'Chunks with the most cliff area are built first; the rest fall back to the displaced heightfield'],
+      ] },
       { title: 'Face displacement', controls: [
         ['overhang', 'Caprock overhang', 0, 8, 0.25, 'm', 'Hard beds pushed out of the face, soft beds recessed — real overhangs a heightmap cannot hold (capped at ~85% of the grid cell)'],
         ['buttress', 'Buttress bulge', 0, 1, 0.05, '', 'Large-scale swelling of the faces into ribs and alcoves'],
@@ -390,7 +480,20 @@ export const groups = [
     cards: [
       { title: 'Draw', kind: 'draw' },
       { title: 'Features', kind: 'featureList' },
-      { title: 'Rivers', stage: 'terrain', controls: [
+      { title: 'Simulated rivers', stage: 'terrain', controls: [
+        ['riverSim', 'Simulate drainage', 0, 1, 1, '', 'Fill depressions, route D8 flow over the eroded surface and carve a river network where the catchment is large enough. Drawn rivers become guides that inject flow'],
+        ['riverCatchment', 'Min. catchment', 0.01, 2, 0.01, 'km²', 'Drainage area needed before a channel forms — smaller = denser network'],
+        ['riverWidthScale', 'Width per √km²', 4, 120, 1, 'm', 'Channel width = this × √catchment'],
+        ['riverMaxWidth', 'Max width', 10, 400, 5, 'm', ''],
+        ['riverDepthScale', 'Depth scale', 0.2, 3, 0.05, '', 'Channel depth ≈ scale × width^0.45'],
+        ['riverWaterFrac', 'Water fill', 0.2, 0.9, 0.05, '', 'Fraction of the channel depth filled with water'],
+        ['riverBraiding', 'Braiding', 0, 1, 0.05, '', 'Gravel bars and split threads on wide, gentle reaches (river plains)'],
+        ['riverLakes', 'Lakes in depressions', 0, 1, 1, '', 'Closed basins fill to their spill level'],
+        ['riverLakeFill', 'Lake fill', 0, 1, 0.05, '', '1 = basins fill to their spill level · lower leaves a dry floor with the river crossing it'],
+        ['riverLakeMin', 'Min. lake area', 0.001, 0.2, 0.001, 'km²', 'Smaller depressions stay dry unless a river feeds them'],
+        ['riverGuideFlow', 'Guide flow', 0, 5, 0.1, 'km²', 'Catchment injected at the head of each drawn river so it always carries water'],
+      ] },
+      { title: 'Drawn river guides', stage: 'terrain', controls: [
         ['riverWidth', 'Channel width', 2, 120, 1, 'm', 'Width of the carved channel'],
         ['riverDepth', 'Channel depth', 0.5, 40, 0.5, 'm', 'Incision below the smoothed valley profile'],
         ['riverBank', 'Bank angle', 10, 80, 1, '°', 'Slope of the cut banks'],

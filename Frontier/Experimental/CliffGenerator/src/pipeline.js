@@ -6,6 +6,7 @@
 import { synthesizeBase, applyStrata, computeCavity, computeSlopeMap } from './heightfield.js';
 import { hydraulicErosion, thermalErosion, blurField } from './erosion.js';
 import { carveRivers, NO_WATER } from './features.js';
+import { simulateRivers } from './hydrology.js';
 
 export function generateTerrain(params, progress = () => {}) {
   const N = params.resolution;
@@ -53,6 +54,25 @@ export function generateTerrain(params, progress = () => {}) {
     riverResult = carveRivers(height, N, params.worldSize, rivers, riverOpts, params.seed);
   }
 
+  // Simulated drainage: the drawn rivers are guides (already carved + injected as flow); the
+  // network itself comes from the eroded surface.
+  let hydro = null;
+  const lake = new Float32Array(N * N);
+  if (params.riverSim) {
+    progress({ phase: 'Simulating rivers', fraction: 0 });
+    hydro = simulateRivers(height, N, params.worldSize, {
+      catchment: params.riverCatchment, widthScale: params.riverWidthScale, maxWidth: params.riverMaxWidth, depthScale: params.riverDepthScale,
+      bankAngle: params.riverBank, maxBank: params.riverMaxBank, waterDepth: params.riverWaterFrac, braiding: params.riverBraiding,
+      lakes: params.riverLakes, lakeFill: params.riverLakeFill, lakeMinArea: Math.round((params.riverLakeMin || 0.01) * 1e6 / (cell * cell)),
+      seaLevel: params.waterEnabled ? params.seaLevel : -Infinity, sources: riverResult.sources, guideFlow: params.riverGuideFlow,
+    }, params.seed);
+    for (let i = 0; i < N * N; i++) {
+      riverResult.riverMask[i] = Math.max(riverResult.riverMask[i], hydro.riverMask[i]);
+      riverResult.waterLevel[i] = Math.max(riverResult.waterLevel[i], hydro.waterLevel[i]);
+      lake[i] = hydro.lakeMask[i];
+    }
+  }
+
   progress({ phase: 'Deriving shading maps', fraction: 0 });
 
   // Deposit: hydraulic sediment + thermally slumped material → scree/gravel aprons.
@@ -64,6 +84,14 @@ export function generateTerrain(params, progress = () => {}) {
   const flowRaw = new Float32Array(N * N);
   for (let i = 0; i < N * N; i++) flowRaw[i] = Math.log1p(flow[i]);
   const flowNorm = normalisePercentile(blurField(flowRaw, N, 1), 0.995);
+  if (hydro) {
+    // drainage network → wet gully floors; channels and lake shores → gravel / silt deposits
+    for (let i = 0; i < N * N; i++) {
+      const f = hydro.flow[i];
+      flowNorm[i] = Math.max(flowNorm[i], f * f * 0.95);
+      deposit[i] = Math.max(deposit[i], riverResult.riverMask[i] * 0.8, lake[i] * 0.5);
+    }
+  }
 
   const cavityRaw = computeCavity(height, N, cell);
   const cavity = new Float32Array(N * N);
@@ -82,8 +110,8 @@ export function generateTerrain(params, progress = () => {}) {
     resolution: N,
     worldSize: params.worldSize,
     height, hardness, deposit, flow: flowNorm, cavity, slope,
-    river: riverResult.riverMask, waterLevel: riverResult.waterLevel,
-    stats: { min, max, elapsedMs: now() - t0 },
+    river: riverResult.riverMask, waterLevel: riverResult.waterLevel, lake,
+    stats: { min, max, elapsedMs: now() - t0, rivers: hydro ? hydro.stats : null },
   };
 }
 

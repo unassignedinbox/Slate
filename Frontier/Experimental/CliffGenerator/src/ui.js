@@ -29,7 +29,7 @@ export class Editor {
         <aside class="outliner">
           <div class="brand"><div class="brand-symbol">${icon('layers', 24, 1.5)}</div><span>frontier<span class="brand-dot">.</span></span><span class="version">ENGINE / 01</span></div>
           <div class="scene-label">WORKSPACE <span class="status-dot"></span></div>
-          <div class="scene-title"><span>Cliff generator</span><span class="scene-extension">.scene</span></div>
+          <div class="scene-title"><span>Terrain generator</span><span class="scene-extension">.scene</span></div>
           <div class="outliner-heading"><h2>Outliner <span>${String(groups.length).padStart(2, '0')}</span></h2></div>
           <div class="outliner-tree"></div>
           <div class="outliner-bottom"><div class="world-icon">${icon('mountain', 20)}</div><div><strong>Escarpment study</strong><span>Local project</span></div><span class="little-dot"></span></div>

@@ -47,6 +47,8 @@ export function placeRocks(field, params, library) {
       if (field.road && sampler.map('road', x, z) > 0.2) continue;
       if (field.waterLevel && sampler.map('waterLevel', x, z) > h + 0.3) continue;
       const slope = sampler.map('slope', x, z);          // tan(angle)
+      // true-3D cliff chunks carve their own faces: no scatter rocks hanging on those walls
+      if (field.sdfWeight && slope > 0.9 && sampler.map('sdfWeight', x, z) > 0.4) continue;
       const inWindow = smoothstep(slopeLo * 0.7, slopeLo + 0.02, slope) * (1 - smoothstep(slopeHi, slopeHi * 1.35 + 0.05, slope));
       if (inWindow <= 0.001) continue;
       // clustering: a smooth mask that thins the scatter into groups as the slider rises

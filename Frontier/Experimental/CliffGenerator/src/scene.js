@@ -7,6 +7,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { buildTerrainGeometry, buildSkirtGeometry, refineField, buildWaterGeometry, makeSampler } from './terrain-geometry.js';
+import { selectChunks, packChunkJobs } from './sdf-chunks.js';
 import { sampleSpline } from './features.js';
 import { buildRockLibrary } from './rock-geometry.js';
 import { placeRocks, buildRockMeshes } from './rock-placement.js';
@@ -58,7 +59,12 @@ export class CliffScene {
 
     this.terrainGroup = new THREE.Group();
     this.rockGroup = new THREE.Group();
-    this.scene.add(this.terrainGroup, this.rockGroup);
+    this.sdfGroup = new THREE.Group(); // true-3D cliff chunks (meshed in sdf.worker.js)
+    this.scene.add(this.terrainGroup, this.rockGroup, this.sdfGroup);
+    this.sdfWorker = null;
+    this.sdfGeneration = 0;
+    this.sdfStats = null;
+    this.onSdfProgress = null;
 
     this.water = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
@@ -267,7 +273,9 @@ export class CliffScene {
     const field = refineField(this.field, v);
     this.meshField = field;
     this.disposeGroup(this.terrainGroup);
-    const geometry = buildTerrainGeometry(field, v);
+    const chunks = v.sdfOn ? selectChunks(field, v) : null;
+    if (!chunks) { field.sdfWeight = null; field.sdfFade = null; }
+    const geometry = buildTerrainGeometry(field, v, chunks);
     const floorY = field.stats.min - Math.max(40, (field.stats.max - field.stats.min) * 0.12);
     const skirt = buildSkirtGeometry(field, floorY);
     const terrain = new THREE.Mesh(geometry, this.terrainMaterial);
@@ -282,6 +290,46 @@ export class CliffScene {
     this.stats.triangles = geometry.index.count / 3;
     this.buildWaterBodies();
     this.setFeatureOverlay(v);
+    this.buildSdfChunks(field, chunks, v);
+  }
+
+  // SDF cliff chunks stream in from the worker in batches; a newer build cancels older results.
+  buildSdfChunks(field, chunks, v) {
+    const id = ++this.sdfGeneration;
+    this.disposeGroup(this.sdfGroup);
+    this.sdfStats = null;
+    if (!chunks || chunks.list.length === 0) { if (this.onSdfProgress) this.onSdfProgress(null); return; }
+    this.sdfStats = { done: 0, total: chunks.list.length, candidates: chunks.candidates, triangles: 0, started: performance.now(), ms: 0 };
+    if (!this.sdfWorker) {
+      this.sdfWorker = new Worker(new URL('./sdf.worker.js', import.meta.url), { type: 'module' });
+      this.sdfWorker.onmessage = (event) => {
+        const msg = event.data;
+        if (msg.id !== this.sdfGeneration) return;
+        if (msg.type === 'error') { console.error('SDF worker:', msg.message); return; }
+        for (const c of msg.chunks) {
+          if (c.index.length === 0) { this.sdfStats.done++; continue; }
+          const g = new THREE.BufferGeometry();
+          g.setAttribute('position', new THREE.BufferAttribute(c.positions, 3));
+          g.setAttribute('normal', new THREE.BufferAttribute(c.normals, 3));
+          g.setAttribute('aux', new THREE.BufferAttribute(c.aux, 4));
+          g.setAttribute('aux2', new THREE.BufferAttribute(c.aux2, 4));
+          g.setIndex(new THREE.BufferAttribute(c.index, 1));
+          g.computeBoundingSphere();
+          const mesh = new THREE.Mesh(g, this.terrainMaterial);
+          mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = `sdf-${c.ci}-${c.cj}`;
+          this.sdfGroup.add(mesh);
+          this.sdfStats.done++;
+          this.sdfStats.triangles += c.triangles;
+        }
+        this.sdfStats.ms = performance.now() - this.sdfStats.started;
+        if (this.onSdfProgress) this.onSdfProgress(this.sdfStats, msg.done);
+      };
+      this.sdfWorker.onerror = (e) => console.error('SDF worker error', e);
+    }
+    const { jobs, transfer, meta } = packChunkJobs(field, chunks, v);
+    const plain = {}; for (const [k, val] of Object.entries(v)) if (k !== 'features') plain[k] = val;
+    this.sdfWorker.postMessage({ id, jobs, meta, v: plain }, transfer);
+    if (this.onSdfProgress) this.onSdfProgress(this.sdfStats, false);
   }
 
   frameCamera(v) {
@@ -340,6 +388,7 @@ export class CliffScene {
   exportGroup(includeRocks) {
     const group = new THREE.Group();
     group.add(this.terrainGroup.clone());
+    group.add(this.sdfGroup.clone());
     if (includeRocks) group.add(this.rockGroup.clone());
     return group;
   }

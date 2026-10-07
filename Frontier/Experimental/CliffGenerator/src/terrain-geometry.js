@@ -90,7 +90,7 @@ export function refineField(field, v) {
   const fine = k <= 1 ? {
     resolution: N, worldSize: field.worldSize,
     height: field.height.slice(), hardness: field.hardness, deposit: field.deposit, flow: field.flow, cavity: field.cavity, slope: field.slope,
-    river: field.river || empty(), waterLevel: (field.waterLevel || empty().fill(NO_WATER)).slice(),
+    river: field.river || empty(), waterLevel: (field.waterLevel || empty().fill(NO_WATER)).slice(), lakeSim: field.lake || empty(),
     stats: field.stats, base: field,
   } : {
     resolution: M,
@@ -103,16 +103,23 @@ export function refineField(field, v) {
     slope: upsampleMap(field.slope, N, k, true),
     river: upsampleMap(field.river || empty(), N, k, true),
     waterLevel: upsampleWaterLevel(field.waterLevel || empty().fill(NO_WATER), N, k),
+    lakeSim: upsampleMap(field.lake || empty(), N, k, true),
     stats: field.stats,
     base: field,
   };
-  if (!v.riverWater) fine.waterLevel.fill(NO_WATER);
+  if (!v.riverWater) {
+    // dry the channels; simulated lakes follow the lake toggle instead
+    for (let i = 0; i < fine.waterLevel.length; i++) if (!(v.lakeWater && fine.lakeSim[i] > 0.9)) fine.waterLevel[i] = NO_WATER;
+  } else if (!v.lakeWater) {
+    for (let i = 0; i < fine.waterLevel.length; i++) if (fine.lakeSim[i] > 0.9) fine.waterLevel[i] = NO_WATER;
+  }
   const features = v.features || {};
   const { roadMask } = applyRoads(fine.height, fine.resolution, fine.worldSize, features.roads, {
     width: v.roadWidth, shoulder: v.roadShoulder, smoothing: v.roadSmoothing, cutAngle: v.roadCut, fillAngle: v.roadFill,
   });
   const { lakeMask } = applyLakes(fine.height, fine.resolution, fine.worldSize, features.lakes, { depth: v.lakeDepth, water: !!v.lakeWater }, fine.waterLevel);
   fine.road = roadMask;
+  for (let i = 0; i < lakeMask.length; i++) lakeMask[i] = Math.max(lakeMask[i], fine.lakeSim[i]);
   fine.lake = lakeMask;
   field._refined = { key, field: fine };
   return fine;
@@ -142,7 +149,7 @@ export function makeDetail(field, v) {
   };
 }
 
-export function buildTerrainGeometry(field, v = {}) {
+export function buildTerrainGeometry(field, v = {}, chunks = null) {
   const { resolution: N, worldSize: size, height, deposit, flow, hardness, cavity } = field;
   const road = field.road, river = field.river, lake = field.lake, waterLevel = field.waterLevel;
   const cell = size / (N - 1);
@@ -154,6 +161,9 @@ export function buildTerrainGeometry(field, v = {}) {
   const disp = makeDisplacement(field, v);
   const detail = makeDetail(field, v);
   const fadeCells = 3;
+  // SDF cliff chunks: no displacement on / near their footprint (the chunk field is the authority
+  // there and its border must coincide with the plain heightfield), and their quads are skipped
+  const sdfFade = chunks ? chunks.fade : null;
 
   for (let j = 0; j < N; j++) {
     const z = (j / (N - 1) - 0.5) * size;
@@ -167,11 +177,13 @@ export function buildTerrainGeometry(field, v = {}) {
       const nx = -dx, ny = 1, nz = -dz;
       const inv = 1 / Math.hypot(nx, ny, nz);
       const edge = i === 0 || j === 0 || i === N - 1 || j === N - 1;
-      const [ox, oz, sag] = edge ? [0, 0, 0] : disp.at(i, j, nx * inv, ny * inv, nz * inv, hardness[idx], x, z, height[idx]);
+      const chunkFade = sdfFade ? sdfFade[idx] : 1;
+      let [ox, oz, sag] = edge || chunkFade <= 0 ? [0, 0, 0] : disp.at(i, j, nx * inv, ny * inv, nz * inv, hardness[idx], x, z, height[idx]);
+      if (chunkFade < 1) { ox *= chunkFade; oz *= chunkFade; sag *= chunkFade; }
       let det = 0;
-      if (detail.amp > 0 && !edge) {
+      if (detail.amp > 0 && !edge && chunkFade > 0) {
         const border = Math.min(i, j, N - 1 - i, N - 1 - j) / fadeCells;
-        det = detail.at(x, height[idx], z, ny * inv, hardness[idx]) * Math.min(1, border);
+        det = detail.at(x, height[idx], z, ny * inv, hardness[idx]) * Math.min(1, border) * chunkFade;
       }
       positions[idx * 3] = x + ox + nx * inv * det;
       positions[idx * 3 + 1] = height[idx] + sag + ny * inv * det;
@@ -195,10 +207,12 @@ export function buildTerrainGeometry(field, v = {}) {
     }
   }
 
-  const indices = new Uint32Array((N - 1) * (N - 1) * 6);
+  let indices = new Uint32Array((N - 1) * (N - 1) * 6);
   let k = 0;
+  const active = chunks ? chunks.active : null, C = chunks ? chunks.C : 1, nc = chunks ? chunks.nc : 1;
   for (let j = 0; j < N - 1; j++) {
     for (let i = 0; i < N - 1; i++) {
+      if (active && active[Math.floor(j / C) * nc + Math.floor(i / C)]) continue;
       const a = j * N + i, b = a + 1, c = a + N, d = c + 1;
       // Alternate the diagonal to avoid a directional bias on steep faces.
       if ((i + j) & 1) {
@@ -211,6 +225,7 @@ export function buildTerrainGeometry(field, v = {}) {
     }
   }
 
+  if (k < indices.length) indices = indices.slice(0, k);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));

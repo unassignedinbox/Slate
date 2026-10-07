@@ -21,6 +21,15 @@ export function synthesizeBase(params, progress = () => {}) {
   // Canyon centreline wanders with low-frequency noise so the gorge meanders.
   const canyonNoise = new SimplexNoise(params.seed * 11 + 7);
 
+  // Transverse dunes: asymmetric ridges across the wind, in fields.
+  const duneAmp = params.duneAmount || 0;
+  const duneNoise = new SimplexNoise(params.seed * 17 + 23);
+  const duneDir = ((params.duneDirection || 0) * Math.PI) / 180;
+  const duneCos = Math.cos(duneDir), duneSin = Math.sin(duneDir);
+  const duneLambda = Math.max(10, params.duneWavelength || 140);
+  const crest = Math.min(0.95, Math.max(0.5, params.duneAsymmetry == null ? 0.68 : params.duneAsymmetry));
+  const duneCover = params.duneCoverage == null ? 0.6 : params.duneCoverage;
+
   for (let j = 0; j < N; j++) {
     const v = j * invN;
     for (let i = 0; i < N; i++) {
@@ -62,6 +71,24 @@ export function synthesizeBase(params, progress = () => {}) {
         const profile = 1 - smoothstep(halfWidth * 0.25, halfWidth, d);
         const floorNoise = 1 + 0.15 * noise.fbm(u * 20, v * 20, 3);
         h -= params.canyonDepth * profile * floorNoise;
+      }
+
+      if (duneAmp > 0) {
+        const xw = (u - 0.5) * size, zw = (v - 0.5) * size;
+        // along-wind coordinate, bent by low-frequency noise so crests curve (barchanoid ridges)
+        const bend = duneNoise.fbm(u * 3 + 11, v * 3 - 4, 3) * 0.6 + duneNoise.fbm(u * 9 + 2, v * 9 + 6, 2) * 0.12;
+        const sCoord = (xw * duneCos + zw * duneSin) / duneLambda + bend;
+        const fr = sCoord - Math.floor(sCoord);
+        // long windward slope up to the crest, short slip face down (at the angle of repose it is the
+        // thermal pass that finishes the slip face)
+        let profile;
+        if (fr < crest) { const t = fr / crest; profile = t * t * (3 - 2 * t); }
+        else { const t = (fr - crest) / (1 - crest); profile = 1 - t * t * (3 - 2 * t) * 0.85 - t * 0.15; }
+        // dune fields come and go
+        const fieldMask = smoothstep(0.5 - duneCover * 0.5, 0.5 + duneCover * 0.35, 0.5 + 0.5 * duneNoise.fbm(u * 2.2 + 31, v * 2.2 + 7, 3));
+        // smaller secondary ripples on the windward side
+        const ripple = 0.08 * Math.sin(sCoord * 7 * Math.PI * 2 + bend * 4) * (fr < crest ? 1 : 0.3);
+        h += duneAmp * (profile + ripple) * fieldMask * (0.7 + 0.3 * duneNoise.fbm(u * 5 + 3, v * 5 + 9, 2));
       }
 
       height[j * N + i] = h;
