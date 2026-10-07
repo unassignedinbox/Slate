@@ -31,6 +31,6 @@ export const groupIcons = {
 export const cardIcons = {
   'Preset': 'sparkles', 'Elevation': 'mountain', 'Relief': 'wind', 'Mesa & canyon': 'strata', 'Grid': 'grid',
   'Bedding': 'strata', 'Face displacement': 'layers', 'Geological dip': 'sliders', 'Hydraulic erosion': 'droplets', 'Thermal weathering': 'mountain',
-  'Placement pattern': 'box', 'Rock shape': 'gem', 'Rock type': 'palette', 'Colours': 'palette', 'Strata': 'strata', 'Grain': 'grid', 'Oxide & cavity': 'droplets', 'Material response': 'sliders',
+  'Scatter': 'box', 'Mesh detail': 'grid', 'Rock shape': 'gem', 'Rock type': 'palette', 'Colours': 'palette', 'Strata': 'strata', 'Grain': 'grid', 'Oxide & cavity': 'droplets', 'Material response': 'sliders',
   'Flakes': 'gem', 'Plate look': 'sparkles', 'Peeling sheets': 'layers', 'Joint cells (Voronoi)': 'grid', 'Isolate layer': 'layers', 'Runoff': 'droplets', 'Gravel': 'box', 'Vegetation': 'sparkles', 'Moss': 'sparkles', 'Snow': 'wind', 'Sun direction': 'sun', 'Atmosphere': 'wind', 'Water': 'waves', 'Display': 'monitor', 'Export': 'download',
 };

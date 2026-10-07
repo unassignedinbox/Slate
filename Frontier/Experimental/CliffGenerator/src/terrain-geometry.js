@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 
-import { SimplexNoise } from './noise.js';
+import { SimplexNoise, GradientNoise3 } from './noise.js';
 
 // Face displacement: moves vertices horizontally along the outward face normal so that hard beds
 // stand proud of the face and soft beds are recessed. Because this is applied to the mesh (not the
@@ -40,6 +40,83 @@ export function makeDisplacement(field, v) {
   };
 }
 
+
+// Catmull-Rom bicubic upsampling of every field map, so the mesh can carry more vertices than the
+// simulated heightfield (erosion cost grows with N², mesh detail is cheap by comparison).
+const MAX_MESH_SIDE = 2049;
+export function meshSubdivision(field, v) {
+  const want = Math.max(1, Math.round(v.meshSubdivision || 1));
+  const maxK = Math.max(1, Math.floor((MAX_MESH_SIDE - 1) / (field.resolution - 1)));
+  return Math.min(want, maxK);
+}
+function cubic(p0, p1, p2, p3, t) {
+  return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+}
+function upsampleMap(src, N, k, smoothOnly) {
+  const M = (N - 1) * k + 1;
+  const out = new Float32Array(M * M);
+  const at = (i, j) => src[Math.min(N - 1, Math.max(0, j)) * N + Math.min(N - 1, Math.max(0, i))];
+  const col = new Float32Array(4);
+  for (let J = 0; J < M; J++) {
+    const gj = J / k, j = Math.min(N - 2, Math.floor(gj)), tj = gj - j;
+    for (let I = 0; I < M; I++) {
+      const gi = I / k, i = Math.min(N - 2, Math.floor(gi)), ti = gi - i;
+      if (smoothOnly) {
+        // bilinear for the auxiliary maps (no overshoot on masks)
+        out[J * M + I] = at(i, j) * (1 - ti) * (1 - tj) + at(i + 1, j) * ti * (1 - tj) + at(i, j + 1) * (1 - ti) * tj + at(i + 1, j + 1) * ti * tj;
+      } else {
+        for (let r = -1; r <= 2; r++) col[r + 1] = cubic(at(i - 1, j + r), at(i, j + r), at(i + 1, j + r), at(i + 2, j + r), ti);
+        out[J * M + I] = cubic(col[0], col[1], col[2], col[3], tj);
+      }
+    }
+  }
+  return out;
+}
+export function refineField(field, v) {
+  const k = meshSubdivision(field, v);
+  if (k <= 1) return field;
+  if (field._refined && field._refined.k === k) return field._refined.field;
+  const N = field.resolution;
+  const fine = {
+    resolution: (N - 1) * k + 1,
+    worldSize: field.worldSize,
+    height: upsampleMap(field.height, N, k, false),
+    hardness: upsampleMap(field.hardness, N, k, true),
+    deposit: upsampleMap(field.deposit, N, k, true),
+    flow: upsampleMap(field.flow, N, k, true),
+    cavity: upsampleMap(field.cavity, N, k, true),
+    slope: upsampleMap(field.slope, N, k, true),
+    stats: field.stats,
+    base: field,
+  };
+  field._refined = { k, field: fine };
+  return fine;
+}
+
+// Fine relief added along the surface normal: rock bumps / knobs on steep faces, gentle hummocks on
+// flat ground. Independent of the heightfield so it survives any resolution.
+export function makeDetail(field, v) {
+  const amp = v.detailRelief || 0;
+  const scale = Math.max(0.5, v.detailScale || 6);
+  const cliffBias = v.detailCliffBias == null ? 0.8 : v.detailCliffBias;
+  if (amp <= 0) return { amp: 0, at: () => 0 };
+  const noise = new GradientNoise3((v.seed || 1) * 31 + 11);
+  const cell = field.worldSize / (field.resolution - 1);
+  const limit = cell * 0.9;
+  return {
+    amp,
+    at(x, y, z, ny, hardness) {
+      const steep = Math.min(1, Math.max(0, (1 - ny - 0.2) / 0.4));
+      const weight = (1 - cliffBias) + cliffBias * steep;
+      if (weight <= 0.001) return 0;
+      const n = noise.fbm(x / scale, y / scale, z / scale, 3, 2.1, 0.55);
+      // harder beds knobbly, softer beds smoother
+      const d = n * amp * weight * (0.6 + 0.6 * hardness);
+      return Math.max(-limit, Math.min(limit, d));
+    },
+  };
+}
+
 export function buildTerrainGeometry(field, v = {}) {
   const { resolution: N, worldSize: size, height, deposit, flow, hardness, cavity } = field;
   const cell = size / (N - 1);
@@ -48,6 +125,8 @@ export function buildTerrainGeometry(field, v = {}) {
   const normals = new Float32Array(count * 3);
   const aux = new Float32Array(count * 4);
   const disp = makeDisplacement(field, v);
+  const detail = makeDetail(field, v);
+  const fadeCells = 3;
 
   for (let j = 0; j < N; j++) {
     const z = (j / (N - 1) - 0.5) * size;
@@ -62,9 +141,14 @@ export function buildTerrainGeometry(field, v = {}) {
       const inv = 1 / Math.hypot(nx, ny, nz);
       const edge = i === 0 || j === 0 || i === N - 1 || j === N - 1;
       const [ox, oz, sag] = edge ? [0, 0, 0] : disp.at(i, j, nx * inv, ny * inv, nz * inv, hardness[idx], x, z, height[idx]);
-      positions[idx * 3] = x + ox;
-      positions[idx * 3 + 1] = height[idx] + sag;
-      positions[idx * 3 + 2] = z + oz;
+      let det = 0;
+      if (detail.amp > 0 && !edge) {
+        const border = Math.min(i, j, N - 1 - i, N - 1 - j) / fadeCells;
+        det = detail.at(x, height[idx], z, ny * inv, hardness[idx]) * Math.min(1, border);
+      }
+      positions[idx * 3] = x + ox + nx * inv * det;
+      positions[idx * 3 + 1] = height[idx] + sag + ny * inv * det;
+      positions[idx * 3 + 2] = z + oz + nz * inv * det;
       normals[idx * 3] = nx * inv;
       normals[idx * 3 + 1] = ny * inv;
       normals[idx * 3 + 2] = nz * inv;
@@ -96,7 +180,7 @@ export function buildTerrainGeometry(field, v = {}) {
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute('aux', new THREE.BufferAttribute(aux, 4));
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-  if ((v.overhang || 0) + (v.buttress || 0) > 0) {
+  if ((v.overhang || 0) + (v.buttress || 0) + (v.detailRelief || 0) > 0) {
     // displaced faces need true mesh normals; blend with the heightfield normal to keep them smooth
     const smooth = normals.slice();
     geometry.computeVertexNormals();
@@ -170,6 +254,24 @@ export function makeSampler(field) {
       return [nx * inv, inv, nz * inv];
     },
     map: (name, x, z) => { const [gx, gz] = toGrid(x, z); return bilinear(field[name], gx, gz); },
+    // world-space point on the rendered surface at (x, z): heightfield + face displacement + detail
+    surface(x, z, v) {
+      const [gx, gz] = toGrid(x, z);
+      const h = bilinear(field.height, gx, gz);
+      const n = this.normal(x, z);
+      let px = x, py = h, pz = z;
+      if (v && ((v.overhang || 0) + (v.buttress || 0)) > 0) {
+        if (!this._disp || this._disp.v !== v) { this._disp = makeDisplacement(field, v); this._disp.v = v; }
+        const [ox, oz, sag] = this._disp.at(0, 0, n[0], n[1], n[2], bilinear(field.hardness, gx, gz), x, z, h);
+        px += ox; pz += oz; py += sag;
+      }
+      if (v && (v.detailRelief || 0) > 0) {
+        if (!this._det || this._det.v !== v) { this._det = makeDetail(field, v); this._det.v = v; }
+        const d = this._det.at(x, h, z, n[1], bilinear(field.hardness, gx, gz));
+        px += n[0] * d; py += n[1] * d; pz += n[2] * d;
+      }
+      return [px, py, pz];
+    },
     // horizontal offset the face displacement applies near (x, z)
     displaced(x, z, v) {
       if (!v || ((v.overhang || 0) + (v.buttress || 0)) <= 0) return [x, z];

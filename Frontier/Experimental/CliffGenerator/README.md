@@ -15,6 +15,14 @@ cd Frontier/Experimental/CliffGenerator
 python3 -m http.server 5173 --bind 0.0.0.0     # or: npm install && npm run dev
 ```
 
+## Representation
+
+The terrain is **heightfield‑based**: a 2‑D grid of heights (128²–2048²) is what the noise,
+strata and erosion operate on, and what the heightmap / satmap / mask exports describe. The
+*rendered mesh* is more than the heightfield — vertices are moved horizontally for overhangs and
+along the normal for fine detail — but it is still one sheet with no caves, arches or tunnels, and
+overhangs are limited to roughly one grid cell. True 3‑D (voxel / SDF) terrain is out of scope here.
+
 ## Pipeline — base shape → noise → erosion → rocks → surface
 
 1. **Base relief** (`src/heightfield.js`) — domain‑warped ridged multifractal with a continental
@@ -30,15 +38,17 @@ python3 -m http.server 5173 --bind 0.0.0.0     # or: npm install && npm run dev
    normals and an `aux` attribute `(deposit, flow, hardness, cavity)`; a skirt turns the tile
    into a cut block of ground. **Cliff depth**: steep vertices are displaced horizontally along
    the face normal — hard beds out, soft beds in, plus buttress/alcove noise — so the mesh has
-   genuine overhangs, ledges and recesses that the heightfield itself cannot represent. Rocks
-   are seated on the displaced surface.
+   genuine overhangs, ledges and recesses that the heightfield itself cannot represent.
+   **Mesh detail**: the mesh can carry 1–4× the heightfield's vertices (bicubic upsample, side
+   capped at 2049) plus fine relief pushed along the surface normal (knobs on steep rock,
+   hummocks on flat ground) — cheap detail on top of the expensive erosion. Rocks are seated on
+   the final displaced surface.
 5. **Rocks** (`src/rock-geometry.js`, `src/rock-placement.js`) — eight archetypes per seed
    (boulder / block / slab / shard): displaced icosphere, anisotropic stretch, then clipped by
-   bedding + joint‑set planes, crease‑aware normals. Placed with three patterns read from the
-   erosion maps: scree aprons (deposit), cliff blocks snapped into bed rows along resistant
-   layers (hardness × slope, aligned to the strata dip, protruding from the face) and summit
-   tors (convexity × elevation). Rendered as `InstancedMesh` with per‑instance tone variation
-   and the same surface shader.
+   bedding + joint‑set planes, crease‑aware normals. Placement is a plain scatter: jittered
+   grid × density × slope window × clustering mask, power‑law sizes, slope‑following tilt and
+   embed depth. Rendered as `InstancedMesh` with per‑instance tone variation and the same
+   surface shader.
 6. **Surface** (`src/surface-shader.js`) — analytic, world‑space, texture‑free material injected
    into `MeshStandardMaterial` so Three's PBR, shadows, sky environment and fog still apply:
    - strata colour bands with dip, bed seams, oxide pockets, aggregate grain (3D value noise

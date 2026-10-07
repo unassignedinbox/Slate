@@ -108,7 +108,7 @@ function updateStats(extra = {}) {
   Object.assign(statCache, extra);
   if (!lastField) return;
   editor.setStats({
-    'Grid': `${lastField.resolution}² · ${values.worldSize} m`,
+    'Grid': `${lastField.resolution}²${scene.meshField && scene.meshField !== lastField ? ` → ${scene.meshField.resolution}²` : ''} · ${values.worldSize} m`,
     'Triangles': (scene.stats.triangles + scene.rockGroup.children.reduce((n, m) => n + (m.geometry.getAttribute('position').count / 3) * m.count, 0)).toLocaleString('en-US', { maximumFractionDigits: 0 }),
     'Rocks': scene.rockCount.toLocaleString('en-US'),
     'Relief': `${lastField.stats.min.toFixed(0)} – ${lastField.stats.max.toFixed(0)} m`,

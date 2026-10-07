@@ -6,7 +6,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { buildTerrainGeometry, buildSkirtGeometry } from './terrain-geometry.js';
+import { buildTerrainGeometry, buildSkirtGeometry, refineField } from './terrain-geometry.js';
 import { buildRockLibrary } from './rock-geometry.js';
 import { placeRocks, buildRockMeshes } from './rock-placement.js';
 import { makeSurfaceUniforms, updateSurfaceUniforms, makeSurfaceMaterial } from './surface-shader.js';
@@ -155,7 +155,8 @@ export class CliffScene {
   }
 
   buildTerrainMeshes(v) {
-    const field = this.field;
+    const field = refineField(this.field, v);
+    this.meshField = field;
     this.disposeGroup(this.terrainGroup);
     const geometry = buildTerrainGeometry(field, v);
     const floorY = field.stats.min - Math.max(40, (field.stats.max - field.stats.min) * 0.12);
@@ -194,7 +195,7 @@ export class CliffScene {
       this.rockLibrary = buildRockLibrary(v.rockSeed, v.rockAngularity);
       this.rockLibrary.key = key;
     }
-    const placements = placeRocks(this.field, v, this.rockLibrary);
+    const placements = placeRocks(this.meshField || this.field, v, this.rockLibrary);
     const meshes = buildRockMeshes(placements, this.rockLibrary, this.rockMaterial);
     meshes.forEach((m) => this.rockGroup.add(m));
     this.rockCount = placements.length;

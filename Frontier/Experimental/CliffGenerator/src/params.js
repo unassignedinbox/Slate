@@ -41,22 +41,27 @@ export const defaults = {
   thermalRate: 0.5,
   talusSoft: 33,            // [°]
   talusHard: 78,            // [°]
-  // Rocks
+  // Rocks (plain scatter)
   rocksEnabled: 1,
   rockSeed: 7,
-  screeDensity: 0.7,
-  cliffBlockDensity: 0.6,
-  torDensity: 0.4,
-  rockSizeMin: 1.2,         // [m]
-  rockSizeMax: 14,          // [m]
+  rockDensity: 0.35,
+  rockSlopeMin: 0,          // [°]
+  rockSlopeMax: 55,         // [°]
+  rockClustering: 0.5,
+  rockClusterScale: 80,     // [m]
+  rockTilt: 0.7,
+  rockSizeMin: 0.8,         // [m]
+  rockSizeMax: 9,           // [m]
   rockAngularity: 0.7,
   rockEmbed: 0.45,
-  rockBedding: 0.8,
-  rockProtrude: 0.5,
   // Cliff depth (mesh displacement)
   overhang: 3.5,            // [m]
   buttress: 0.5,
   ledgeNoise: 0.6,
+  meshSubdivision: 2,
+  detailRelief: 0.5,        // [m]
+  detailScale: 7,           // [m]
+  detailCliffBias: 0.8,
   // Rock material
   palette: 'granite',
   rockA: '#b3b1ae', rockB: '#94918f', rockC: '#c7c2ba', fresh: '#d6d3cd', oxide: '#ac947b',
@@ -151,35 +156,34 @@ export const presets = {
   'Alpine granite': {
     palette: 'granite', mountainHeight: 560, baseFrequency: 1.7, ridgeSharpness: 2.2, peakPower: 1.4, warpStrength: 0.6,
     strataBand: 26, strataStrength: 0.6, strataDip: 6, hardnessContrast: 0.7, plateauStrength: 0, canyonDepth: 0,
-    snowLine: 430, vegetation: 0.6, seaLevel: 0, waterEnabled: 1, talusSoft: 34, talusHard: 80, droplets: 180000,
-    screeDensity: 0.7, cliffBlockDensity: 0.5, torDensity: 0.5, peelStrength: 0.45, peelCoverage: 0.3, flakeStrength: 0.65, flakeScale: 1.0, jointsOn: 0, jointStrength: 0.2,
+    snowLine: 430, vegetation: 0.6, seaLevel: 0, waterEnabled: 1, talusSoft: 34, talusHard: 80, droplets: 180000, peelStrength: 0.45, peelCoverage: 0.3, flakeStrength: 0.65, flakeScale: 1.0, jointsOn: 0, jointStrength: 0.2,
   },
   'Sandstone mesa': {
     palette: 'sandstone', mountainHeight: 320, baseElevation: 60, baseFrequency: 1.3, ridgeSharpness: 1.4, peakPower: 1.0, warpStrength: 0.45,
     strataBand: 18, strataStrength: 1.0, strataDip: 2, hardnessContrast: 1.0, plateauStrength: 0.85, plateauHeight: 300,
     canyonDepth: 0, snowLine: 5000, vegetation: 0.15, seaLevel: -100, waterEnabled: 0, talusSoft: 30, talusHard: 86,
-    droplets: 140000, erodeSpeed: 0.3, screeDensity: 0.8, cliffBlockDensity: 0.9, torDensity: 0.3, peelStrength: 0.7, peelScale: 3.0, peelCoverage: 0.45, flakeStrength: 0.4,
+    droplets: 140000, erodeSpeed: 0.3, peelStrength: 0.7, peelScale: 3.0, peelCoverage: 0.45, flakeStrength: 0.4,
     sunElevation: 32, sunAzimuth: 240, turbidity: 6,
   },
   'Canyon': {
     palette: 'sandstone', mountainHeight: 260, baseElevation: 240, baseFrequency: 1.1, ridgeSharpness: 1.2, peakPower: 0.9, warpStrength: 0.4,
     plateauStrength: 0.9, plateauHeight: 420, canyonDepth: 380, canyonWidth: 420,
     strataBand: 16, strataStrength: 1.0, strataDip: 1.5, hardnessContrast: 1.0, snowLine: 5000, vegetation: 0.1, seaLevel: -20, waterEnabled: 1,
-    talusSoft: 31, talusHard: 86, droplets: 160000, screeDensity: 0.9, cliffBlockDensity: 0.9, torDensity: 0.2,
+    talusSoft: 31, talusHard: 86, droplets: 160000,
     peelStrength: 0.7, peelScale: 3.2, peelCoverage: 0.45, flakeStrength: 0.4, sunElevation: 38, sunAzimuth: 200, turbidity: 5,
   },
   'Sea cliffs': {
     palette: 'basalt', mountainHeight: 300, baseElevation: 20, baseFrequency: 1.4, ridgeSharpness: 1.6, peakPower: 1.1, warpStrength: 0.5,
     reliefContrast: 0.9, strataBand: 22, strataStrength: 0.85, strataDip: 8, strataDipDirection: 120, hardnessContrast: 0.9,
     plateauStrength: 0.5, plateauHeight: 220, canyonDepth: 0, snowLine: 5000, vegetation: 0.9, mossiness: 0.8, seaLevel: 70, waterEnabled: 1,
-    talusSoft: 35, talusHard: 84, droplets: 150000, screeDensity: 0.6, cliffBlockDensity: 0.7, torDensity: 0.3,
+    talusSoft: 35, talusHard: 84, droplets: 150000,
     peelStrength: 0.5, peelScale: 1.8, flakeStrength: 0.7, jointsOn: 1, jointStrength: 0.4, jointScale: 2.5, sunElevation: 18, sunAzimuth: 290, turbidity: 3, fogDensity: 0.5,
   },
   'Limestone escarpment': {
     palette: 'limestone', mountainHeight: 420, baseElevation: 30, baseFrequency: 1.2, ridgeSharpness: 1.7, peakPower: 1.2, warpStrength: 0.7,
     reliefContrast: 0.95, strataBand: 30, strataStrength: 0.9, strataDip: 10, strataDipDirection: 300, hardnessContrast: 0.9,
     plateauStrength: 0.35, plateauHeight: 400, canyonDepth: 0, snowLine: 5000, vegetation: 0.75, mossiness: 0.5, seaLevel: 0, waterEnabled: 0,
-    talusSoft: 33, talusHard: 82, droplets: 170000, screeDensity: 0.8, cliffBlockDensity: 0.8, torDensity: 0.4,
+    talusSoft: 33, talusHard: 82, droplets: 170000,
     peelStrength: 0.55, peelScale: 2.4, flakeStrength: 0.5, jointsOn: 1, jointStrength: 0.35, sunElevation: 28, sunAzimuth: 160, turbidity: 4,
   },
 };
@@ -220,7 +224,7 @@ export const groups = [
       ] },
       { title: 'Grid', controls: [
         ['seed', 'Seed', 1, 9999, 1, '', 'Deterministic noise seed'],
-        ['resolution', 'Resolution', 128, 1024, 128, 'px', 'Heightfield side in samples — 1024 is slow'],
+        ['resolution', 'Resolution', 128, 2048, 128, 'px', 'Heightfield side in samples. 512 ≈ 2 s, 1024 ≈ 15 s, 2048 ≈ 1 min and a 4 M-vertex mesh'],
       ] },
     ],
   },
@@ -239,12 +243,18 @@ export const groups = [
     ],
   },
   {
-    id: 'relief', name: 'Cliff depth', type: 'Overhangs & ledges', stage: 'mesh', color: '#b9a3d6',
+    id: 'relief', name: 'Cliff depth', type: 'Overhangs, ledges & mesh detail', stage: 'mesh', color: '#b9a3d6',
     cards: [
       { title: 'Face displacement', controls: [
         ['overhang', 'Caprock overhang', 0, 8, 0.25, 'm', 'Hard beds pushed out of the face, soft beds recessed — real overhangs a heightmap cannot hold (capped at ~85% of the grid cell)'],
         ['buttress', 'Buttress bulge', 0, 1, 0.05, '', 'Large-scale swelling of the faces into ribs and alcoves'],
         ['ledgeNoise', 'Ledge irregularity', 0, 1, 0.05, '', 'Breaks ledges into blocks and notches'],
+      ] },
+      { title: 'Mesh detail', controls: [
+        ['meshSubdivision', 'Mesh subdivision', 1, 4, 1, '×', 'Vertices per heightfield cell (bicubic). Mesh side is capped at 2049 vertices'],
+        ['detailRelief', 'Detail relief', 0, 3, 0.05, 'm', 'Fine bumps and knobs pushed along the surface normal — independent of the heightfield'],
+        ['detailScale', 'Detail scale', 1, 40, 0.5, 'm', ''],
+        ['detailCliffBias', 'Cliff bias', 0, 1, 0.05, '', '0 = everywhere, 1 = steep rock only'],
       ] },
     ],
   },
@@ -270,14 +280,16 @@ export const groups = [
     ],
   },
   {
-    id: 'rocks', name: 'Rocks', type: 'Boulders & scree', stage: 'rocks', color: '#a8bbeb',
+    id: 'rocks', name: 'Rocks', type: 'Plain scatter', stage: 'rocks', color: '#a8bbeb',
     cards: [
-      { title: 'Placement pattern', controls: [
-        ['screeDensity', 'Scree aprons', 0, 1, 0.05, '', 'Loose debris where sediment collected below cliffs'],
-        ['cliffBlockDensity', 'Cliff blocks', 0, 1, 0.05, '', 'Blocks embedded along resistant beds on faces'],
-        ['torDensity', 'Summit tors', 0, 1, 0.05, '', 'Large blocks perched on crests'],
-        ['rockBedding', 'Bed alignment', 0, 1, 0.05, '', 'Rotate blocks to follow the strata dip and snap them into bed rows'],
-        ['rockProtrude', 'Face protrusion', 0, 1, 0.05, '', 'How far cliff blocks stand out of the face'],
+      { title: 'Scatter', controls: [
+        ['rocksEnabled', 'Enable rocks', 0, 1, 1, '', ''],
+        ['rockDensity', 'Density', 0, 1, 0.05, '', 'How many rocks are scattered'],
+        ['rockSlopeMin', 'Slope · min', 0, 80, 1, '°', 'No rocks on ground gentler than this'],
+        ['rockSlopeMax', 'Slope · max', 5, 89, 1, '°', 'No rocks on ground steeper than this'],
+        ['rockClustering', 'Clustering', 0, 1, 0.05, '', 'Even spread → grouped into patches'],
+        ['rockClusterScale', 'Cluster size', 10, 400, 5, 'm', ''],
+        ['rockTilt', 'Follow slope', 0, 1, 0.05, '', 'Upright → aligned to the ground normal'],
       ] },
       { title: 'Rock shape', controls: [
         ['rockSizeMin', 'Smallest rock', 0.3, 6, 0.1, 'm', ''],
