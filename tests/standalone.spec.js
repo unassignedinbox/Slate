@@ -310,6 +310,7 @@ test("standalone page renders, edits and exports without external assets", async
   await page
     .getByRole("button", { name: "Pattern studio", exact: true })
     .click();
+  await page.getByLabel("Pattern collection").selectOption("Basic / Originals");
   await page
     .getByRole("button", { name: "Painted blossoms", exact: true })
     .click();
@@ -357,7 +358,7 @@ test("standalone page renders, edits and exports without external assets", async
   await page
     .getByRole("button", { name: "Pattern studio", exact: true })
     .click();
-  await page.getByLabel("Pattern collection").selectOption("Fading");
+  await page.getByLabel("Pattern collection").selectOption("Legacy / Fading");
   await page
     .getByRole("button", { name: "Golden Cube Fade", exact: true })
     .click();
@@ -391,11 +392,9 @@ test("standalone page renders, edits and exports without external assets", async
     .getByRole("button", { name: "Pattern studio", exact: true })
     .click();
   await page.getByLabel("Pattern collection").selectOption("Stitch patterns");
-  await page.getByLabel("Pattern colorway").selectOption("Indigo");
+  await page.getByLabel("Textile family colorway").selectOption("Indigo");
   await page.getByLabel("Search patterns").fill("Chain");
-  await page
-    .getByRole("button", { name: "Chain stitch - Indigo", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Chain stitch", exact: true }).click();
   await page.getByLabel("Stitch placement").selectOption("diagonal");
   await page.getByRole("button", { name: "3D material", exact: true }).click();
   await expect(
@@ -431,12 +430,38 @@ test("standalone page renders, edits and exports without external assets", async
   )(THREE);
   expect(rebuilt.userData.params.pattern.library.family).toBe("Plain weave");
   rebuilt.dispose();
+  const beaded = new Function(
+    "THREE",
+    stitchFactory.replace(
+      "return createMaterial(preset);",
+      "return createMaterial({...preset,pattern:patternStarter('Beaded Diamond Weave')});",
+    ),
+  )(THREE);
+  expect(beaded.userData.params.pattern.beadwork).toEqual({
+    columns: 84,
+    rows: 64,
+    height: 0.004,
+  });
+  const beadShader = {
+    uniforms: {},
+    vertexShader: THREE.ShaderLib.physical.vertexShader,
+    fragmentShader: THREE.ShaderLib.physical.fragmentShader,
+  };
+  beaded.onBeforeCompile(beadShader);
+  expect(beadShader.uniforms.uPatternBeads.value.toArray()).toEqual([
+    84, 64, 0.004,
+  ]);
+  beaded.dispose();
+
   await page
     .getByRole("button", { name: "Pattern studio", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "108 detailed compositions ↗", exact: true })
+    .getByRole("button", { name: "4 reference-led rebuilds ↗", exact: true })
     .click();
+  await page
+    .getByLabel("Pattern collection")
+    .selectOption("Legacy / Islamic carpets");
   await page.getByLabel("Search patterns").fill("Saffron Rosette Court");
   await page
     .getByRole("button", { name: "Saffron Rosette Court", exact: true })
@@ -495,9 +520,9 @@ test("standalone page renders, edits and exports without external assets", async
       .click();
     await page
       .getByLabel("Pattern collection")
-      .selectOption("African-inspired");
+      .selectOption("Reference studies");
     await page
-      .getByRole("button", { name: "African Diamond Carpet", exact: true })
+      .getByRole("button", { name: "Chromatic Diamond Tapestry", exact: true })
       .click();
     await page
       .getByLabel("Pattern base material")

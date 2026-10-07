@@ -1,6 +1,15 @@
+import {
+  referenceDesignCatalog,
+  referencePattern,
+  referenceDiamondPattern,
+} from "./referencePatterns.js";
 import { rugDesignCatalog } from "./rugDesigns.js";
 import { richRugPattern, normalizeRugComposition } from "./rugCompositions.js";
-import { textileLibraryEntries, textilePattern } from "./patternLibrary.js";
+import {
+  textileLibraryEntries,
+  textilePalettes,
+  textilePattern,
+} from "./patternLibrary.js";
 import { normalizeStitches } from "./patternStitches.js";
 import {
   collectionPatterns,
@@ -73,6 +82,21 @@ export function validatePattern(input) {
     ...(input.presentation === "rug" ? { presentation: "rug" } : {}),
     ...(input.fade ? { fade: normalizeCollectionFade(input.fade) } : {}),
     tileAxes,
+    ...(input.designAspect
+      ? { designAspect: patternNumber(input.designAspect, 1, 0.5, 2) }
+      : {}),
+    ...(input.referenceDesign
+      ? { referenceDesign: String(input.referenceDesign).slice(0, 80) }
+      : {}),
+    ...(input.beadwork
+      ? {
+          beadwork: {
+            columns: patternNumber(input.beadwork.columns, 96, 24, 180),
+            rows: patternNumber(input.beadwork.rows, 72, 24, 180),
+            height: patternNumber(input.beadwork.height, 0.004, 0.0001, 0.012),
+          },
+        }
+      : {}),
     ...(input.ornament
       ? { ornament: normalizeRugComposition(input.ornament) }
       : {}),
@@ -178,32 +202,99 @@ export function patternLayer(kind = "diamond", extra = {}) {
     ...extra,
   };
 }
-export const patternStarterNames = [
-  "Diamond weave",
-  "Painted blossoms",
-  "Cube lattice",
-  "Inlaid tile",
-  "Banded geometry",
-  "Medallion rug",
-  "Graduated lattice",
-  ...collectionPatterns.map((p) => p.name),
-  "Blank",
-  ...textileLibraryEntries.map((p) => p.name),
-  ...rugDesignCatalog.map((p) => p.name),
+// Colorways are options within a family; legacy aliases are never catalog cards.
+const patternAliases = new Set([
+  "African Diamond Carpet",
+  "Islamic Medallion Carpet",
+  "Islamic Garden Carpet",
+  "Ink Cube Fade",
+]);
+export const canonicalTextileEntries = textileLibraryEntries
+  .filter(
+    (p) =>
+      p.palette === "Indigo" &&
+      !["Micro dots", "Awning stripes", "Candy stripes"].includes(p.family),
+  )
+  .map((p) => ({
+    ...p,
+    name: p.family,
+    colorways: Object.keys(textilePalettes),
+  }));
+export const patternStarterCatalog = [
+  {
+    ...rugDesignCatalog.find((p) => p.name === "Chromatic Diamond Tapestry"),
+    group: "Reference studies",
+    reference: true,
+  },
+  ...referenceDesignCatalog.map((p) => ({
+    ...p,
+    group: "Reference studies",
+    reference: true,
+  })),
+  ...rugDesignCatalog
+    .filter((p) => p.name !== "Chromatic Diamond Tapestry")
+    .map((p) => ({ ...p, group: "Legacy / " + p.group })),
+  ...canonicalTextileEntries.map((p) => ({
+    ...p,
+    group: ["Fabric weaves", "Stitch patterns"].includes(p.group)
+      ? p.group
+      : "Basic / " + p.group,
+  })),
+  ...[
+    "Diamond weave",
+    "Painted blossoms",
+    "Cube lattice",
+    "Inlaid tile",
+    "Banded geometry",
+    "Medallion rug",
+    "Graduated lattice",
+    "Blank",
+  ].map((name) => ({ name, group: "Basic / Originals" })),
+  ...collectionPatterns
+    .filter((p) => !patternAliases.has(p.name))
+    .map((p) => ({ ...p, group: "Legacy / " + p.group })),
 ];
-export const patternStarterCatalog = patternStarterNames.map(
-  (name) =>
-    rugDesignCatalog.find((p) => p.name === name) ||
-    textileLibraryEntries.find((p) => p.name === name) || {
-      name,
-      group:
-        collectionPatterns.find((p) => p.name === name)?.group || "Originals",
-      palette: "Original",
-    },
-);
-export function patternStarter(name = "Diamond weave") {
+export const patternStarterNames = patternStarterCatalog.map((p) => p.name);
+export function resolvePatternStarterName(slug) {
+  return [
+    ...patternStarterNames,
+    ...textileLibraryEntries.map((p) => p.name),
+    ...patternAliases,
+  ].find((name) => name.toLowerCase().replaceAll(" ", "-") === slug);
+}
+// This is a reference-rebuild progress count, NOT a claim that old compositions
+// or elementary repeats satisfy the requested 200 detailed distinct designs.
+export const patternInventory = {
+  target: 200,
+  referenceStudies: 4,
+  catalogEntries: patternStarterCatalog.length - 1,
+  targetMet: false,
+};
+export function patternStarter(name = "Diamond weave", colorway = "Indigo") {
+  if (
+    [
+      "Chromatic Diamond Tapestry",
+      "chromatic-diamond-tapestry",
+      "African Diamond Carpet",
+    ].includes(name)
+  )
+    return validatePattern({
+      ...referenceDiamondPattern(),
+      ...(name === "African Diamond Carpet"
+        ? { name, collection: "African-inspired" }
+        : {}),
+    });
+  const family = canonicalTextileEntries.find((p) => p.name === name);
+  if (family)
+    name =
+      name +
+      " - " +
+      (family.colorways.includes(colorway) ? colorway : "Indigo");
   const collection =
-    richRugPattern(name) || textilePattern(name) || collectionPattern(name);
+    referencePattern(name) ||
+    richRugPattern(name) ||
+    textilePattern(name) ||
+    collectionPattern(name);
   if (collection) return validatePattern(collection);
   const d = {
     schema: "alloy.pattern.v1",
@@ -507,7 +598,7 @@ export function patternSVG(input, mode = "color") {
         body += `<g opacity="${l.opacity}" transform="translate(${x} ${y}) rotate(${l.rotation * sx * sy}) scale(${(sx * l.width * (l.flipX ? -1 : 1)) / 100} ${(sy * l.height * (l.flipY ? -1 : 1)) / 100}) translate(-50 -50)">${shape}</g>`;
       }
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w * (d.designAspect || 1)}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${body}</svg>`;
 }
 
 // Seeded layout generation is separate from sampling: exported SVG remains a

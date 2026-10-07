@@ -17,7 +17,7 @@ import { createMaterial, materials } from "../src/materials.js";
 import { createLeatherSwatchGeometry } from "../src/leatherGeometry.js";
 
 test("all ten collections are bounded editable vectors, including maximum-density fades", () => {
-  expect(patternStarterNames).toHaveLength(342);
+  expect(patternStarterNames).toHaveLength(176);
   for (const p of collectionPatterns) {
     const raw = collectionPattern(p.name),
       doc = patternStarter(p.name);
@@ -171,12 +171,16 @@ test("collection filters, fade controls, undo, border export and JSON reload", a
     "/?material=natural-cotton&studio=pattern&pattern=golden-cube-fade",
   );
   await expect(page.getByLabel("Pattern name")).toHaveValue("Golden Cube Fade");
-  await page.getByLabel("Pattern collection").selectOption("Islamic geometry");
-  await expect(page.locator(".pe-starters button")).toHaveCount(4);
-  await page.getByLabel("Pattern collection").selectOption("African-inspired");
-  await expect(page.locator(".pe-starters button")).toHaveCount(3);
-  await page.getByLabel("Pattern collection").selectOption("Fading");
-  await expect(page.locator(".pe-starters button")).toHaveCount(3);
+  await page
+    .getByLabel("Pattern collection")
+    .selectOption("Legacy / Islamic geometry");
+  await expect(page.locator(".pe-starters button")).toHaveCount(2);
+  await page
+    .getByLabel("Pattern collection")
+    .selectOption("Legacy / African-inspired");
+  await expect(page.locator(".pe-starters button")).toHaveCount(2);
+  await page.getByLabel("Pattern collection").selectOption("Legacy / Fading");
+  await expect(page.locator(".pe-starters button")).toHaveCount(2);
   await page.getByLabel("Motif color", { exact: true }).fill("#cf1234");
   await page.getByLabel("Fade direction").selectOption("left");
   await page.getByLabel("Motif density").fill("18");
@@ -231,8 +235,10 @@ test("rug live preview renders a wool surface and applies the dedicated rug mesh
   await ready(page);
   await expect(page.getByLabel("Pattern preview object")).toHaveValue("Rug");
   const d = await saveDoc(page);
-  expect(d.layers.every((l) => l.finish === "wool")).toBe(true);
-  await page.getByLabel("Pattern collection").selectOption("African-inspired");
+  expect(d.layers.every((l) => l.finish === "cotton")).toBe(true);
+  await page
+    .getByLabel("Pattern collection")
+    .selectOption("Legacy / African-inspired");
   await page.getByLabel("Pattern preview zoom").fill("180");
   await ready(page);
   await page.evaluate(
@@ -240,9 +246,12 @@ test("rug live preview renders a wool surface and applies the dedicated rug mesh
       new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
   );
   await page.screenshot({ path: ".playwright/final-african-rug.png" });
-  await page.getByLabel("Pattern collection").selectOption("Islamic geometry");
   await page
-    .getByRole("button", { name: "Islamic Medallion Carpet", exact: true })
+    .getByLabel("Pattern collection")
+    .selectOption("Legacy / Islamic carpets");
+  await page.getByLabel("Search patterns").fill("Azure Arabesque Medallion");
+  await page
+    .getByRole("button", { name: "Azure Arabesque Medallion", exact: true })
     .click();
   await ready(page);
   await page.screenshot({ path: ".playwright/final-islamic-rug.png" });

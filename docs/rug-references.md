@@ -1,12 +1,27 @@
-# Rug and textile studies — v7.4
+# Rug and textile studies — v7.5
 
 ## Scope and originality
 
-This revision prioritizes composition and ornament detail over colorway counts. It adds **108 original composition blueprints**, rather than another colorway multiplication: 36 African-inspired compositions, 36 Islamic-style carpets and 36 rug-atelier compositions. The 108 share an editable ornamental vocabulary but combine different field arrangements, focal structures, motifs, proportions and border treatments. They are contemporary vector studies—not scans, replicas, authenticated traditional patterns, symbolic interpretations or loom-ready instructions.
+The user rejected the V7.4 output as too simple and rejected recolors being counted as designs. **The earlier count and geometry-hash argument did not establish reference fidelity.** This pass separates the accounting correction from the unfinished quantity/quality target.
 
-The older **African Diamond Carpet**, **Islamic Medallion Carpet** and **Islamic Garden Carpet** starter names now resolve to three of the richer compositions. Those compatibility aliases are **not** extra unique compositions. The full catalogue contains 341 named preset entries plus Blank, still including the previous colorways and these aliases. Do not advertise that larger number as distinct designs.
+The public catalog has **175 entries plus Blank**: four reference studies, 107 older composition entries, 51 canonical textile/basic families and 13 other starters. Colorways, compatibility aliases, ink/gold versions of cube fade and dot/stripe size variants no longer multiply cards. This inventory is not an approved distinct-design count. **The requested 200 detailed distinct designs are not complete.** No palette, seed or motif permutation batch was added to conceal the deficit.
 
-No research photographs, museum images, stock watermarks or externally hosted assets are embedded in the materials or standalone app. Research downloads are ignored by Git. The generated paths and shader finish assignments are the artwork shipped in the application. Palette changes are not counted as new compositions.
+The four reference studies correspond to the four distinct visual subjects in the supplied images; repeated woven-rug images are not counted separately. **Chromatic Diamond Tapestry is replaced**, not counted twice. Beaded Diamond Weave, Turquoise Faceted Vault and Crimson Star and Cross Carpet are three additions. They are contemporary vector studies, not authenticated traditional works, loom-ready instructions or exact replicas. No reference pixels, museum photographs, watermarks or external assets are shipped in the artwork.
+
+### Additional research for the supplied references
+
+- The Met's discussion of African beadwork documents glass-bead/hide/thread constructions and geometrically organized Ndebele aprons and capes. It informed the use of bead-level color assignment and a filled geometric field, not an assertion that the user's unlabelled image is a particular authenticated object. [1](https://www.metmuseum.org/perspectives/beadwork-in-arts-of-africa-and-beyond)
+- The V&A's Islamic tile activity illustrates interlocking eight-pointed star and cross tiles with floral decoration. This informed a joined field with decorated interstices instead of isolated star stamps. [2](https://www.vam.ac.uk/articles/design-and-make-your-own-islamic-tile-and-printed-pattern)
+- Brian Wichmann's tiling introduction discusses connected geometric networks, rosettes and strapwork. The new field follows the connected-network principle; it is not a claim of reconstructing a named historical tiling or its exact interlace. [3](https://tilingsearch.mit.edu/intro.pdf)
+
+### What was drawn and checked
+
+- **Woven reference:** wide format, three nested diamonds/shields, stepped black/ivory/blue contours, tiny outline checks and bead marks, complete split panel background and narrow green/black selvedges.
+- **Bead reference:** large nested colored bands crossing a staggered field of thousands of oval bead bodies, separate highlights/edge shading and pierced centers. The shared runtime adds rounded profile relief, hole depressions and matte interstices.
+- **Vault reference:** connected radial faceted panels, alternating ivory/navy/turquoise grounds, gold ribs, leaves, palmettes, blossoms and scrollwork clipped to panel boundaries. This is a flat surface design; no architectural vault geometry is claimed.
+- **Carpet reference:** a connected eightfold star/cross layout with branching floral/leaf/scroll decoration in both tile types and narrow outer guards.
+
+Actual SVG rasterizations and studio screenshots were inspected, including the beadwork in live 3D. The renders were revised when the first Islamic fills were too sparse. This is visual inspection, not user approval or a quantitative measure of authenticity.
 
 ## Research that informed the designs
 
@@ -18,7 +33,7 @@ No research photographs, museum images, stock watermarks or externally hosted as
 - **FIT Fashion History Timeline, bògòlanfini.** The article discusses patterned grids, narrow strips, chevrons, crosses, dashes and decorated end borders. These informed earth-tone panel/mark arrangements—not an attempt to reproduce culturally specific ceremonial motifs. [4](https://fashionhistory.fitnyc.edu/bogolanfini/)
 - **V&A, _Africa fashion: cloth of a continent_.** Its bògòlanfini discussion describes geometric negative-space patterning and the off-white/brown palette associated with the dyeing process. That informed the contrast treatment of the Earthmark studies. [2](https://www.vam.ac.uk/articles/cloth-of-a-continent-africa-fashion)
 
-The earlier user-supplied vivid nested-diamond rug informed **Chromatic Diamond Tapestry**: a large central diamond, flanking medallions, broad blue/red/yellow/green bands, finer inset marks, stepped corners, comb/chevron fields and hooked guard borders. This is an original reconstruction of the composition idea, not a pixel trace or exact reproduction of that textile.
+The earlier vivid nested-diamond study has been replaced by the new wide-format construction described above; the earlier sparse field is not retained as another catalog entry.
 
 ### Islamic carpets and rug structures
 
@@ -31,25 +46,26 @@ The earlier user-supplied vivid nested-diamond rug informed **Chromatic Diamond 
 
 ## Implementation and editing
 
-`src/rugDesigns.js` contains the 108 explicit blueprints and study-source links. Each selects a composition plan, primary and secondary motifs, border system, focal treatment and field subdivision. `src/rugCompositions.js` renders the blueprints into ordinary `alloy.pattern.v1` vector layers. It does not fetch images or make random variations at runtime.
+`src/referencePatterns.js` contains the four hand-authored reference studies, including explicit wide-format shield/panel coordinates, the faceted polar construction with convex polygon clipping, the connected star/cross field and bead geometry. There are no runtime network requests, random variation packs or embedded photographs. Paths are grouped by drawing stage and pigment; stage order is retained so outlines and knockouts are not destroyed by color bucketing.
 
-Composition plans include central, triple, vertical and cross medallions; radial satellites; offset strips; unequal patchwork; compartments; canals; trellises; ogival fields; stepped bands; arches; trees; and vase groups. The motif vocabulary includes hooked/stepped diamonds, spirals, divided lozenges, combs, patterned strips, rings, interlace, eight-/twelvefold stars, lobed medallions, flowers, palmettes, leaves, paisleys and branching vines. Fine stems, buds, inlay marks and multiple guard bands add hierarchy around the large motifs.
+`src/patternDocument.js` owns the canonical public catalog. `src/patternLibrary.js` retains historical colorway constructors for loading old saved inputs. These compatibility constructors are not public cards or additional designs. `src/rugDesigns.js` / `src/rugCompositions.js` retain the older blueprints, explicitly classified as Legacy; the Chromatic recipe now dispatches to the new reconstruction.
 
-Use **108 detailed compositions** in the library, or filter **African compositions**, **Islamic carpets**, or **Rug atelier**. **Composition designer** controls:
+The reference studies are fixed, editable path documents. The legacy Composition designer is deliberately absent for them rather than pretending its generic controls describe the new art. Palette, material assignments, layer editing, stitches, undo, save/import, SVG, shader exports and baking remain available. Generated compound paths represent semantic pigment/depth groups, not one layer per blossom or bead. Maximum generated layer count remains below 61, leaving room for three stitch layers.
 
-- Detail level: Open / Detailed / Intricate. This changes subdivisions and fine ornament—not opacity.
-- Border width: 28–76 design units.
-- Patterned field, focal structure, corner ornaments and ornamental border. Focal/corner controls are shown only on applicable layouts.
-- Existing palette controls edit matching pigments across vector layers. Individual layers retain their material, roughness, metalness and relief controls.
+`designAspect` changes the physical artboard and Rug preview while preserving normalized document coordinates. New fields are validated and survive JSON roundtrips. Old documents retain default behavior. Other mesh previews still use their own UVs.
 
-Regeneration replaces generated geometry identified by `ornamentRole`. It preserves matching role colors/finish assignments, manually added non-generated layers and stitch overlays, plus the document's name and mapping settings. Newly appearing roles start with the recipe defaults; manually edited generated paths are replaced. Undo/redo covers these changes. Adding enough custom layers can exceed the 64-layer limit; that fails explicitly without replacing the document.
+## Rendering limits and unfinished work
 
-Generated compositions reserve at most **61 layers**, leaving room for the three-layer stitch overlay. Paths are chunked below 100,000 characters instead of silently truncating detail. Normalized detail/border extremes are covered by tests. Compound paths group ornamental regions, not each flower into a separate layer.
+- The requested 200 distinct detailed-design target remains open. Basic primitives, recolors and unaudited legacy arrangements must not be used to claim it is complete.
+- The SVG artwork remains scalable, but live color/parameter/finish maps are finite resolution. Very fine ornament needs a close view and sufficiently large bakes.
+- Bead relief is a derivative-filtered fixed lattice, not separate physical glass bead meshes, transmission or thread simulation. Moving individual pigment layers does not move that procedural relief grid; transform the complete document for coherent beadwork.
+- The vault design is flat ornament, not a muqarnas/dome model. Wool uses relief and sheen, not groomed fibers, antique wear, fringe or loom simulation.
+- Finite rugs use `tileAxes: "none"`. Repeat scaling can crop or stretch terminal pixels; it does not make them seamless.
+- Existing pure leather, scratch, botanical and analytic fabric kernels are not changed. Rug preview aspect is optional and does not change the unpatterned leather swatch.
 
-## Finite rugs and rendering limits
+See `tests/reference-patterns.spec.js` for explicit card-accounting, legacy loading, full path/metadata serialization, artboard aspect, actual bead preview and baked-channel checks. Existing regression tests remain useful for functionality; unique hashes or passing tests are not proof of visual quality.
 
-These new rugs use `tileAxes: "none"`: a single framed composition with no wrapped vector copies, and clamp-to-edge on both GPU texture axes. Their export is labeled **Export rug SVG**. This keeps the opposite edge from bleeding into a border and avoids repeating the entire composition into itself. Changing mapping/repeat scale can crop or stretch the terminal pixels; these are not declared seamless repeating fabrics. The old repeatable textile and one-way fade modes are retained.
 
-SVG remains scalable and editable. Live material sampling remains finite (normally 1024² for a single tile); tiny filigree can become subpixel. UV shape/aspect affects the design on a mesh. Wool is shader relief and sheen, not groomed yarn geometry, antique wear reconstruction, fringe or a knot-by-knot physical simulation. The Rug preview now starts from a more frontal, centered camera; other preview geometries and material kernels are unchanged.
+## Validation of this revision
 
-Validation: 21 targeted pattern/editor/library/composition tests and one standalone test with external assets blocked. Tests cover 108 distinct color-independent geometry signatures, full JSON roundtrips, path/layer limits at dense boundary settings, finite texture wrapping, assignment and stitch preservation, UI controls/undo, actual rug rendering, wool baking and independent exported shader helpers. This is targeted validation, not a claim that all historical tests were rerun or that the materials are measured textile reproductions.
+25 targeted tests passed across the main run (24 passed, one old navigation selector failed) and the corrected-selector rerun (one passed). The offline standalone check also passed with external assets blocked, including construction of the bead generator and its uniforms from the exported shader helpers. The generated standalone artifact was rebuilt. Test scope includes the legacy pattern regressions, not the full historical material suite. SVG and actual 3D screenshots were inspected separately from the automated checks.

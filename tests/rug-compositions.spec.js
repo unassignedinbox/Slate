@@ -32,9 +32,9 @@ const signature = (d) =>
     )
     .digest("hex");
 
-test("108 geometric compositions, not recolors: bounds, determinism, complete serialization", () => {
+test("108 legacy blueprints: bounds, determinism, complete serialization", () => {
   expect(rugDesignCatalog).toHaveLength(108);
-  expect(patternStarterCatalog).toHaveLength(342);
+  expect(patternStarterCatalog).toHaveLength(176);
   for (const group of [
     "African compositions",
     "Islamic carpets",
@@ -49,7 +49,11 @@ test("108 geometric compositions, not recolors: bounds, determinism, complete se
     expect(d.layers.length).toBeGreaterThan(15);
     expect(
       d.layers.every(
-        (l) => l.kind === "path" && l.finish === "wool" && !!l.ornamentRole,
+        (l) =>
+          l.kind === "path" &&
+          l.finish ===
+            (p.name === "Chromatic Diamond Tapestry" ? "cotton" : "wool") &&
+          !!l.ornamentRole,
       ),
     ).toBe(true);
     expect(d.tileAxes).toBe("none");
@@ -173,10 +177,12 @@ test("detailed library navigation, composition controls, undo, SVG/JSON and actu
     "/?material=natural-cotton&studio=pattern&pattern=chromatic-diamond-tapestry",
   );
   await expect(page.getByLabel("Pattern collection")).toHaveValue(
-    "Detailed compositions",
+    "Reference studies",
   );
-  await expect(page.locator(".pe-library-count")).toContainText("108 results");
-  await page.getByLabel("Pattern collection").selectOption("Islamic carpets");
+  await expect(page.locator(".pe-library-count")).toContainText("4 results");
+  await page
+    .getByLabel("Pattern collection")
+    .selectOption("Legacy / Islamic carpets");
   await expect(page.locator(".pe-library-count")).toContainText("36 results");
   await page.getByRole("button", { name: "Next pattern page" }).click();
   await expect(page.locator(".pe-library-paging")).toContainText("Page 2 / 2");
@@ -215,11 +221,9 @@ test("detailed library navigation, composition controls, undo, SVG/JSON and actu
   await page.screenshot({ path: ".playwright/final-ornate-islamic-rug.png" });
   await page.getByRole("button", { name: "Design tile", exact: true }).click();
   await page
-    .getByRole("button", { name: "108 detailed compositions ↗", exact: true })
+    .getByRole("button", { name: "4 reference-led rebuilds ↗", exact: true })
     .click();
-  await page
-    .getByLabel("Pattern collection")
-    .selectOption("African compositions");
+  await page.getByLabel("Pattern collection").selectOption("Reference studies");
   await page
     .getByRole("button", { name: "Chromatic Diamond Tapestry", exact: true })
     .click();

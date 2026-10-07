@@ -2,18 +2,21 @@ import * as THREE from "three";
 
 // A softly flexed, finite-thickness sample. This is only a preview asset: the
 // material is also tested on a flat panel and baked on an undeformed XY patch.
-export function createLeatherSwatchGeometry({ rug = false } = {}) {
+export function createLeatherSwatchGeometry({
+  rug = false,
+  rugAspect = 3.3 / 2.1,
+} = {}) {
   const nx = 96,
     ny = 64,
     positions = [],
     uvs = [],
     indices = [];
   const point = (u, v, back) => {
-    const x = (u - 0.5) * (rug ? 3.3 : 2.8),
+    const x = (u - 0.5) * (rug ? 2.1 * rugAspect : 2.8),
       y = (v - 0.5) * 2.1;
     const z = rug
       ? 0.025 * Math.sin(x * 1.8) * Math.cos(y * 2) +
-        0.075 * Math.pow(Math.abs(x) / 1.65, 10)
+        0.075 * Math.pow(Math.abs(x) / (1.05 * rugAspect), 10)
       : 0.34 * Math.cos(x * 1.6) +
         0.095 * Math.sin(y * 2.7 + x * 0.7) +
         0.12 * x * y;

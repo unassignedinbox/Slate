@@ -1,37 +1,43 @@
-# Pattern studio — v7.4
+# Pattern studio — v7.5
 
 This is a **hybrid vector/procedural material workflow**, not the previous zero-input-map claim. Existing paint, scratch and botanical families remain analytic. All five leather presets now share one generated SVG height atlas; pattern documents can contain vector shapes, sanitized SVG groups and embedded user images. No reference photographs are shipped as leather maps.
 
-## New in v7.4: 108 detailed rug and textile compositions
+## V7.5: corrected inventory and four reference studies
 
-This update prioritizes different layouts and richer ornament—not more palette variants. **36 African-inspired compositions, 36 Islamic-style carpets and 36 rug designs** have explicit blueprints with field structures, primary/secondary motifs, focal ornaments and border systems. They are original reference-informed vector studies, not museum-image decals or authenticated historical replicas.
+The catalog now has **175 entries plus Blank**. This is a card inventory, **not** a certification that 175 designs satisfy the requested complexity or that the 200-design target is complete. The prior palette-expanded count has been withdrawn. One ombre family has one card, regardless of color. Tiny dots and stripe-width variants are not separate cards; ink/gold cube fades share a public entry. Older names and deep links remain loadable for compatibility.
 
-Open **108 detailed compositions** above the library filters. Browse all 108, or select **African compositions**, **Islamic carpets** or **Rug atelier**. The catalogue remains searchable and paginated. The broader count is now 341 named entries plus Blank, including the earlier colorways and compatibility aliases; that is **not** the unique-design count.
+The initial library filter is **Reference studies**. **4 reference-led rebuilds** opens:
 
-- The old **African Diamond Carpet** now opens the richer Chromatic Diamond Tapestry geometry. **Islamic Medallion Carpet** and **Islamic Garden Carpet** likewise use the new Arabesque Medallion and Palmette Garden designs. These three aliases do not add to the 108 composition count.
-- The **Composition designer** provides detail level, border width, patterned-field visibility, ornamental borders and applicable focal/corner controls. Fine stems, buds, inlay marks, nested guard bands and unequal patchwork accompany the larger structures.
-- Matching generated-layer palette and finish assignments survive regeneration, as do custom non-generated motifs and stitch overlays. Manual edits to generated paths are replaced; undo is available. At most 61 generated layers leave room for a three-layer stitch overlay. More custom layers can reach the document cap and produce a non-destructive error.
-- New framed compositions use `tileAxes: "none"`: no SVG wrap copies and clamp-to-edge on both runtime texture axes. **Export rug SVG** exports one finite composition. Mapping/repeat scaling can crop the artwork or stretch edge pixels; it does not turn a finite rug into a seamless fabric repeat.
-- The Rug camera starts centered and more frontal. Cotton backing and wool relief/sheen are retained; there is no groomed yarn mesh or manufacturing-knot simulation.
+- **Chromatic Diamond Tapestry**: replacement of the existing design, with a 640:360 artboard, nested shields, staircase contours, patterned outline bands, split rectangular fields and narrow selvedges.
+- **Beaded Diamond Weave**: thousands of individually authored oval bead polygons arranged in a staggered lattice. Color is assigned per bead; highlights, edge shading and pierced centers remain vector geometry. Analytical rounded relief and gap roughness are shared by live materials and baking.
+- **Turquoise Faceted Vault**: a flat decorative study of a fan of connected panels, alternating cream/navy/turquoise grounds, gold ribs and clipped floral infill. It is not actual vaulted/muqarnas mesh geometry.
+- **Crimson Star and Cross Carpet**: a continuous eightfold star/cross arrangement with branching leaf, scroll, blossom and palmette infill—not disconnected star stamps.
 
-[**Reference sources, full design notes and limitations**](rug-references.md). Live rendering remains finite-resolution; detailed SVG remains scalable. All designs keep the shared JSON, shader export and six-channel baking workflow.
+The three new studies and one replacement are not advertised as resolving the outstanding quantity requirement. Older studies remain in **Legacy / …**, while elementary repeats are in **Basic / …**. **Legacy compositions** is a convenience filter, not a quality approval.
 
-Example links: `?material=natural-cotton&studio=pattern&pattern=chromatic-diamond-tapestry`, `?material=natural-cotton&studio=pattern&pattern=saffron-rosette-court&view=3d` and `?material=natural-cotton&studio=pattern&pattern=hooked-diamond-caravan`.
+### Editing and rendering
 
-Validation: **21 targeted pattern/library/editor/composition tests plus one offline standalone test**. This includes all 108 color-independent geometry signatures, complete serialization, dense geometry limits, finite sampling, material/stitch preservation, live preview, wool channel baking and independent shader exports. Existing leather, scratch, plant and analytic fabric shader kernels were not changed.
+- All four studies are ordinary editable `alloy.pattern.v1` path layers with pigment and finish assignments. They reserve room for a three-layer stitch overlay. Semantic groups, rather than each individual bead or blossom, are layers.
+- `designAspect` retains wide-artboard proportions in the editor, exported SVG and the Rug preview. Old documents without it retain their old dimensions. Other preview objects use their own UV aspect.
+- The designs use `tileAxes: "none"`, clamp-to-edge sampling and one finite composition. Increasing repeat count crops/stretches edge pixels; it does not make a framed rug seamless.
+- The fixed studies intentionally do not show the old generic Composition designer. The older recipes retain their regeneration controls and preservation behavior.
+- Bead relief uses a fixed staggered grid in document coordinates. Individual bead-layer geometry transformations do not move that procedural grid; use document-level mapping/rotation/repeats to transform the complete beaded surface coherently. Beads are shader relief, not separate glass meshes or transmission simulation.
+- SVG is scalable; live source maps remain finite resolution. Tiny ornament can become subpixel. The reference studies are original vector interpretations, not scans or exact photographic reconstructions.
 
-## Retained from v7.3: textile library, palettes and stitch overlays
+[Research, inventory and limitations](rug-references.md).
 
-**V7.3 introduced 233 pattern presets + Blank.** This count includes colorways: the expansion is **54 new construction/design families × four named palettes = 216 presets**, plus the previous 17 designs. It is not a claim of 233 distinct weave constructions.
+### Family colorways, not duplicate cards
 
-| New collection | Families | Colorways | Presets |
-| --- | ---: | ---: | ---: |
-| Fabric weaves | 16 | 4 | 64 |
-| Stitch patterns | 10 | 4 | 40 |
-| Geometric designs | 16 | 4 | 64 |
-| Color patterns | 12 | 4 | 48 |
+| Public family group                | Cards | Starting colorways per card |
+| ---------------------------------- | ----: | --------------------------: |
+| Fabric weaves                      |    16 |                           4 |
+| Stitch patterns                    |    10 |                           4 |
+| Basic geometric designs            |    15 |                           4 |
+| Basic checks/stripes/color layouts |    10 |                           4 |
 
-The four starting palettes are **Indigo, Earth, Studio and Mulberry**. Search by name or collection, filter by collection and colorway, and move through 24-card pages. Only mounted cards generate thumbnail SVGs; images are lazy-loaded. Switching to a starter replaces the current document, with undo available. New textile presets select cotton backing by default; a reopened existing document preserves the current material.
+Choose the **Starter colorway** before selecting a family card. It changes that starter's colors and thumbnail, not the number of results, and does not replace edits in the current document. **Design palette** edits the current document. The four options are Indigo, Earth, Studio and Mulberry. Old `Family - Palette` names still resolve; their presence in compatibility code is not a public count.
+
+The legacy 108-blueprint geometry tests are retained as serialization/bounds regressions, not evidence of reference fidelity. A unique path hash does not demonstrate a genuinely different or sufficiently detailed design.
 
 ### Weaves and printed designs
 
@@ -49,19 +55,19 @@ An overlay reserves **three editable vector layers**: recessed needle-entry mark
 
 Controls rebuild only layers marked with `stitchRole`; the underlying design's edits are preserved. Rebuilding replaces manual path edits to generated stitch layers. Disable removes those three layers while retaining the controls for later use. **Rebuild stitch layers** restores manually deleted stitch components. Adding stitches to a full document produces an explicit layer-cap error without changing the design. Fade regeneration retains the stitch overlay. Undo/redo, pattern JSON, local material presets, SVG and independent shader exports all retain the applicable settings/geometry. In SVG, even-odd paths keep rings and frame interiors open; procedural controls themselves live in JSON, not SVG.
 
-Deep links: `?material=natural-cotton&studio=pattern&pattern=chain-stitch---indigo` and `?material=natural-cotton&studio=pattern&pattern=herringbone-weave---earth&view=3d`. The three hyphens arise from the ` - ` separator in preset names.
+Deep links: `?material=natural-cotton&studio=pattern&pattern=chain-stitch---indigo` and `?material=natural-cotton&studio=pattern&pattern=herringbone-weave---earth&view=3d`. The three hyphens arise from the `-` separator in preset names.
 
-**Validation:** 17 targeted pattern/library/editor tests plus one standalone test with external assets blocked. Checks include all 216 new documents, 54 distinct geometry signatures with four consistent colorways each, maximum-density stitch bounds, weave-period boundaries, non-destructive overlay regeneration, search/pagination, palette edits, save/reload/undo, live rendering, changed height/normal bakes and independent shader construction. These are targeted checks, not the complete historical suite or a claim of measured textile realism. Leather, scratch, plant and analytic fabric shader kernels are unchanged.
+**Historical v7.3 validation:** 17 targeted pattern/library/editor tests plus one standalone test with external assets blocked. Checks include all 216 new documents, 54 distinct geometry signatures with four consistent colorways each, maximum-density stitch bounds, weave-period boundaries, non-destructive overlay regeneration, search/pagination, palette edits, save/reload/undo, live rendering, changed height/normal bakes and independent shader construction. These are targeted checks, not the complete historical suite or a claim of measured textile realism. Leather, scratch, plant and analytic fabric shader kernels are unchanged.
 
 ## Retained from v7.2: rugs, geometric collections and size fades
 
-**Ten new editable starters** join the seven existing designs (17 designs plus Blank). Filter the library with **Pattern collection**:
+**Historical v7.2 inventory:** ten starters joined seven originals. Current cards consolidate aliases and colorways; the names below remain compatibility inputs:
 
-| Collection | Starters |
-| --- | --- |
+| Collection       | Starters                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------- |
 | Islamic geometry | Islamic Star Lattice, Islamic Rosette Mosaic, Islamic Garden Carpet, Islamic Medallion Carpet |
-| African-inspired | African Diamond Carpet, African Chevron Weave, Indigo Diamond Rug |
-| Fading | Golden Cube Fade, Ink Cube Fade, Diamond Dissolve |
+| African-inspired | African Diamond Carpet, African Chevron Weave, Indigo Diamond Rug                             |
+| Fading           | Golden Cube Fade, Ink Cube Fade, Diamond Dissolve                                             |
 
 These are original reference-inspired vector constructions, not reproductions of a particular named textile tradition or embedded stock images. The gold and black fade references inform the geometric growth, not a raster decal. Dense repeating details use compound paths to stay below 64 layers and 100,000 path characters per layer; each cube-face group is editable, rather than each individual cube having its own layer.
 

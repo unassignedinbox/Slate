@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import {
   patternStarter,
-  patternStarterNames,
+  resolvePatternStarterName,
   patternStarterCatalog,
   generatePatternLayout,
   patternLayer,
@@ -45,17 +45,17 @@ import "./patternEditor.css";
 
 // Only mounted page cards generate SVG. Hundreds of presets must not block
 // startup, pointer moves or background material-thumbnail updates.
-const StarterThumb = React.memo(function StarterThumb({ name }) {
+const StarterThumb = React.memo(function StarterThumb({ name, palette }) {
   const src = useMemo(
     () =>
-      `data:image/svg+xml,${encodeURIComponent(patternSVG(patternStarter(name)))}`,
-    [name],
+      `data:image/svg+xml,${encodeURIComponent(patternSVG(patternStarter(name, palette)))}`,
+    [name, palette],
   );
   return <img src={src} alt="" loading="lazy" decoding="async" />;
 });
 const libraryGroups = [
   "All patterns",
-  "Detailed compositions",
+  "Legacy compositions",
   ...new Set(patternStarterCatalog.map((p) => p.group)),
 ];
 
@@ -78,10 +78,8 @@ export default function PatternEditor({
     initial
       ? validatePattern(initial)
       : patternStarter(
-          patternStarterNames.find(
-            (name) =>
-              name.toLowerCase().replaceAll(" ", "-") ===
-              new URLSearchParams(window.location.search).get("pattern"),
+          resolvePatternStarterName(
+            new URLSearchParams(window.location.search).get("pattern"),
           ),
         ),
   );
@@ -96,20 +94,24 @@ export default function PatternEditor({
     [aspect, setAspect] = useState(false),
     [ring, setRing] = useState({ count: 6, radius: 160 });
   const [collectionFilter, setCollectionFilter] = useState(() =>
-    doc.ornament ? "Detailed compositions" : "All patterns",
+    doc.referenceDesign || doc.name === "Chromatic Diamond Tapestry"
+      ? "Reference studies"
+      : doc.ornament
+        ? "Legacy compositions"
+        : "Reference studies",
   );
   const [librarySearch, setLibrarySearch] = useState(""),
-    [libraryPalette, setLibraryPalette] = useState("All colorways"),
+    [libraryPalette, setLibraryPalette] = useState("Indigo"),
     [libraryPage, setLibraryPage] = useState(0);
   const libraryMatches = useMemo(
     () =>
       patternStarterCatalog.filter(
         (p) =>
           (collectionFilter === "All patterns" ||
-            (collectionFilter === "Detailed compositions" && p.detailed) ||
+            (collectionFilter === "Legacy compositions" &&
+              p.detailed &&
+              !p.reference) ||
             p.group === collectionFilter) &&
-          (libraryPalette === "All colorways" ||
-            p.palette === libraryPalette) &&
           `${p.name} ${p.group} ${p.description || ""} ${p.study || ""}`
             .toLowerCase()
             .includes(librarySearch.trim().toLowerCase()),
@@ -503,12 +505,12 @@ export default function PatternEditor({
           <button
             className="pe-wide pe-rich-library"
             onClick={() => {
-              setCollectionFilter("Detailed compositions");
-              setLibraryPalette("All colorways");
+              setCollectionFilter("Reference studies");
+              setLibraryPalette("Indigo");
               setLibrarySearch("");
             }}
           >
-            108 detailed compositions ↗
+            4 reference-led rebuilds ↗
           </button>
           <select
             className="pe-collection-filter"
@@ -528,23 +530,22 @@ export default function PatternEditor({
             value={librarySearch}
             onChange={(e) => setLibrarySearch(e.target.value)}
           />
+          <span className="pe-hint">
+            Starter colorway · weaves, stitches & basics
+          </span>
           <select
-            aria-label="Pattern colorway"
+            aria-label="Textile family colorway"
+            title="Color option for weave, stitch and basic families; never a separate design"
             value={libraryPalette}
             onChange={(e) => setLibraryPalette(e.target.value)}
           >
-            {[
-              "All colorways",
-              "Original",
-              "Designed composition",
-              ...Object.keys(textilePalettes),
-            ].map((p) => (
+            {Object.keys(textilePalettes).map((p) => (
               <option key={p}>{p}</option>
             ))}
           </select>
           <p className="pe-library-count" aria-live="polite">
             {libraryMatches.length} results · {patternStarterCatalog.length - 1}{" "}
-            presets + Blank
+            catalog entries + Blank · colorways excluded
           </p>
           <div
             className="pe-starters"
@@ -556,21 +557,21 @@ export default function PatternEditor({
                 <button
                   key={name}
                   onClick={() => {
-                    const next = patternStarter(name);
+                    const next = patternStarter(name, libraryPalette);
                     commit(next);
                     if (next.presentation === "rug" || !!next.library)
                       setBase("natural-cotton");
                     setSelection(0);
                   }}
                 >
-                  <StarterThumb name={name} />
+                  <StarterThumb name={name} palette={libraryPalette} />
                   <span>{name}</span>
                 </button>
               ))}
           </div>
           {!libraryMatches.length && (
             <p className="pe-hint">
-              No matches. Try another collection or colorway.
+              No matches. Try another collection or search.
             </p>
           )}
           <div className="pe-library-paging">
@@ -593,9 +594,10 @@ export default function PatternEditor({
             </button>
           </div>
           <p className="pe-hint">
-            108 detailed compositions, not recolors. Plus 54 textile families in
-            4 colorways and the earlier starters. The original African Diamond
-            Carpet is now rebuilt in detail.
+            Colorways share one card. Basic repeats and legacy compositions are
+            separate from the reference rebuilds. Catalog entries are not a
+            quality-approved design count. The 200 distinct-design target
+            remains unfinished.
           </p>
           <div className="pe-section">
             <h3>Generate a layout</h3>
@@ -836,6 +838,8 @@ export default function PatternEditor({
                   tabIndex={0}
                   role="group"
                   viewBox="0 0 512 512"
+                  preserveAspectRatio="none"
+                  style={{ aspectRatio: doc.designAspect || 1, height: "auto" }}
                   aria-label="Pattern design canvas"
                   onPointerDown={down}
                   onPointerMove={motion}

@@ -1,3 +1,4 @@
+import { referenceDiamondPattern } from "./referencePatterns.js";
 import { rugDesignCatalog } from "./rugDesigns.js";
 import { applyStitches } from "./patternStitches.js";
 
@@ -48,6 +49,7 @@ const rugRadial = (n, r = 1, inner = null, phase = -Math.PI / 2) =>
 export function richRugPattern(name, settings) {
   const spec = rugDesignCatalog.find((p) => p.name === name || p.id === name);
   if (!spec) return null;
+  if (spec.name === "Chromatic Diamond Tapestry") return referenceDiamondPattern();
   const opts = normalizeRugComposition({ ...settings, id: spec.id });
   const colorKey =
     spec.study === "reference" || spec.study === "strip"

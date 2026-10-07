@@ -164,6 +164,13 @@ export function attachSurfaceSources(material, p) {
       uHideVariation: {
         value: Math.max(0, Math.min(1, Number(p.hideVariation ?? 0.65))),
       },
+      uPatternBeads: {
+        value: new THREE.Vector3(
+          doc?.beadwork?.columns || 1,
+          doc?.beadwork?.rows || 1,
+          doc?.beadwork?.height || 0,
+        ),
+      },
       uPatternColor: { value: pattern?.textures[0] || null },
       uPatternParams: { value: pattern?.textures[1] || null },
       uPatternFinish: { value: pattern?.textures[2] || null },
@@ -205,6 +212,7 @@ uniform sampler2D uPatternColor,uPatternParams,uPatternFinish;
 uniform float uPatternRepeats,uPatternAngle;
 uniform int uPatternObject;
 uniform vec2 uPatternAspect;
+uniform vec3 uPatternBeads;
 vec4 patternColorSample,patternParamsSample;
 vec3 patternFinishSample;
 float patternCoverage=0.,patternMaterialCoverage=0.;
@@ -227,6 +235,19 @@ export function patternColorGLSL() {
  patternParamsSample.rgb/=max(patternMaterialCoverage,.00001);
  vec4 finishSample=texture2D(uPatternFinish,patternUV);
  patternFinishSample=finishSample.rgb/max(finishSample.a,.00001);
+ if(uPatternBeads.z>0.){
+   vec2 beadGrid=patternUV*uPatternBeads.xy;
+   beadGrid.x-=mod(floor(beadGrid.y),2.)*.5;
+   vec2 beadLocal=fract(beadGrid)-.5;
+   float beadRadius=length(beadLocal/vec2(.44,.46));
+   float beadRound=sqrt(max(0.,1.-beadRadius*beadRadius));
+   float beadHole=1.-smoothstep(.07,.14,length(beadLocal/vec2(1.,.65)));
+   float beadEdge=1.-smoothstep(.9,1.,beadRadius);
+   float beadFilter=1.-smoothstep(.6,1.5,length(fwidth(beadGrid)));
+   surfaceHeight+=uPatternBeads.z*(beadRound*.7-beadHole*.42)*beadFilter;
+   patternParamsSample.r=mix(.94,patternParamsSample.r,beadEdge*(1.-beadHole*.8));
+   patternFinishSample.r*=beadEdge;
+ }
  float isWool=patternFinishSample.g;
  float isCotton=patternFinishSample.b;
  vec2 thread=patternUV*420.;

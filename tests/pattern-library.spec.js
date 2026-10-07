@@ -21,9 +21,9 @@ import {
 } from "../src/patternStitches.js";
 import { rebuildCollectionFade } from "../src/patternCollections.js";
 
-test("341 presets plus Blank: 54 distinct new constructions, four explicit colorways each", () => {
-  expect(patternStarterCatalog).toHaveLength(342);
-  expect(new Set(patternStarterCatalog.map((p) => p.name)).size).toBe(342);
+test("175 catalog entries plus Blank: colorways remain compatible but do not multiply cards", () => {
+  expect(patternStarterCatalog).toHaveLength(176);
+  expect(new Set(patternStarterCatalog.map((p) => p.name)).size).toBe(176);
   expect(textileLibraryEntries).toHaveLength(216);
   const structures = new Map();
   for (const p of textileLibraryEntries) {
@@ -160,19 +160,21 @@ test("search, paging, palette edits, stitch overlays, undo and portable saved do
   });
   await page.goto("/?material=natural-cotton&studio=pattern");
   await expect(page.locator(".pe-library-count")).toContainText(
-    "341 presets + Blank",
+    "175 catalog entries + Blank",
   );
-  await expect(page.locator(".pe-starters button")).toHaveCount(24);
+  await expect(page.locator(".pe-starters button")).toHaveCount(4);
   await page.getByLabel("Pattern collection").selectOption("Fabric weaves");
-  await expect(page.locator(".pe-library-count")).toContainText("64 results");
-  await page.getByRole("button", { name: "Next pattern page" }).click();
-  await expect(page.locator(".pe-library-paging")).toContainText("Page 2 / 3");
-  await page.getByLabel("Pattern colorway").selectOption("Indigo");
+  await expect(page.locator(".pe-library-count")).toContainText("16 results");
+  await expect(
+    page.getByRole("button", { name: "Next pattern page" }),
+  ).toBeDisabled();
+  await expect(page.locator(".pe-library-paging")).toContainText("Page 1 / 1");
+  await page.getByLabel("Textile family colorway").selectOption("Indigo");
   await expect(page.locator(".pe-starters button")).toHaveCount(16);
   await page.getByLabel("Search patterns").fill("herringbone");
   await expect(page.locator(".pe-starters button")).toHaveCount(1);
   await page
-    .getByRole("button", { name: "Herringbone weave - Indigo", exact: true })
+    .getByRole("button", { name: "Herringbone weave", exact: true })
     .click();
   await page.locator("summary").filter({ hasText: "Design palette" }).click();
   await page.getByLabel("Palette color 1", { exact: true }).fill("#172c47");

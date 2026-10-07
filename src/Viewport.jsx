@@ -565,7 +565,10 @@ export default function Viewport({
       e.camera.position.set(1.6, 2.4, 6.8);
       e.controls.target.set(0, 1.35, 0);
       e.controls.update();
-      e.specimen.geometry = createLeatherSwatchGeometry({ rug: true });
+      e.specimen.geometry = createLeatherSwatchGeometry({
+        rug: true,
+        rugAspect: params.pattern?.designAspect,
+      });
       e.specimen.rotation.set(-0.2, -0.16, 0);
       e.specimen.position.y = 1.35;
     }
@@ -626,7 +629,7 @@ export default function Viewport({
       e.specimen.rotation.x = 0.06;
       e.specimen.position.y = 1.68;
     }
-  }, [shape, params.plantRibs]);
+  }, [shape, params.plantRibs, params.pattern?.designAspect]);
   useEffect(() => {
     const e = engine.current;
     if (!e) return;

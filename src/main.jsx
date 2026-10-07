@@ -1,3 +1,4 @@
+import referenceModuleSource from "./referencePatterns.js?raw";
 import rugDesignModuleSource from "./rugDesigns.js?raw";
 import rugCompositionModuleSource from "./rugCompositions.js?raw";
 import stitchModuleSource from "./patternStitches.js?raw";
@@ -67,6 +68,8 @@ import botanicalModuleSource from "./botanicalKernels.js?raw";
 import architectureModuleSource from "./architecturalKernels.js?raw";
 import BakePanel from "./BakePanel";
 const shaderSource =
+  referenceModuleSource +
+  "\n" +
   stitchModuleSource +
   "\n" +
   rugDesignModuleSource +
@@ -441,7 +444,7 @@ function App() {
           <span>Automotive essentials</span>
           <ChevronRight size={13} />
           <strong>Material explorer</strong>
-          <span className="version-badge">v7.4</span>
+          <span className="version-badge">v7.5</span>
         </div>
         <div className="project-actions">
           <span className="saved-state">
