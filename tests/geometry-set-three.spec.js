@@ -42,10 +42,10 @@ const inside = (p, x, y) => {
 
 test("Set 03 adds eight portable, distinct geometric constructions", () => {
   expect(geometricSetThree).toHaveLength(8);
-  expect(geometricCatalog).toHaveLength(22);
+  expect(geometricCatalog).toHaveLength(30);
   const ids = new Set(geometricCatalog.map((p) => p.id)),
     signatures = new Set();
-  expect(ids.size).toBe(22);
+  expect(ids.size).toBe(30);
   for (const spec of geometricSetThree) {
     const raw = geometricPattern(spec.id),
       doc = patternStarter(spec.name);

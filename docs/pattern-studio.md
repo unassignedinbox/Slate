@@ -1,6 +1,23 @@
-# Pattern studio — v7.9
+# Pattern studio — v7.10
 
 This is a **hybrid vector/procedural material workflow**, not the previous zero-input-map claim. Existing paint, scratch and botanical families remain analytic. All five leather presets now share one generated SVG height atlas; pattern documents can contain vector shapes, sanitized SVG groups and embedded user images. No reference photographs are shipped as leather maps.
+
+## V7.10 — Geometric Set 04
+
+Eight independent analytic/vector constructions join the retained 22. Choose **Geometric constructions** and search **Set 04**. Sets 02 and 03 remain separately searchable; the six original constructions also remain. This set changes no material shader, textile draft, stitch model or retired collection.
+
+| Construction | Geometric rule |
+| --- | --- |
+| Dual-hexagon overlay | Two phase-offset, quarter-turned hexagon nets are flattened along perpendicular axes; both have exact 128-unit periods. |
+| Poincaré geodesic lattice | Sampled arcs of circles orthogonal to four ideal-disk boundaries, plus the diameter case in the geometry helper. |
+| Periodic Voronoi mosaic | Sixteen deterministic displaced sites yield a clipped, edge-wrapped periodic tessellation; sampled coverage is exactly one cell. |
+| Koch snowflake field | Four equilateral islands use three exact Koch inflation steps: 192 equal boundary segments per island. |
+| Archimedean counterspirals | Opposed arms follow r = 5 + 5θ for two complete turns, with concentric orbit guides. |
+| Superellipse contour field | Fourth- and sixth-power Lamé contours use nested scales and a rotated second family. |
+| Bernoulli lemniscate field | Analytic figure-eights close at both algebraic double points; quarter-turned inset orbits remain separate. |
+| Torus-knot projection | A sampled (2,3) torus curve is split into positive-depth overpasses and negative-depth passages. |
+
+All eight documents use editable vector paths; no source image, palette-only variant or collection revival is involved. The Voronoi cells preserve full polygons beyond the repeat boundary so adjacent tiles meet without clipped gaps.
 
 ## V7.9 — Geometric Set 03
 
@@ -45,7 +62,7 @@ Checks cover full path preservation, JSON and shader exports, the original six r
 
 Rejected rug, African and Islamic collections are removed, including African Diamond Carpet, Islamic Medallion Carpet, Medallion rug and Golden Cube Fade. Old starter URLs no longer resolve to these designs. The 200-structure claim and filters are withdrawn; no smaller quota is presented as completion of the earlier request.
 
-At v7.8, the library had 66 nonblank family cards plus Blank and fourteen geometric constructions. V7.9 now has 74 nonblank cards plus Blank and 22 geometric constructions (six original, eight in Set 02, eight in Set 03), alongside ten weave families and ten stitch families. The retained geometric/printed/original starters still include Diamond Dissolve. This is a transparent inventory, not a claim that all entries are equally complex or user-approved. Backgrounds, palettes and settings do not create extra cards.
+At v7.8, the library had 66 nonblank family cards plus Blank and fourteen geometric constructions. V7.9 added eight cards; V7.10 now has 82 nonblank cards plus Blank and 30 geometric constructions (six original plus eight each in Sets 02, 03 and 04), alongside ten weave families and ten stitch families. The retained geometric/printed/original starters still include Diamond Dissolve. This is a transparent inventory, not a claim that all entries are equally complex or user-approved. Backgrounds, palettes and settings do not create extra cards.
 
 ### Geometric additions
 
@@ -170,7 +187,16 @@ The six-channel ZIP includes the embedded document in `material.json`. Patterned
 
 ## Checks
 
-At the V7.8 release, nine Set 02 checks, 21 existing document/textile/compatibility checks and the offline standalone test passed. That historical result is retained; it is not a validation claim for V7.9.
+### V7.10 focused validation
+
+- Set 04: **12 passed**, including geometric invariants, all eight card saves, an edit/undo/JSON round-trip, and the live WebGL material preview for the Poincaré lattice.
+- Sets 02 and 03: **19 regression checks passed**; the Set 02 live 3D preview was run separately and passed too. Set 03's live 3D test is included in the 19.
+- Catalog/inventory audit: **5 passed**; the standalone self-contained page: **1 passed** with external assets blocked.
+- `npm ci`, `npm run build`, and `npm run test:standalone` completed successfully; Vite reported a large JavaScript-chunk advisory.
+
+This is a targeted result, not a full-suite claim. The 87-test browser suite was attempted but did not complete within the sandbox's 25-minute command window; it had reached the legacy saved-composition preview when the time limit expired.
+
+At the V7.8 release, nine Set 02 checks, 21 existing document/textile/compatibility checks and the offline standalone test passed. That historical result is retained; it is not a validation claim for later releases.
 
 
 V7.7 validation completed 21 document/construction checks and seven targeted browser checks: library/palette/stitch editing; the monochrome weave/draft UI; saved-rug Apply behavior; stitch height/normal baking; image/SVG imports with save/undo/shader export; deep links/focus/generation; and saved-composition editing/roundtrips. The final rebuilt standalone page also passed its offline rendering/export test with external assets blocked. This is a targeted selection, not the complete historical test suite.

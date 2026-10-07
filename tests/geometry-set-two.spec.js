@@ -43,7 +43,7 @@ const inside = (p, x, y) => {
 
 test("eight new constructions, portable full paths and no duplicate geometry identities", () => {
   expect(geometricSetTwo).toHaveLength(8);
-  expect(geometricCatalog).toHaveLength(22);
+  expect(geometricCatalog).toHaveLength(30);
   const signatures = new Set();
   for (const p of geometricCatalog) {
     const raw = geometricPattern(p.name),

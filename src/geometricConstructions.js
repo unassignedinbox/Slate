@@ -96,6 +96,56 @@ export const geometricSetThree = [
   set: 3,
 }));
 
+// Set 04 adds eight distinct constructions: cellular, hyperbolic, fractal,
+// polar, algebraic, and space-curve geometry.
+export const geometricSetFour = [
+  [
+    "Dual-hexagon overlay",
+    "dual-hexagon-overlay",
+    "Quarter-turned, phase-offset flattened hexagon nets make a continuous crossing lattice.",
+  ],
+  [
+    "Poincaré geodesic lattice",
+    "poincare-geodesic-lattice",
+    "Orthogonal-circle geodesics cross four disk cells; every arc stays inside its ideal boundary.",
+  ],
+  [
+    "Periodic Voronoi mosaic",
+    "periodic-voronoi-mosaic",
+    "Sixteen fixed, displaced sites generate a clipped periodic Voronoi tiling with exact cell coverage.",
+  ],
+  [
+    "Koch snowflake field",
+    "koch-snowflake-field",
+    "Four level-three Koch islands retain equal segment lengths and nested triangular construction lines.",
+  ],
+  [
+    "Archimedean counterspirals",
+    "archimedean-counterspirals",
+    "Opposed r = a + bθ arms wind through paired orbit cells with concentric calibration rings.",
+  ],
+  [
+    "Superellipse contour field",
+    "superellipse-contour-field",
+    "Nested Lamé curves transition between rounded-square and diamond axes in four repeat cells.",
+  ],
+  [
+    "Bernoulli lemniscate field",
+    "bernoulli-lemniscate-field",
+    "Analytic figure-eight curves meet at their algebraic double points, with nested orbit guides.",
+  ],
+  [
+    "Torus-knot projection",
+    "torus-knot-projection",
+    "A closed (2,3) torus-knot projection separates positive and negative depth branches at crossings.",
+  ],
+].map(([name, id, description]) => ({
+  name,
+  id,
+  description: "Set 04 — " + description,
+  set: 4,
+}));
+
 // Small, explicit geometric constructions. No rug borders or cultural labels.
 export const geometricCatalog = [
   {
@@ -136,12 +186,14 @@ export const geometricCatalog = [
   },
   ...geometricSetTwo,
   ...geometricSetThree,
+  ...geometricSetFour,
 ].map((p) => ({ ...p, group: "Geometric constructions" }));
 export function geometricPattern(name) {
   const spec = geometricCatalog.find((p) => p.name === name || p.id === name);
   if (!spec) return null;
   if (spec.set === 2) return geometricSetTwoPattern(spec);
   if (spec.set === 3) return geometricSetThreePattern(spec);
+  if (spec.set === 4) return geometricSetFourPattern(spec);
   const d = {
     schema: "alloy.pattern.v1",
     name: spec.name,
@@ -1101,6 +1153,511 @@ function geometricSetThreePattern(spec) {
     }
     add(horizontal, teal, "Horizontal harmonic rows", 1.35);
     add(vertical, gold, "Vertical harmonic columns", 1.35);
+  }
+  return d;
+}
+
+
+// A Poincaré-disk geodesic between two ideal boundary points. Except for
+// diameters, the geodesic is the inner arc of a circle orthogonal to the disk.
+export function poincareGeodesic(center, radius, startAngle, endAngle, samples = 32) {
+  if (
+    !center ||
+    !Number.isFinite(center.x) ||
+    !Number.isFinite(center.y) ||
+    !Number.isFinite(radius) ||
+    radius <= 0 ||
+    !Number.isFinite(startAngle) ||
+    !Number.isFinite(endAngle) ||
+    !Number.isInteger(samples) ||
+    samples < 2 ||
+    samples > 1024
+  )
+    throw new Error("A Poincaré geodesic needs finite disk and sampling values.");
+  const wrap = (a) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI),
+    delta = wrap(endAngle - startAngle + Math.PI) - Math.PI,
+    point = (a) => [center.x + radius * Math.cos(a), center.y + radius * Math.sin(a)],
+    start = point(startAngle),
+    end = point(endAngle);
+  if (Math.abs(delta) < 1e-10)
+    throw new Error("A Poincaré geodesic needs distinct ideal endpoints.");
+  if (Math.abs(Math.abs(delta) - Math.PI) < 1e-9)
+    return Array.from({ length: samples + 1 }, (_, i) => {
+      const t = i / samples;
+      return [start[0] + (end[0] - start[0]) * t, start[1] + (end[1] - start[1]) * t];
+    });
+  const middle = startAngle + delta / 2,
+    centerDistance = radius / Math.cos(delta / 2),
+    circleRadius = radius * Math.abs(Math.tan(delta / 2)),
+    cx = center.x + centerDistance * Math.cos(middle),
+    cy = center.y + centerDistance * Math.sin(middle),
+    from = Math.atan2(start[1] - cy, start[0] - cx),
+    to = Math.atan2(end[1] - cy, end[0] - cx),
+    ccw = wrap(to - from),
+    candidates = [ccw, ccw - 2 * Math.PI];
+  const insideSweep = candidates.find((sweep) => {
+    const a = from + sweep / 2,
+      x = cx + circleRadius * Math.cos(a),
+      y = cy + circleRadius * Math.sin(a);
+    return Math.hypot(x - center.x, y - center.y) < radius + 1e-8;
+  });
+  if (insideSweep === undefined)
+    throw new Error("Could not resolve the inner Poincaré arc.");
+  const points = Array.from({ length: samples + 1 }, (_, i) => {
+    const a = from + (insideSweep * i) / samples;
+    return [cx + circleRadius * Math.cos(a), cy + circleRadius * Math.sin(a)];
+  });
+  points[0] = start;
+  points[samples] = end;
+  return points;
+}
+
+function geometricSetFourPattern(spec) {
+  const d = {
+    schema: "alloy.pattern.v1",
+    name: spec.name,
+    construction: spec.id,
+    collection: "Geometric constructions",
+    background: "#203741",
+    repeat: "straight",
+    repeats: 1,
+    mapping: "uv",
+    layers: [],
+  };
+  const n = (v) => Number((v / 5.12).toFixed(4));
+  const xy = (x, y) => [n(x), n(y)];
+  const poly = (points) =>
+    points
+      .map(([x, y], i) => {
+        const [X, Y] = xy(x, y);
+        return (i ? "L" : "M") + X + " " + Y;
+      })
+      .join("") + "Z";
+  const line = (points) =>
+    points
+      .map(([x, y], i) => {
+        const [X, Y] = xy(x, y);
+        return (i ? "L" : "M") + X + " " + Y;
+      })
+      .join("");
+  const add = (path, color, name, width = 0, opacity = 1) => {
+    if (path)
+      d.layers.push({
+        kind: "path",
+        path,
+        color,
+        name,
+        x: 256,
+        y: 256,
+        width: 512,
+        height: 512,
+        finish: "cotton",
+        roughness: 0.83,
+        metalness: 0,
+        relief: 0.035,
+        strokeWidth: width / 5.12,
+        opacity,
+      });
+  };
+  const circle = (cx, cy, radius) =>
+    `M${n(cx + radius)} ${n(cy)}a${n(radius)} ${n(radius)} 0 1 0 ${n(-2 * radius)} 0a${n(radius)} ${n(radius)} 0 1 0 ${n(2 * radius)} 0Z`;
+  const inset = (points, cx, cy, scale) =>
+    points.map(([x, y]) => [cx + (x - cx) * scale, cy + (y - cy) * scale]);
+  const dark = "#203741",
+    cream = "#eee2c7",
+    gold = "#d5b36b",
+    teal = "#4d9292",
+    coral = "#bd7056";
+
+  if (spec.id === "dual-hexagon-overlay") {
+    d.background = "#1b3039";
+    const radius = 128 / 3,
+      root3 = Math.sqrt(3),
+      grids = ["", ""],
+      inlays = ["", ""],
+      hubs = ["", ""],
+      seenCenters = [new Set(), new Set()];
+    const project = (x, y, grid) =>
+      grid === 0 ? [x, root3 * y] : [-root3 * y + 64, x + 64];
+    const wrap = (v) => {
+      const q = ((v % 512) + 512) % 512;
+      return q < 1e-7 || 512 - q < 1e-7 ? 0 : q;
+    };
+    for (let grid = 0; grid < 2; grid++)
+      for (let i = -10; i <= 10; i++)
+        for (let j = -10; j <= 10; j++) {
+          const base = [
+              1.5 * radius * (i + j),
+              (root3 / 2) * radius * (i - j),
+            ],
+            rawCenter = project(base[0], base[1], grid),
+            center = [wrap(rawCenter[0]), wrap(rawCenter[1])],
+            key = center.map((v) => v.toFixed(6)).join(":");
+          if (seenCenters[grid].has(key)) continue;
+          seenCenters[grid].add(key);
+          const shift = [center[0] - rawCenter[0], center[1] - rawCenter[1]],
+            points = Array.from({ length: 6 }, (_, k) => {
+              const a = (k * Math.PI) / 3,
+                p = project(
+                  base[0] + radius * Math.cos(a),
+                  base[1] + radius * Math.sin(a),
+                  grid,
+                );
+              return [p[0] + shift[0], p[1] + shift[1]];
+            });
+          grids[grid] += poly(points);
+          inlays[grid] += poly(inset(points, center[0], center[1], 0.82));
+          hubs[grid] += circle(center[0], center[1], 2.8);
+        }
+    add(grids[0], gold, "Flattened hexagon net A", 1.7);
+    add(grids[1], teal, "Quarter-turned hexagon net B", 1.7);
+    add(inlays[0], cream, "Inner edge tracery A", 0.65);
+    add(inlays[1], coral, "Inner edge tracery B", 0.65);
+    add(hubs[0] + hubs[1], cream, "Hexagon centers");
+  } else if (spec.id === "poincare-geodesic-lattice") {
+    d.background = "#1a303b";
+    let warmPaths = "",
+      coolPaths = "",
+      boundaries = "",
+      meridians = "";
+    const centers = [128, 384];
+    for (const cy of centers)
+      for (const cx of centers) {
+        const center = { x: cx, y: cy },
+          radius = 76,
+          count = 16;
+        for (const [separation, target] of [
+          [3, "cool"],
+          [5, "warm"],
+        ])
+          for (let i = 0; i < count; i++) {
+            const j = (i + separation) % count,
+              arc = poincareGeodesic(
+                center,
+                radius,
+                (2 * Math.PI * i) / count,
+                (2 * Math.PI * j) / count,
+                32,
+              );
+            if (target === "warm") warmPaths += line(arc);
+            else coolPaths += line(arc);
+          }
+        boundaries += circle(cx, cy, radius);
+        boundaries += circle(cx, cy, radius * 0.91);
+        boundaries += circle(cx, cy, radius * 0.72);
+        for (let k = 0; k < 8; k++) {
+          const a = (k * Math.PI) / 4;
+          meridians += line([
+            [cx, cy],
+            [cx + radius * Math.cos(a), cy + radius * Math.sin(a)],
+          ]);
+        }
+      }
+    add(coolPaths, teal, "Inner geodesic family", 1.35);
+    add(warmPaths, gold, "Crossing geodesic family", 1.35);
+    add(boundaries, cream, "Ideal-circle and orbit rings", 1.2);
+    add(meridians, coral, "Eight radial construction diameters", 0.8);
+  } else if (spec.id === "periodic-voronoi-mosaic") {
+    d.background = "#e9dfc9";
+    const period = 512,
+      sites = [];
+    for (let row = 0; row < 4; row++)
+      for (let col = 0; col < 4; col++) {
+        const phase = (col + 1) * 1.71 + (row + 2) * 2.13;
+        sites.push({
+          row,
+          col,
+          x: col * 128 + 64 + 13 * Math.sin(phase),
+          y: row * 128 + 64 + 11 * Math.cos(phase * 0.83),
+        });
+      }
+    const clipHalfPlane = (points, ax, ay, limit) => {
+      const out = [];
+      for (let i = 0; i < points.length; i++) {
+        const a = points[i],
+          b = points[(i + 1) % points.length],
+          va = ax * a[0] + ay * a[1] - limit,
+          vb = ax * b[0] + ay * b[1] - limit,
+          insideA = va <= 1e-9,
+          insideB = vb <= 1e-9;
+        if (insideA && insideB) out.push(b);
+        else if (insideA && !insideB) {
+          const t = va / (va - vb);
+          out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        } else if (!insideA && insideB) {
+          const t = va / (va - vb);
+          out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+          out.push(b);
+        }
+      }
+      return out;
+    };
+    const polygonArea = (points) =>
+      Math.abs(
+        points.reduce((sum, [x, y], i) => {
+          const q = points[(i + 1) % points.length];
+          return sum + x * q[1] - y * q[0];
+        }, 0) / 2,
+      );
+    const colorPaths = ["", "", "", ""],
+      outlines = [],
+      markers = [];
+    for (const site of sites) {
+      // Keep the whole cell, including pieces that cross a repeat edge. The
+      // pattern's neighbor tiles supply those wrapped fragments seamlessly.
+      let cell = [
+        [site.x - period / 2, site.y - period / 2],
+        [site.x + period / 2, site.y - period / 2],
+        [site.x + period / 2, site.y + period / 2],
+        [site.x - period / 2, site.y + period / 2],
+      ];
+      for (const other of sites)
+        for (let dx = -1; dx <= 1; dx++)
+          for (let dy = -1; dy <= 1; dy++) {
+            if (other === site && dx === 0 && dy === 0) continue;
+            const ox = other.x + dx * period,
+              oy = other.y + dy * period,
+              ax = 2 * (ox - site.x),
+              ay = 2 * (oy - site.y),
+              limit = ox * ox + oy * oy - site.x * site.x - site.y * site.y;
+            cell = clipHalfPlane(cell, ax, ay, limit);
+            if (cell.length < 3) break;
+          }
+      if (cell.length < 3 || polygonArea(cell) < 1e-6) continue;
+      const tint = (site.col * 7 + site.row * 3 + (site.col * site.row) % 3) % 4;
+      colorPaths[tint] += poly(cell);
+      outlines.push(cell);
+      markers.push(
+        poly([
+          [site.x, site.y - 8],
+          [site.x + 8, site.y],
+          [site.x, site.y + 8],
+          [site.x - 8, site.y],
+        ]),
+      );
+    }
+    [teal, coral, gold, "#53717a"].forEach((color, i) =>
+      add(colorPaths[i], color, `Voronoi cell family ${i + 1}`),
+    );
+    add(
+      outlines.map((points) => poly(points)).join(""),
+      "#263c43",
+      "Voronoi cell joints",
+      1.2,
+    );
+    add(markers.join(""), cream, "Displaced site diamonds");
+    add(
+      sites.map(({ x, y }) => circle(x, y, 2.2)).join(""),
+      dark,
+      "Voronoi site centers",
+    );
+  } else if (spec.id === "koch-snowflake-field") {
+    d.background = "#1b3039";
+    const snowflakes = ["", ""];
+    let outlines = "",
+      constructions = "";
+    const rotate = ([x, y], a) => [
+      x * Math.cos(a) - y * Math.sin(a),
+      x * Math.sin(a) + y * Math.cos(a),
+    ];
+    const kochSegment = (a, b, depth) => {
+      if (!depth) return [a, b];
+      const v = [(b[0] - a[0]) / 3, (b[1] - a[1]) / 3],
+        p = [a[0] + v[0], a[1] + v[1]],
+        q = [a[0] + 2 * v[0], a[1] + 2 * v[1]],
+        rotated = rotate(v, Math.PI / 3),
+        r = [p[0] + rotated[0], p[1] + rotated[1]],
+        parts = [
+          kochSegment(a, p, depth - 1),
+          kochSegment(p, r, depth - 1),
+          kochSegment(r, q, depth - 1),
+          kochSegment(q, b, depth - 1),
+        ];
+      return parts
+        .slice(1)
+        .reduce((all, part) => all.concat(part.slice(1)), parts[0]);
+    };
+    for (const cy of [128, 384])
+      for (const cx of [128, 384]) {
+        const radius = 65,
+          base = [
+            [cx, cy - radius],
+            [cx + (radius * Math.sqrt(3)) / 2, cy + radius / 2],
+            [cx - (radius * Math.sqrt(3)) / 2, cy + radius / 2],
+          ],
+          points = [];
+        for (let i = 0; i < 3; i++) {
+          const side = kochSegment(base[i], base[(i + 1) % 3], 3);
+          points.push(...side.slice(0, -1));
+        }
+        const path = line(points) + "Z",
+          colorIndex = ((cx + cy) / 256 - 1) % 2;
+        snowflakes[colorIndex] += path;
+        outlines += path;
+        constructions += poly(base);
+        constructions += circle(cx, cy, 5);
+      }
+    add(snowflakes[0], teal, "Koch island fields A");
+    add(snowflakes[1], coral, "Koch island fields B");
+    add(outlines, dark, "Level-three snowflake edges", 1.15);
+    add(constructions, gold, "Equilateral parent triangles and centers", 0.95);
+  } else if (spec.id === "archimedean-counterspirals") {
+    d.background = "#203741";
+    let spirals = "",
+      underlay = "",
+      orbitRings = "",
+      ticks = "";
+    for (const cy of [128, 384])
+      for (const cx of [128, 384]) {
+        for (const direction of [1, -1]) {
+          const points = [];
+          for (let i = 0; i <= 240; i++) {
+            const t = (i / 240) * Math.PI * 4,
+              r = 5 + 5 * t,
+              a = direction * t + (direction < 0 ? Math.PI / 2 : 0);
+            points.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+          }
+          const path = line(points);
+          spirals += path;
+          underlay += path;
+        }
+        for (const r of [20, 40, 60]) orbitRings += circle(cx, cy, r);
+        for (let k = 0; k < 16; k++) {
+          const a = (k * Math.PI) / 8,
+            r0 = 62,
+            r1 = k % 2 ? 66 : 70;
+          ticks += line([
+            [cx + r0 * Math.cos(a), cy + r0 * Math.sin(a)],
+            [cx + r1 * Math.cos(a), cy + r1 * Math.sin(a)],
+          ]);
+        }
+      }
+    add(underlay, dark, "Spiral ribbon underlay", 3.4);
+    add(spirals, gold, "Counter-rotating Archimedean arms", 1.55);
+    add(orbitRings, teal, "Concentric orbit guides", 0.95);
+    add(ticks, cream, "Peripheral scale marks", 1.05);
+  } else if (spec.id === "superellipse-contour-field") {
+    d.background = "#e9dfca";
+    let squareFamily = "",
+      rotatedFamily = "",
+      cardinal = "",
+      centers = "";
+    const superellipse = (cx, cy, radius, exponent, rotation, samples = 256) => {
+      const signPow = (v, p) => Math.sign(v) * Math.pow(Math.abs(v), p),
+        points = Array.from({ length: samples + 1 }, (_, i) => {
+          const t = (i * Math.PI * 2) / samples,
+            x = radius * signPow(Math.cos(t), 2 / exponent),
+            y = radius * 0.82 * signPow(Math.sin(t), 2 / exponent);
+          return [
+            cx + x * Math.cos(rotation) - y * Math.sin(rotation),
+            cy + x * Math.sin(rotation) + y * Math.cos(rotation),
+          ];
+        });
+      return line(points) + "Z";
+    };
+    for (const cy of [128, 384])
+      for (const cx of [128, 384]) {
+        for (const r of [68, 52, 36, 20])
+          squareFamily += superellipse(cx, cy, r, 4, 0);
+        for (const r of [59, 43, 27])
+          rotatedFamily += superellipse(cx, cy, r, 6, Math.PI / 4);
+        for (let k = 0; k < 8; k++) {
+          const a = (k * Math.PI) / 4;
+          cardinal += line([
+            [cx + 68 * Math.cos(a), cy + 68 * Math.sin(a)],
+            [cx + 74 * Math.cos(a), cy + 74 * Math.sin(a)],
+          ]);
+        }
+        centers += poly([
+          [cx, cy - 7],
+          [cx + 7, cy],
+          [cx, cy + 7],
+          [cx - 7, cy],
+        ]);
+      }
+    add(squareFamily, teal, "Fourth-power Lamé contours", 1.5);
+    add(rotatedFamily, gold, "Rotated sixth-power contours", 1.25);
+    add(cardinal, coral, "Eight contour axes", 1.05);
+    add(centers, dark, "Contour center diamonds");
+  } else if (spec.id === "bernoulli-lemniscate-field") {
+    d.background = "#1b3039";
+    let lemniscates = "",
+      underlay = "",
+      insetPaths = "",
+      centers = "";
+    for (const cy of [128, 384])
+      for (const cx of [128, 384]) {
+        const trace = (a, phase = 0) => {
+          const points = Array.from({ length: 513 }, (_, i) => {
+            const t = (i * Math.PI * 2) / 512 + phase,
+              den = 1 + Math.sin(t) ** 2,
+              x = (a * Math.SQRT2 * Math.cos(t)) / den,
+              y = (a * Math.SQRT2 * Math.cos(t) * Math.sin(t)) / den;
+            return [cx + x, cy + y];
+          });
+          return line(points) + "Z";
+        };
+        const path = trace(48);
+        lemniscates += path;
+        underlay += path;
+        insetPaths += trace(30, Math.PI / 2);
+        centers += circle(cx, cy, 4);
+      }
+    add(underlay, dark, "Figure-eight ribbon underlay", 4.2);
+    add(lemniscates, gold, "Bernoulli double-point curves", 2.05);
+    add(insetPaths, teal, "Quarter-turned inner orbits", 1.2);
+    add(centers, coral, "Lemniscate crossing jewels");
+  } else if (spec.id === "torus-knot-projection") {
+    d.background = "#1c333d";
+    let full = "",
+      low = "",
+      high = "",
+      rings = "";
+    const p = 2,
+      q = 3,
+      major = 36,
+      minor = 15,
+      samples = 480;
+    for (const cy of [128, 384])
+      for (const cx of [128, 384]) {
+        const trace = Array.from({ length: samples + 1 }, (_, i) => {
+          const t = (i * Math.PI * 2) / samples,
+            z = minor * Math.sin(q * t),
+            r = major + minor * Math.cos(q * t);
+          return {
+            t,
+            z,
+            point: [cx + r * Math.cos(p * t), cy + r * Math.sin(p * t)],
+          };
+        });
+        full += line(trace.map((v) => v.point)) + "Z";
+        let branch = [],
+          branchSign = 0;
+        for (let i = 0; i < samples; i++) {
+          const a = trace[i],
+            b = trace[i + 1],
+            sign = Math.sin((q * (a.t + b.t)) / 2) >= 0 ? 1 : -1;
+          if (branchSign && branchSign !== sign) {
+            const path = line(branch);
+            if (branchSign > 0) high += path;
+            else low += path;
+            branch = [a.point];
+          } else if (!branch.length) branch = [a.point];
+          branch.push(b.point);
+          branchSign = sign;
+          if (i === samples - 1) {
+            const path = line(branch);
+            if (branchSign > 0) high += path;
+            else low += path;
+          }
+        }
+        rings += circle(cx, cy, major + minor + 5);
+        rings += circle(cx, cy, major - minor - 5);
+      }
+    add(full, dark, "Projected knot backing", 4.2);
+    add(low, teal, "Negative-depth passages", 2.05);
+    add(high, gold, "Positive-depth overpasses", 2.05);
+    add(rings, cream, "Torus tube bounds", 0.95);
   }
   return d;
 }

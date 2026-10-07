@@ -19,7 +19,7 @@ const references = [
 test("catalog audit: one ombre, no palette or compatibility-alias cards; no primitive/colorway padding", () => {
   expect(references).toHaveLength(4);
   expect(patternInventory).toEqual({
-    catalogEntries: 74,
+    catalogEntries: 82,
     stitches: 10,
     weaves: 10,
   });

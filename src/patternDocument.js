@@ -246,10 +246,17 @@ export const patternStarterCatalog = [
 ];
 export const patternStarterNames = patternStarterCatalog.map((p) => p.name);
 export function resolvePatternStarterName(slug) {
-  // Do not resurrect rejected rugs through their old aliases/deep links.
-  return patternStarterNames.find(
-    (name) => name.toLowerCase().replaceAll(" ", "-") === slug,
-  );
+  // Normalize diacritics so human-readable names still have portable ASCII URLs.
+  // Search only the public catalog; retired rugs cannot return through old links.
+  const normalize = (value) =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+  const target = normalize(slug);
+  return patternStarterNames.find((name) => normalize(name) === target);
 }
 export const patternInventory = {
   catalogEntries: patternStarterCatalog.length - 1,
