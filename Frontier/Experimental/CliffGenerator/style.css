@@ -151,6 +151,12 @@ h1{font-size:30px}
 .control-value small{color:#8a8a8a;margin-left:3px;font-size:9px}
 .control .muted{margin:5px 0 0;font-size:9.5px;color:#7c7c7c}
 .toggle-line{margin:0 0 12px;padding:4px 0}
+.color-line{margin:0 0 10px;padding:2px 0;align-items:center}
+.color-chip{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.color-chip::before{content:'';width:22px;height:22px;border-radius:6px;background:var(--chip);border:1px solid rgba(255,255,255,.18);box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
+.color-chip input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0}
+.color-chip code{font:11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#b4b4b4;letter-spacing:.02em}
+.color-chip:hover code{color:#e4e4e4}
 .toggle-line:last-child{margin-bottom:0}
 .toggle-line small{display:block;color:#747474;font-size:9px;margin-top:3px}
 .toggle{flex-shrink:0}

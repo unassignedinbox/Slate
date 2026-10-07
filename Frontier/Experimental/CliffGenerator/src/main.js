@@ -1,16 +1,25 @@
 // Entry: wires the editor chrome to the heightfield worker and the Three.js viewport.
-import { defaults, presets, groups, stageOf } from './params.js';
+import { defaults, presets, groups, stageOf, palettes, paletteKeys } from './params.js';
 import { Editor } from './ui.js';
 import { CliffScene } from './scene.js';
 
 const STORAGE_KEY = 'frontier-cliff-generator';
+const SCHEMA = 3; // bump when parameter semantics change so stale saved values do not override new defaults
 
 function readStored() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
 }
 
 const stored = readStored();
-const values = { ...defaults, ...presets['Alpine granite'], ...(stored.values || {}) };
+const storedValues = stored.schema === SCHEMA ? stored.values || {} : {};
+const values = { ...defaults, ...presets['Alpine granite'], ...storedValues };
+
+function applyPalette(name) {
+  const p = palettes[name];
+  if (!p) return;
+  values.palette = name;
+  for (const k of paletteKeys) values[k] = p[k];
+}
 
 let scene = null;
 let worker = null;
@@ -22,6 +31,7 @@ const editor = new Editor(document.getElementById('root'), {
   values,
   onChange(key, val) {
     values[key] = val;
+    if (key === 'palette') applyPalette(val);
     persist();
     const stage = stageOf(key);
     if (stage === 'terrain') editor.setPending(true);
@@ -33,6 +43,7 @@ const editor = new Editor(document.getElementById('root'), {
   },
   onPreset(name) {
     Object.assign(values, defaults, presets[name]);
+    applyPalette(values.palette);
     persist();
     applyLive();
     generate();
@@ -40,7 +51,7 @@ const editor = new Editor(document.getElementById('root'), {
   onGenerate: () => generate(),
   onReset(group) {
     for (const card of group.cards) for (const [key] of card.controls || []) values[key] = defaults[key];
-    if (group.id === 'surface') values.palette = defaults.palette;
+    if (group.id === 'material') applyPalette(defaults.palette);
     persist();
     if (group.stage === 'terrain') editor.setPending(true);
     else if (group.stage === 'rocks') scheduleRocks();
@@ -61,7 +72,7 @@ const editor = new Editor(document.getElementById('root'), {
 });
 
 function persist() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ values })); } catch { /* private mode */ }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ schema: SCHEMA, values })); } catch { /* private mode */ }
 }
 
 function applyLive() {

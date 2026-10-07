@@ -26,11 +26,11 @@ export function icon(name, size = 16, strokeWidth = 1.5) {
 }
 
 export const groupIcons = {
-  landform: 'mountain', strata: 'strata', relief: 'layers', erosion: 'droplets', rocks: 'box', surface: 'palette', sun: 'sun', viewport: 'monitor',
+  landform: 'mountain', strata: 'strata', relief: 'layers', erosion: 'droplets', rocks: 'box', material: 'palette', flakes: 'sparkles', exfoliation: 'layers', cover: 'droplets', sun: 'sun', viewport: 'monitor',
 };
 export const cardIcons = {
   'Preset': 'sparkles', 'Elevation': 'mountain', 'Relief': 'wind', 'Mesa & canyon': 'strata', 'Grid': 'grid',
   'Bedding': 'strata', 'Face displacement': 'layers', 'Geological dip': 'sliders', 'Hydraulic erosion': 'droplets', 'Thermal weathering': 'mountain',
-  'Placement pattern': 'box', 'Rock shape': 'gem', 'Rock type': 'palette', 'Strata & grain': 'strata', 'Mineral flakes': 'gem',
-  'Exfoliation': 'layers', 'Cover': 'sparkles', 'Sun direction': 'sun', 'Atmosphere': 'wind', 'Water': 'waves', 'Display': 'monitor', 'Export': 'download',
+  'Placement pattern': 'box', 'Rock shape': 'gem', 'Rock type': 'palette', 'Colours': 'palette', 'Strata': 'strata', 'Grain': 'grid', 'Oxide & cavity': 'droplets', 'Material response': 'sliders',
+  'Flakes': 'gem', 'Plate look': 'sparkles', 'Peeling sheets': 'layers', 'Joint network': 'grid', 'Runoff': 'droplets', 'Gravel': 'box', 'Vegetation': 'sparkles', 'Moss': 'sparkles', 'Snow': 'wind', 'Sun direction': 'sun', 'Atmosphere': 'wind', 'Water': 'waves', 'Display': 'monitor', 'Export': 'download',
 };

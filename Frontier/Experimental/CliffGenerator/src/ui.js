@@ -105,7 +105,8 @@ export class Editor {
           <div class="preset-list">${Object.keys(presets).map((name) => `<button class="preset ${this.activePreset === name ? 'active' : ''}" data-preset="${name}"><span>${name}</span>${icon('sparkles', 12)}</button>`).join('')}</div>`;
       } else if (card.kind === 'palette') {
         body = `<p class="muted">Lithology drives the colour family of beds, fresh breaks and oxide staining.</p>
-          <div class="pill-row">${Object.entries(palettes).map(([key, p]) => `<button class="enabled-pill ${v.palette === key ? '' : 'disabled'}" data-palette="${key}"><span style="background:rgb(${p.rockA.map((c) => Math.round(Math.pow(c, 1 / 2.2) * 255)).join(',')})"></span>${p.name}</button>`).join('')}</div>`;
+          <div class="pill-row">${Object.entries(palettes).map(([key, p]) => `<button class="enabled-pill ${v.palette === key ? '' : 'disabled'}" data-palette="${key}"><span style="background:${p.rockA}"></span>${p.name}</button>`).join('')}</div>
+          <p class="muted">Picking a type fills the colour swatches below — edit them freely afterwards.</p>`;
       } else if (card.kind === 'export') {
         body = `<p class="muted">Geometry exports include the displaced terrain block and every rock instance. Map exports share the same top-down frame so heightmap, satmap, splat masks and normal map line up pixel-for-pixel.</p>
           <div class="export-list">
@@ -119,6 +120,9 @@ export class Editor {
           </div>`;
       } else {
         body = card.controls.map(([key, label, min, max, step, unit, hint]) => {
+          if (unit === 'color') {
+            return `<div class="control-line color-line"><span>${label}${hint ? `<small> · ${hint}</small>` : ''}</span><label class="color-chip" style="--chip:${v[key]}"><input type="color" data-color="${key}" value="${v[key]}" aria-label="${label}"><code>${v[key]}</code></label></div>`;
+          }
           const isToggle = min === 0 && max === 1 && step === 1;
           if (isToggle) {
             return `<div class="control-line toggle-line"><span>${label}${hint ? `<small> · ${hint}</small>` : ''}</span><button class="toggle ${v[key] ? 'on' : ''}" data-key="${key}" aria-label="${label}"><span></span></button></div>`;
@@ -162,6 +166,15 @@ export class Editor {
       btn.classList.toggle('on', !!val);
       this.onChange(key, val);
     }));
+    this.content.querySelectorAll('input[type=color]').forEach((input) => {
+      input.addEventListener('input', () => {
+        const key = input.dataset.color;
+        input.parentElement.style.setProperty('--chip', input.value);
+        input.parentElement.querySelector('code').textContent = input.value;
+        this.activePreset = null;
+        this.onChange(key, input.value);
+      });
+    });
     this.content.querySelectorAll('[data-preset]').forEach((btn) => btn.addEventListener('click', () => {
       this.activePreset = btn.dataset.preset;
       this.onPreset(btn.dataset.preset);

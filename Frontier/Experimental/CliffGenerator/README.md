@@ -50,10 +50,15 @@ python3 -m http.server 5173 --bind 0.0.0.0     # or: npm install && npm run dev
      *lifting* (sheet tilted so one edge curls off the face, shadowed underside) and *spalled*
      (sheet gone: recessed pale fresh rock with a dark rim); two octaves (sheets and small
      flakes). Sheets only grow on exposed rock, in patches, and are stretched along bedding on
-     vertical faces. All layers contribute height **and** an analytic gradient, combined
-     triplanarly into one perturbed normal — no finite differences, no texture reads;
-   - cover: runoff staining from the flow map, gravel on deposits, vegetation on gentle ground,
-     moss in concavities, slope‑limited snow above the snow line.
+     vertical faces — coverage, size, thickness, lift, bedding stretch, fresh contrast and
+     shadow depth are all separate controls;
+   - **joint network** — an independent Voronoi fracture set (F2−F1 V‑grooves) with its own
+     block size, line width, groove depth and bedding bias, so cracks and peeling can be tuned
+     (or switched off) separately;
+   - cover: runoff staining from the flow map + face streaks, gravel on deposits, vegetation on
+     gentle ground, moss in concavities, slope‑limited snow above the snow line.
+   All layers contribute height **and** an analytic gradient, combined triplanarly into one
+   perturbed normal — no finite differences, no texture reads.
 7. **Lighting** — `Sky` with PMREM environment, shadowed directional sun, exponential fog,
    ACES tone mapping, water plane.
 
@@ -61,8 +66,21 @@ python3 -m http.server 5173 --bind 0.0.0.0     # or: npm install && npm run dev
 
 Outliner rows map to inspector groups: **Landform / Strata / Erosion** rebuild the heightfield
 (press *Generate* or Ctrl+Enter; the worker reports progress), **Rocks** re‑scatter automatically,
-**Surface / Sun & atmosphere / Viewport** are live. Presets: Alpine granite, Sandstone mesa,
-Canyon, Sea cliffs, Limestone escarpment. **Cliff depth** rebuilds the mesh live.
+**Cliff depth** rebuilds the mesh live, and everything under **Rock material / Mineral flakes /
+Exfoliation & joints / Ground cover / Sun & atmosphere / Viewport** is live. Presets: Alpine
+granite, Sandstone mesa, Canyon, Sea cliffs, Limestone escarpment.
+
+Every texture layer is fully exposed: each has an **enable** toggle, its own **scale**,
+**strength** and **colour** controls —
+
+| Group | Layers | Controls |
+| --- | --- | --- |
+| Rock material | palette → five editable colour swatches; strata; grain; oxide; cavity | bed contrast, band scale, laminae, bed shading, seam darkness/width, caprock tint, grain size/relief/mottle/fineness, oxide amount/scale, cavity shading, bump strength, base roughness |
+| Mineral flakes | 1–3 cellular plate layers | coverage, size (5 cm – 8 m), layer count, density, colour variation, raised plates, rim highlight, sheen |
+| Exfoliation & joints | peeling sheets; joint network | peel strength, coverage, sheet size/thickness, edge lift, small sheets, follow bedding, fresh contrast, shadow depth; joint darkness, block size, line width, groove depth, bedding bias |
+| Ground cover | runoff; gravel; vegetation; moss; snow | wetness, face streaks + scale; gravel amount/scale/colour; vegetation amount, slope limit, patch scale, patchiness, dry grass + three colours; moss amount/scale/colour; snow line, slope limit, transition, roughness, colour |
+
+Picking a rock type fills the colour swatches; they can be edited freely afterwards.
 
 Exports (all maps share the heightmap's top‑down frame): OBJ / GLB (displaced terrain block +
 all rock instances), 16‑bit packed heightmap PNG, **satmap** PNG (top‑down lit colour render at
