@@ -172,8 +172,10 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     const seen = new Uint8Array(total);
     const stack = [];
     const minArea = Math.max(4, opts.lakeMinArea || 24);
+    const sea = opts.seaLevel == null ? -Infinity : opts.seaLevel;
+    const isPool = (c) => filled[c] - height[c] >= 0.4 && filled[c] > sea + 0.01; // the sea is not a lake
     for (let s = 0; s < total; s++) {
-      if (seen[s] || filled[s] - height[s] < 0.4) continue;
+      if (seen[s] || !isPool(s)) continue;
       // flood the connected depression
       stack.length = 0; stack.push(s); seen[s] = 1;
       const cells = []; let fed = false, deepest = 0;
@@ -186,7 +188,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
           const ni = ci + DX[d], nj = cj + DZ[d];
           if (ni < 0 || nj < 0 || ni >= N || nj >= N) continue;
           const nidx = nj * N + ni;
-          if (seen[nidx] || filled[nidx] - height[nidx] < 0.4) continue;
+          if (seen[nidx] || !isPool(nidx)) continue;
           seen[nidx] = 1; stack.push(nidx);
         }
       }
