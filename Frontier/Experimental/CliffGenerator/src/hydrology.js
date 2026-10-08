@@ -405,14 +405,17 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     let half = w * 0.5;
     const ci = c % N, cj = (c - ci) / N;
     const x = (ci / (N - 1) - 0.5) * size, z = (cj / (N - 1) - 0.5) * size;
-    // braided bars on wide, gentle reaches
+    // braided bars on wide, gentle reaches — and on alluvium (fans, floodplains, silted basins),
+    // where a loaded river spreads into shifting channels and bars
     let bar = 0;
-    if (braiding > 0 && w > cell * 6) {
+    const allu = opts.alluvium ? opts.alluvium[s] : 0;
+    if (allu > 0) half *= 1 + 0.35 * allu;
+    if (braiding > 0 && w > cell * 4) {
       const dn = down[s];
       const grad = dn >= 0 ? (bed[s] - bed[dn]) / (cell * 1.2) : 0;
       const gentle = 1 - smoothstep(0.003, 0.012, grad);
       const wide = smoothstep(cell * 6, cell * 14, w);
-      const br = braiding * gentle * wide;
+      const br = braiding * Math.max(gentle * wide, allu * (1 - smoothstep(0.01, 0.03, grad)) * smoothstep(cell * 4, cell * 9, w));
       if (br > 0) {
         half *= 1 + br * 1.2;
         const n = braidNoise.fbm(x / (w * 0.9), z / (w * 0.9), 3, 2.1, 0.55);

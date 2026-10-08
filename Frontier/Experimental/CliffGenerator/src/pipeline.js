@@ -100,6 +100,14 @@ export function generateTerrain(params, progress = () => {}) {
   // network itself comes from the eroded surface.
   let hydro = null;
   const lake = new Float32Array(N * N);
+  // alluvium (0..1): fluvial sediment thickness relative to the "shows at" thickness — floodplains,
+  // fans and silted basins; the rivers braid on it and the surface paints it as silt / sand
+  const alluvium = new Float32Array(N * N);
+  if (fluvial && fluvial.sediment) {
+    const sedScale = Math.max(0.5, params.fluvialSedimentShow == null ? 2.5 : params.fluvialSedimentShow);
+    const sed = blurField(fluvial.sediment, N, 1);
+    for (let i = 0; i < N * N; i++) { const t = Math.min(1, sed[i] / sedScale); alluvium[i] = t * t * (3 - 2 * t); }
+  }
   if (params.riverSim) {
     progress({ phase: 'Simulating rivers', fraction: 0 });
     hydro = simulateRivers(height, N, params.worldSize, {
@@ -107,6 +115,7 @@ export function generateTerrain(params, progress = () => {}) {
       bankAngle: params.riverBank, maxBank: params.riverMaxBank, waterDepth: params.riverWaterFrac, braiding: params.riverBraiding, drySlope: params.riverDrySlope, dryBig: params.riverDryBig,
       lakes: params.riverLakes, lakeFill: params.riverLakeFill, lakeMaxArea: (params.riverLakeMax == null ? 8 : params.riverLakeMax) / 100, lakeMinArea: Math.round((params.riverLakeMin || 0.01) * 1e6 / (cell * cell)),
       seaLevel: params.waterEnabled ? params.seaLevel : -Infinity, sources: riverResult.sources, guideFlow: params.riverGuideFlow,
+      alluvium,
     }, params.seed);
     for (let i = 0; i < N * N; i++) {
       riverResult.riverMask[i] = Math.max(riverResult.riverMask[i], hydro.riverMask[i]);
@@ -144,11 +153,13 @@ export function generateTerrain(params, progress = () => {}) {
     }
   }
 
-  // fluvial sediment: fans, valley fills and basin floors are alluvium
-  if (fluvial && fluvial.sediment) {
-    const sedScale = Math.max(0.5, params.fluvialSedimentShow == null ? 2.5 : params.fluvialSedimentShow);
-    const sed = blurField(fluvial.sediment, N, 1);
-    for (let i = 0; i < N * N; i++) deposit[i] = Math.max(deposit[i], Math.min(1, sed[i] / sedScale));
+  // fluvial sediment: fans, valley fills and basin floors are alluvium — fine sediment (the
+  // silt / sand channel the surface shares with lake beds) with some gravel in it
+  for (let i = 0; i < N * N; i++) {
+    const a = alluvium[i];
+    if (a <= 0) continue;
+    lake[i] = Math.max(lake[i], a * 0.75);
+    deposit[i] = Math.max(deposit[i], a * 0.45);
   }
 
   // core-stones shed their debris: no scree skin on the boulders themselves

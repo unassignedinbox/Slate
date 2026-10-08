@@ -273,7 +273,7 @@ struct Surface { vec3 albedo; vec3 normalW; float roughness; float ao; float met
 Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   float road = aux2.x * ( 1.0 - uIsRock ) * uRoadOn;
   float riverBed = aux2.y * ( 1.0 - uIsRock ) * uBedOn;
-  float lakeBed = aux2.z * ( 1.0 - uIsRock ) * uBedOn;
+  float lakeBed = aux2.z * ( 1.0 - uIsRock ) * uBedOn; // lake beds and fluvial alluvium: silt / sand
   float localWater = mix( -1.0e6, aux2.w, 1.0 - uIsRock );
   float waterLine = max( uSeaLevel, localWater );
   float bedCover = clamp( max( road, max( riverBed, lakeBed ) ), 0.0, 1.0 );

@@ -62,7 +62,9 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    dozen long steps, re‑routing the water (priority‑flood fill + D8) every step. **Sedimentation**:
    what the rivers cut is carried downstream (donors before receivers) and dropped wherever the
    flux exceeds the transport capacity ∝ A^m·S — alluvial fans where slopes flatten, valley
-   fills, deltas and basin floors; the deposited thickness is painted as alluvium. Closed basins
+   fills, deltas and basin floors; the deposited thickness becomes an *alluvium* map: the
+   surface paints it as silt / sand with some gravel, and the rivers widen and braid on it
+   (shifting bars in a gravel belt) the way a loaded river does on its own fan. Closed basins
    silt up towards their spill level (*Basin fill*) so they become valley floors drained by a
    river — standing‑water lakes are off by default (*Lakes in depressions* turns them back on); after the droplet erosion, hollows shallower than
    *Silt up pits* are filled so the sediment fans do not dam the valleys into chains of ponds.
