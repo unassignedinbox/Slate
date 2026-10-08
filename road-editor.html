@@ -1157,7 +1157,8 @@ profC.addEventListener('pointermove',e=>{
   const r=selRoad();if(!r||!profGeom)return;
   const [px,py]=profPos(e),{X,Y,W,padL}=profGeom;
   if(profDrag&&profDrag.i>=0){
-    const nd=r.nodes[profDrag.i];const yv=profGeom.mx-(py-profGeom.padT)/profGeom.H*(profGeom.mx-profGeom.mn);
+    const nd=r.nodes[profDrag.i];if(!nd){profDrag=null;return;}
+    const yv=profGeom.mx-(py-profGeom.padT)/profGeom.H*(profGeom.mx-profGeom.mn);
     nd.y=+clamp(yv,-200,2000).toFixed(2);rebuildRoad(r);rebuildJunctions();
     lightRefresh();drawProfile();return;
   }
@@ -1247,7 +1248,7 @@ function draw3D(){
   const fL=Math.hypot(f.x,f.y,f.z)||1;f={x:f.x/fL,y:f.y/fL,z:f.z/fL};
   let r={x:-f.z,y:0,z:f.x}; // cross(f, up) = camera-right on the ground plane
   const rL=Math.hypot(r.x,r.z)||1;r={x:r.x/rL,y:0,z:r.z/rL};
-  const u={x:r.z*f.y-r.y*f.z,y:r.x*f.z-r.z*f.x,z:r.y*f.x-r.x*f.y};
+  const u={x:-r.z*f.y,y:r.z*f.x-r.x*f.z,z:r.x*f.y}; // cross(r, f) = camera-up
   const focal=h*1.15,near=0.5;
   const proj=p=>{const vx=p.x-cam.pos.x,vy=p.y-cam.pos.y,vz=p.z-cam.pos.z;
     const z=vx*f.x+vy*f.y+vz*f.z;if(z<near)return null;
@@ -1261,7 +1262,8 @@ function draw3D(){
   for(let pass=0;pass<2;pass++){
     g.strokeStyle=pass?'rgba(255,255,255,.10)':'rgba(255,255,255,.04)';
     g.beginPath();
-    const step=pass?100:20;
+    let step=pass?100:20;
+    while((gx1-gx0)/step>80||(gz1-gz0)/step>80)step*=2;
     for(let x=Math.ceil(gx0/step)*step;x<=gx1;x+=step){const a=proj({x,y:gy,z:gz0}),b=proj({x,y:gy,z:gz1});if(a&&b){g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);}}
     for(let z=Math.ceil(gz0/step)*step;z<=gz1;z+=step){const a=proj({x:gx0,y:gy,z}),b=proj({x:gx1,y:gy,z});if(a&&b){g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);}}
     g.stroke();
@@ -1742,7 +1744,7 @@ function runChecks(){
   }
   // overlaps / grade separations (coarse)
   for(let i=0;i<P.roads.length;i++)for(let k=i+1;k<P.roads.length;k++){
-    const A=P.roads[i],B=P.roads[k];if(!A._c||!B._c||A._c.pts.length<2||B._c||B._c.pts.length<2)continue;
+    const A=P.roads[i],B=P.roads[k];if(!A._c||!B._c||A._c.pts.length<2||B._c.pts.length<2)continue;
     const wA=extents(A),wB=extents(B),need=(wA.dMax-wA.dMin)/2+(wB.dMax-wB.dMin)/2;
     const pa=A._c.pts,pb=B._c.pts,sa=Math.max(1,Math.floor(pa.length/120)),sb=Math.max(1,Math.floor(pb.length/120));
     let near=null;
@@ -1795,6 +1797,7 @@ function lightRefresh(){
   renderSelPill();
 }
 function fullRefresh(){
+  if(S.project){for(const r of S.project.roads)if(!r._c)rebuildRoad(r);rebuildJunctions();}
   runChecks();renderOutliner();renderInspector();renderChecks();renderDockTabs();
   renderProfileSide();renderXsecSide();renderD3Side();renderExport();updateUndoBtns();
   lightRefresh();
@@ -1969,18 +1972,11 @@ function buildOBJ(step){
         A0.y+=lift;A1.y+=lift;B0.y+=lift;B1.y+=lift;
         const b0=vi;V(A0);V(A1);V(B1);V(B0);vi+=4;
         L.push(`f ${b0} ${b0+1} ${b0+2}`,`f ${b0} ${b0+2} ${b0+3}`);tris+=2;}};
-      if(strips.length||dashStrips.length){L.push(`g ${r.id}_markings`);emit(strips,0.02);
-        // continuous strips need intermediate rows for curves: emitted per whole length is coarse; subdivide
-        emit(dashStrips,0.02);}
-      // subdivide continuous strips properly
-      if(strips.length){let extra=[];
-        for(const st of strips){const segs=Math.min(400,Math.max(8,Math.ceil(c.length/8)));
-          for(let i=0;i<segs;i++)extra.push({d0:st.d0,d1:st.d1,s0:c.length*i/segs,s1:c.length*(i+1)/segs});}
-        // remove the coarse whole-length strips emitted above by rebuilding? simpler: emit subdivided INSTEAD — drop coarse:
-        // (coarse ones were already emitted; to avoid doubles we emit subdivided only when strips exist — so re-do: strip coarse out)
-        // Easiest: we already emitted coarse whole-length; undo by truncating: coarse added strips.length*6 lines. Remove them.
-        L.splice(L.length-strips.length*6,strips.length*6);tris-=strips.length*2;vi-=strips.length*4;
-        emit(extra,0.02);}
+      // continuous strips follow curves: subdivide along length BEFORE emitting
+      const extra=[];
+      for(const st of strips){const segs=Math.min(400,Math.max(8,Math.ceil(c.length/8)));
+        for(let i=0;i<segs;i++)extra.push({d0:st.d0,d1:st.d1,s0:c.length*i/segs,s1:c.length*(i+1)/segs});}
+      if(extra.length||dashStrips.length){L.push(`g ${r.id}_markings`);emit(extra,0.02);emit(dashStrips,0.02);}
     }
     // kerb walls
     if(S.exportKerbs&&(r.kerbL||r.kerbR)){
@@ -2014,6 +2010,8 @@ function exportCSV(){
   toast('Centerline CSV exported');
 }
 function exportPNG(which){
+  const pane={profile:'profile','3d':'3d',section:'section'}[which];
+  if(pane&&!dockVisible(pane)){setDock(pane);setTimeout(()=>exportPNG(which),150);return;}
   const c=which==='profile'?$('profile'):which==='3d'?$('view3d'):which==='section'?$('xsec'):$('plan');
   c.toBlob(b=>{if(b){download(b,`road-${which}-${Date.now()}.png`);toast('PNG snapshot saved');}});
 }
@@ -2118,7 +2116,7 @@ function boot(){
       if(o&&o.project&&Array.isArray(o.project.roads)&&o.project.roads.length){
         S.project={name:o.project.name,grid:o.project.grid||10,roads:o.project.roads};
         S.project.roads.forEach(r=>{r._c=null;rebuildRoad(r);});
-        S.gridSize=S.project.grid;restored=true;}}}catch(e){}
+        S.gridSize=S.project.grid;syncUid();restored=true;}}}catch(e){}
   if(!restored)S.project=sampleProject();
   S.sel={road:S.project.roads[0]?S.project.roads[0].id:null,nodes:new Set(),jx:null};
   S.project.roads.forEach(r=>S.expanded.add(r.id));
