@@ -538,9 +538,16 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   color = mix( color, uMoss * ( 0.8 + 0.4 * speckle ), moss * 0.8 );
 
   // snow
-  float snow = snowAlt * smoothstep( uSnowSlopeCos - 0.12, uSnowSlopeCos + 0.1, nW.y );
+  // couloirs and hollows hold snow on steeper faces, arêtes and convex ribs are blown clear
+  float snowCos = uSnowSlopeCos + cavity * 0.12;
+  float snow = snowAlt * smoothstep( snowCos - 0.12, snowCos + 0.1, nW.y );
+  // rock ribs show through the thin snow on the steeper faces (fluted high-mountain faces)
+  float rib = smoothstep( 0.55, 0.85, cgNoise3( wp * vec3( 0.35, 0.07, 0.35 ) + 3.0 ).x ) * ( 1.0 - smoothstep( snowCos + 0.04, snowCos + 0.3, nW.y ) );
+  snow *= 1.0 - rib * 0.85;
   snow = clamp( snow * ( 1.0 + deposit * 0.6 + max( 0.0, -cavity ) * 0.4 ), 0.0, 1.0 );
-  color = mix( color, uSnow, snow );
+  // wind-packed surface: faint drifts, slightly dirtier in old hollows
+  vec3 snowCol = uSnow * ( 0.94 + 0.06 * cgNoise3( wp * 0.6 ).x ) * ( 1.0 - 0.06 * max( 0.0, -cavity ) );
+  color = mix( color, snowCol, snow );
 
   // wet band at the shoreline and darker, cooler ground under water
   float shore = 1.0 - smoothstep( waterLine - 0.3, waterLine + 1.2 * uShoreWet + 0.3, wp.y );
