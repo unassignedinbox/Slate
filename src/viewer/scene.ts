@@ -594,11 +594,15 @@ export class Viewer {
           '#include <color_fragment>',
           `#include <color_fragment>
           if (uDesert > 0.5) {
-            float rib = 0.5 + 0.5 * cos(vUv.x * 6.2831853 * 14.0);
+            // Use the interpolated geometric normal rather than vUv: MeshStandardMaterial does not
+            // enable its UV varying unless a texture map is bound, so this remains valid for every
+            // solid-colour desert material and for the worker-generated branch buffers.
+            float azimuth = atan(vViewNrm.z, vViewNrm.x);
+            float rib = 0.5 + 0.5 * cos(azimuth * 14.0);
             float groove = smoothstep(0.32, 0.72, rib);
             diffuseColor.rgb *= mix(vec3(0.70, 0.82, 0.56), vec3(0.42, 0.58, 0.32), groove);
             if (uCactus > 0.5) {
-              float areole = smoothstep(0.88, 0.98, sin(vUv.x * 6.2831853 * 7.0) * 0.5 + 0.5);
+              float areole = smoothstep(0.88, 0.98, sin(azimuth * 7.0) * 0.5 + 0.5);
               diffuseColor.rgb += areole * 0.035;
             }
           }
