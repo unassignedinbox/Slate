@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cliff Generator - SDF Heightmap Hybrid</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #0a0a1a; 
+            color: #e0e0e0; 
+            min-height: 100vh; 
+            overflow: hidden;
+        }
+        #canvas { width: 100%; height: 100%; display: block; }
+        .ui {
+            position: absolute; top: 20px; left: 20px; background: rgba(10,10,20,0.85);
+            padding: 20px; border-radius: 8px; backdrop-filter: blur(12px);
+            min-width: 300px; border: 1px solid #333;
+        }
+        h2 { margin-bottom: 20px; color: #4ade80; border-bottom: 1px solid #444; padding-bottom: 8px; }
+        .control-group { margin-bottom: 18px; }
+        .control-group label { 
+            display: block; margin-bottom: 5px; 
+            color: #a0a0a0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+        }
+        .control-group input, .control-group select, .control-group textarea {
+            width: 100%; padding: 8px; background: #1a1a2a; border: 1px solid #333; border-radius: 5px; color: #e0e0e0;
+            font-size: 13px;
+        }
+        .control-group input:focus, .control-group select:focus { outline: none; border-color: #4ade80; }
+        .slider-wrapper { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+        .slider-wrapper input { flex: 1; margin: 0 8px; width: auto; }
+        .btn { width: 100%; padding: 10px; background: #4ade80; color: #1a1a2e; border: none; border-radius: 5px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+        .btn:hover { background: #22c55e; }
+        .presets { margin-top: 18px; }
+        .preset-btn { width: 100%; padding: 8px; margin: 3px 0; background: #1a1a2a; color: #c0c0c0; border: 1px solid #333; border-radius: 5px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+        .preset-btn:hover { background: #2a2a3a; color: #e0e0e0; }
+        .preset-btn.active { background: #4ade80; color: #1a1a2e; }
+        .info { position: absolute; bottom: 20px; right: 20px; font-size: 12px; color: #666; }
+        .stats { position: absolute; top: 20px; right: 20px; background: rgba(10,10,20,0.8); padding: 10px 15px; border-radius: 5px; font-size: 12px; border: 1px solid #333; }
+        .preset-selector { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <div class="ui">
+        <h2>Cliff Generator SDF Hybrid</h2>
+        
+        <div class="control-group">
+            <label>Global Scale</label>
+            <div class="slider-wrapper">
+                <input type="range" id="scale" min="0.5" max="3" step="0.05" value="1.2">
+                <span id="scaleVal">1.2</span>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>Ruggedness</label>
+            <div class="slider-wrapper">
+                <input type="range" id="ruggedness" min="0" max="1" step="0.02" value="0.45">
+                <span id="ruggedVal">0.45</span>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>Stratification Layers</label>
+            <div class="slider-wrapper">
+                <input type="number" id="strataCount" min="1" max="8" step="1" value="3">
+                <span id="strataVal">3</span>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>Height Bias</label>
+            <div class="slider-wrapper">
+                <input type="range" id="heightBias" min="-0.5" max="0.5" step="0.05" value="0">
+                <span id="biasVal">0.00</span>
+            </div>
+        </div>
+        
+        <div class="presets">
+            <h3>Presets</h3>
+            <div class="preset-selector">
+                <button class="preset-btn active" data-preset="rugged">Rugged Outcrops</button>
+                <button class="preset-btn" data-preset="strata">Stratified Layers</button>
+                <button class="preset-btn" data-preset="mixed">Rugged + Stratified</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="stats" id="stats">Ready</div>
+    <div class="info">SDF Heightmap Hybrid — topology preserving | Signed Distance Field operations</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statsEl = document.getElementById('stats');
+        
+        let width, height;
+        let terrainHeights = [];
+        let colorPalette = [];
+        
+        // SDF operations — topology preserving
+        const sdf = {
+            // Signed distance function for a plane (base terrain)
+            plane(x, y, scale, offsetX = 0, offsetY = 0) {
+                const fx = (x / scale + offsetX) % 1;
+                const fy = (y / scale + offsetY) % 1;
+                // Gentle sine-based undulation as distance field
+                return Math.sin(fx * Math.PI * 2) * Math.cos(fy * Math.PI * 2) * 0.3;
+            },
+            
+            // Rugged outcrops — rocky, irregular features
+            // Uses multiple scaled noise functions assembled as SDF
+            ruggedOutcrop(x, y, frequency, amplitude, octaves = 4) {
+                let value = 0;
+                for (let i = 0; i < octaves; i++) {
+                    const f = frequency * Math.pow(2, i);
+                    const a = amplitude / octaves;
+                    const nx = (x / f) % 1;
+                    const ny = (y / f) % 1;
+                    // Simple deterministic "noise" using sin/cos combos
+                    const n = Math.sin(nx * 10 + ny * 7) * Math.cos(nx * 3 + ny * 11) * 0.5 + 0.5;
+                    value += n * a * Math.pow(0.5, i);
+                }
+                return value;
+            },
+            
+            // Stratification — geological layering effect
+            stratification(x, y, frequency, layerCount) {
+                const normY = (y / frequency) % 1;
+                // Sinusoidal layering with smooth transitions
+                const layerPhase = Math.sin(normY * Math.PI * layerCount);
+                const layerIdx = Math.floor((layerPhase + 1) / 2 * layerCount);
+                const withinLayer = (normY * layerCount) % 1;
+                // Return signed distance from layer boundary
+                return (withinLayer / 1.0) - 0.5;
+            }
+        };
+        
+        function updateUIValues() {
+            document.getElementById('scaleVal').textContent = document.getElementById('scale').value;
+            document.getElementById('ruggedVal').textContent = document.getElementById('ruggedness').value;
+            document.getElementById('strataVal').textContent = document.getElementById('strataCount').value;
+            document.getElementById('biasVal').textContent = parseFloat(document.getElementById('heightBias').value).toFixed(2);
+        }
+        
+        function resizeCanvas() {
+            width = window.innerWidth;
+            height = Math.max(600, window.innerHeight * 0.8);
+            canvas.width = width;
+            canvas.height = height;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        function sdfHeightmap(x, y, scale, ruggedness, strataCount) {
+            // 1. Base SDF height — gentle rolling hills with consistent topology
+            const base = sdf.plane(x, y, scale);
+            
+            // 2. Add rugged outcrops — preserves global topology while adding local features
+            const rugged = sdf.ruggedOutcrop(x, y, 2 + ruggedness * 4, 0.3 + ruggedness * 0.4);
+            
+            // 3. Stratification layers — geological layering that respects topology
+            let strataValue = 0;
+            for (let i = 0; i < strataCount; i++) {
+                const layerEffect = sdf.stratification(x, y, scale, strataCount);
+                // Weight each layer — deeper layers have less height impact
+                strataValue += layerEffect * 0.08 * Math.pow(1.2, -i);
+            }
+            
+            // 4. Combine using smooth minimum/maximum for topology preservation
+            // smoothmin(a, b) = -lambda * log(exp(-a*lambda) + exp(-b*lambda))
+            // With lambda = 0.25, this creates smooth transitions while maintaining manifold topology
+            const lambda = 0.25;
+            const smoothMin = (a, b) => -lambda * Math.log(Math.exp(-a / lambda) + Math.exp(-b / lambda));
+            
+            let result = smoothMin(base, -rugged * 0.6);
+            result = smoothMin(result, strataValue);
+            
+            // Apply height bias
+            result += parseFloat(document.getElementById('heightBias').value);
+            
+            return result;
+        }
+        
+        function classifyColor(height) {
+            // Color mapping that respects topological layers
+            const t = (height + 1) / 2; // Normalize from [-1, 1] to [0, 1]
+            
+            // Base colors by height
+            let r, g, b;
+            if (t < 0.2) {
+                // Deep areas — dark oceans/fjords
+                r = Math.round(20 + t * 30);
+                g = Math.round(20 + t * 30);
+                b = Math.round(40 + t * 50);
+            } else if (t < 0.4) {
+                // Lowlands — rocky terrain
+                r = Math.round(80 + t * 50);
+                g = Math.round(60 + t * 40);
+                b = Math.round(50 + t * 30);
+            } else if (t < 0.6) {
+                // Hills — forest/grass transition
+                r = Math.round(120 + t * 40);
+                g = Math.round(100 + t * 40);
+                b = Math.round(70 + t * 30);
+            } else if (t < 0.8) {
+                // Uplands — elevated terrain
+                r = Math.round(160 + t * 40);
+                g = Math.round(140 + t * 30);
+                b = Math.round(100 + t * 20);
+            } else {
+                // Peaks — high alpine
+                r = Math.round(200 + t * 30);
+                g = Math.round(180 + t * 20);
+                b = Math.round(130 + t * 15);
+            }
+            
+            // Add stratification stripes if height is in transition zones
+            const strataCount = parseInt(document.getElementById('strataCount').value);
+            if (strataCount > 2 && t > 0.3 && t < 0.7) {
+                // Thin vertical stripes indicating layering
+                const stripePattern = Math.sin(t * Math.PI * strataCount * 3) * 0.15;
+                r = Math.round(r * (1 - stripePattern * 0.3));
+                g = Math.round(g * (1 - stripePattern * 0.3));
+                b = Math.round(b * (1 - stripePattern * 0.3));
+            }
+            
+            return `rgb(${r},${g},${b})`;
+        }
+        
+        function generateTerrain() {
+            updateUIValues();
+            const scale = parseFloat(document.getElementById('scale').value);
+            const ruggedness = parseFloat(document.getElementById('ruggedness').value);
+            const strataCount = parseInt(document.getElementById('strataCount').value);
+            const heightBias = parseFloat(document.getElementById('heightBias').value);
+            
+            statsEl.textContent = 'Generating SDF terrain...';
+            terrainHeights = [];
+            const startTime = performance.now();
+            
+            // Adaptive sampling based on canvas size
+            const sampleCount = Math.min(200000, width * height / 50);
+            const samplesX = Math.ceil(Math.sqrt(sampleCount * (width / height)));
+            const samplesY = Math.ceil(sampleCount / samplesX);
+            
+            terrainHeights = new Array(samplesX).fill().map(() => new Array(samplesY));
+            
+            for (let i = 0; i < samplesX; i++) {
+                for (let j = 0; j < samplesY; j++) {
+                    const sx = (i / samplesX) * width;
+                    const sy = (j / samplesY) * height;
+                    const sdfValue = sdfHeightmap(sx, sy, scale, ruggedness, strataCount);
+                    terrainHeights[i][j] = Math.max(-1, Math.min(1, sdfValue + heightBias));
+                }
+            }
+            
+            const elapsed = performance.now() - startTime;
+            statsEl.textContent = `SDF terrain generated in ${elapsed.toFixed(0)}ms (${samplesX}x${samplesY} samples)`;
+            
+            drawTerrain();
+        }
+        
+        function drawTerrain() {
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, width, height);
+            
+            if (terrainHeights.length === 0) return;
+            
+            const w = terrainHeights.length;
+            const h = terrainHeights[0].length;
+            const data = ctx.createImageData(width, height);
+            
+            // Map samples to pixel grid with bilinear consistency
+            const scaleX = w / width;
+            const scaleY = h / height;
+            
+            for (let px = 0; px < width; px++) {
+                for (let py = 0; py < height; py++) {
+                    // Sample from height grid using nearest neighbor from our sparse samples
+                    const sx = Math.floor(px * scaleX);
+                    const sy = Math.floor(py * scaleY);
+                    
+                    // Clamp to grid bounds
+                    const si = Math.max(0, Math.min(sx, w - 1));
+                    const sj = Math.max(0, Math.min(sy, h - 1));
+                    
+                    const height = terrainHeights[si][sj] || 0;
+                    const color = classifyColor(height);
+                    
+                    const idx = (py * width + px) * 4;
+                    // Parse rgb from color string
+                    const matches = color.match(/\d+/g);
+                    if (matches) {
+                        data[idx] = parseInt(matches[0]);
+                        data[idx + 1] = parseInt(matches[1]);
+                        data[idx + 2] = parseInt(matches[2]);
+                    }
+                    data[idx + 3] = 255;
+                }
+            }
+            
+            ctx.putImageData(data, 0, 0);
+        }
+        
+        function applyPreset(type) {
+            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+            const activeBtn = document.querySelector(`.preset-btn[data-preset="${type}"]`);
+            if (activeBtn) activeBtn.classList.add('active');
+            
+            const scaleInput = document.getElementById('scale');
+            const ruggednessInput = document.getElementById('ruggedness');
+            const strataInput = document.getElementById('strataCount');
+            const biasInput = document.getElementById('heightBias');
+            
+            if (type === 'rugged') {
+                scaleInput.value = '1.5';
+                ruggednessInput.value = '0.8';
+                strataInput.value = '2';
+                biasInput.value = '0';
+            } else if (type === 'strata') {
+                scaleInput.value = '1.1';
+                ruggednessInput.value = '0.2';
+                strataInput.value = '6';
+                biasInput.value = '0';
+            } else if (type === 'mixed') {
+                scaleInput.value = '1.3';
+                ruggednessInput.value = '0.5';
+                strataInput.value = '4';
+                biasInput.value = '0';
+            }
+            
+            updateUIValues();
+            generateTerrain();
+        }
+        
+        // Event listeners for UI controls
+        document.getElementById('scale').addEventListener('input', () => {
+            document.getElementById('scaleVal').textContent = document.getElementById('scale').value;
+        });
+        document.getElementById('ruggedness').addEventListener('input', () => {
+            document.getElementById('ruggedVal').textContent = document.getElementById('ruggedness').value;
+        });
+        document.getElementById('strataCount').addEventListener('input', () => {
+            document.getElementById('strataVal').textContent = document.getElementById('strataCount').value;
+        });
+        document.getElementById('heightBias').addEventListener('input', () => {
+            document.getElementById('biasVal').textContent = parseFloat(document.getElementById('heightBias').value).toFixed(2);
+        });
+        
+        // Preset button listeners
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                applyPreset(btn.dataset.preset);
+            });
+        });
+        
+        // Initial generation
+        generateTerrain();
+    </script>
+</body>
+</html>
