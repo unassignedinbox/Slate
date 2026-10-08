@@ -48,7 +48,19 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    threshold, after‑erosion share. The 3‑D cliff chunks carry the same idea into true 3‑D
    (*Cliff depth → 3D push–pull*): a blocky noise that varies with height pushes buttresses out
    of the carved face and cuts recesses back into it, so a block can overhang the recess below it
-   — real XZ push–pull with overhangs, not just contour wiggles. **Boulder outcrops** (`src/outcrops.js`) — clusters of large core‑stones (tors, woolsacks,
+   — real XZ push–pull with overhangs, not just contour wiggles. **Escarpment** (*Landform →
+   Mesa & canyon → Escarpment*): a near‑vertical cliff line along the edge of the massif — the
+   high side is lifted onto a bench within a cell or two along a smoothed version of the
+   continental mask (long headlands and bays), then pushed and pulled in plan by the rugged stage;
+   this is the base of the *Coastal cliffs* and *Quarry walls* presets. In the 3‑D chunks *Lean*
+   cuts such a face back progressively from its crest to its foot (local crest / foot maps), so
+   the profile is | / — vertical to overhanging — instead of the back‑leaning slope a heightfield
+   can give. **Jointing** (*Rock material → Jointing*, shader): two vertical joint sets (families
+   of warped planes spaced like the bed thickness, staggered bed to bed like brickwork) and the
+   bedding planes break the face into blocks — each joint with its own width, some missing, each
+   block with its own slight tilt and tone, grooves with normal and occlusion — the cracked, blocky
+   rock face of a quarry wall or a sea cliff; a joint family parallel to the face is invisible.
+   **Boulder outcrops** (`src/outcrops.js`) — clusters of large core‑stones (tors, woolsacks,
    "encampments") are unioned into the relief *before* strata and erosion: superellipsoid stones
    with a plan rotation, a low‑frequency bulge and a burial depth, in clusters on a site grid
    filtered by slope and biased to ridges / hill tops. They come out as a landform the rest of the
@@ -219,7 +231,7 @@ under **Rock material / Mineral flakes / Spalling / Ground cover / Sun & atmosph
 live. Presets: Alpine granite, Sandstone mesa, Canyon, Sea cliffs, Limestone escarpment, Fjord,
 Badlands, Dolomite towers, Desert buttes, Volcanic island, Highland glens, Boulder field, Scree
 slopes, Granite domes, Granite tors, Rocky coast, Talus canyon, Rocky mountains, Sand dunes,
-Icelandic highlands, Icelandic river plains, Himalayan peaks, Alpine peaks, Karst pinnacles. **Landform → Dunes** adds transverse
+Icelandic highlands, Icelandic river plains, Coastal cliffs, Quarry walls, Himalayan peaks, Alpine peaks, Karst pinnacles. **Landform → Dunes** adds transverse
 dune fields (height, spacing, wind direction, asymmetry, coverage) to any preset. **Landform →
 Boulder outcrops** adds embedded core‑stone clusters (density, boulder size, boulders per cluster,
 spread, spacing, height/width, burial, rounding, prefer‑high‑ground, max ground slope) — on by

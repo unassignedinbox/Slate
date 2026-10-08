@@ -21,6 +21,9 @@ export function synthesizeBase(params, progress = () => {}) {
 
   // Canyon centreline wanders with low-frequency noise so the gorge meanders.
   const canyonNoise = new SimplexNoise(params.seed * 11 + 7);
+  const cliffH = params.cliffHeight || 0;
+  const cliffEdgeW = 0.5 * (1 - 0.97 * Math.min(1, Math.max(0, params.cliffSharpness == null ? 0.8 : params.cliffSharpness)));
+  const cliffNoise = new SimplexNoise(params.seed * 13 + 29);
 
   // Transverse dunes: asymmetric ridges across the wind, in fields.
   const duneAmp = params.duneAmount || 0;
@@ -54,6 +57,19 @@ export function synthesizeBase(params, progress = () => {}) {
       let h = (r * mask + rolling * 0.08 * (1 - mask * 0.5)) * params.mountainHeight;
       h += (mask - 0.5) * params.mountainHeight * 0.25;
       h += params.baseElevation;
+
+      // Escarpment: a near-vertical cliff line along the edge of the massif (coastal cliffs, quarry
+      // walls). The continental mask is thresholded very sharply and the ground on the high side
+      // is lifted onto a bench, so the relief drops by `cliffHeight` within a cell or two; the
+      // line is pushed and pulled in plan by the rugged stage that follows (headlands, coves).
+      if (cliffH > 0) {
+        // the cliff line follows a smoother version of the mask (long headlands and bays, not the
+        // fractal fringe of the full mask) with a little fine wobble; the rugged stage adds the
+        // blocky push–pull afterwards
+        const mEdge = 0.5 + 0.5 * maskNoise.fbm(u * params.reliefFrequency + 0.3, v * params.reliefFrequency - 0.6, 2, 2, 0.5);
+        const edge = smoothstep(0.5 - cliffEdgeW, 0.5 + cliffEdgeW, mEdge + 0.03 * cliffNoise.fbm(u * 7 + 4, v * 7 - 2, 3));
+        h += cliffH * edge;
+      }
 
       // Mesa plateau — soft minimum clamps peaks into flat tops.
       if (params.plateauStrength > 0) {

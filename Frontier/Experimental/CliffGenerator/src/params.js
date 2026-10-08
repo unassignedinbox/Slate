@@ -18,6 +18,8 @@ export const defaults = {
   plateauStrength: 0,
   plateauHeight: 380,       // [m]
   canyonDepth: 0,           // [m]
+  cliffHeight: 0,           // [m]
+  cliffSharpness: 0.8,
   canyonWidth: 260,         // [m]
   duneAmount: 0,            // [m]
   duneWavelength: 140,      // [m]
@@ -112,6 +114,8 @@ export const defaults = {
   sdfJoints: 0.5,
   sdfRough: 0.5,
   sdfPushPull: 2.5,         // [m]
+  sdfLean: 0,               // [m]
+  sdfLeanReach: 24,         // [m]
   sdfPushScale: 18,         // [m]
   sdfMaxChunks: 400,
   // Cliff depth (mesh displacement)
@@ -448,6 +452,32 @@ Object.assign(presets, {
     rockDensity: 0.25, rockSizeMax: 5, pebbleDensity: 0.8, pebbleSize: 0.5, gravelAmount: 1, sdfOn: 1, sdfAngle: 60, sdfUndercut: 4,
     oxideAmount: 0.5, peelStrength: 0.3, flakeStrength: 0.45, sunElevation: 26, sunAzimuth: 190, turbidity: 5, fogDensity: 0.45,
   },
+  'Coastal cliffs': {
+    palette: 'shale', worldSize: 2048, mountainHeight: 70, baseElevation: -25, baseFrequency: 1.0, ridgeSharpness: 1.2, peakPower: 1.0, warpStrength: 0.4,
+    reliefFrequency: 0.7, reliefContrast: 0.6, cliffHeight: 110, cliffSharpness: 1, plateauStrength: 0.6, plateauHeight: 120, canyonDepth: 0,
+    ruggedAmount: 26, ruggedScale: 90, ruggedBlockiness: 0.8, ruggedLedges: 0.3, ruggedSlope: 30, ruggedAfter: 0.4,
+    strataBand: 9, strataStrength: 0.9, strataVariation: 0.5, strataHardShare: 0.6, strataDip: 1.5, hardnessContrast: 0.5, strataRecut: 0.6,
+    fluvialStrength: 0.1, fluvialIterations: 8, droplets: 25000, erodeSpeed: 0.15, thermalIterations: 12, talusSoft: 46, talusHard: 89, rillStrength: 0.1,
+    snowOn: 0, vegetation: 0.95, vegSlope: 32, vegPatchiness: 0.2, mossiness: 0.25, soilAmount: 0.6, dryness: 0.15,
+    seaLevel: 0, waterEnabled: 1, waterMeshes: 0, riverCatchment: 0.4, riverLakes: 0,
+    sdfOn: 1, sdfAngle: 50, sdfUndercut: 5, sdfJoints: 0.8, sdfPits: 0.25, sdfPushPull: 3, sdfPushScale: 14, sdfLean: 4, sdfLeanReach: 30, overhang: 2,
+    jointStrength: 1.0, jointSpacing: 2.2, jointWidth: 0.2, jointDepth: 0.4, jointStagger: 1, jointBlocks: 0.7, jointDropout: 0.3,
+    peelStrength: 0.25, flakeStrength: 0.3, oxideAmount: 0.25, wetness: 0.8, rockDensity: 0.45, rockSlopeMax: 30, rockSizeMin: 0.6, rockSizeMax: 6, gravelAmount: 1,
+    sunElevation: 38, sunAzimuth: 235, turbidity: 3, fogDensity: 0.3,
+  },
+  'Quarry walls': {
+    palette: 'shale', worldSize: 1536, mountainHeight: 90, baseElevation: 20, baseFrequency: 1.0, ridgeSharpness: 1.2, peakPower: 1.0, warpStrength: 0.3,
+    reliefFrequency: 0.8, reliefContrast: 0.9, cliffHeight: 70, cliffSharpness: 1, plateauStrength: 0.85, plateauHeight: 95, canyonDepth: 0,
+    ruggedAmount: 18, ruggedScale: 60, ruggedBlockiness: 0.9, ruggedLedges: 0.5, ruggedSlope: 30, ruggedAfter: 0.5,
+    strataBand: 7, strataStrength: 0.8, strataVariation: 0.4, strataHardShare: 0.6, strataDip: 4, hardnessContrast: 0.6, strataRecut: 0.5,
+    fluvialStrength: 0.08, fluvialIterations: 6, droplets: 20000, erodeSpeed: 0.12, thermalIterations: 10, talusSoft: 46, talusHard: 89, rillStrength: 0.1,
+    snowOn: 0, vegetation: 0.35, vegSlope: 30, vegPatchiness: 0.7, mossiness: 0.1, soilAmount: 0.7, dryness: 0.4,
+    seaLevel: -100, waterEnabled: 0, riverCatchment: 0.6, riverLakes: 0,
+    sdfOn: 1, sdfAngle: 50, sdfUndercut: 3, sdfJoints: 1.0, sdfPits: 0.15, sdfPushPull: 3.5, sdfPushScale: 10, sdfLean: 3, sdfLeanReach: 24, overhang: 1.5,
+    jointStrength: 1.2, jointSpacing: 1.8, jointWidth: 0.18, jointDepth: 0.45, jointStagger: 0.6, jointBlocks: 0.8, jointDropout: 0.25,
+    peelStrength: 0.3, flakeStrength: 0.35, oxideAmount: 0.3, wetness: 0.4, rockDensity: 0.9, rockSlopeMax: 35, rockSizeMin: 0.5, rockSizeMax: 8, gravelAmount: 1,
+    sunElevation: 42, sunAzimuth: 200, turbidity: 3, fogDensity: 0.15,
+  },
   'Himalayan peaks': {
     palette: 'slate', worldSize: 4096, mountainHeight: 2100, baseElevation: 260, baseFrequency: 1.3, ridgeSharpness: 3.4, peakPower: 1.9, warpStrength: 0.55,
     reliefFrequency: 0.9, reliefContrast: 0.95, strataBand: 42, strataStrength: 0.55, strataDip: 22, strataDipDirection: 150, hardnessContrast: 0.9, plateauStrength: 0, canyonDepth: 0,
@@ -484,6 +514,7 @@ export const palettes = {
   sandstone: { name: 'Sandstone', rockA: '#e1b794', rockB: '#bd8f72', rockC: '#eed6b7', fresh: '#f3dec2', oxide: '#a8755a', flakeColor1: '#c9a07c', flakeColor2: '#e5c8a4', flakeColor3: '#f2e3c9', gravelColor: '#c7a383' },
   limestone: { name: 'Limestone', rockA: '#d9d3c7', rockB: '#b3aea4', rockC: '#e9e4d9', fresh: '#f1ede4', oxide: '#baa080', flakeColor1: '#c4bdae', flakeColor2: '#e2dccf', flakeColor3: '#f3f0e8', gravelColor: '#bdb6a8' },
   basalt:    { name: 'Basalt',    rockA: '#858588', rockB: '#616165', rockC: '#a09e9c', fresh: '#b1b0ae', oxide: '#a08068', flakeColor1: '#6c6c70', flakeColor2: '#8e8d8a', flakeColor3: '#b5b2ad', gravelColor: '#7a7a7c' },
+  shale:     { name: 'Dark shale', rockA: '#4b4a47', rockB: '#2c2c2b', rockC: '#6a6762', fresh: '#7d7a74', oxide: '#6e5a48', flakeColor1: '#3a3a39', flakeColor2: '#575551', flakeColor3: '#7b7872', gravelColor: '#4f4e4b' },
   slate:     { name: 'Slate',     rockA: '#9498a0', rockB: '#6f7580', rockC: '#b0b3ba', fresh: '#c2c6ca', oxide: '#a48a75', flakeColor1: '#767b86', flakeColor2: '#a3a7ae', flakeColor3: '#cfd2d6', gravelColor: '#8a8e96' },
 };
 export const paletteKeys = ['rockA', 'rockB', 'rockC', 'fresh', 'oxide', 'flakeColor1', 'flakeColor2', 'flakeColor3', 'gravelColor'];
@@ -541,6 +572,8 @@ export const groups = [
         ['plateauHeight', 'Plateau height', 50, 1000, 10, 'm', 'Elevation of the caprock surface'],
         ['canyonDepth', 'Canyon depth', 0, 600, 10, 'm', 'Incision of the meandering gorge'],
         ['canyonWidth', 'Canyon width', 60, 900, 10, 'm', 'Rim-to-rim width'],
+        ['cliffHeight', 'Escarpment', 0, 400, 5, 'm', 'A near-vertical cliff line along the edge of the massif (coastal cliffs, quarry walls): the high side is lifted onto a bench by this much within a cell or two'],
+        ['cliffSharpness', 'Escarpment edge', 0, 1, 0.05, '', 'How abrupt the drop is (1 = a wall)'],
       ] },
       { title: 'Grid', controls: [
         ['seed', 'Seed', 1, 9999, 1, '', 'Deterministic noise seed'],
@@ -583,6 +616,8 @@ export const groups = [
         ['sdfRough', 'Roughness', 0, 1.5, 0.05, '', 'Fine 3D roughness on the carved faces'],
         ['sdfPushPull', '3D push–pull', 0, 10, 0.25, 'm', 'Blocky buttresses stand out of the carved face and recesses go back into it, varying with height so blocks overhang the recess below (blockiness from Landform → Rugged outcrops)'],
         ['sdfPushScale', 'Block scale', 4, 80, 1, 'm', 'Size of the 3D blocks'],
+        ['sdfLean', 'Lean (| /)', 0, 12, 0.5, 'm', 'The face is cut back progressively from crest to foot, so a cliff stands vertical to overhanging (| /) instead of leaning back (| \\)'],
+        ['sdfLeanReach', 'Lean reach', 8, 80, 2, 'm', 'Plan distance over which crest and foot of a face are found'],
         ['sdfBlend', 'Blend margin', 1, 5, 1, 'cells', 'Cells over which the 3D field fades back to the plain heightfield'],
         ['sdfChunk', 'Chunk size', 8, 32, 8, 'cells', ''],
         ['sdfVoxel', 'Voxels per cell', 0, 3, 1, '', '0 = auto: the finest resolution that fits the voxel budget. 2 = voxels half the grid cell (8× the work), 3 = a third'],

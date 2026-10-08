@@ -129,10 +129,26 @@ export function selectChunks(fine, v) {
 export function packChunkJobs(fine, chunks, v) {
   const { resolution: N } = fine;
   const { C, list } = chunks;
-  const names = ['height', 'hardness', 'deposit', 'flow', 'cavity', 'road', 'river', 'lake', 'waterLevel', 'waterPaint', 'sdfWeight', 'outcrop'];
+  const names = ['height', 'hardness', 'deposit', 'flow', 'cavity', 'road', 'river', 'lake', 'waterLevel', 'waterPaint', 'sdfWeight', 'outcrop', 'crest', 'foot'];
   const jobs = [], transfer = [];
   const cell = fine.worldSize / (N - 1);
   const maxCarve = carveReach(v);
+  const leanR = Math.max(2, Math.round(Math.min(80, (v.sdfLeanReach || 24)) / cell));
+  if ((v.sdfLean || 0) > 0 && (!fine.crest || fine._crestR !== leanR)) {
+    // local crest / foot of the face (separable max / min filters + a blur) for the lean
+    const r = leanR;
+    fine._crestR = r;
+    const run = (src, pick) => {
+      const a = new Float32Array(N * N), b = new Float32Array(N * N);
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { let m = src[j * N + i]; for (let d = -r; d <= r; d++) { const ii = i + d; if (ii >= 0 && ii < N) m = pick(m, src[j * N + ii]); } a[j * N + i] = m; }
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { let m = a[j * N + i]; for (let d = -r; d <= r; d++) { const jj = j + d; if (jj >= 0 && jj < N) m = pick(m, a[jj * N + i]); } b[j * N + i] = m; }
+      // box blur so the lean does not step where the filter window changes
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { let sum = 0, n = 0; for (let dj = -2; dj <= 2; dj++) { const jj = j + dj; if (jj < 0 || jj >= N) continue; for (let di = -2; di <= 2; di++) { const ii = i + di; if (ii < 0 || ii >= N) continue; sum += b[jj * N + ii]; n++; } } a[j * N + i] = sum / n; }
+      return a;
+    };
+    fine.crest = run(fine.height, Math.max);
+    fine.foot = run(fine.height, Math.min);
+  }
   for (const c of list) {
     const Sx = c.cw + 1, Sz = c.ch + 1;
     const maps = {};
@@ -162,7 +178,7 @@ export function carveReach(v) {
   const undercut = Math.max(0, v.sdfUndercut == null ? 6 : v.sdfUndercut);
   const pits = v.sdfPits == null ? 0.3 : v.sdfPits, joints = v.sdfJoints == null ? 0.5 : v.sdfJoints;
   const detail = (v.detailRelief || 0) + (v.rockyAmount || 0) + (v.cragAmount || 0);
-  return undercut * (1 + 0.5 * pits + 0.9 * joints) + 1.5 + detail + Math.max(0, v.sdfPushPull || 0);
+  return undercut * (1 + 0.5 * pits + 0.9 * joints) + 1.5 + detail + Math.max(0, v.sdfPushPull || 0) + Math.max(0, v.sdfLean || 0);
 }
 
 function stair(v, steps, sharp) {
@@ -262,6 +278,10 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const pushAmp = Math.max(0, v.sdfPushPull || 0);
   const pushL = Math.max(vox * 4, v.sdfPushScale || 18);
   const pushBlock = Math.min(1, Math.max(0, v.ruggedBlockiness == null ? 0.7 : v.ruggedBlockiness));
+  // lean: the face is cut back progressively from its crest to its foot, so the profile is | / —
+  // vertical to overhanging — instead of the back-leaning slope a heightfield gives
+  const leanAmp = Math.max(0, v.sdfLean || 0);
+  const hasLean = leanAmp > 0 && !!m.crest && !!m.foot;
   const bump = roughAmp + detail.amp + pushAmp;
   const maxCarve = carveReach(v);
   // everything that depends on the plan position only
@@ -273,7 +293,8 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     const slopeF = Math.sqrt(1 + gx * gx + gz * gz);
     const steep = smoothstep(0.7, 1.7, Math.hypot(gx, gz));
     const oc = hasOutcrop ? bil(m.outcrop, u, wq) : 0;
-    return { x, z, h, w, slopeF, steep, oc, strata: w > 1e-6 && steep > 0 ? ctx.strata.column(x, z) : null };
+    const crest = hasLean ? bil(m.crest, u, wq) : 0, foot = hasLean ? bil(m.foot, u, wq) : 0;
+    return { x, z, h, w, slopeF, steep, oc, crest, foot, strata: w > 1e-6 && steep > 0 ? ctx.strata.column(x, z) : null };
   }
   function carve(col, y) {
     const { x, z } = col;
@@ -305,7 +326,14 @@ export function buildChunkGeometry(job, meta, v, ctx) {
       const pn = ctx.push.fbm(x / pushL, y / (pushL * 0.55), z / pushL, 2, 2.1, 0.5) * 1.4;
       push = pushAmp * ((1 - pushBlock) * pn + pushBlock * blockify(pn, 3, 0.75)) * (1 - col.oc * 0.7);
     }
-    const d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + fallen * 0.9 + pit * 0.5 + col.oc * 0.12 * pocket) + rough - det - push;
+    let lean = 0;
+    if (hasLean) {
+      const faceH = Math.max(4, col.crest - col.foot);
+      const down = Math.min(1, Math.max(0, (col.crest - y) / faceH));
+      // deepest just above the foot, eased out at the very bottom so the face meets the ground
+      lean = leanAmp * down * (1 - 0.5 * smoothstep(0.85, 1, down)) * (1 - col.oc);
+    }
+    const d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + fallen * 0.9 + pit * 0.5 + col.oc * 0.12 * pocket) + rough - det - push + lean;
     return d * col.steep * col.w;
   }
   function fCol(col, y) {
