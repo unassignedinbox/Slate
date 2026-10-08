@@ -24,6 +24,17 @@ export const defaults = {
   duneDirection: 30,        // [°]
   duneAsymmetry: 0.68,
   duneCoverage: 0.6,
+  // Boulder outcrops (tors / core-stone clusters unioned into the landform)
+  outcropDensity: 0,
+  outcropSize: 16,          // [m]
+  outcropSpacing: 220,      // [m]
+  outcropCount: 5,
+  outcropSpread: 1.6,
+  outcropAspect: 0.7,
+  outcropBury: 0.4,
+  outcropRidge: 0.5,
+  outcropSlopeMax: 30,      // [°]
+  outcropWeather: 0.5,
   // Strata
   strataBand: 26,           // [m]
   strataStrength: 0.75,
@@ -67,7 +78,8 @@ export const defaults = {
   sdfAngle: 58,             // [°]
   sdfBlend: 2,              // [cells]
   sdfChunk: 16,             // [cells]
-  sdfVoxel: 1,              // voxels per cell
+  sdfVoxel: 0,              // voxels per cell (0 = auto from budget)
+  sdfVoxelBudget: 24,       // [M voxels]
   sdfUndercut: 6,           // [m]
   sdfBedContrast: 1,
   sdfPockets: 12,           // [m]
@@ -166,8 +178,8 @@ export const defaults = {
   roadShading: 1,
   riverWidth: 14,           // [m]
   riverDepth: 4,            // [m]
-  riverBank: 35,            // [°]
-  riverMaxBank: 30,         // [m]
+  riverBank: 24,            // [°]
+  riverMaxBank: 10,         // [m]
   riverMeander: 0.4,
   riverErosion: 0.6,
   riverWater: 1,
@@ -177,11 +189,12 @@ export const defaults = {
   riverCatchment: 0.04,     // [km²]
   riverWidthScale: 40,      // [m per √km²]
   riverMaxWidth: 150,       // [m]
-  riverDepthScale: 1.0,
-  riverWaterFrac: 0.6,
+  riverDepthScale: 0.7,
+  riverWaterFrac: 0.7,
   riverBraiding: 0.35,
   riverLakes: 1,
   riverLakeFill: 0.8,
+  riverLakeMax: 8,          // [% of map]
   riverLakeMin: 0.01,       // [km²]
   riverGuideFlow: 1.0,      // [km²]
   lakeDepth: 6,             // [m]
@@ -286,6 +299,7 @@ Object.assign(presets, {
     reliefContrast: 0.6, strataBand: 36, strataStrength: 0.3, hardnessContrast: 0.4, plateauStrength: 0, canyonDepth: 0,
     snowOn: 0, vegetation: 0.25, mossiness: 0.5, dryness: 0.7, waterEnabled: 0, seaLevel: -100, droplets: 200000, thermalIterations: 40, talusSoft: 36, talusHard: 76,
     rockDensity: 0.95, rockSlopeMax: 50, rockClustering: 0.35, rockSizeMin: 1.5, rockSizeMax: 16, rockEmbed: 0.4, pebbleDensity: 0.7,
+    outcropDensity: 0.35, outcropSize: 12, outcropCount: 4, outcropSpacing: 200, outcropRidge: 0.3, outcropWeather: 0.6,
     peelStrength: 0.4, sunElevation: 30, sunAzimuth: 225, turbidity: 4, fogDensity: 0.25,
   },
   'Scree slopes': {
@@ -301,6 +315,17 @@ Object.assign(presets, {
     snowOn: 0, vegetation: 0.35, mossiness: 0.2, waterEnabled: 0, seaLevel: -100, droplets: 90000, erodeSpeed: 0.2, thermalIterations: 10, talusSoft: 38, talusHard: 85,
     rockDensity: 0.5, rockSlopeMax: 35, rockClustering: 0.6, rockSizeMin: 2, rockSizeMax: 22, rockEmbed: 0.55, pebbleDensity: 0.3,
     peelStrength: 0.85, peelCoverage: 0.45, peelScale: 4, peelThickness: 0.05, flakeStrength: 0.8, sunElevation: 42, sunAzimuth: 240, turbidity: 5, fogDensity: 0.15,
+    outcropDensity: 0.4, outcropSize: 18, outcropCount: 5, outcropSpacing: 260, outcropAspect: 0.65, outcropBury: 0.45, outcropRidge: 0.6, outcropWeather: 0.8,
+    riverLakeFill: 0.6, riverLakeMax: 3,
+  },
+  'Granite tors': {
+    palette: 'granite', mountainHeight: 260, baseElevation: 80, baseFrequency: 1.1, ridgeSharpness: 1.0, peakPower: 0.9, warpStrength: 0.6, reliefFrequency: 0.9, reliefContrast: 0.35,
+    strataBand: 40, strataStrength: 0.1, hardnessContrast: 0.3, plateauStrength: 0, canyonDepth: 0,
+    snowOn: 0, vegetation: 0.9, vegSlope: 38, mossiness: 0.7, dryness: 0.5, waterEnabled: 0, seaLevel: -100, droplets: 160000, erodeSpeed: 0.3, thermalIterations: 30, talusSoft: 33, talusHard: 84,
+    outcropDensity: 0.7, outcropSize: 16, outcropCount: 7, outcropSpread: 1.5, outcropSpacing: 170, outcropAspect: 0.75, outcropBury: 0.35, outcropRidge: 0.85, outcropSlopeMax: 25, outcropWeather: 0.75,
+    rockDensity: 0.45, rockSlopeMax: 40, rockClustering: 0.7, rockSizeMin: 1, rockSizeMax: 6, rockEmbed: 0.5, pebbleDensity: 0.4, gravelAmount: 0.3,
+    sdfOn: 1, sdfAngle: 55, sdfUndercut: 3, sdfPockets: 9, sdfJoints: 0.3, sdfPits: 0.4, peelStrength: 0.5, peelCoverage: 0.3, peelScale: 3,
+    riverCatchment: 0.08, riverLakeMax: 2, sunElevation: 26, sunAzimuth: 235, turbidity: 4, fogDensity: 0.35,
   },
   'Rocky coast': {
     palette: 'basalt', mountainHeight: 220, baseElevation: -40, baseFrequency: 1.8, ridgeSharpness: 1.8, peakPower: 1.2, warpStrength: 0.6,
@@ -326,10 +351,10 @@ Object.assign(presets, {
   },
   'Sand dunes': {
     palette: 'sandstone', rockA: '#e3c49a', rockB: '#d2ab7c', rockC: '#f0d9b5', fresh: '#f6e4c4', oxide: '#c89a6e', gravelColor: '#d9b98f',
-    mountainHeight: 120, baseElevation: 60, baseFrequency: 1.2, ridgeSharpness: 1.0, peakPower: 0.8, warpStrength: 0.4, reliefFrequency: 1.0, reliefContrast: 0.25,
-    duneAmount: 32, duneWavelength: 170, duneDirection: 40, duneAsymmetry: 0.72, duneCoverage: 0.75,
-    strataStrength: 0, strataBand: 60, hardnessContrast: 0.2, plateauStrength: 0, canyonDepth: 0,
-    droplets: 20000, erodeSpeed: 0.15, thermalIterations: 60, thermalRate: 0.8, talusSoft: 31, talusHard: 34,
+    mountainHeight: 70, baseElevation: 60, baseFrequency: 1.2, ridgeSharpness: 1.0, peakPower: 0.8, warpStrength: 0.4, reliefFrequency: 1.0, reliefContrast: 0.2,
+    duneAmount: 48, duneWavelength: 300, duneDirection: 40, duneAsymmetry: 0.8, duneCoverage: 0.85,
+    strataStrength: 0, strataBand: 60, hardnessContrast: 0.1, plateauStrength: 0, canyonDepth: 0,
+    droplets: 6000, erodeSpeed: 0.1, thermalIterations: 30, thermalRate: 0.6, talusSoft: 33, talusHard: 36,
     snowOn: 0, vegOn: 0, vegetation: 0, mossOn: 0, mossiness: 0, oxideAmount: 0.15, waterEnabled: 0, seaLevel: -100,
     rocksEnabled: 0, pebblesOn: 0, gravelAmount: 0, peelOn: 0, flakeStrength: 0.25, flakeSize3: 0.08, flakeCrystal3: 0.5, flakeSparkle: 1.2,
     sdfOn: 0, overhang: 0, detailRelief: 0.15, riverSim: 0, riverWater: 0, riverLakes: 0, streakAmount: 0, wetness: 0.1,
@@ -343,6 +368,7 @@ Object.assign(presets, {
     snowOn: 1, snowLine: 520, snowSlope: 42, snowSoftness: 2.5, vegetation: 0.5, vegSlope: 30, vegPatchiness: 0.8, dryness: 0.3, mossiness: 0.9, mossScale: 6,
     waterEnabled: 0, seaLevel: -100, riverCatchment: 0.03, riverWidthScale: 55, riverMaxWidth: 220, riverBraiding: 0.8, riverLakes: 1, riverLakeFill: 0.9,
     rockDensity: 0.4, rockSizeMax: 6, pebbleDensity: 0.6, gravelAmount: 1, sdfOn: 1, sdfAngle: 60, sdfUndercut: 5,
+    outcropDensity: 0.2, outcropSize: 10, outcropCount: 6, outcropSpacing: 180, outcropAspect: 0.55, outcropBury: 0.5, outcropRidge: 0.2, outcropWeather: 0.3,
     oxideAmount: 0.6, peelStrength: 0.35, flakeStrength: 0.5, sunElevation: 22, sunAzimuth: 200, turbidity: 4, fogDensity: 0.5,
   },
   'Icelandic river plains': {
@@ -389,6 +415,18 @@ export const groups = [
         ['duneDirection', 'Wind direction', 0, 360, 5, '°', ''],
         ['duneAsymmetry', 'Asymmetry', 0.5, 0.9, 0.01, '', 'Position of the crest along the wavelength (0.5 symmetric, 0.9 steep slip face)'],
         ['duneCoverage', 'Coverage', 0, 1, 0.05, '', 'Fraction of the tile with dune fields'],
+      ] },
+      { title: 'Boulder outcrops', controls: [
+        ['outcropDensity', 'Outcrop density', 0, 1, 0.05, '', 'Clusters of large core-stones built into the relief before strata and erosion — tors, woolsacks, "encampments". 0 = none'],
+        ['outcropSize', 'Boulder size', 4, 60, 1, 'm', 'Radius of the largest boulder in a cluster'],
+        ['outcropCount', 'Boulders per cluster', 1, 12, 1, '', ''],
+        ['outcropSpread', 'Cluster spread', 0.8, 3, 0.1, '', 'How far the satellites sit from the main stone (×size)'],
+        ['outcropSpacing', 'Cluster spacing', 60, 800, 10, 'm', 'Site grid for clusters; density decides how many sites are used'],
+        ['outcropAspect', 'Height / width', 0.3, 1.3, 0.05, '', 'Flat slabs to tall stacks'],
+        ['outcropBury', 'Burial', 0.1, 0.8, 0.05, '', 'How deep the stones sit in the ground'],
+        ['outcropWeather', 'Rounding', 0, 1, 0.05, '', '0 = blocky joint-bounded blocks, 1 = fully rounded woolsacks'],
+        ['outcropRidge', 'Prefer high ground', 0, 1, 0.05, '', 'Bias clusters towards ridges and hill tops (tors) rather than anywhere'],
+        ['outcropSlopeMax', 'Max ground slope', 5, 60, 1, '°', 'Clusters avoid ground steeper than this'],
       ] },
       { title: 'Relief', controls: [
         ['baseFrequency', 'Ridge frequency', 0.6, 4, 0.05, '', 'Number of ridge systems across the tile'],
@@ -438,7 +476,8 @@ export const groups = [
         ['sdfRough', 'Roughness', 0, 1.5, 0.05, '', 'Fine 3D roughness on the carved faces'],
         ['sdfBlend', 'Blend margin', 1, 5, 1, 'cells', 'Cells over which the 3D field fades back to the plain heightfield'],
         ['sdfChunk', 'Chunk size', 8, 32, 8, 'cells', ''],
-        ['sdfVoxel', 'Voxels per cell', 1, 3, 1, '', 'Voxel resolution relative to the mesh grid (2 = 8× the work)'],
+        ['sdfVoxel', 'Voxels per cell', 0, 3, 1, '', '0 = auto: the finest resolution that fits the voxel budget. 2 = voxels half the grid cell (8× the work), 3 = a third'],
+        ['sdfVoxelBudget', 'Voxel budget', 2, 80, 2, 'M', 'Total voxels (in the surface band) auto mode may spend; raise it for finer cliffs if the machine can take it'],
         ['sdfMaxChunks', 'Chunk budget', 50, 2000, 50, '', 'Chunks with the most cliff area are built first; the rest fall back to the displaced heightfield'],
       ] },
       { title: 'Face displacement', controls: [
@@ -490,6 +529,7 @@ export const groups = [
         ['riverBraiding', 'Braiding', 0, 1, 0.05, '', 'Gravel bars and split threads on wide, gentle reaches (river plains)'],
         ['riverLakes', 'Lakes in depressions', 0, 1, 1, '', 'Closed basins fill to their spill level'],
         ['riverLakeFill', 'Lake fill', 0, 1, 0.05, '', '1 = basins fill to their spill level · lower leaves a dry floor with the river crossing it'],
+        ['riverLakeMax', 'Lake area cap', 0, 40, 1, '%', 'Largest/deepest basins are filled first until this share of the map is lake; beyond it only a small pond remains where a river ends in a hollow'],
         ['riverLakeMin', 'Min. lake area', 0.001, 0.2, 0.001, 'km²', 'Smaller depressions stay dry unless a river feeds them'],
         ['riverGuideFlow', 'Guide flow', 0, 5, 0.1, 'km²', 'Catchment injected at the head of each drawn river so it always carries water'],
       ] },
@@ -497,7 +537,7 @@ export const groups = [
         ['riverWidth', 'Channel width', 2, 120, 1, 'm', 'Width of the carved channel'],
         ['riverDepth', 'Channel depth', 0.5, 40, 0.5, 'm', 'Incision below the smoothed valley profile'],
         ['riverBank', 'Bank angle', 10, 80, 1, '°', 'Slope of the cut banks'],
-        ['riverMaxBank', 'Bank height', 2, 200, 1, 'm', 'Banks are shaped up to this height; higher ground is cut as a gorge with steep walls'],
+        ['riverMaxBank', 'Bank height', 2, 200, 1, 'm', 'Banks are shaped up to this height (the cut fades out towards it); keep it low for valleys that follow the terrain, high for gorges'],
         ['riverMeander', 'Meander', 0, 1, 0.05, '', 'Lateral sinuosity added to the drawn line'],
         ['riverErosion', 'Water erosion', 0, 1, 0.05, '', 'Share of erosion droplets that start in the river and how much water they carry — carves the bed and drains the slopes into it. Rivers flow from their higher end'],
         ['riverWaterDepth', 'Water depth', 0.2, 10, 0.1, 'm', 'Depth of water standing in the channel'],

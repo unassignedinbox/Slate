@@ -112,8 +112,60 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   const total = N * N;
   const original = Float32Array.from(height);
 
-  const { filled, order } = fillDepressions(height, N, opts.seaLevel == null ? -Infinity : opts.seaLevel);
+  // a little low-frequency noise on the routing surface breaks the dead-straight D8 lines that
+  // smooth slopes otherwise produce (the depressions are filled again afterwards)
+  const routing = Float32Array.from(height);
+  const wander = opts.wander == null ? 1.5 : Math.max(0, opts.wander);
+  if (wander > 0) {
+    const wn = new SimplexNoise(seed * 23 + 11);
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const x = i * cell, z = j * cell;
+      routing[j * N + i] += wander * wn.fbm(x / 90, z / 90, 3, 2.1, 0.55);
+    }
+  }
+  const { filled } = fillDepressions(routing, N, opts.seaLevel == null ? -Infinity : opts.seaLevel);
   const down = flowDirections(filled, N);
+  // inside closed depressions water runs down the real floor to the lowest point (into the lake),
+  // not in dead-straight lines across the filled flat; the sink hands its flow to the pour point
+  {
+    const downF = Int32Array.from(down);
+    const inDep = (c) => filled[c] - routing[c] > 0.3;
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const c = j * N + i;
+        if (!inDep(c)) continue;
+        let best = -1, bestDrop = 0;
+        for (let d = 0; d < 8; d++) {
+          const ni = i + DX[d], nj = j + DZ[d];
+          if (ni < 0 || nj < 0 || ni >= N || nj >= N) continue;
+          const n = nj * N + ni;
+          const drop = (routing[c] - routing[n]) / DL[d];
+          if (drop > bestDrop) { bestDrop = drop; best = n; }
+        }
+        if (best >= 0) { down[c] = best; continue; }
+        let p = c, guard = 0;
+        while (p >= 0 && inDep(p) && guard++ < total) p = downF[p];
+        down[c] = p;
+      }
+    }
+  }
+  // topological order of the drainage graph (upstream first)
+  const order = new Int32Array(total);
+  {
+    const indeg = new Int32Array(total);
+    for (let c = 0; c < total; c++) if (down[c] >= 0) indeg[down[c]]++;
+    let head = 0, tail = 0;
+    for (let c = 0; c < total; c++) if (indeg[c] === 0) order[tail++] = c;
+    while (head < tail) {
+      const c = order[head++];
+      const d = down[c];
+      if (d >= 0 && --indeg[d] === 0) order[tail++] = d;
+    }
+    if (tail < total) { // should not happen (acyclic); fall back to the remaining cells in any order
+      const seen = new Uint8Array(total); for (let n = 0; n < tail; n++) seen[order[n]] = 1;
+      for (let c = 0; c < total; c++) if (!seen[c]) order[tail++] = c;
+    }
+  }
 
   // accumulation (in cells), highest cells first
   const acc = new Float32Array(total).fill(1);
@@ -125,7 +177,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
       acc[gj * N + gi] += s === 0 ? guide : guide * 0.03;
     }
   }
-  for (let n = total - 1; n >= 0; n--) {
+  for (let n = 0; n < total; n++) {
     const c = order[n];
     const d = down[c];
     if (d >= 0) acc[d] += acc[c];
@@ -138,33 +190,10 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   const bed = new Float32Array(total);
   const wl = new Float32Array(total);
   const waterFrac = opts.waterDepth == null ? 0.6 : opts.waterDepth;
-  const maxWidth = Math.max(cell * 2, opts.maxWidth || 120);
-  let riverCells = 0;
-  // outlets first so the downstream bed is known
-  for (let n = 0; n < total; n++) {
-    const c = order[n];
-    if (acc[c] < threshold) continue;
-    isRiver[c] = 1; riverCells++;
-    const km2 = acc[c] * cellKm2;
-    let w = Math.min(maxWidth, Math.max(cell * 1.5, (opts.widthScale || 25) * Math.sqrt(km2)));
-    const dep = Math.max(0.5, (opts.depthScale || 1) * Math.pow(w, 0.45));
-    width[c] = w; depth[c] = dep;
-    const d = down[c];
-    let b = filled[c] - dep;
-    let l = b + dep * waterFrac;
-    if (d >= 0 && isRiver[d]) {
-      b = Math.max(b, bed[d] + 0.0004 * cell);
-      l = Math.min(filled[c] - dep * 0.2, Math.max(b + dep * waterFrac, wl[d]));
-      b = Math.min(b, l - dep * 0.25);
-    }
-    bed[c] = b; wl[c] = l;
-  }
-
   const riverMask = new Float32Array(total);
   const waterLevel = new Float32Array(total).fill(NO_WATER);
   const lakeMask = new Float32Array(total);
-  const stats = { riverCells, lakeCells: 0, maxWidth: 0, maxKm2: 0 };
-  for (let c = 0; c < total; c++) if (isRiver[c]) { stats.maxWidth = Math.max(stats.maxWidth, width[c]); stats.maxKm2 = Math.max(stats.maxKm2, acc[c] * cellKm2); }
+  const stats = { riverCells: 0, lakeCells: 0, maxWidth: 0, maxKm2: 0 };
 
   // ---- lakes: depressions on the filled surface ---------------------------------------------
   const lakeLevel = new Float32Array(total).fill(NO_WATER);
@@ -173,7 +202,8 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     const stack = [];
     const minArea = Math.max(4, opts.lakeMinArea || 24);
     const sea = opts.seaLevel == null ? -Infinity : opts.seaLevel;
-    const isPool = (c) => filled[c] - height[c] >= 0.4 && filled[c] > sea + 0.01; // the sea is not a lake
+    const isPool = (c) => filled[c] - routing[c] >= 0.4 && filled[c] > sea + 0.01; // the sea is not a lake
+    const candidates = [];
     for (let s = 0; s < total; s++) {
       if (seen[s] || !isPool(s)) continue;
       // flood the connected depression
@@ -182,7 +212,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
       while (stack.length) {
         const c = stack.pop(); cells.push(c);
         if (acc[c] >= threshold * 0.5) fed = true;
-        deepest = Math.max(deepest, filled[c] - height[c]);
+        deepest = Math.max(deepest, filled[c] - routing[c]);
         const ci = c % N, cj = (c - ci) / N;
         for (let d = 0; d < 4; d++) {
           const ni = ci + DX[d], nj = cj + DZ[d];
@@ -193,12 +223,29 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
         }
       }
       if (cells.length < minArea && !(fed && deepest > 1.5)) continue;
+      candidates.push({ cells, deepest, fed });
+    }
+    // biggest / deepest basins first, up to a share of the map — a landscape full of small
+    // closed hollows (domes, moraine) must not turn into a staircase of ponds
+    candidates.sort((a, b) => b.cells.length * b.deepest - a.cells.length * a.deepest);
+    const cap = total * (opts.lakeMaxArea == null ? 0.06 : Math.max(0, Math.min(1, opts.lakeMaxArea)));
+    let used = 0;
+    const fill0 = opts.lakeFill == null ? 1 : Math.max(0, Math.min(1, opts.lakeFill));
+    for (const lake of candidates) {
+      let fill = fill0;
+      if (used + lake.cells.length > cap) {
+        // over the cap: unfed hollows stay dry, basins a river drains into keep a small pond at
+        // the bottom where the river ends
+        if (!lake.fed) continue;
+        fill = fill0 * 0.35;
+      }
       // partial fill: level between the deepest point and the spill level
       let minH = Infinity, spill = -Infinity;
-      for (const c of cells) { if (height[c] < minH) minH = height[c]; if (filled[c] > spill) spill = filled[c]; }
-      const fill = opts.lakeFill == null ? 1 : Math.max(0, Math.min(1, opts.lakeFill));
+      for (const c of lake.cells) { if (height[c] < minH) minH = height[c]; if (filled[c] > spill) spill = filled[c]; }
       const level = minH + (spill - minH) * fill - 0.05;
-      for (const c of cells) {
+      let n = 0; for (const c of lake.cells) if (height[c] < level) n++;
+      used += n;
+      for (const c of lake.cells) {
         if (height[c] >= level) continue;
         lakeLevel[c] = level;
         lakeMask[c] = 1;
@@ -206,6 +253,41 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
       }
     }
   }
+
+  const maxWidth = Math.max(cell * 2, opts.maxWidth || 120);
+  let riverCells = 0;
+  // outlets first so the downstream bed is known
+  for (let n = total - 1; n >= 0; n--) {
+    const c = order[n];
+    if (acc[c] < threshold) continue;
+    isRiver[c] = 1; riverCells++;
+    const km2 = acc[c] * cellKm2;
+    // steep reaches run narrow and shallow (torrents), gentle reaches spread out
+    let dn = c, drop = 0, run = 0;
+    for (let k = 0; k < 6 && down[dn] >= 0; k++) { const nx = down[dn]; drop += filled[dn] - filled[nx]; run += cell * ((nx - dn) % N === 0 || Math.abs(nx - dn) === 1 ? 1 : 1.414); dn = nx; }
+    const grade = run > 0 ? drop / run : 0;
+    const torrent = 1 / (1 + 6 * grade);
+    let w = Math.min(maxWidth, Math.max(cell * 1.5, (opts.widthScale || 25) * Math.sqrt(km2) * torrent));
+    const dep = Math.max(0.4, (opts.depthScale || 1) * Math.pow(w, 0.45) * (0.5 + 0.5 * torrent));
+    width[c] = w; depth[c] = dep;
+    const d = down[c];
+    let b = filled[c] - dep;
+    let l = b + dep * waterFrac;
+    if (filled[c] - routing[c] > 0.3) {
+      // inside a closed depression: the channel follows the real floor down to the lake (or across
+      // the dry hollow) instead of hovering at the spill level
+      b = height[c] - dep * 0.5;
+      l = lakeLevel[c] > NO_WATER * 0.5 ? Math.max(lakeLevel[c], b + dep * waterFrac) : b + dep * waterFrac;
+    } else if (d >= 0 && isRiver[d]) {
+      b = Math.max(b, bed[d] + 0.0004 * cell);
+      l = Math.min(filled[c] - dep * 0.2, Math.max(b + dep * waterFrac, wl[d]));
+      b = Math.min(b, l - dep * 0.25);
+    }
+    bed[c] = b; wl[c] = l;
+  }
+
+  for (let c = 0; c < total; c++) if (isRiver[c]) { stats.maxWidth = Math.max(stats.maxWidth, width[c]); stats.maxKm2 = Math.max(stats.maxKm2, acc[c] * cellKm2); }
+  stats.riverCells = riverCells;
 
   // ---- carve channels: chamfer distance from the nearest channel cell -----------------------
   const bankSlope = Math.tan((Math.max(10, Math.min(80, opts.bankAngle || 35)) * Math.PI) / 180);
@@ -267,13 +349,44 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
       const rise = (d - half) * bankSlope;
       if (rise > maxBank) continue;
       target = bed[s] + dep * 0.35 + rise;
+      // the bank cut fades out towards its limit instead of leaving a wall
+      const fade = smoothstep(maxBank * 0.45, maxBank, rise);
+      if (target < height[c]) target += (height[c] - target) * fade;
     }
     // lakes keep their floor
     if (lakeLevel[c] > NO_WATER * 0.5 && target < height[c]) target = Math.max(target, height[c] - dep * 0.3);
     if (target < height[c]) height[c] = target;
+    else if (d <= half + w * 0.6 && lakeLevel[c] <= NO_WATER * 0.5) {
+      // the channel also has a floor on its downhill side (a bench on cross-slopes) — otherwise
+      // the water would hang in the air over the lower ground
+      const fillW = d <= half ? 1 : 1 - (d - half) / (w * 0.6);
+      height[c] += (target - height[c]) * fillW;
+    }
     const m = 1 - smoothstep(half, half + w * 0.9, d);
     if (m > riverMask[c]) riverMask[c] = m;
-    if (d <= half + w * 1.5 && waterHere > waterLevel[c]) waterLevel[c] = waterHere;
+    if (d <= half + cell && waterHere > waterLevel[c]) waterLevel[c] = waterHere;
+  }
+
+  // the water level was copied from the nearest channel cell, which on steep reaches gives a
+  // staircase of plates; relax it so the sheet becomes one continuous sloped surface
+  {
+    const tmp = new Float32Array(total);
+    for (let pass = 0; pass < 3; pass++) {
+      tmp.set(waterLevel);
+      for (const c of touched) {
+        if (waterLevel[c] <= NO_WATER * 0.5) continue;
+        const ci = c % N, cj = (c - ci) / N;
+        let sum = 0, n = 0;
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+          const ii = ci + di, jj = cj + dj;
+          if (ii < 0 || jj < 0 || ii >= N || jj >= N) continue;
+          const v = waterLevel[jj * N + ii];
+          if (v > NO_WATER * 0.5) { sum += v; n++; }
+        }
+        if (n) tmp[c] = sum / n;
+      }
+      waterLevel.set(tmp);
+    }
   }
 
   // lakes: water at spill level over the depression (and a shore band in the mask)

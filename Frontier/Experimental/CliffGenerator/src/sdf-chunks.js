@@ -66,15 +66,19 @@ export function selectChunks(fine, v) {
   for (let cj = 0; cj < nc; cj++) {
     for (let ci = 0; ci < nc; ci++) {
       const i0 = ci * C, j0 = cj * C, i1 = Math.min(N - 1, i0 + C), j1 = Math.min(N - 1, j0 + C);
-      let sum = 0, hmin = Infinity, hmax = -Infinity;
+      let sum = 0, hmin = Infinity, hmax = -Infinity, g2max = 0;
       for (let j = j0; j <= j1; j++) {
         for (let i = i0; i <= i1; i++) {
           const idx = j * N + i;
           sum += W[idx];
           const h = height[idx]; if (h < hmin) hmin = h; if (h > hmax) hmax = h;
+          if (i > 0 && j > 0 && i < N - 1 && j < N - 1) {
+            const gx = (height[idx + 1] - height[idx - 1]) / (2 * cell), gz = (height[idx + N] - height[idx - N]) / (2 * cell);
+            const g2 = gx * gx + gz * gz; if (g2 > g2max) g2max = g2;
+          }
         }
       }
-      if (sum > 0) candidates.push({ ci, cj, i0, j0, cw: i1 - i0, ch: j1 - j0, hmin, hmax, sum });
+      if (sum > 0) candidates.push({ ci, cj, i0, j0, cw: i1 - i0, ch: j1 - j0, hmin, hmax, sum, slopeF: Math.sqrt(1 + g2max) });
     }
   }
   candidates.sort((a, b) => b.sum - a.sum);
@@ -123,8 +127,10 @@ export function selectChunks(fine, v) {
 export function packChunkJobs(fine, chunks, v) {
   const { resolution: N } = fine;
   const { C, list } = chunks;
-  const names = ['height', 'hardness', 'deposit', 'flow', 'cavity', 'road', 'river', 'lake', 'waterLevel', 'sdfWeight'];
+  const names = ['height', 'hardness', 'deposit', 'flow', 'cavity', 'road', 'river', 'lake', 'waterLevel', 'sdfWeight', 'outcrop'];
   const jobs = [], transfer = [];
+  const cell = fine.worldSize / (N - 1);
+  const maxCarve = carveReach(v);
   for (const c of list) {
     const Sx = c.cw + 1, Sz = c.ch + 1;
     const maps = {};
@@ -135,9 +141,25 @@ export function packChunkJobs(fine, chunks, v) {
       else if (name === 'waterLevel') out.fill(NO_WATER);
       maps[name] = out; transfer.push(out.buffer);
     }
-    jobs.push({ ci: c.ci, cj: c.cj, i0: c.i0, j0: c.j0, cw: c.cw, ch: c.ch, hmin: c.hmin, hmax: c.hmax, maps });
+    jobs.push({ ci: c.ci, cj: c.cj, i0: c.i0, j0: c.j0, cw: c.cw, ch: c.ch, hmin: c.hmin, hmax: c.hmax, slopeF: c.slopeF, maps });
   }
-  return { jobs, transfer, meta: { N, size: fine.worldSize, C } };
+  // voxel resolution: explicit, or the finest that fits the voxel budget (only the band around the
+  // surface is polygonised, so the estimate is footprint × band thickness)
+  let k = Math.max(1, Math.min(3, Math.round(v.sdfVoxel || 0)));
+  if (!(v.sdfVoxel >= 1)) {
+    let est = 0;
+    for (const c of list) est += c.cw * c.ch * ((maxCarve * Math.min(3, c.slopeF) * 2) / cell + 6);
+    const budget = Math.max(1e6, (v.sdfVoxelBudget || 24) * 1e6);
+    k = est * 27 <= budget ? 3 : est * 8 <= budget ? 2 : 1;
+  }
+  return { jobs, transfer, meta: { N, size: fine.worldSize, C, k, cell: cell / k } };
+}
+
+// largest distance the carve can move the surface along the normal
+export function carveReach(v) {
+  const undercut = Math.max(0, v.sdfUndercut == null ? 6 : v.sdfUndercut);
+  const pits = v.sdfPits == null ? 0.3 : v.sdfPits, joints = v.sdfJoints == null ? 0.5 : v.sdfJoints;
+  return undercut * (1 + 0.5 * pits + 0.6 * joints) + 1.5;
 }
 
 // ---- strata hardness at a 3-D point (same model as heightfield.applyStrata) -----------------------
@@ -188,7 +210,7 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const { N, size } = meta;
   const Sx = job.cw + 1, Sz = job.ch + 1;
   const cell = size / (N - 1);
-  const k = Math.max(1, Math.min(4, Math.round(v.sdfVoxel || 1)));
+  const k = v.sdfVoxel >= 1 ? Math.max(1, Math.min(3, Math.round(v.sdfVoxel))) : (meta.k || 1);
   const vox = cell / k;
   const nx = job.cw * k, nz = job.ch * k;
   const x0 = (job.i0 / (N - 1) - 0.5) * size, z0 = (job.j0 / (N - 1) - 0.5) * size;
@@ -213,10 +235,13 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const pocketScale = Math.max(1, v.sdfPockets || 12);
   const pits = v.sdfPits == null ? 0.3 : v.sdfPits;
   const joints = v.sdfJoints == null ? 0.5 : v.sdfJoints;
-  const roughAmp = (v.sdfRough == null ? 0.5 : v.sdfRough) * Math.min(1.5, cell * 0.35);
+  // roughness wavelength is tied to the voxel size (≥ 5 voxels) so it cannot alias into stair-steps
+  const roughAmp = (v.sdfRough == null ? 0.5 : v.sdfRough) * Math.min(1.2, vox * 0.3);
+  const roughFreq = 1 / (vox * 5);
   const bedPower = v.sdfBedContrast == null ? 1 : v.sdfBedContrast;
+  const hasOutcrop = !!m.outcrop;
 
-  const maxCarve = undercut * (1 + 0.5 * pits + 0.6 * joints) + roughAmp;
+  const maxCarve = carveReach(v);
   // everything that depends on the plan position only
   function column(x, z) {
     const u = (x - x0) / cell, wq = (z - z0) / cell;
@@ -225,20 +250,23 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     const [gx, gz] = grad(u, wq);
     const slopeF = Math.sqrt(1 + gx * gx + gz * gz);
     const steep = smoothstep(0.7, 1.7, Math.hypot(gx, gz));
-    return { x, z, h, w, slopeF, steep, strata: w > 1e-6 && steep > 0 ? ctx.strata.column(x, z) : null };
+    const oc = hasOutcrop ? bil(m.outcrop, u, wq) : 0;
+    return { x, z, h, w, slopeF, steep, oc, strata: w > 1e-6 && steep > 0 ? ctx.strata.column(x, z) : null };
   }
   function carve(col, y) {
     const { x, z } = col;
     const [hard, f] = ctx.strata.at(col.strata, y);
     // soft beds recede, strongest mid-bed; hard beds keep their lip
-    const soft = Math.pow(1 - smoothstep(0.3, 0.6, hard), bedPower) * (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, Math.max(0, f))));
+    let soft = Math.pow(1 - smoothstep(0.3, 0.6, hard), bedPower) * (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, Math.max(0, f))));
     const n = 0.5 + 0.5 * ctx.pocket.fbm(x / pocketScale, y / (pocketScale * 0.6), z / pocketScale, 3, 2.1, 0.55);
     const pocket = smoothstep(0.32, 0.7, n);
     const jn = 0.5 + 0.5 * ctx.joint.fbm(x * 0.03, z * 0.03 + y * 0.004, 2);
-    const joint = smoothstep(0.74, 0.86, jn) * joints;
+    let joint = smoothstep(0.74, 0.86, jn) * joints;
     const pit = smoothstep(0.66, 0.82, n) * pits;
-    const rough = ctx.rough.fbm(x * 0.6, y * 0.6, z * 0.6, 2, 2.1, 0.55) * roughAmp;
-    const d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + pit * 0.5) + rough;
+    const rough = ctx.rough.fbm(x * roughFreq, y * roughFreq, z * roughFreq, 2, 2.1, 0.55) * roughAmp;
+    // embedded boulders are massive rock: no bedding undercuts, spheroidal weathering only
+    if (col.oc > 0) { soft *= 1 - col.oc; joint *= 1 - col.oc * 0.5; }
+    const d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + pit * 0.5 + col.oc * 0.12 * pocket) + rough;
     return d * col.steep * col.w;
   }
   function fCol(col, y) {
@@ -251,16 +279,26 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   }
 
   // vertical range: carving d along the normal moves the surface up to d·|∇| vertically
-  const yLo = Math.floor((job.hmin - maxCarve * 3 - 2 * vox) / vox) * vox;
+  const reach = maxCarve * Math.min(3, job.slopeF || 3);
+  const yLo = Math.floor((job.hmin - reach - 2 * vox) / vox) * vox;
   const yHi = Math.ceil((job.hmax + roughAmp + 2 * vox) / vox) * vox;
   const ny = Math.max(1, Math.round((yHi - yLo) / vox));
   const sx = nx + 1, sy = ny + 1, sz = nz + 1;
+  // only the band around the surface is sampled / polygonised; nodes outside it are the plain
+  // distance, whose sign is known from the column height
   const vals = new Float32Array(sx * sy * sz);
+  const bandLo = new Int32Array(sx * sz), bandHi = new Int32Array(sx * sz);
   for (let jz = 0; jz < sz; jz++) {
     const z = z0 + jz * vox;
     for (let jx = 0; jx < sx; jx++) {
       const col = column(x0 + jx * vox, z);
-      for (let jy = 0; jy < sy; jy++) vals[(jz * sy + jy) * sx + jx] = fCol(col, yLo + jy * vox);
+      const lo = Math.max(0, Math.floor((col.h - maxCarve * col.slopeF - 2 * vox - yLo) / vox) - 1);
+      const hi = Math.min(ny, Math.ceil((col.h + roughAmp + 2 * vox - yLo) / vox) + 1);
+      bandLo[jz * sx + jx] = lo; bandHi[jz * sx + jx] = hi;
+      const base = jz * sy * sx + jx;
+      for (let jy = 0; jy < lo; jy++) vals[base + jy * sx] = yLo + jy * vox - col.h;
+      for (let jy = lo; jy <= hi; jy++) vals[base + jy * sx] = fCol(col, yLo + jy * vox);
+      for (let jy = hi + 1; jy < sy; jy++) vals[base + jy * sx] = yLo + jy * vox - col.h;
     }
   }
   const idx = (ix, iy, iz) => (iz * sy + iy) * sx + ix;
@@ -273,8 +311,11 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const cv = new Float64Array(8), cp = new Float64Array(24);
   const vid = new Int32Array(12);
   for (let iz = 0; iz < nz; iz++) {
-    for (let iy = 0; iy < ny; iy++) {
-      for (let ix = 0; ix < nx; ix++) {
+    for (let ix = 0; ix < nx; ix++) {
+      const c00 = iz * sx + ix, c10 = c00 + 1, c01 = c00 + sx, c11 = c01 + 1;
+      const iyLo = Math.max(0, Math.min(bandLo[c00], bandLo[c10], bandLo[c01], bandLo[c11]));
+      const iyHi = Math.min(ny - 1, Math.max(bandHi[c00], bandHi[c10], bandHi[c01], bandHi[c11]));
+      for (let iy = iyLo; iy <= iyHi; iy++) {
         let cube = 0;
         for (let c = 0; c < 8; c++) {
           const val = vals[idx(ix + CORNER[c][0], iy + CORNER[c][1], iz + CORNER[c][2])];

@@ -32,7 +32,15 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
 ## Pipeline — base shape → noise → erosion → rocks → surface
 
 1. **Base relief** (`src/heightfield.js`) — domain‑warped ridged multifractal with a continental
-   mask, optional mesa soft‑clamp and a meandering canyon incision.
+   mask, optional mesa soft‑clamp and a meandering canyon incision. **Dunes**: transverse ridges
+   across the wind with a concave windward slope steepening to a sharp brink, a straight slip
+   face at the angle of repose, interdune flats and smaller compound dunes climbing the big ones.
+   **Boulder outcrops** (`src/outcrops.js`) — clusters of large core‑stones (tors, woolsacks,
+   "encampments") are unioned into the relief *before* strata and erosion: superellipsoid stones
+   with a plan rotation, a low‑frequency bulge and a burial depth, in clusters on a site grid
+   filtered by slope and biased to ridges / hill tops. They come out as a landform the rest of the
+   pipeline weathers — pinned hard, no bedding terraces, no scree skin, no bedding undercuts in
+   the 3‑D chunks — and distinct from the scattered rock props.
 2. **Strata** — the heightfield is terraced in a tilted (geological dip) frame. Every bed gets a
    hashed *hardness*; hard caprock beds become near‑vertical faces, soft beds become slopes.
    Hardness is kept as a map and drives everything downstream.
@@ -44,9 +52,16 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    border as outlets), D8 flow routing and accumulation on the eroded surface, channels where the
    catchment exceeds a threshold with width ∝ √catchment, a monotone bed / water profile from the
    outlets upstream, concave beds with sloped banks (chamfer distance from the nearest channel
-   cell), braided gravel bars on wide gentle reaches, and lakes where basins fill (partial fill
-   supported). Drawn rivers are *guides*: carved first and injected as flow so the network passes
-   through them. Flow and deposit maps pick the network up for shading (wet gullies, gravel beds).
+   cell, the cut fading out towards the bank height instead of leaving a wall), braided gravel
+   bars on wide gentle reaches, and lakes where basins fill (partial fill, area cap — the
+   biggest/deepest basins first; over the cap a river that ends in a hollow keeps a small pond).
+   Steep reaches run narrow and shallow (torrents); inside closed depressions water runs down the
+   real floor into the lake instead of in straight lines across the filled flat; a little noise on
+   the routing surface breaks the dead‑straight D8 lines smooth slopes produce. The water mesh is
+   one continuous sheet with per‑vertex levels (relaxed along the channel) so it follows the
+   river's grade. Drawn rivers are *guides*: carved first and injected as flow so the network
+   passes through them. Flow and deposit maps pick the network up for shading (wet gullies, gravel
+   beds).
 4. **Mesh** (`src/terrain-geometry.js`) — indexed grid with alternating diagonals, per‑vertex
    normals and an `aux` attribute `(deposit, flow, hardness, cavity)`; a skirt turns the tile
    into a cut block of ground. **Cliff depth**: steep vertices are displaced horizontally along
@@ -57,9 +72,12 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    hummocks on flat ground) — cheap detail on top of the expensive erosion. Rocks are seated on
    the final displaced surface. **True‑3D cliffs**: cells steeper than the cliff angle are grouped
    into chunks (16 cells, budgeted), the heightfield mesh skips their quads and masks its
-   displacement around them, and the worker streams marching‑cubes meshes back in batches; the
-   chunks use the same world‑space surface shader with `aux` sampled by XZ and hardness from the 3‑D
-   strata model so beds read correctly on undercut faces.
+   displacement around them, and a small pool of workers streams marching‑cubes meshes back in
+   batches; the chunks use the same world‑space surface shader with `aux` sampled by XZ and hardness
+   from the 3‑D strata model so beds read correctly on undercut faces. Only the band of voxels
+   around the surface is sampled and polygonised; the fine roughness noise is band‑limited to ≥ 5
+   voxels so it cannot alias into stair‑steps / "pancake" layers; the voxel size is either set
+   explicitly or chosen automatically as the finest that fits a voxel budget (the HUD shows it).
 5. **Rocks** (`src/rock-geometry.js`, `src/rock-placement.js`) — eight archetypes per seed
    (boulder / block / slab / shard): displaced icosphere, anisotropic stretch, then clipped by
    bedding + joint‑set planes, crease‑aware normals. Placement is a plain scatter: jittered
@@ -113,13 +131,16 @@ Outliner rows map to inspector groups: **Landform / Strata / Erosion** rebuild t
 under **Rock material / Mineral flakes / Spalling / Ground cover / Sun & atmosphere / Viewport** is
 live. Presets: Alpine granite, Sandstone mesa, Canyon, Sea cliffs, Limestone escarpment, Fjord,
 Badlands, Dolomite towers, Desert buttes, Volcanic island, Highland glens, Boulder field, Scree
-slopes, Granite domes, Rocky coast, Talus canyon, Rocky mountains, Sand dunes, Icelandic highlands,
-Icelandic river plains, Karst pinnacles. **Landform → Dunes** adds transverse dune fields
-(height, spacing, wind direction, asymmetry, coverage) to any preset.
+slopes, Granite domes, Granite tors, Rocky coast, Talus canyon, Rocky mountains, Sand dunes,
+Icelandic highlands, Icelandic river plains, Karst pinnacles. **Landform → Dunes** adds transverse
+dune fields (height, spacing, wind direction, asymmetry, coverage) to any preset. **Landform →
+Boulder outcrops** adds embedded core‑stone clusters (density, boulder size, boulders per cluster,
+spread, spacing, height/width, burial, rounding, prefer‑high‑ground, max ground slope) — on by
+default in Granite tors, Granite domes, Boulder field and Icelandic highlands.
 
 **Rivers** (*Roads, rivers & lakes → Simulated rivers*): simulate drainage on/off, minimum
 catchment, width per √km², max width, depth scale, water fill, braiding, lakes in depressions,
-lake fill, minimum lake area, guide flow for drawn rivers. The drawn‑river card still shapes the
+lake fill, lake area cap, minimum lake area, guide flow for drawn rivers. The drawn‑river card still shapes the
 guide channels (width, depth, bank angle, bank height, meander, water erosion).
 
 Every texture layer is fully exposed: each has an **enable** toggle, its own **scale**,

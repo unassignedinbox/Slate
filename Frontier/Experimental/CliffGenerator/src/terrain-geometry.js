@@ -91,6 +91,7 @@ export function refineField(field, v) {
     resolution: N, worldSize: field.worldSize,
     height: field.height.slice(), hardness: field.hardness, deposit: field.deposit, flow: field.flow, cavity: field.cavity, slope: field.slope,
     river: field.river || empty(), waterLevel: (field.waterLevel || empty().fill(NO_WATER)).slice(), lakeSim: field.lake || empty(),
+    outcrop: field.outcrop || null,
     stats: field.stats, base: field,
   } : {
     resolution: M,
@@ -104,6 +105,7 @@ export function refineField(field, v) {
     river: upsampleMap(field.river || empty(), N, k, true),
     waterLevel: upsampleWaterLevel(field.waterLevel || empty().fill(NO_WATER), N, k),
     lakeSim: upsampleMap(field.lake || empty(), N, k, true),
+    outcrop: field.outcrop ? upsampleMap(field.outcrop, N, k, true) : null,
     stats: field.stats,
     base: field,
   };
@@ -346,12 +348,24 @@ export function buildWaterGeometry(field) {
   const index = new Int32Array(N * N).fill(-1);
   const positions = [];
   const indices = [];
-  const level = (idx) => waterLevel[idx];
   const wet = (idx) => waterLevel[idx] > NO_WATER * 0.5 && waterLevel[idx] > height[idx] - 0.5;
-  const vertex = (i, j, idx, lvl) => {
+  // per-vertex level: own level when wet, else the highest wet neighbour (shore vertices) — the
+  // sheet is then one continuous surface that follows the river's grade instead of stepped plates
+  const vertexLevel = (i, j, idx) => {
+    if (wet(idx)) return waterLevel[idx];
+    let lvl = NO_WATER;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const ii = i + di, jj = j + dj;
+      if (ii < 0 || jj < 0 || ii >= N || jj >= N) continue;
+      const n = jj * N + ii;
+      if (wet(n) && waterLevel[n] > lvl) lvl = waterLevel[n];
+    }
+    return lvl;
+  };
+  const vertex = (i, j, idx) => {
     if (index[idx] >= 0) return index[idx];
     const x = (i / (N - 1) - 0.5) * size, z = (j / (N - 1) - 0.5) * size;
-    positions.push(x, lvl, z);
+    positions.push(x, vertexLevel(i, j, idx), z);
     index[idx] = positions.length / 3 - 1;
     return index[idx];
   };
@@ -360,11 +374,9 @@ export function buildWaterGeometry(field) {
       const a = j * N + i, b = a + 1, c = a + N, d = c + 1;
       const anyWet = wet(a) || wet(b) || wet(c) || wet(d);
       if (!anyWet) continue;
-      const lvl = Math.max(level(a), level(b), level(c), level(d));
-      if (lvl <= NO_WATER * 0.5) continue;
-      // every corner must be under (or at) the water to avoid a sheet poking through ridges
-      if (height[a] > lvl + 1.5 && height[b] > lvl + 1.5 && height[c] > lvl + 1.5 && height[d] > lvl + 1.5) continue;
-      const va = vertex(i, j, a, lvl), vb = vertex(i + 1, j, b, lvl), vc = vertex(i, j + 1, c, lvl), vd = vertex(i + 1, j + 1, d, lvl);
+      const va = vertex(i, j, a), vb = vertex(i + 1, j, b), vc = vertex(i, j + 1, c), vd = vertex(i + 1, j + 1, d);
+      // a quad whose four corners all stand above their water level is a dry bank
+      if (height[a] > positions[va * 3 + 1] + 0.5 && height[b] > positions[vb * 3 + 1] + 0.5 && height[c] > positions[vc * 3 + 1] + 0.5 && height[d] > positions[vd * 3 + 1] + 0.5) continue;
       indices.push(va, vc, vb, vb, vc, vd);
     }
   }

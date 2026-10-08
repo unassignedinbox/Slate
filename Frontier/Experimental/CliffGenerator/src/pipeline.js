@@ -7,6 +7,7 @@ import { synthesizeBase, applyStrata, computeCavity, computeSlopeMap } from './h
 import { hydraulicErosion, thermalErosion, blurField } from './erosion.js';
 import { carveRivers, NO_WATER } from './features.js';
 import { simulateRivers } from './hydrology.js';
+import { addOutcrops } from './outcrops.js';
 
 export function generateTerrain(params, progress = () => {}) {
   const N = params.resolution;
@@ -16,8 +17,12 @@ export function generateTerrain(params, progress = () => {}) {
   progress({ phase: 'Synthesising base relief', fraction: 0 });
   const height = synthesizeBase(params, (f) => progress({ phase: 'Synthesising base relief', fraction: f }));
 
+  // boulder outcrops are part of the landform: added before strata and erosion
+  const outcrop = addOutcrops(height, params);
+
   progress({ phase: 'Layering strata', fraction: 0 });
-  const hardness = applyStrata(height, params, (f) => progress({ phase: 'Layering strata', fraction: f }));
+  const hardness = applyStrata(height, params, (f) => progress({ phase: 'Layering strata', fraction: f }), outcrop);
+  for (let i = 0; i < N * N; i++) if (outcrop[i] > 0) hardness[i] = Math.max(hardness[i], 0.55 + 0.4 * outcrop[i]);
 
   const erosionParams = { ...params, heightScale: Math.max(1, params.mountainHeight) };
 
@@ -63,7 +68,7 @@ export function generateTerrain(params, progress = () => {}) {
     hydro = simulateRivers(height, N, params.worldSize, {
       catchment: params.riverCatchment, widthScale: params.riverWidthScale, maxWidth: params.riverMaxWidth, depthScale: params.riverDepthScale,
       bankAngle: params.riverBank, maxBank: params.riverMaxBank, waterDepth: params.riverWaterFrac, braiding: params.riverBraiding,
-      lakes: params.riverLakes, lakeFill: params.riverLakeFill, lakeMinArea: Math.round((params.riverLakeMin || 0.01) * 1e6 / (cell * cell)),
+      lakes: params.riverLakes, lakeFill: params.riverLakeFill, lakeMaxArea: (params.riverLakeMax == null ? 8 : params.riverLakeMax) / 100, lakeMinArea: Math.round((params.riverLakeMin || 0.01) * 1e6 / (cell * cell)),
       seaLevel: params.waterEnabled ? params.seaLevel : -Infinity, sources: riverResult.sources, guideFlow: params.riverGuideFlow,
     }, params.seed);
     for (let i = 0; i < N * N; i++) {
@@ -93,6 +98,9 @@ export function generateTerrain(params, progress = () => {}) {
     }
   }
 
+  // core-stones shed their debris: no scree skin on the boulders themselves
+  for (let i = 0; i < N * N; i++) if (outcrop[i] > 0) deposit[i] *= 1 - 0.85 * outcrop[i];
+
   const cavityRaw = computeCavity(height, N, cell);
   const cavity = new Float32Array(N * N);
   for (let i = 0; i < N * N; i++) cavity[i] = Math.max(-1, Math.min(1, cavityRaw[i] * 1.5));
@@ -110,7 +118,7 @@ export function generateTerrain(params, progress = () => {}) {
     resolution: N,
     worldSize: params.worldSize,
     height, hardness, deposit, flow: flowNorm, cavity, slope,
-    river: riverResult.riverMask, waterLevel: riverResult.waterLevel, lake,
+    river: riverResult.riverMask, waterLevel: riverResult.waterLevel, lake, outcrop,
     stats: { min, max, elapsedMs: now() - t0, rivers: hydro ? hydro.stats : null },
   };
 }

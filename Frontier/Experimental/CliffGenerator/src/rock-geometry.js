@@ -18,7 +18,7 @@ export function buildRockGeometry({ seed = 1, family = 'block', angularity = 0.7
   const spec = ROCK_FAMILIES[family] || ROCK_FAMILIES.block;
   const rand = mulberry32(seed * 131 + 17);
   const noise = new GradientNoise3(seed);
-  const base = new THREE.IcosahedronGeometry(1, detail).toNonIndexed();
+  const base = new THREE.IcosahedronGeometry(1, detail); // already non-indexed (flat faces)
   const pos = base.getAttribute('position');
   const count = pos.count;
 

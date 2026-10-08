@@ -61,7 +61,7 @@ export class CliffScene {
     this.rockGroup = new THREE.Group();
     this.sdfGroup = new THREE.Group(); // true-3D cliff chunks (meshed in sdf.worker.js)
     this.scene.add(this.terrainGroup, this.rockGroup, this.sdfGroup);
-    this.sdfWorker = null;
+    this.sdfWorkers = null;
     this.sdfGeneration = 0;
     this.sdfStats = null;
     this.onSdfProgress = null;
@@ -299,37 +299,51 @@ export class CliffScene {
     this.disposeGroup(this.sdfGroup);
     this.sdfStats = null;
     if (!chunks || chunks.list.length === 0) { if (this.onSdfProgress) this.onSdfProgress(null); return; }
-    this.sdfStats = { done: 0, total: chunks.list.length, candidates: chunks.candidates, triangles: 0, started: performance.now(), ms: 0 };
-    if (!this.sdfWorker) {
-      this.sdfWorker = new Worker(new URL('./sdf.worker.js', import.meta.url), { type: 'module' });
-      this.sdfWorker.onmessage = (event) => {
-        const msg = event.data;
-        if (msg.id !== this.sdfGeneration) return;
-        if (msg.type === 'error') { console.error('SDF worker:', msg.message); return; }
-        for (const c of msg.chunks) {
-          if (c.index.length === 0) { this.sdfStats.done++; continue; }
-          const g = new THREE.BufferGeometry();
-          g.setAttribute('position', new THREE.BufferAttribute(c.positions, 3));
-          g.setAttribute('normal', new THREE.BufferAttribute(c.normals, 3));
-          g.setAttribute('aux', new THREE.BufferAttribute(c.aux, 4));
-          g.setAttribute('aux2', new THREE.BufferAttribute(c.aux2, 4));
-          g.setIndex(new THREE.BufferAttribute(c.index, 1));
-          g.computeBoundingSphere();
-          const mesh = new THREE.Mesh(g, this.terrainMaterial);
-          mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = `sdf-${c.ci}-${c.cj}`;
-          this.sdfGroup.add(mesh);
-          this.sdfStats.done++;
-          this.sdfStats.triangles += c.triangles;
-        }
-        this.sdfStats.ms = performance.now() - this.sdfStats.started;
-        if (this.onSdfProgress) this.onSdfProgress(this.sdfStats, msg.done);
-      };
-      this.sdfWorker.onerror = (e) => console.error('SDF worker error', e);
-    }
     const { jobs, transfer, meta } = packChunkJobs(field, chunks, v);
+    this.sdfStats = { done: 0, total: chunks.list.length, candidates: chunks.candidates, triangles: 0, started: performance.now(), ms: 0, voxel: meta.cell, k: meta.k, workersDone: 0, workers: 0 };
+    // a small pool of workers; jobs are dealt round-robin from the biggest cliff area down
+    const hw = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4;
+    const want = Math.max(1, Math.min(4, hw - 1, jobs.length));
+    if (!this.sdfWorkers) this.sdfWorkers = [];
+    while (this.sdfWorkers.length < want) {
+      const worker = new Worker(new URL('./sdf.worker.js', import.meta.url), { type: 'module' });
+      worker.onmessage = (event) => this.onSdfMessage(event.data);
+      worker.onerror = (e) => console.error('SDF worker error', e);
+      this.sdfWorkers.push(worker);
+    }
     const plain = {}; for (const [k, val] of Object.entries(v)) if (k !== 'features') plain[k] = val;
-    this.sdfWorker.postMessage({ id, jobs, meta, v: plain }, transfer);
+    const buckets = Array.from({ length: want }, () => ({ jobs: [], transfer: [] }));
+    jobs.forEach((job, n) => {
+      const b = buckets[n % want];
+      b.jobs.push(job);
+      for (const m of Object.values(job.maps)) b.transfer.push(m.buffer);
+    });
+    this.sdfStats.workers = want;
+    buckets.forEach((b, n) => this.sdfWorkers[n].postMessage({ id, jobs: b.jobs, meta, v: plain }, b.transfer));
     if (this.onSdfProgress) this.onSdfProgress(this.sdfStats, false);
+  }
+
+  onSdfMessage(msg) {
+    if (msg.id !== this.sdfGeneration || !this.sdfStats) return;
+    if (msg.type === 'error') { console.error('SDF worker:', msg.message); return; }
+    for (const c of msg.chunks) {
+      if (c.index.length === 0) { this.sdfStats.done++; continue; }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(c.positions, 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(c.normals, 3));
+      g.setAttribute('aux', new THREE.BufferAttribute(c.aux, 4));
+      g.setAttribute('aux2', new THREE.BufferAttribute(c.aux2, 4));
+      g.setIndex(new THREE.BufferAttribute(c.index, 1));
+      g.computeBoundingSphere();
+      const mesh = new THREE.Mesh(g, this.terrainMaterial);
+      mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = `sdf-${c.ci}-${c.cj}`;
+      this.sdfGroup.add(mesh);
+      this.sdfStats.done++;
+      this.sdfStats.triangles += c.triangles;
+    }
+    if (msg.done) this.sdfStats.workersDone++;
+    this.sdfStats.ms = performance.now() - this.sdfStats.started;
+    if (this.onSdfProgress) this.onSdfProgress(this.sdfStats, this.sdfStats.workersDone >= this.sdfStats.workers);
   }
 
   frameCamera(v) {

@@ -81,14 +81,15 @@ export function synthesizeBase(params, progress = () => {}) {
         const fr = sCoord - Math.floor(sCoord);
         // long windward slope up to the crest, short slip face down (at the angle of repose it is the
         // thermal pass that finishes the slip face)
-        let profile;
-        if (fr < crest) { const t = fr / crest; profile = t * t * (3 - 2 * t); }
-        else { const t = (fr - crest) / (1 - crest); profile = 1 - t * t * (3 - 2 * t) * 0.85 - t * 0.15; }
+        const profile = duneProfile(fr, crest, duneLambda, duneAmp);
         // dune fields come and go
         const fieldMask = smoothstep(0.5 - duneCover * 0.5, 0.5 + duneCover * 0.35, 0.5 + 0.5 * duneNoise.fbm(u * 2.2 + 31, v * 2.2 + 7, 3));
-        // smaller secondary ripples on the windward side
-        const ripple = 0.08 * Math.sin(sCoord * 7 * Math.PI * 2 + bend * 4) * (fr < crest ? 1 : 0.3);
-        h += duneAmp * (profile + ripple) * fieldMask * (0.7 + 0.3 * duneNoise.fbm(u * 5 + 3, v * 5 + 9, 2));
+        // compound dunes: a smaller set of dunes climbing the windward slope of the big ones
+        const s2 = sCoord * 2.6 + bend * 2.5 + duneNoise.fbm(u * 6 + 17, v * 6 - 9, 2) * 0.8;
+        const fr2 = s2 - Math.floor(s2);
+        const minor = (fr2 < 0.7 ? Math.pow(fr2 / 0.7, 1.5) : 1 - smoothstep(0.7, 1, fr2)) * 0.07 * smoothstep(0.15, 0.6, fr) * (fr < crest ? 1 : 0.1);
+        const local = 0.75 + 0.25 * duneNoise.fbm(u * 5 + 3, v * 5 + 9, 2);
+        h += duneAmp * (profile + minor) * fieldMask * local;
       }
 
       height[j * N + i] = h;
@@ -96,6 +97,19 @@ export function synthesizeBase(params, progress = () => {}) {
     if ((j & 31) === 0) progress(j / N);
   }
   return height;
+}
+
+// Transverse dune cross-section on [0,1): gently concave windward slope steepening to a sharp
+// brink, a straight slip face at the angle of repose, a short toe and an interdune flat.
+function duneProfile(fr, crest, lambda, amp) {
+  if (fr < crest) return Math.pow(fr / crest, 1.7); // steepens all the way to the brink
+  // slip face: drop at ~33° with a rounded toe; if the wavelength leaves room the floor stays flat
+  const run = (fr - crest) * lambda;
+  const slipLen = amp / Math.tan((33 * Math.PI) / 180);
+  const t = Math.min(1, run / Math.max(1e-3, slipLen));
+  const a = 0.25;
+  const y = t <= 1 - a ? 1 - t - a / 2 : (1 - t) * (1 - t) / (2 * a);
+  return y / (1 - a / 2);
 }
 
 function softplus(x, k) {
@@ -107,7 +121,7 @@ function softplus(x, k) {
 
 // Strata terracing with geological dip. Also produces the hardness field that the erosion
 // passes use so that resistant layers survive as cliff bands while soft layers wear to slopes.
-export function applyStrata(height, params, progress = () => {}) {
+export function applyStrata(height, params, progress = () => {}, outcrop = null) {
   const N = params.resolution;
   const size = params.worldSize;
   const hardness = new Float32Array(N * N);
@@ -167,7 +181,8 @@ export function applyStrata(height, params, progress = () => {}) {
       const terraced = (bi + fp) * band * jitter - tilt;
 
       const sm = smoothstep(slopeMaskLo, slopeMaskHi, slope[idx]);
-      const amount = strength * lerp(0.25, 1, sm);
+      let amount = strength * lerp(0.25, 1, sm);
+      if (outcrop && outcrop[idx] > 0) amount *= 1 - outcrop[idx]; // massive core-stones are not bedded
       height[idx] = lerp(h, terraced, amount);
       hardness[idx] = hard;
     }
