@@ -75,7 +75,17 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    blocks. **Cliff protection** (*Erosion → Fluvial incision → Cliff protection*): faces steeper
    than the protection angle keep their pre‑erosion shape through every erosion stage, so the
    plateau above a sea cliff or quarry wall can be eroded into a real landscape — valleys, rills,
-   streams that simply hang at the crest — while the wall stays a wall. **Jointing** (*Rock material → Jointing*, shader): two vertical joint sets (families
+   streams that simply hang at the crest — while the wall stays a wall.
+   **Rock stacks** (*Landform → Rock stacks (Gaea Stacks)*): tiered rock towers in the manner of
+   Gaea's Stacks node — a mask (a smooth union of warped discs around jittered feature points) is
+   thresholded at a rising level per tier, so every tier sits inside the one below; each tier has
+   its own thickness, edge width and, under *Chaos*, its own plan offset and outline wobble, so
+   the pile leans and steps irregularly instead of a wedding cake. *Spires* shrinks the cells and
+   discs towards isolated hoodoos, *Taper* goes from straight towers to stepped pyramids, a talus
+   *Pedestal* ramps up to the lowest tier. Two experimental presets: *Desert stacks* (red sandstone
+   buttes and spires under normal erosion — fluted walls, talus skirts) and *Stack cliffs* (the
+   same towers treated like the quarry / coastal walls: cliff protection, vertical sheared walls,
+   rock blocks). **Jointing** (*Rock material → Jointing*, shader): two vertical joint sets (families
    of warped planes spaced like the bed thickness, staggered bed to bed like brickwork) and the
    bedding planes break the face into blocks — each joint with its own width, some missing, each
    block with its own slight tilt and tone, grooves with normal and occlusion — the cracked, blocky
@@ -248,7 +258,7 @@ Outliner rows map to inspector groups: **Landform / Strata / Erosion** rebuild t
 (press *Generate* or Ctrl+Enter; the worker reports progress), **Rocks** re‑scatter automatically,
 **Cliff depth** (true‑3D cliffs, displacement, mesh detail) rebuilds the mesh live, and everything
 under **Rock material / Mineral flakes / Spalling / Ground cover / Sun & atmosphere / Viewport** is
-live. Presets: Alpine granite, Sandstone mesa, Canyon, Sea cliffs, Coastal cliffs, Quarry walls, Limestone escarpment, Fjord,
+live. Presets: Alpine granite, Sandstone mesa, Canyon, Sea cliffs, Coastal cliffs, Quarry walls, Desert stacks, Stack cliffs, Limestone escarpment, Fjord,
 Badlands, Dolomite towers, Desert buttes, Volcanic island, Highland glens, Boulder field, Scree
 slopes, Granite domes, Granite tors, Rocky coast, Talus canyon, Rocky mountains, Sand dunes,
 Icelandic highlands, Icelandic river plains, Himalayan peaks, Alpine peaks, Karst pinnacles. **Landform → Dunes** adds transverse

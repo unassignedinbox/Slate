@@ -35,6 +35,10 @@ export function synthesizeBase(params, progress = () => {}) {
   const crest = Math.min(0.95, Math.max(0.5, params.duneAsymmetry == null ? 0.68 : params.duneAsymmetry));
   const duneCover = params.duneCoverage == null ? 0.6 : params.duneCoverage;
 
+  // Rock stacks (Gaea "Stacks"): tiered towers of rock — each tier a thresholded blob of a
+  // warped mask, every tier smaller than the one below, with its own thickness, edge and offset.
+  const stacks = (params.stackHeight || 0) > 0 ? makeStacks(params) : null;
+
   for (let j = 0; j < N; j++) {
     const v = j * invN;
     for (let i = 0; i < N; i++) {
@@ -100,6 +104,8 @@ export function synthesizeBase(params, progress = () => {}) {
         h -= params.canyonDepth * profile * floorNoise;
       }
 
+      if (stacks) h += stacks.at(u, v);
+
       if (duneAmp > 0) {
         const xw = (u - 0.5) * size, zw = (v - 0.5) * size;
         // along-wind coordinate, bent by low-frequency noise so crests curve (barchanoid ridges)
@@ -137,6 +143,98 @@ function duneProfile(fr, crest, lambda, amp) {
   const a = 0.25;
   const y = t <= 1 - a ? 1 - t - a / 2 : (1 - t) * (1 - t) / (2 * a);
   return y / (1 - a / 2);
+}
+
+// ---- rock stacks -------------------------------------------------------------------------------
+// Tiered rock towers in the manner of Gaea's Stacks node: a mask m(x,z) — warped fbm for buttes
+// and mesas, blended towards cellular cones for isolated spires / hoodoos — is thresholded at a
+// rising level per tier, so each tier sits inside the one below (taper). Every tier has its own
+// thickness (a bed table of its own), its own edge width, and under "chaos" its own plan offset
+// and outline wobble, so the pile leans and steps irregularly like real sandstone stacks instead
+// of a wedding cake. A talus pedestal ramps up to the foot of the lowest tier.
+function makeStacks(params) {
+  const size = params.worldSize;
+  const amp = params.stackHeight;
+  const levels = Math.max(1, Math.min(16, Math.round(params.stackLevels == null ? 6 : params.stackLevels)));
+  const scale = Math.max(10, params.stackScale || 220);
+  const taper = params.stackTaper == null ? 0.5 : params.stackTaper;
+  const sharp = params.stackSharpness == null ? 0.8 : params.stackSharpness;
+  const chaos = params.stackChaos == null ? 0.5 : params.stackChaos;
+  const spires = params.stackSpires == null ? 0 : params.stackSpires;
+  const cover = params.stackCoverage == null ? 0.5 : params.stackCoverage;
+  const pedestal = params.stackPedestal == null ? 0.4 : params.stackPedestal;
+  const seed = params.seed | 0;
+  const n2 = new SimplexNoise(seed * 29 + 17);
+  // tier table: thickness (its own bed table), threshold, edge width and plan offset of every tier.
+  // The mask is 1 at the centre of a stack and 0 at its rim, so tier k stands where m > t_k.
+  const tTop = 0.85 * taper;
+  const tiers = [];
+  let sum = 0;
+  for (let k = 0; k < levels; k++) {
+    const thick = 0.45 + 1.1 * hash2(k, 1, seed + 5);
+    sum += thick;
+    const ang = hash2(k, 2, seed + 5) * Math.PI * 2;
+    tiers.push({
+      thick,
+      t: levels > 1 ? (tTop * k) / (levels - 1) : 0,
+      w: lerp(0.16, 0.015, sharp) * (0.6 + 0.8 * hash2(k, 3, seed + 5)),
+      ox: Math.cos(ang) * chaos * 0.07, oz: Math.sin(ang) * chaos * 0.07,
+      ph: k * 7.3,
+    });
+  }
+  for (const tier of tiers) tier.h = (tier.thick / sum) * amp;
+  const f = size / scale; // one unit = the stack size
+  // blobs: a smooth union of discs around jittered feature points (one per cell), each with its
+  // own radius; spires make the cells smaller and the discs narrower (isolated pillars)
+  const cs = lerp(1.0, 0.45, spires), rMul = lerp(1.0, 0.7, spires);
+  function blobs(px, pz) {
+    const cx = Math.floor(px / cs), cz = Math.floor(pz / cs);
+    let acc = 0;
+    const kS = 0.07; // smooth-union softness
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+      const ix = cx + dx, iz = cz + dz;
+      if (hash2(ix, iz, seed + 43) > 0.8) continue; // not every cell has a stack
+      const fx = (ix + 0.2 + 0.6 * hash2(ix, iz, seed + 31)) * cs, fz = (iz + 0.2 + 0.6 * hash2(ix, iz, seed + 37)) * cs;
+      const R = cs * (0.3 + 0.35 * hash2(ix, iz, seed + 41)) * rMul;
+      const val = 1 - Math.hypot(px - fx, pz - fz) / R;
+      acc += Math.exp(val / kS);
+    }
+    return acc > 0 ? kS * Math.log(acc) : -2;
+  }
+  function mask(px, pz) {
+    // the outlines are warped so no stack is a disc
+    const wx = n2.fbm(px * 1.3 + 1.3, pz * 1.3 + 5.1, 3) * 0.22, wz = n2.fbm(px * 1.3 - 7.7, pz * 1.3 + 2.9, 3) * 0.22;
+    return blobs(px + wx, pz + wz);
+  }
+  function at(u, v) {
+    // stack fields come and go
+    const edge = 0.5 + (0.5 - cover) * 0.8;
+    const c = cover >= 1 ? 1 : smoothstep(edge - 0.08, edge + 0.08, 0.5 + 0.5 * n2.fbm(u * 1.4 + 23, v * 1.4 - 11, 3));
+    if (c <= 0.001) return 0;
+    const px = u * f, pz = v * f;
+    // outside the field the stacks shrink and lose their upper tiers (the mask sinks) rather
+    // than being squashed flat
+    const sink = (1 - c) * 0.7;
+    const m0 = mask(px, pz) - sink;
+    if (m0 < -0.6) return 0;
+    let h = 0, below = 1;
+    for (let k = 0; k < levels; k++) {
+      const tier = tiers[k];
+      // this tier's own outline: offset in plan and wobbled, so the tiers do not share one shape
+      const mk = (k === 0 ? m0 : mask(px + tier.ox, pz + tier.oz) - sink) + chaos * 0.05 * n2.fbm(px * 6 + tier.ph, pz * 6 - tier.ph, 2);
+      const sk = smoothstep(tier.t - tier.w, tier.t + tier.w, mk) * below;
+      // the tier top is not dead flat: it rises a little towards the centre
+      h += tier.h * sk * (1 + 0.1 * Math.max(0, mk - tier.t));
+      below = sk; // a tier can only stand on the one below it
+      if (k === 0 && pedestal > 0) {
+        // talus pedestal: a ramp from the ground up to the foot of the lowest tier
+        const ramp = smoothstep(-0.55, -tier.w, m0);
+        h += amp * 0.22 * pedestal * Math.pow(ramp, 1.6) * (1 - sk);
+      }
+    }
+    return h;
+  }
+  return { at };
 }
 
 function softplus(x, k) {
