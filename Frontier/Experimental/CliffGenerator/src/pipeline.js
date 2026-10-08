@@ -1,6 +1,7 @@
 // End-to-end heightfield pipeline. Pure JS, no DOM — runs in the worker and under Node for checks.
 //
-//   synthesizeBase → applyStrata (+hardness) → thermal pre-settle → hydraulic erosion → thermal
+//   synthesizeBase → outcrops → applyStrata (+hardness) → thermal pre-settle → fluvial incision
+//   (stream power) → hydraulic droplet erosion → thermal → simulated rivers
 //   → derived maps (deposit, flow, cavity, slope) packed for the vertex attributes.
 
 import { synthesizeBase, applyStrata, computeCavity, computeSlopeMap } from './heightfield.js';
@@ -8,6 +9,7 @@ import { hydraulicErosion, thermalErosion, blurField } from './erosion.js';
 import { carveRivers, NO_WATER } from './features.js';
 import { simulateRivers } from './hydrology.js';
 import { addOutcrops } from './outcrops.js';
+import { fluvialErosion, fillShallowPits } from './fluvial.js';
 
 export function generateTerrain(params, progress = () => {}) {
   const N = params.resolution;
@@ -29,6 +31,18 @@ export function generateTerrain(params, progress = () => {}) {
   progress({ phase: 'Thermal settling', fraction: 0 });
   thermalErosion(height, hardness, { ...erosionParams, thermalIterations: Math.ceil(params.thermalIterations * 0.3) },
     (f) => progress({ phase: 'Thermal settling', fraction: f }));
+
+  // Fluvial incision: stream-power erosion re-shapes the relief into a drainage network of
+  // branching valleys before the fine droplet erosion and the river simulation run on it.
+  let fluvial = null;
+  if (params.fluvialStrength > 0 && params.fluvialIterations > 0) {
+    progress({ phase: 'Fluvial incision', fraction: 0 });
+    fluvial = fluvialErosion(height, hardness, N, params.worldSize, {
+      strength: params.fluvialStrength, iterations: params.fluvialIterations, concavity: params.fluvialConcavity,
+      uplift: params.fluvialUplift, diffusion: params.fluvialDiffusion, basinFill: params.fluvialFill,
+      seaLevel: params.waterEnabled ? params.seaLevel : -Infinity,
+    }, (f) => progress({ phase: 'Fluvial incision', fraction: f }));
+  }
 
   // Drawn rivers: carve the channel first so the slopes drain into it, and seed the erosion with it.
   const rivers = (params.features && params.features.rivers) || [];
@@ -52,6 +66,10 @@ export function generateTerrain(params, progress = () => {}) {
   progress({ phase: 'Scree slumping', fraction: 0 });
   const slumped = thermalErosion(height, hardness, erosionParams,
     (f) => progress({ phase: 'Scree slumping', fraction: f }));
+
+  // droplet fans dam the valley floors into chains of shallow pits — silt them up so the drainage
+  // stays integrated (deep basins remain as lakes)
+  if (fluvial && params.fluvialPits > 0) fillShallowPits(height, N, params.waterEnabled ? params.seaLevel : -Infinity, params.fluvialPits, 0.2, cell);
 
   if (rivers.length) {
     // Restore the bed to its profile after erosion/slumping and take the final mask + water level.
@@ -87,8 +105,16 @@ export function generateTerrain(params, progress = () => {}) {
 
   // Flow accumulation on a log scale → wet streaks, darkened gully floors.
   const flowRaw = new Float32Array(N * N);
+  const fluvialFlow = new Float32Array(N * N);
   for (let i = 0; i < N * N; i++) flowRaw[i] = Math.log1p(flow[i]);
+  if (fluvial) {
+    // stream-power drainage area → the valley floors read as wet even where droplets were sparse
+    let hiAcc = 1; for (let i = 0; i < N * N; i++) if (fluvial.acc[i] > hiAcc) hiAcc = fluvial.acc[i];
+    const lh = Math.log1p(hiAcc);
+    for (let i = 0; i < N * N; i++) { const t = Math.log1p(fluvial.acc[i] - 1) / lh; fluvialFlow[i] = Math.max(0, Math.min(1, (t - 0.35) / 0.65)); }
+  }
   const flowNorm = normalisePercentile(blurField(flowRaw, N, 1), 0.995);
+  if (fluvial) for (let i = 0; i < N * N; i++) flowNorm[i] = Math.max(flowNorm[i], fluvialFlow[i] * fluvialFlow[i] * 0.7);
   if (hydro) {
     // drainage network → wet gully floors; channels and lake shores → gravel / silt deposits
     for (let i = 0; i < N * N; i++) {

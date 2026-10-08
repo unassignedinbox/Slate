@@ -49,12 +49,11 @@ const DZ = [0, 0, 1, -1, 1, -1, 1, -1];
 const DL = [1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2];
 
 // Priority flood: returns the filled surface and the processing order (increasing filled height).
-export function fillDepressions(height, N, seaLevel = -Infinity) {
+export function fillDepressions(height, N, seaLevel = -Infinity, eps = 1e-4) {
   const filled = new Float32Array(N * N);
   const closed = new Uint8Array(N * N);
   const order = new Int32Array(N * N);
   const heap = new Heap(N * N + 8);
-  const eps = 1e-4;
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
       const idx = j * N + i;
@@ -202,7 +201,10 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     const stack = [];
     const minArea = Math.max(4, opts.lakeMinArea || 24);
     const sea = opts.seaLevel == null ? -Infinity : opts.seaLevel;
-    const isPool = (c) => filled[c] - routing[c] >= 0.4 && filled[c] > sea + 0.01; // the sea is not a lake
+    // pools are judged on the real surface (the wander noise would turn every flat valley floor
+    // into a field of 1 m puddles); the sea is not a lake
+    const { filled: filledReal } = fillDepressions(height, N, sea);
+    const isPool = (c) => filledReal[c] - height[c] >= 0.6 && filledReal[c] > sea + 0.01;
     const candidates = [];
     for (let s = 0; s < total; s++) {
       if (seen[s] || !isPool(s)) continue;
@@ -212,7 +214,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
       while (stack.length) {
         const c = stack.pop(); cells.push(c);
         if (acc[c] >= threshold * 0.5) fed = true;
-        deepest = Math.max(deepest, filled[c] - routing[c]);
+        deepest = Math.max(deepest, filledReal[c] - height[c]);
         const ci = c % N, cj = (c - ci) / N;
         for (let d = 0; d < 4; d++) {
           const ni = ci + DX[d], nj = cj + DZ[d];
@@ -222,7 +224,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
           seen[nidx] = 1; stack.push(nidx);
         }
       }
-      if (cells.length < minArea && !(fed && deepest > 1.5)) continue;
+      if (deepest < 1.5 || (cells.length < minArea && !fed)) continue;
       candidates.push({ cells, deepest, fed });
     }
     // biggest / deepest basins first, up to a share of the map — a landscape full of small
@@ -241,7 +243,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
       }
       // partial fill: level between the deepest point and the spill level
       let minH = Infinity, spill = -Infinity;
-      for (const c of lake.cells) { if (height[c] < minH) minH = height[c]; if (filled[c] > spill) spill = filled[c]; }
+      for (const c of lake.cells) { if (height[c] < minH) minH = height[c]; if (filledReal[c] > spill) spill = filledReal[c]; }
       const level = minH + (spill - minH) * fill - 0.05;
       let n = 0; for (const c of lake.cells) if (height[c] < level) n++;
       used += n;

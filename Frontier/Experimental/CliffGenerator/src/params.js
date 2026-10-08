@@ -40,12 +40,19 @@ export const defaults = {
   strataStrength: 0.75,
   strataVariation: 0.6,
   strataPackaging: 0.6,
-  strataHardShare: 0.4,
+  strataHardShare: 0.35,
   strataLateral: 0.18,
   strataDip: 4,             // [°]
   strataDipDirection: 35,   // [°]
   hardnessContrast: 0.8,
   // Erosion
+  fluvialStrength: 0.7,
+  fluvialIterations: 40,
+  fluvialConcavity: 0.5,
+  fluvialUplift: 0.3,
+  fluvialFill: 0.6,
+  fluvialPits: 8,
+  fluvialDiffusion: 0.3,
   droplets: 180000,
   inertia: 0.08,
   sedimentCapacity: 5,
@@ -512,8 +519,17 @@ export const groups = [
     ],
   },
   {
-    id: 'erosion', name: 'Erosion', type: 'Hydraulic & thermal', stage: 'terrain', color: '#81b8c8',
+    id: 'erosion', name: 'Erosion', type: 'Fluvial, hydraulic & thermal', stage: 'terrain', color: '#81b8c8',
     cards: [
+      { title: 'Fluvial incision', controls: [
+        ['fluvialStrength', 'Incision', 0, 1, 0.05, '', 'Stream-power erosion: rivers cut valleys in proportion to the water they gather, shaping a branching drainage network. 0 = off'],
+        ['fluvialIterations', 'Time steps', 0, 80, 1, '', 'Number of implicit erosion steps (each is a long geological interval)'],
+        ['fluvialConcavity', 'Concavity', 0.3, 0.7, 0.05, '', 'Area exponent m: higher = big rivers dominate, flatter valley floors and steeper headwaters'],
+        ['fluvialUplift', 'Uplift', 0, 1, 0.05, '', 'Tectonic uplift of the massifs during incision: keeps the relief high while the valleys deepen; 0 lets everything grade towards base level'],
+        ['fluvialFill', 'Basin fill', 0, 1, 0.05, '', 'How fast closed basins silt up to their spill level: high = lakes become flat valley floors with a river through them, low = lakes survive'],
+        ['fluvialPits', 'Silt up pits', 0, 30, 1, 'm', 'After the droplet erosion, hollows shallower than this are silted up so the valleys drain as one network; deeper basins stay lakes'],
+        ['fluvialDiffusion', 'Hillslope diffusion', 0, 1, 0.05, '', 'Soil creep rounding the interfluves between valleys'],
+      ] },
       { title: 'Hydraulic erosion', controls: [
         ['droplets', 'Droplets', 0, 600000, 10000, '', 'Rain particles traced downhill'],
         ['erodeSpeed', 'Cutting rate', 0.05, 1, 0.05, '', 'How fast flowing water removes material'],

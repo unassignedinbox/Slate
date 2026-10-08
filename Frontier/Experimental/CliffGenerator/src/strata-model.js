@@ -29,15 +29,17 @@ export function makeBedTable(params) {
   let y = Y_MIN, guard = 0;
   while (y < Y_MAX && guard++ < 4000) {
     const r = rand();
-    const type = r < packaging * 0.45 ? 0 /* thin-bedded */ : r < packaging * 0.9 ? 1 /* massive */ : 2 /* mixed */;
+    const type = r < packaging * 0.45 ? 0 /* thin-bedded */ : r < packaging * 0.72 ? 1 /* massive */ : 2 /* mixed */;
     const n = 2 + Math.floor(rand() * 6);
     for (let k = 0; k < n && y < Y_MAX; k++) {
       let t = band * Math.exp(gauss() * 0.5 * variation) * (type === 0 ? 0.42 : type === 1 ? 1.45 : 1);
       t = Math.max(band * 0.12, Math.min(band * 4, t));
       let h;
-      if (type === 0) h = rand() < 0.15 ? 0.6 + 0.3 * rand() : 0.04 + 0.3 * rand();
-      else if (type === 1) h = rand() < 0.18 ? 0.15 + 0.25 * rand() : 0.7 + 0.3 * rand();
-      else h = rand() < hardShare ? 0.65 + 0.35 * rand() : 0.05 + 0.4 * rand();
+      // soft beds are decidedly soft (≤ 0.3 → full notch / terrace tread), hard ones decidedly
+      // hard: the contrast between them is what reads as stratification
+      if (type === 0) h = rand() < 0.15 ? 0.62 + 0.3 * rand() : 0.02 + 0.24 * rand();
+      else if (type === 1) h = rand() < 0.18 ? 0.08 + 0.22 * rand() : 0.72 + 0.28 * rand();
+      else h = rand() < hardShare ? 0.66 + 0.34 * rand() : 0.03 + 0.27 * rand();
       y += t;
       tops.push(y); hard.push(h); thick.push(t); tint.push(rand()); grad.push(h > 0.5 && rand() < 0.4 ? 1 : 0); pkg.push(type);
     }

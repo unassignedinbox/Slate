@@ -262,7 +262,7 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     // undercut; hard beds keep their lip
     const softness = Math.pow(1 - smoothstep(0.3, 0.6, hard), bedPower);
     const notch = 0.3 + 0.7 * Math.sin(Math.PI * Math.pow(Math.min(1, Math.max(0, f)), 1.6));
-    const thickF = Math.pow(Math.min(1, thick / (band * 0.7)), 0.6);
+    const thickF = Math.pow(Math.min(1, thick / (band * 0.5)), 0.5);
     let soft = softness * notch * thickF;
     const n = 0.5 + 0.5 * ctx.pocket.fbm(x / pocketScale, y / (pocketScale * 0.6), z / pocketScale, 3, 2.1, 0.55);
     const pocket = smoothstep(0.32, 0.7, n);

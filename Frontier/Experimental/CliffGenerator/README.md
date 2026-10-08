@@ -53,7 +53,19 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    sets spaced like their thickness into blocky columns with the occasional fallen block, and the
    shader paints each bed from the same table (hard = pale/clean, soft = darker/warmer, plus the
    bed's tint, laminae and seams).
-3. **Erosion** (`src/erosion.js`) — thermal pre‑settle, Lagrangian droplet hydraulic erosion
+3. **Fluvial incision** (`src/fluvial.js`) — the stream‑power model ∂h/∂t = U − K·A^m·S + D∇²h
+   that gives real terrain its dendritic valleys. Rivers cut down in proportion to the water they
+   gather (drainage area A) and their slope, resistant beds lower K (knickpoints, benches),
+   hillslopes diffuse towards the channels and the massifs are uplifted a little so the relief
+   stays high while the valleys deepen. Solved with the Braun–Willett implicit scheme (cells
+   processed from the outlets upwards, closed form per cell, unconditionally stable) over a few
+   dozen long steps, re‑routing the water (priority‑flood fill + D8) every step. Closed basins
+   silt up towards their spill level (*Basin fill*) so most become flat valley floors drained by a
+   river and only the deepest survive as lakes; after the droplet erosion, hollows shallower than
+   *Silt up pits* are filled so the sediment fans do not dam the valleys into chains of ponds.
+   The simulated rivers then run in valleys they shaped themselves instead of being carved into an
+   unrelated surface.
+4. **Erosion** (`src/erosion.js`) — thermal pre‑settle, Lagrangian droplet hydraulic erosion
    (cutting scaled by hardness so cliff bands survive, deposition builds fans), then talus
    slumping with a hardness‑dependent repose angle → scree aprons beneath the faces.
    Outputs: height, deposit, flow (log accumulation), hardness, cavity, slope.
@@ -75,7 +87,7 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    river's grade. Drawn rivers are *guides*: carved first and injected as flow so the network
    passes through them. Flow and deposit maps pick the network up for shading (wet gullies, gravel
    beds).
-4. **Mesh** (`src/terrain-geometry.js`) — indexed grid with alternating diagonals, per‑vertex
+5. **Mesh** (`src/terrain-geometry.js`) — indexed grid with alternating diagonals, per‑vertex
    normals and an `aux` attribute `(deposit, flow, hardness, cavity)`; a skirt turns the tile
    into a cut block of ground. **Cliff depth**: steep vertices are displaced horizontally along
    the face normal — hard beds out, soft beds in, plus buttress/alcove noise — so the mesh has
@@ -94,7 +106,7 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    around the surface is sampled and polygonised; the fine roughness noise is band‑limited to ≥ 5
    voxels so it cannot alias into stair‑steps / "pancake" layers; the voxel size is either set
    explicitly or chosen automatically as the finest that fits a voxel budget (the HUD shows it).
-5. **Rocks** (`src/rock-geometry.js`, `src/rock-placement.js`) — eight archetypes per seed
+6. **Rocks** (`src/rock-geometry.js`, `src/rock-placement.js`) — eight archetypes per seed
    (boulder / block / slab / shard): displaced icosphere, anisotropic stretch, then clipped by
    bedding + joint‑set planes, crease‑aware normals. Placement is a plain scatter: jittered
    grid × density × slope window × clustering mask, power‑law sizes, slope‑following tilt and
@@ -102,7 +114,7 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    aprons and river beds (slope‑limited, never on roads or under water) so gravel is real
    geometry up close. Rendered as `InstancedMesh` with per‑instance tone variation and the same
    surface shader.
-6. **Surface** (`src/surface-shader.js`) — analytic, world‑space, texture‑free material injected
+7. **Surface** (`src/surface-shader.js`) — analytic, world‑space, texture‑free material injected
    into `MeshStandardMaterial` so Three's PBR, shadows, sky environment and fog still apply:
    - strata colour bands with dip, bed seams, oxide pockets, aggregate grain (3D value noise
      with analytic gradient);
@@ -123,7 +135,7 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
      vegetation on gentle ground, moss in concavities, slope‑limited snow above the snow line.
    All layers contribute height **and** an analytic gradient, combined triplanarly into one
    perturbed normal — no finite differences, no texture reads.
-7. **Drawn features** (`src/features.js`) — splines and points drawn in the viewport:
+8. **Drawn features** (`src/features.js`) — splines and points drawn in the viewport:
    - **rivers** (terrain stage): Catmull‑Rom line → meander → smoothed, monotone‑downhill bed
      profile (flowing from the higher end) → channel carved with sloped banks up to a bank
      height, gorge walls above that. Carved before hydraulic erosion, and a share of the droplets

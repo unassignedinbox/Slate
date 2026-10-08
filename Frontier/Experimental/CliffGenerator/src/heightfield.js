@@ -179,7 +179,7 @@ export function applyStrata(height, params, progress = () => {}, outcrop = null)
       const k = lerp(1.2, 9, hard);
       const fk = Math.pow(f, k);
       const fp = fk / (fk + Math.pow(1 - f, k));
-      const thin = smoothstep(0.1, 0.45, bed.thick / band);
+      const thin = smoothstep(0.08, 0.3, bed.thick / band);
       const terraced = (table.tops[bi] - bed.thick + lerp(f, fp, thin) * bed.thick) * jitter - tilt;
 
       const sm = smoothstep(slopeMaskLo, slopeMaskHi, slope[idx]);
