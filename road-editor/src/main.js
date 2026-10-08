@@ -314,6 +314,9 @@ const queueAutosave = () => {
 store.subscribe((tag) => {
   if (tag === 'project' || tag === 'project-live') {
     recompute(tag === 'project-live');
+    // Views subscribed before this handler repainted with stale topology;
+    // repaint the plan now that samples + topology are fresh.
+    plan.redraw();
     panels.renderMetrics();
     panels.renderStatus(lastCursor);
     queuePreview();

@@ -532,10 +532,14 @@ export function buildRailRun(S, side, offFn, gndFn, {roadId = null, railName = '
 }
 
 /* ── junction paving: fan from approach frames + skirt + paint ── */
-export function buildJunctionParts(ix, project, samples, terrain) {
-  const parts = [];
-  const legs = [...ix.legs].sort((a, b) => Math.atan2(a.dirx, -a.dirz) - Math.atan2(b.dirx, -b.dirz));
-  if (legs.length < 2) return parts;
+/**
+ * Pure junction patch shape: approach frames + pavement ring + surface.
+ * Shared by the 3D mesh builder and the plan view so both draw the same
+ * merged pavement. Returns null when no patch can form.
+ */
+export function junctionPatch(ix, project, samples, terrain) {
+  const legs = [...(ix.legs || [])].sort((a, b) => Math.atan2(a.dirx, -a.dirz) - Math.atan2(b.dirx, -b.dirz));
+  if (legs.length < 2) return null;
   const C = {x: ix.x, z: ix.z};
   const frames = [];
   for (const l of legs) {
@@ -551,7 +555,7 @@ export function buildJunctionParts(ix, project, samples, terrain) {
     }));
     frames.push({leg: l, road, smp, ctx, b, yC: ctx.crossY(b, yB, hr, 0), edges});
   }
-  if (frames.length < 2) return parts;
+  if (frames.length < 2) return null;
   const N = frames.length;
   // Per leg: the edge facing each neighbour corner (forced distinct).
   for (let i = 0; i < N; i++) {
@@ -583,7 +587,16 @@ export function buildJunctionParts(ix, project, samples, terrain) {
   }
   const yC = frames.reduce((a, f) => a + f.yC, 0) / N;
   const wide = [...frames].sort((a, b) => b.leg.halfW - a.leg.halfW)[0];
-  const surf = (SURFACES[wide.road.surface] || SURFACES.asphalt).road;
+  const surfId = wide.road.surface || 'asphalt';
+  const surf = (SURFACES[surfId] || SURFACES.asphalt).road;
+  return {ring, frames, surf, surfId, yC, C};
+}
+
+export function buildJunctionParts(ix, project, samples, terrain) {
+  const parts = [];
+  const patch = junctionPatch(ix, project, samples, terrain);
+  if (!patch) return parts;
+  const {ring, frames, surf, yC, C} = patch;
   const top = fanPart('junction-top', null, C.x, yC, C.z, ring, surf);
   if (top) { top.junction = ix.id; parts.push(top); }
   // Skirt hides any ribbon/patch seam.

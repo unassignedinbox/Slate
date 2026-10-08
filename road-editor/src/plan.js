@@ -3,7 +3,7 @@
    Tools: select / draw / pan. Space-drag pans in any tool.
    ════════════════════════════════════════════════════════════════════ */
 import {distToSegment} from './spline.js';
-import {SURFACES, baseWidth, pierStations} from './geometry.js';
+import {SURFACES, baseWidth, pierStations, junctionPatch} from './geometry.js';
 import {sampleAtStation} from './topology.js';
 import {effectivePoints, linkForPoint, setPointPosition, roadById} from './state.js';
 import {allocId, defaultRoad, downloadCanvasPNG} from './io.js';
@@ -393,25 +393,46 @@ export function createPlanView(canvas, store, env) {
 
   function drawTopology(topo) {
     if (!topo) return;
-    // Paved intersection discs.
+    // True paved intersection shapes — the same ring the 3D mesh paves, so
+    // crossing roads read as one fused surface here too.
+    const p = store.project;
+    const sampleMap = new Map();
+    for (const road of p.roads) {
+      const smp = env.getSamples(road.id);
+      if (smp) sampleMap.set(road.id, smp);
+    }
     for (const ix of topo.intersections || []) {
-      const [sx, sy] = w2s(ix.x, ix.z);
-      const r = ix.radius * cam.scale;
-      if (r < 6) continue;
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(38,40,45,.92)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(246,198,106,.55)'; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (const l of ix.legs) {
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(sx + l.dirx * r * 0.8, sy + l.dirz * r * 0.8);
+      const patch = junctionPatch(ix, p, sampleMap, null);
+      if (patch && patch.ring.length > 2) {
+        const pal = PLAN_SURFACE[patch.surfId] || PLAN_SURFACE.asphalt;
+        // Dark casing first (matches the ribbon under-fill language), then pavement.
+        for (const [fill, grow] of [['rgba(0,0,0,.9)', 0.35], [pal.road, 0]]) {
+          ctx.fillStyle = fill;
+          ctx.beginPath();
+          patch.ring.forEach((v, i) => {
+            let px = v.x, pz = v.z;
+            if (grow) {
+              const dx = v.x - patch.C.x, dz = v.z - patch.C.z;
+              const L = Math.hypot(dx, dz) || 1;
+              px += (dx / L) * grow; pz += (dz / L) * grow;
+            }
+            const [qx, qy] = w2s(px, pz);
+            if (i === 0) ctx.moveTo(qx, qy); else ctx.lineTo(qx, qy);
+          });
+          ctx.closePath(); ctx.fill();
+        }
       }
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(246,198,106,.95)';
-      ctx.font = '700 10px "Segoe UI",system-ui,sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText({cross: 'X', tee: 'T', merge: 'M', wye: 'Y', elbow: 'L', multi: '*'}[ix.kind] || '?', sx, sy);
+      // Compact kind badge (not a disc — the patch itself is the visual now).
+      const [sx, sy] = w2s(ix.x, ix.z);
+      if (ix.radius * cam.scale >= 6) {
+        ctx.beginPath(); ctx.arc(sx, sy, 9, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(20,21,24,.92)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(246,198,106,.8)'; ctx.lineWidth = 1.2; ctx.stroke();
+        ctx.fillStyle = 'rgba(246,198,106,.95)';
+        ctx.font = '700 10px "Segoe UI",system-ui,sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText({cross: 'X', tee: 'T', merge: 'M', wye: 'Y', elbow: 'L', multi: '*'}[ix.kind] || '?', sx, sy);
+      }
     }
     // Overpass markers (upper > lower, clearance).
     for (const o of topo.overpasses || []) {
