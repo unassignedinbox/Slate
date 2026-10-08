@@ -111,6 +111,8 @@ export const defaults = {
   sdfPits: 0.3,
   sdfJoints: 0.5,
   sdfRough: 0.5,
+  sdfPushPull: 2.5,         // [m]
+  sdfPushScale: 18,         // [m]
   sdfMaxChunks: 400,
   // Cliff depth (mesh displacement)
   overhang: 3.5,            // [m]
@@ -570,6 +572,8 @@ export const groups = [
         ['sdfJoints', 'Joints', 0, 1.5, 0.05, '', 'Near-vertical joint cuts and chimneys'],
         ['sdfPits', 'Pits', 0, 1, 0.05, '', 'Weathering hollows'],
         ['sdfRough', 'Roughness', 0, 1.5, 0.05, '', 'Fine 3D roughness on the carved faces'],
+        ['sdfPushPull', '3D push–pull', 0, 10, 0.25, 'm', 'Blocky buttresses stand out of the carved face and recesses go back into it, varying with height so blocks overhang the recess below (blockiness from Landform → Rugged outcrops)'],
+        ['sdfPushScale', 'Block scale', 4, 80, 1, 'm', 'Size of the 3D blocks'],
         ['sdfBlend', 'Blend margin', 1, 5, 1, 'cells', 'Cells over which the 3D field fades back to the plain heightfield'],
         ['sdfChunk', 'Chunk size', 8, 32, 8, 'cells', ''],
         ['sdfVoxel', 'Voxels per cell', 0, 3, 1, '', '0 = auto: the finest resolution that fits the voxel budget. 2 = voxels half the grid cell (8× the work), 3 = a third'],

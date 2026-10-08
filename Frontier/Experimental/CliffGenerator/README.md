@@ -45,7 +45,10 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    flat ground (valleys, rivers, plains) is never displaced. Applied to the base shape and again,
    finer, after erosion (which smears lateral structure) — the hardness and boulder maps ride along
    with the faces. Controls: push–pull distance, block scale, blockiness, levels, ledges, slope
-   threshold, after‑erosion share. **Boulder outcrops** (`src/outcrops.js`) — clusters of large core‑stones (tors, woolsacks,
+   threshold, after‑erosion share. The 3‑D cliff chunks carry the same idea into true 3‑D
+   (*Cliff depth → 3D push–pull*): a blocky noise that varies with height pushes buttresses out
+   of the carved face and cuts recesses back into it, so a block can overhang the recess below it
+   — real XZ push–pull with overhangs, not just contour wiggles. **Boulder outcrops** (`src/outcrops.js`) — clusters of large core‑stones (tors, woolsacks,
    "encampments") are unioned into the relief *before* strata and erosion: superellipsoid stones
    with a plan rotation, a low‑frequency bulge and a burial depth, in clusters on a site grid
    filtered by slope and biased to ridges / hill tops. They come out as a landform the rest of the

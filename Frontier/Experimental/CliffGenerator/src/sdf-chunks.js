@@ -162,7 +162,16 @@ export function carveReach(v) {
   const undercut = Math.max(0, v.sdfUndercut == null ? 6 : v.sdfUndercut);
   const pits = v.sdfPits == null ? 0.3 : v.sdfPits, joints = v.sdfJoints == null ? 0.5 : v.sdfJoints;
   const detail = (v.detailRelief || 0) + (v.rockyAmount || 0) + (v.cragAmount || 0);
-  return undercut * (1 + 0.5 * pits + 0.9 * joints) + 1.5 + detail;
+  return undercut * (1 + 0.5 * pits + 0.9 * joints) + 1.5 + detail + Math.max(0, v.sdfPushPull || 0);
+}
+
+function stair(v, steps, sharp) {
+  const s = v * steps, f = s - Math.floor(s), e = 0.5 - 0.5 * sharp;
+  return (Math.floor(s) + smoothstep(e, 1 - e, f)) / steps;
+}
+function blockify(v, steps, sharp) {
+  const t = Math.min(1, Math.max(0, (v + 1) * 0.5));
+  return stair(t, steps, sharp) * 2 - 1;
 }
 
 // ---- strata hardness at a 3-D point (same model as heightfield.applyStrata) -----------------------
@@ -205,6 +214,7 @@ export function makeChunkContext(v) {
     pocket: new GradientNoise3((v.seed || 1) * 41 + 9),
     joint: new SimplexNoise((v.seed || 1) * 23 + 5),
     rough: new GradientNoise3((v.seed || 1) * 31 + 11),
+    push: new GradientNoise3((v.seed || 1) * 37 + 29),
   };
 }
 
@@ -247,7 +257,12 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   // the same rocky facets / crags / relief as the heightfield mesh, evaluated in 3-D on the carved
   // faces (feature size clamped to ≥ 2.5 voxels so blocks cannot alias into voxel steps)
   const detail = makeDetail({ worldSize: size, resolution: N }, { ...v, detailRelief: 0 }, { minScale: vox * 2.5, limit: 1e9 }); // fbm relief is already there as `rough`
-  const bump = roughAmp + detail.amp;
+  // true 3-D push–pull: blocky buttresses stand out of the face (negative carve = outward) and
+  // recesses go back into it, varying with height so a block can overhang the recess below it
+  const pushAmp = Math.max(0, v.sdfPushPull || 0);
+  const pushL = Math.max(vox * 4, v.sdfPushScale || 18);
+  const pushBlock = Math.min(1, Math.max(0, v.ruggedBlockiness == null ? 0.7 : v.ruggedBlockiness));
+  const bump = roughAmp + detail.amp + pushAmp;
   const maxCarve = carveReach(v);
   // everything that depends on the plan position only
   function column(x, z) {
@@ -285,7 +300,12 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     // embedded boulders are massive rock: no bedding undercuts, spheroidal weathering only
     if (col.oc > 0) { soft *= 1 - col.oc; joint *= 1 - col.oc * 0.5; }
     const det = detail.amp > 0 ? detail.at(x, y, z, 1 / col.slopeF, hard) : 0;
-    const d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + fallen * 0.9 + pit * 0.5 + col.oc * 0.12 * pocket) + rough - det;
+    let push = 0;
+    if (pushAmp > 0) {
+      const pn = ctx.push.fbm(x / pushL, y / (pushL * 0.55), z / pushL, 2, 2.1, 0.5) * 1.4;
+      push = pushAmp * ((1 - pushBlock) * pn + pushBlock * blockify(pn, 3, 0.75)) * (1 - col.oc * 0.7);
+    }
+    const d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + fallen * 0.9 + pit * 0.5 + col.oc * 0.12 * pocket) + rough - det - push;
     return d * col.steep * col.w;
   }
   function fCol(col, y) {
