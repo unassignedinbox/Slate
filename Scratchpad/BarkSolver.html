@@ -1,0 +1,2709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slate — BarkSolver</title>
+<style>
+:root{
+    --bg:#050505; --panel:#121212; --inset:#1a1a1a; --field:#000000; --raised:#222222; --selected:#2a2a2a;
+    --stroke:rgba(255,255,255,.05); --stroke-strong:#2e2e2e;
+    --text:#f0f0f0; --text-dim:#888888; --text-faint:#5c5c5c;
+    --accent:#ffffff; --accent-soft:rgba(255,255,255,.12); --hi:#6c77ff; --danger:#ef4444; --ok:#22c55e;
+    --r-panel:24px; --r-inset:18px; --r-pill:999px; --ctl-h:34px;
+    --ease:cubic-bezier(.22,.61,.36,1);
+    --shadow-panel:0 20px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.03);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+    background:var(--bg); color:var(--text); font-size:13px;
+    font-family:'Segoe UI',Roboto,system-ui,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; user-select:none;
+}
+#stage{position:fixed;inset:0;width:100%;height:100%;display:block;background:#07070a}
+
+.readout{
+    position:fixed; left:20px; top:20px; z-index:5; pointer-events:none;
+    background:rgba(18,18,18,.82); border:1px solid var(--stroke-strong); border-radius:var(--r-inset);
+    padding:12px 14px; min-width:210px; backdrop-filter:blur(14px); box-shadow:var(--shadow-panel);
+}
+.readout h1{font-size:12px; font-weight:600; letter-spacing:.9px; text-transform:uppercase; color:var(--text)}
+.readout .sub{font-size:11px; color:var(--text-faint); margin-bottom:9px}
+.readout dl{display:grid; grid-template-columns:auto auto; gap:3px 14px; font-size:11.5px}
+.readout dt{color:var(--text-dim)}
+.readout dd{text-align:right; font-variant-numeric:tabular-nums; color:var(--text)}
+.readout dd.on{color:var(--ok)} .readout dd.warn{color:#eab308}
+
+.panel{
+    position:fixed; right:20px; top:20px; bottom:20px; width:314px; z-index:6;
+    background:rgba(18,18,18,.90); border:1px solid var(--stroke-strong); border-radius:var(--r-panel);
+    box-shadow:var(--shadow-panel); backdrop-filter:blur(18px);
+    display:flex; flex-direction:column; overflow:hidden;
+}
+.panel header{
+    padding:16px 18px 13px; border-bottom:1px solid var(--stroke); flex:0 0 auto;
+}
+.panel header .t{font-size:13.5px; font-weight:600; letter-spacing:.3px}
+.panel header .s{font-size:11px; color:var(--text-faint); margin-top:2px}
+.panel .scroll{overflow-y:auto; overflow-x:hidden; flex:1 1 auto; padding:6px 0 12px}
+.panel .scroll::-webkit-scrollbar{width:9px}
+.panel .scroll::-webkit-scrollbar-thumb{background:#2e2e2e; border-radius:9px; border:3px solid transparent; background-clip:content-box}
+
+.sec{padding:12px 18px 4px}
+.sec+.sec{border-top:1px solid var(--stroke)}
+.sec>.h{font-size:10px; font-weight:600; letter-spacing:1.1px; text-transform:uppercase; color:var(--text-faint); margin-bottom:9px}
+
+.field{margin-bottom:9px}
+.field>.lab{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px; font-size:11.5px; color:var(--text-dim)}
+.field>.lab b{color:var(--text); font-weight:500; font-variant-numeric:tabular-nums}
+select,input[type=range]{width:100%; display:block}
+select{
+    height:var(--ctl-h); background:var(--field); color:var(--text);
+    border:1px solid var(--stroke-strong); border-radius:var(--r-pill);
+    padding:0 12px; font:inherit; font-size:12px; outline:none; cursor:pointer; appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,#888 50%),linear-gradient(135deg,#888 50%,transparent 50%);
+    background-position:calc(100% - 16px) 15px, calc(100% - 11px) 15px;
+    background-size:5px 5px,5px 5px; background-repeat:no-repeat;
+}
+select:focus{border-color:var(--hi)}
+input[type=range]{
+    -webkit-appearance:none; appearance:none; height:18px; background:transparent; cursor:pointer; margin:0;
+}
+input[type=range]::-webkit-slider-runnable-track{height:3px; background:var(--stroke-strong); border-radius:3px}
+input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:13px; height:13px; margin-top:-5px; border-radius:50%;
+    background:var(--text); border:none; transition:background .12s var(--ease);
+}
+input[type=range]:hover::-webkit-slider-thumb{background:var(--hi)}
+input[type=range]::-moz-range-track{height:3px; background:var(--stroke-strong); border-radius:3px}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border:none;border-radius:50%;background:var(--text)}
+
+.seg{display:flex; background:var(--field); border:1px solid var(--stroke-strong); border-radius:var(--r-pill); padding:3px; gap:3px}
+.seg button{
+    flex:1 1 0; min-width:0; height:28px; border:0; border-radius:var(--r-pill); background:transparent;
+    color:var(--text-dim); font:inherit; font-size:11.5px; cursor:pointer; transition:all .14s var(--ease); white-space:nowrap;
+}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:var(--hi); color:#fff; box-shadow:0 0 12px rgba(108,119,255,.55)}
+.seg button:disabled{opacity:.35; cursor:not-allowed}
+
+.btn{
+    width:100%; height:var(--ctl-h); border-radius:var(--r-pill); border:1px solid var(--stroke-strong);
+    background:var(--inset); color:var(--text); font:inherit; font-size:12px; cursor:pointer;
+    transition:all .14s var(--ease); margin-bottom:7px;
+}
+.btn:hover{background:var(--raised); border-color:#3d3d3d}
+.btn.primary{background:var(--hi); border-color:var(--hi); color:#fff; font-weight:500}
+.btn.primary:hover{filter:brightness(1.12)}
+.btn:disabled{opacity:.45; cursor:not-allowed}
+.row2{display:grid; grid-template-columns:1fr 1fr; gap:7px}
+.row2 .btn{margin-bottom:0}
+.btn.ghost{background:transparent}
+
+.note{font-size:10.5px; line-height:1.5; color:var(--text-faint); padding:2px 0 6px}
+
+.strip{
+    position:fixed; left:20px; bottom:20px; z-index:5; display:flex; gap:10px; align-items:flex-end;
+}
+.strip figure{
+    background:rgba(18,18,18,.82); border:1px solid var(--stroke-strong); border-radius:14px; padding:8px;
+    backdrop-filter:blur(14px); box-shadow:var(--shadow-panel); margin:0;
+}
+.strip figcaption{font-size:10px; color:var(--text-faint); margin-bottom:6px; letter-spacing:.7px; text-transform:uppercase}
+.strip img{display:block; width:132px; height:132px; border-radius:8px; background:#000; image-rendering:auto}
+.strip.small img{width:86px;height:86px}
+
+#veil{
+    position:fixed; inset:0; z-index:20; background:rgba(5,5,5,.72); backdrop-filter:blur(3px);
+    display:none; align-items:center; justify-content:center; font-size:12.5px; color:var(--text-dim);
+}
+#veil.on{display:flex}
+.err{
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:30; max-width:620px;
+    background:#2a1111; border:1px solid var(--danger); color:#fecaca; border-radius:12px;
+    padding:10px 14px; font-size:11.5px; display:none; white-space:pre-wrap;
+}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div class="readout">
+    <h1>BarkSolver</h1>
+    <div class="sub" id="ro-species">—</div>
+    <dl id="ro-list"></dl>
+</div>
+
+<div class="panel">
+    <header>
+        <div class="t">Bark&nbsp;Specification</div>
+        <div class="s">Simulated pieces → clustered → baked</div>
+    </header>
+    <div class="scroll" id="panel-scroll"></div>
+</div>
+
+<div class="strip" id="strip"></div>
+<div id="veil">working…</div>
+<div class="err" id="err"></div>
+
+<script type="module">
+// ============================================================================================================================================================
+//  Slate :: BarkSolver  —  procedural bark built from simulated pieces
+//
+//  Method (three stages, in order):
+//    1. BarkSpecification  — declares the physical recipe, one preset per species.
+//    2. ClusterSolver      — scatters cluster centres, then fills each cluster with a jittered lattice of seeds.
+//    3. PieceStructure     — grows one solid plate per seed: a Voronoi cell, inset by the fissure gap, lifted and
+//                            curled, with side walls dropping back to the trunk surface.
+//    4. UVProjection       — rasterises every plate into the trunk's UV frame to yield albedo / normal / ORM,
+//                            so the result can be used as an ordinary baked texture.
+//
+//  Units are metres, Z-up, throughout. The solver works in a periodic strip  x ∈ [0, W)  (W = reference circumference)
+//  and y ∈ [0, H] (height up the trunk). u = x / W, v = y / H.
+// ============================================================================================================================================================
+// ==CORE-BEGIN==
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  NoiseField — deterministic hashing, value noise and a seeded PRNG. No Math.random anywhere in the solver.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+export const NoiseField =
+{
+    random(seed)
+    {
+        let a = (seed >>> 0) || 1;
+        return function ()
+        {
+            a = (a + 0x6D2B79F5) >>> 0;
+            let t = a;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    },
+
+    hash(x, y, seed)
+    {
+        let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(seed | 0, 1274126177);
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        h ^= h >>> 16;
+        return (h >>> 0) / 4294967296;
+    },
+
+    // Value noise on a unit lattice, smoothstep interpolated. Returns [-1, 1].
+    value(x, y, seed)
+    {
+        const xi = Math.floor(x), yi = Math.floor(y);
+        const xf = x - xi, yf = y - yi;
+        const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+        const a = this.hash(xi, yi, seed), b = this.hash(xi + 1, yi, seed);
+        const c = this.hash(xi, yi + 1, seed), d = this.hash(xi + 1, yi + 1, seed);
+        const top = a + (b - a) * u, bot = c + (d - c) * u;
+        return (top + (bot - top) * v) * 2 - 1;
+    },
+
+    fbm(x, y, seed, octaves)
+    {
+        let sum = 0, amp = 1, norm = 0, f = 1;
+        for (let i = 0; i < octaves; i++)
+        {
+            sum += this.value(x * f, y * f, seed + i * 7919) * amp;
+            norm += amp;
+            amp *= 0.5;
+            f *= 2.03;
+        }
+        return sum / norm;
+    }
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  Small numeric helpers
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+const TWO_PI = Math.PI * 2;
+
+function Clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+function Lerp(a, b, t) { return a + (b - a) * t; }
+function Smoothstep(e0, e1, x) { const t = Clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+
+// Wrap a signed offset into [-period/2, period/2]. This is what makes the strip periodic in x.
+function WrapOffset(d, period)
+{
+    return d - period * Math.round(d / period);
+}
+
+function HexToRgb(hex)
+{
+    const n = parseInt(hex.replace('#', ''), 16);
+    return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+}
+
+function RgbToHex(r, g, b)
+{
+    const c = (v) => Clamp(Math.round(v * 255), 0, 255).toString(16).padStart(2, '0');
+    return '#' + c(r) + c(g) + c(b);
+}
+
+function PolygonArea(poly)
+{
+    let a = 0;
+    for (let i = 0, n = poly.length; i < n; i++)
+    {
+        const p = poly[i], q = poly[(i + 1) % n];
+        a += p[0] * q[1] - q[0] * p[1];
+    }
+    return a * 0.5;
+}
+
+function PolygonCentroid(poly)
+{
+    let cx = 0, cy = 0, a = 0;
+    for (let i = 0, n = poly.length; i < n; i++)
+    {
+        const p = poly[i], q = poly[(i + 1) % n];
+        const f = p[0] * q[1] - q[0] * p[1];
+        a += f; cx += (p[0] + q[0]) * f; cy += (p[1] + q[1]) * f;
+    }
+    if (Math.abs(a) < 1e-20) return [poly[0][0], poly[0][1]];
+    a *= 0.5;
+    return [cx / (6 * a), cy / (6 * a)];
+}
+
+function BoundsOf(poly)
+{
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of poly)
+    {
+        if (p[0] < x0) x0 = p[0];
+        if (p[1] < y0) y0 = p[1];
+        if (p[0] > x1) x1 = p[0];
+        if (p[1] > y1) y1 = p[1];
+    }
+    return { x0, y0, x1, y1 };
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  BarkSpecification — the recipe. `stretch` is the x:y cell aspect (spacingX / spacingY); the geometric mean cell
+//  size is held constant as `spacing` so that changing the aspect never changes the piece density.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+export const BarkSpecification =
+{
+    presets:
+    [
+        {
+            key: 'birch', label: 'Birch',
+            note: 'Papery horizontal strips, curled ends, dark lenticel rows.',
+            stretch: 6.0, spacing: 0.020, jitter: 0.55,
+            thickness: 0.0012, thicknessJitter: 0.35, gap: 0.0016, roughen: 0.50,
+            curlMode: 'endCurl', curlAmount: 0.90,
+            clusterSize: 0.060, clusterSpread: 0.45, clusterSeparation: 0.80, clusterTwist: 0.35,
+            bareChance: 0.06, voidChance: 0.10, coverage: 0.94, coverageSpread: 0.10,
+            relaxIterations: 2, relaxStrength: 0.30,
+            outerTop: '#ece7dc', outerSide: '#c9c0ae', inner: '#7d6042',
+            roughTop: 0.72, roughSide: 0.86, roughInner: 0.95,
+            grainDirection: 'x', grainScale: 0.010, grainStrength: 0.16, speckle: 0.05,
+            lenticels: { rows: 15, perRow: 9, width: 0.0060, height: 0.0016, lift: 0.0015, color: '#332c22', rough: 0.55 }
+        },
+        {
+            key: 'scotsPine', label: 'Scots Pine',
+            note: 'Large thick irregular plates separated by deep fissures.',
+            stretch: 0.9, spacing: 0.055, jitter: 0.70,
+            thickness: 0.0060, thicknessJitter: 0.45, gap: 0.0045, roughen: 0.70,
+            curlMode: 'dome', curlAmount: 0.50,
+            clusterSize: 0.160, clusterSpread: 0.40, clusterSeparation: 0.70, clusterTwist: 1.20,
+            bareChance: 0.10, voidChance: 0.06, coverage: 0.95, coverageSpread: 0.12,
+            relaxIterations: 2, relaxStrength: 0.35,
+            outerTop: '#965f3a', outerSide: '#6d462a', inner: '#3a2416',
+            roughTop: 0.88, roughSide: 0.94, roughInner: 0.97,
+            grainDirection: 'y', grainScale: 0.014, grainStrength: 0.22, speckle: 0.08,
+            lenticels: null
+        },
+        {
+            key: 'oak', label: 'Oak',
+            note: 'Vertical blocky ridges divided by deep furrows.',
+            stretch: 0.5, spacing: 0.030, jitter: 0.60,
+            thickness: 0.0050, thicknessJitter: 0.40, gap: 0.0032, roughen: 0.60,
+            curlMode: 'ridgeV', curlAmount: 0.60,
+            clusterSize: 0.090, clusterSpread: 0.45, clusterSeparation: 0.78, clusterTwist: 0.30,
+            bareChance: 0.07, voidChance: 0.07, coverage: 0.95, coverageSpread: 0.10,
+            relaxIterations: 2, relaxStrength: 0.30,
+            outerTop: '#6f5c45', outerSide: '#4e3f2f', inner: '#2b2216',
+            roughTop: 0.84, roughSide: 0.92, roughInner: 0.96,
+            grainDirection: 'y', grainScale: 0.009, grainStrength: 0.26, speckle: 0.06,
+            lenticels: null
+        },
+        {
+            key: 'sycamore', label: 'Sycamore / London Plane',
+            note: 'Small thin curling flakes flaking off pale inner bark.',
+            stretch: 1.0, spacing: 0.022, jitter: 0.75,
+            thickness: 0.0018, thicknessJitter: 0.40, gap: 0.0022, roughen: 0.80,
+            curlMode: 'edgeCurl', curlAmount: 1.10,
+            clusterSize: 0.050, clusterSpread: 0.50, clusterSeparation: 0.85, clusterTwist: 1.40,
+            bareChance: 0.30, voidChance: 0.16, coverage: 0.88, coverageSpread: 0.16,
+            relaxIterations: 2, relaxStrength: 0.30,
+            outerTop: '#7e6a51', outerSide: '#5b4c39', inner: '#cbc0a6',
+            roughTop: 0.80, roughSide: 0.90, roughInner: 0.70,
+            grainDirection: 'x', grainScale: 0.007, grainStrength: 0.20, speckle: 0.07,
+            lenticels: null
+        },
+        {
+            key: 'cherry', label: 'Cherry',
+            note: 'Glossy thin horizontal peel with dark lenticel dashes.',
+            stretch: 4.0, spacing: 0.026, jitter: 0.45,
+            thickness: 0.0009, thicknessJitter: 0.30, gap: 0.0014, roughen: 0.35,
+            curlMode: 'endCurl', curlAmount: 0.80,
+            clusterSize: 0.070, clusterSpread: 0.40, clusterSeparation: 0.82, clusterTwist: 0.25,
+            bareChance: 0.10, voidChance: 0.08, coverage: 0.95, coverageSpread: 0.09,
+            relaxIterations: 2, relaxStrength: 0.30,
+            outerTop: '#73452f', outerSide: '#51301f', inner: '#2f1d13',
+            roughTop: 0.42, roughSide: 0.62, roughInner: 0.80,
+            grainDirection: 'x', grainScale: 0.011, grainStrength: 0.13, speckle: 0.035,
+            lenticels: { rows: 12, perRow: 8, width: 0.0080, height: 0.0022, lift: 0.0012, color: '#211710', rough: 0.38 }
+        },
+        {
+            key: 'ribbonGum', label: 'Ribbon Gum',
+            note: 'Long vertical curled ribbons over smooth pale inner bark.',
+            stretch: 0.12, spacing: 0.090, jitter: 0.40,
+            thickness: 0.0022, thicknessJitter: 0.35, gap: 0.0040, roughen: 0.55,
+            curlMode: 'edgeCurl', curlAmount: 1.60,
+            clusterSize: 0.120, clusterSpread: 0.35, clusterSeparation: 0.90, clusterTwist: 0.18,
+            bareChance: 0.22, voidChance: 0.18, coverage: 0.93, coverageSpread: 0.12,
+            relaxIterations: 2, relaxStrength: 0.28,
+            outerTop: '#9c8b73', outerSide: '#77694f', inner: '#d9d0c1',
+            roughTop: 0.74, roughSide: 0.86, roughInner: 0.52,
+            grainDirection: 'y', grainScale: 0.020, grainStrength: 0.14, speckle: 0.04,
+            lenticels: null
+        }
+    ],
+
+    find(key) { return this.presets.find((p) => p.key === key) || this.presets[0]; },
+
+    // Merge a preset with the live panel overrides.
+    resolve(key, over)
+    {
+        return Object.assign({}, this.find(key), over || {});
+    }
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  TrunkStructure — a small Z-up trunk. Radius tapers from base to top with a slight flare at the ground.
+//  The solver's periodic strip is x ∈ [0, W) with W the circumference at mid height, y ∈ [0, H].
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+export const TrunkStructure =
+{
+    defaults:
+    {
+        rBase: 0.140, rTop: 0.110, height: 0.600,
+        taper: 1.0, flare: 0.025, flareFall: 0.050,
+        radialSegments: 96, ringCount: 28
+    },
+
+    build(config)
+    {
+        const c = Object.assign({}, this.defaults, config || {});
+        const H = c.height;
+
+        const radiusAt = (z) =>
+            c.rTop + (c.rBase - c.rTop) * Math.pow(Clamp(1 - z / H, 0, 1), c.taper)
+                   + c.flare * Math.exp(-Math.max(z, 0) / c.flareFall);
+
+        const slopeAt = (z) =>
+        {
+            const e = 1e-4;
+            return (radiusAt(z + e) - radiusAt(z - e)) / (2 * e);
+        };
+
+        const rRef = radiusAt(H * 0.5);
+        const W = TWO_PI * rRef;
+
+        const rings = c.ringCount;
+        const cols = c.radialSegments;
+        const positions = new Float32Array((rings + 1) * (cols + 1) * 3);
+        const normals = new Float32Array((rings + 1) * (cols + 1) * 3);
+        const uvs = new Float32Array((rings + 1) * (cols + 1) * 2);
+        const indices = new Uint32Array(rings * cols * 6);
+
+        let p = 0, n = 0, t = 0;
+        for (let j = 0; j <= rings; j++)
+        {
+            const v = j / rings;
+            const z = v * H;
+            const r = radiusAt(z);
+            const rp = slopeAt(z);
+            const inv = 1 / Math.sqrt(1 + rp * rp);
+            for (let i = 0; i <= cols; i++)
+            {
+                const u = i / cols;
+                const a = u * TWO_PI;
+                const ca = Math.cos(a), sa = Math.sin(a);
+                positions[p++] = r * ca;
+                positions[p++] = r * sa;
+                positions[p++] = z;
+                normals[n++] = ca * inv;
+                normals[n++] = sa * inv;
+                normals[n++] = -rp * inv;
+                uvs[t++] = u;
+                uvs[t++] = v;
+            }
+        }
+
+        let k = 0;
+        const row = cols + 1;
+        for (let j = 0; j < rings; j++)
+        {
+            for (let i = 0; i < cols; i++)
+            {
+                const a = j * row + i, b = a + 1, cc = a + row, d = cc + 1;
+                indices[k++] = a; indices[k++] = cc; indices[k++] = b;
+                indices[k++] = b; indices[k++] = cc; indices[k++] = d;
+            }
+        }
+
+        return {
+            config: c, height: H, width: W, rRef,
+            radiusAt, slopeAt,
+            positions, normals, uvs, indices,
+            vertexCount: (rings + 1) * (cols + 1),
+            indexCount: rings * cols * 6
+        };
+    }
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  PieceIndex — uniform bucket lookup over the periodic strip. Used for nearest-neighbour queries during
+//  Voronoi construction and Lloyd relaxation.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+export class PieceIndex
+{
+    // Buckets span x ∈ [0, width) periodically and y ∈ [-yPad, height + yPad]. The y padding matters:
+    // seeds legitimately sit slightly outside the trunk band, and if they were clamped into the edge
+    // rows the neighbour search would miss them and hand back truncated cells.
+    constructor(width, height, cellW, cellH, capacity, yPad)
+    {
+        this.width = width;
+        this.height = height;
+        this.yPad = Math.max(0, yPad || 0);
+        this.yMin = -this.yPad;
+        this.ySpan = height + this.yPad * 2;
+        this.cellW = Math.max(cellW, 1e-4);
+        this.cellH = Math.max(cellH, 1e-4);
+        this.nx = Math.max(1, Math.round(width / this.cellW));
+        this.ny = Math.max(1, Math.round(this.ySpan / this.cellH));
+        this.cellW = width / this.nx;
+        this.cellH = this.ySpan / this.ny;
+        this.buckets = new Array(this.nx * this.ny);
+        for (let i = 0; i < this.buckets.length; i++) this.buckets[i] = [];
+        this.items = [];
+        this.items.length = 0;
+        this.reserve = capacity || 0;
+    }
+
+    insert(x, y)
+    {
+        const ix = ((Math.floor(x / this.cellW) % this.nx) + this.nx) % this.nx;
+        const iy = Clamp(Math.floor((y - this.yMin) / this.cellH), 0, this.ny - 1);
+        const id = this.items.length >> 1;
+        this.items.push(x, y);
+        this.buckets[iy * this.nx + ix].push(id);
+        return id;
+    }
+
+    // Every item inside `radius`, in arbitrary order (periodic in x). Returns -1 if `capacity` is too small.
+    // Sorting is left to the caller, which only ever needs the nearest few.
+    collect(x, y, radius, outId, outD2, capacity)
+    {
+        let n = 0;
+        const r2 = radius * radius;
+        const spanX = Math.ceil(radius / this.cellW) + 1;
+        const cx = Math.floor(x / this.cellW);
+        const cy = Math.floor((y - this.yMin) / this.cellH);
+        const iy0 = Clamp(cy - Math.ceil(radius / this.cellH) - 1, 0, this.ny - 1);
+        const iy1 = Clamp(cy + Math.ceil(radius / this.cellH) + 1, 0, this.ny - 1);
+
+        // Once the radius reaches half the circumference, walking ±spanX columns would wrap past the
+        // starting column and visit every bucket more than once — double counting the whole seed set.
+        const fullSweep = (spanX * 2 + 1 >= this.nx);
+
+        for (let j = iy0; j <= iy1; j++)
+        {
+            const rowBase = j * this.nx;
+            if (fullSweep)
+            {
+                for (let ix = 0; ix < this.nx; ix++)
+                {
+                    n = this.scan(rowBase + ix, x, y, r2, outId, outD2, capacity, n);
+                    if (n < 0) return -1;
+                }
+            }
+            else
+            {
+                for (let t = -spanX; t <= spanX; t++)
+                {
+                    const ix = ((cx + t) % this.nx + this.nx) % this.nx;
+                    n = this.scan(rowBase + ix, x, y, r2, outId, outD2, capacity, n);
+                    if (n < 0) return -1;
+                }
+            }
+        }
+        return n;
+    }
+
+    scan(bucket, x, y, r2, outId, outD2, capacity, n)
+    {
+        const list = this.buckets[bucket];
+        for (let b = 0; b < list.length; b++)
+        {
+            const id = list[b];
+            const dx = WrapOffset(this.items[id * 2] - x, this.width);
+            const dy = this.items[id * 2 + 1] - y;
+            const d2 = dx * dx + dy * dy;
+            if (!(d2 <= r2)) continue;
+            if (n >= capacity) return -1;
+            outD2[n] = d2; outId[n] = id;
+            n++;
+        }
+        return n;
+    }
+
+    nearest(x, y, radius)
+    {
+        for (let attempt = 0; attempt < 8; attempt++)
+        {
+            const k = this.collect(x, y, radius, _nearId, _nearD2, _nearId.length);
+            if (k >= 0)
+            {
+                if (k === 0) return -1;
+                let best = 0;
+                for (let i = 1; i < k; i++) if (_nearD2[i] < _nearD2[best]) best = i;
+                return _nearId[best];
+            }
+            _nearId = new Int32Array(_nearId.length * 4);
+            _nearD2 = new Float64Array(_nearId.length);
+        }
+        return -1;
+    }
+}
+
+// Reusable scratch for the neighbour queries. Single threaded and never re-entered.
+let _candId = new Int32Array(1024);
+let _candD2 = new Float64Array(1024);
+let _candBucket = new Int32Array(1024);
+let _orderId = new Int32Array(1024);
+let _orderD2 = new Float64Array(1024);
+let _nearId = new Int32Array(256);
+let _nearD2 = new Float64Array(256);
+
+const BUCKET_COUNT = 256;
+const _bucketEnd = new Int32Array(BUCKET_COUNT);
+const _bucketFill = new Int32Array(BUCKET_COUNT + 1);
+
+function EnsureCandidateRoom(n)
+{
+    if (_candId.length < n)
+    {
+        _candId = new Int32Array(n);
+        _candD2 = new Float64Array(n);
+        _candBucket = new Int32Array(n);
+        _orderId = new Int32Array(n);
+        _orderD2 = new Float64Array(n);
+    }
+}
+
+// Counting sort of the collected candidates into ascending distance order, bucketed by d².
+//
+// Each clip adds a vertex to the cell and removes few, so the cost of building a cell is roughly
+// (number of clips)². Getting the neighbours into distance order in one O(k) pass — without the
+// restart-on-limit-growth that would otherwise redo every clip — is what keeps that number small.
+function OrderCandidates(k, radius)
+{
+    const scale = BUCKET_COUNT / (radius * radius);
+    _bucketFill.fill(0);
+    for (let i = 0; i < k; i++)
+    {
+        let b = (_candD2[i] * scale) | 0;
+        if (b >= BUCKET_COUNT) b = BUCKET_COUNT - 1;
+        if (b < 0) b = 0;
+        _candBucket[i] = b;
+        _bucketFill[b + 1]++;
+    }
+    for (let b = 0; b < BUCKET_COUNT; b++) _bucketFill[b + 1] += _bucketFill[b];
+    for (let b = 0; b < BUCKET_COUNT; b++) _bucketEnd[b] = _bucketFill[b + 1];
+    for (let i = 0; i < k; i++)
+    {
+        const p = _bucketFill[_candBucket[i]]++;
+        _orderId[p] = _candId[i];
+        _orderD2[p] = _candD2[i];
+    }
+    return scale;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  Half-plane clipping. `ClipKeepLess` retains p·n <= t; passing negated n and t gives the complementary half-plane.
+//  Both preserve winding order.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+function ClipKeepLess(poly, nx, ny, t)
+{
+    const n = poly.length;
+    if (n === 0) return poly;
+    const out = [];
+    for (let i = 0; i < n; i++)
+    {
+        const a = poly[i], b = poly[(i + 1) % n];
+        const da = a[0] * nx + a[1] * ny - t;
+        const db = b[0] * nx + b[1] * ny - t;
+        if (da <= 0) out.push(a);
+        if ((da < 0 && db > 0) || (da > 0 && db < 0))
+        {
+            const s = da / (da - db);
+            out.push([a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s]);
+        }
+    }
+    return out;
+}
+
+function ClipToBandY(poly, y0, y1)
+{
+    return ClipKeepLess(ClipKeepLess(poly, 0, -1, -y0), 0, 1, y1);
+}
+
+// Shrink a convex CCW polygon inward by `d`. Implemented as a half-plane clip per edge, so it degrades
+// gracefully (returning an empty polygon) when d exceeds the inradius.
+function InsetConvexPolygon(poly, d)
+{
+    let out = poly;
+    const n = poly.length;
+    for (let i = 0; i < n; i++)
+    {
+        const a = poly[i], b = poly[(i + 1) % n];
+        const ex = b[0] - a[0], ey = b[1] - a[1];
+        const len = Math.hypot(ex, ey);
+        if (len < 1e-12) continue;
+        // Inward normal of a CCW edge.
+        const nx = -ey / len, ny = ex / len;
+        // Interior test is p·n >= a·n + d; express it as a "keep less" clip.
+        const t = -(a[0] * nx + a[1] * ny + d);
+        out = ClipKeepLess(out, -nx, -ny, t);
+        if (out.length < 3) return [];
+    }
+    return out;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  ClusterSolver — stage 2. Cluster centres by dart throwing with a non-overlap tolerance, then a jittered
+//  lattice of seeds inside each cluster. Some clusters are marked bare (bark flaked away, inner bark showing).
+//  Lloyd relaxation evens out cell sizes without destroying the clustered character.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+export const ClusterSolver =
+{
+    solve(spec, domain, seed)
+    {
+        const W = domain.width, H = domain.height;
+        const roll = NoiseField.random(seed);
+        const spacingX = spec.spacing * Math.sqrt(spec.stretch);
+        const spacingY = spec.spacing / Math.sqrt(spec.stretch);
+        const maxCell = Math.max(spacingX, spacingY);
+        const minSpacing = Math.min(spacingX, spacingY);
+
+        // --- cluster centres ------------------------------------------------------------------
+        const clusters = [];
+        const attempts = 5000;
+        const maxClusters = 600;
+        for (let a = 0; a < attempts && clusters.length < maxClusters; a++)
+        {
+            const radius = Math.max(0.35 * spec.clusterSize,
+                spec.clusterSize * (1 + spec.clusterSpread * (roll() * 2 - 1)));
+            const x = roll() * W;
+            const y = Lerp(-0.25 * radius, H + 0.25 * radius, roll());
+            let ok = true;
+            for (let c = 0; c < clusters.length; c++)
+            {
+                const o = clusters[c];
+                const dx = WrapOffset(o.x - x, W);
+                const dy = o.y - y;
+                const need = (radius + o.radius) * spec.clusterSeparation;
+                if (dx * dx + dy * dy < need * need) { ok = false; break; }
+            }
+            if (!ok) continue;
+            clusters.push({
+                x, y, radius,
+                bare: roll() < spec.bareChance,
+                twist: spec.clusterTwist * (roll() * 2 - 1),
+                tone: roll()
+            });
+        }
+
+        // --- seeds on a jittered lattice within each cluster -----------------------------------
+        const seeds = [];
+        const marginY = 1.5 * maxCell;
+        const pruneIndex = new PieceIndex(W, H, Math.max(minSpacing, 1e-3), Math.max(minSpacing, 1e-3), 64, marginY + 1e-4);
+        const pruneRadius = 0.34 * minSpacing;
+
+        for (let c = 0; c < clusters.length; c++)
+        {
+            const cl = clusters[c];
+            const cos = Math.cos(cl.twist), sin = Math.sin(cl.twist);
+            // Hex-ish lattice: b1 along the species axis, b2 offset by half a step.
+            const b1x = spacingX * cos, b1y = spacingX * sin;
+            const b2x = (spacingX * 0.5) * cos - spacingY * sin;
+            const b2y = (spacingX * 0.5) * sin + spacingY * cos;
+            const reach = cl.radius / Math.max(1e-6, Math.min(spacingX, spacingY)) + 2;
+            const lim = Math.ceil(reach) + 1;
+
+            for (let j = -lim; j <= lim; j++)
+            {
+                for (let i = -lim; i <= lim; i++)
+                {
+                    let px = cl.x + i * b1x + j * b2x;
+                    let py = cl.y + i * b1y + j * b2y;
+                    if (py < -marginY || py > H + marginY) continue;
+                    const jx = spec.jitter * (roll() - 0.5) * spacingX;
+                    const jy = spec.jitter * (roll() - 0.5) * spacingY;
+                    px += jx * cos - jy * sin;
+                    py += jx * sin + jy * cos;
+
+                    const dx = px - cl.x, dy = py - cl.y;
+                    if (dx * dx + dy * dy > (cl.radius * 0.97) * (cl.radius * 0.97)) continue;
+
+                    px = ((px % W) + W) % W;
+                    if (py < -marginY || py > H + marginY) continue;
+
+                    if (pruneIndex.nearest(px, py, pruneRadius) >= 0) continue;
+                    pruneIndex.insert(px, py);
+                    seeds.push({ x: px, y: py, cluster: c, tone: roll(), twist: cl.twist });
+                }
+            }
+        }
+
+        // --- fill any region no cluster reached ------------------------------------------------
+        // Clusters are dart-thrown and do not tile the strip, so interstitial gaps are seeded here.
+        // Bare clusters are deliberately skipped: those are the flaked-off patches that should show
+        // inner bark.
+        {
+            const step = Math.max(0.30 * maxCell, 0.0015);
+            const probe = new PieceIndex(W, H, Math.max(maxCell, 1e-3), Math.max(maxCell, 1e-3), seeds.length + 64, marginY + 1e-4);
+            for (let s = 0; s < seeds.length; s++) probe.insert(seeds[s].x, seeds[s].y);
+            const reach = maxCell * 0.62;
+
+            for (let gy = -marginY; gy <= H + marginY; gy += step)
+            {
+                for (let gx = 0; gx < W; gx += step)
+                {
+                    if (probe.nearest(gx, gy, reach) >= 0) continue;
+                    let fx = gx + (roll() - 0.5) * step * 0.9;
+                    let fy = gy + (roll() - 0.5) * step * 0.9;
+                    let shielded = false;
+                    for (let c = 0; c < clusters.length; c++)
+                    {
+                        const cl = clusters[c];
+                        if (!cl.bare) continue;
+                        const dx = WrapOffset(cl.x - fx, W), dy = cl.y - fy;
+                        if (dx * dx + dy * dy < cl.radius * cl.radius) { shielded = true; break; }
+                    }
+                    if (shielded) continue;
+                    fx = ((fx % W) + W) % W;
+                    if (fy < -marginY || fy > H + marginY) continue;
+                    if (probe.nearest(fx, fy, pruneRadius) >= 0) continue;
+                    probe.insert(fx, fy);
+                    seeds.push({ x: fx, y: fy, cluster: -1, tone: roll(), twist: 0 });
+                }
+            }
+        }
+
+        // --- Lloyd relaxation ------------------------------------------------------------------
+        const boxY = H + 3 * maxCell;
+        const boxX = W * 0.5;
+        // A lattice brick rotated by the cluster twist has a larger axis-aligned bounding box than the raw
+        // spacings suggest, so the starting rectangle is derived per seed rather than from spacing alone.
+        const hint = { sx: spacingX, sy: spacingY, margin: 1.3 };
+        let index = new PieceIndex(W, H, Math.max(spacingX, 1e-3), Math.max(spacingY, 1e-3), seeds.length, marginY + 1e-4);
+        for (let s = 0; s < seeds.length; s++) index.insert(seeds[s].x, seeds[s].y);
+
+        for (let iter = 0; iter < (spec.relaxIterations | 0); iter++)
+        {
+            for (let s = 0; s < seeds.length; s++)
+            {
+                const cell = this.cellForSeed(seeds, index, s, W, H, hint, boxX, boxY);
+                if (!cell || cell.length < 3) continue;
+                const cen = PolygonCentroid(cell);
+                if (!isFinite(cen[0]) || !isFinite(cen[1])) continue;
+                seeds[s].x = ((seeds[s].x + cen[0] * spec.relaxStrength) % W + W) % W;
+                seeds[s].y = Clamp(seeds[s].y + cen[1] * spec.relaxStrength, -marginY, H + marginY);
+            }
+            const fresh = new PieceIndex(W, H, Math.max(spacingX, 1e-3), Math.max(spacingY, 1e-3), seeds.length, marginY + 1e-4);
+            for (let s = 0; s < seeds.length; s++) fresh.insert(seeds[s].x, seeds[s].y);
+            index = fresh;
+        }
+
+        return {
+            clusters, seeds, spacingX, spacingY, maxCell, minSpacing, marginY, index,
+            boxX, boxY, hint
+        };
+    },
+
+    // Voronoi cell of `si` as a convex polygon in coordinates local to the seed.
+    //
+    // The strip is periodic in x, so every neighbour offset is wrapped into [-W/2, W/2] before its bisector is
+    // taken. The cell starts as the rectangle [-boxX, boxX] x [-boxY, boxY] and is cut by the bisector of every
+    // neighbour in ascending distance order. Two facts make this both exact and cheap:
+    //   * a neighbour at distance d can only cut the cell while d < 2 * maxR, where maxR is the current
+    //     distance from the seed to the farthest cell vertex — so the loop stops early;
+    //   * the query radius is 2 * maxR of the *initial* rectangle, and maxR only shrinks, so if the loop runs
+    //     to the end without stopping early every relevant neighbour has been seen.
+    // If the finished cell still touches the starting rectangle, the rectangle was too small and we grow it.
+    cellForSeed(seeds, index, si, W, H, hint, capX, capY)
+    {
+        const s = seeds[si];
+        const halfW = W * 0.5;
+        const th = s.twist || 0;
+        const ct = Math.abs(Math.cos(th)), st = Math.abs(Math.sin(th));
+        let bx = Math.min(hint.margin * 0.5 * (hint.sx * ct + hint.sy * st), capX);
+        let by = Math.min(hint.margin * 0.5 * (hint.sx * st + hint.sy * ct), capY);
+
+        EnsureCandidateRoom(seeds.length + 8);
+
+        for (let attempt = 0; attempt < 9; attempt++)
+        {
+            const radius = 2 * Math.hypot(bx, by);
+            let k = index.collect(s.x, s.y, radius, _candId, _candD2, _candId.length);
+            if (k < 0)
+            {
+                EnsureCandidateRoom(seeds.length * 2 + 16);
+                k = index.collect(s.x, s.y, radius, _candId, _candD2, _candId.length);
+                if (k < 0) return null;
+            }
+            const scale = OrderCandidates(k, radius);
+
+            let poly = [[-bx, -by], [bx, -by], [bx, by], [-bx, by]];
+            let maxR2 = bx * bx + by * by;
+
+            for (let b = 0; b < BUCKET_COUNT; b++)
+            {
+                const hi = _bucketEnd[b];
+                const lo = b > 0 ? _bucketEnd[b - 1] : 0;
+                if (hi === lo) continue;
+                // Lower bound on d² for this bucket: nothing in it can cut the cell any more.
+                if (b / scale > 4 * maxR2) break;
+
+                for (let c = lo; c < hi; c++)
+                {
+                    const id = _orderId[c];
+                    if (id === si) continue;
+                    const o = seeds[id];
+                    const dx = WrapOffset(o.x - s.x, W);
+                    const dy = o.y - s.y;
+                    poly = ClipKeepLess(poly, dx, dy, (dx * dx + dy * dy) * 0.5);
+                    if (poly.length < 3) return null;
+                    maxR2 = 0;
+                    for (let v = 0; v < poly.length; v++)
+                    {
+                        const r2 = poly[v][0] * poly[v][0] + poly[v][1] * poly[v][1];
+                        if (r2 > maxR2) maxR2 = r2;
+                    }
+                }
+            }
+            let touches = false;
+            for (let v = 0; v < poly.length; v++)
+            {
+                if (Math.abs(Math.abs(poly[v][0]) - bx) < 1e-12 || Math.abs(Math.abs(poly[v][1]) - by) < 1e-12)
+                {
+                    touches = true;
+                    break;
+                }
+            }
+            if (!touches) return poly;
+            if (bx >= capX && by >= capY) return poly;
+            bx = Math.min(capX, bx * 1.7);
+            by = Math.min(capY, by * 1.7);
+        }
+        return null;
+    }
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  Growable typed sinks (no "Buffer" in the name; these are plain append-only writers).
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+class FloatSink
+{
+    constructor(capacity) { this.a = new Float32Array(Math.max(64, capacity | 0)); this.n = 0; }
+    push3(x, y, z) { this.grow(3); const a = this.a, n = this.n; a[n] = x; a[n + 1] = y; a[n + 2] = z; this.n = n + 3; }
+    push2(x, y) { this.grow(2); const a = this.a, n = this.n; a[n] = x; a[n + 1] = y; this.n = n + 2; }
+    push1(x) { this.grow(1); this.a[this.n++] = x; }
+    grow(k) { if (this.n + k > this.a.length) { const b = new Float32Array(Math.max(this.a.length * 2, this.n + k)); b.set(this.a.subarray(0, this.n)); this.a = b; } }
+    done() { return this.a.subarray(0, this.n); }
+}
+
+class IndexSink
+{
+    constructor(capacity) { this.a = new Uint32Array(Math.max(64, capacity | 0)); this.n = 0; }
+    push3(x, y, z) { if (this.n + 3 > this.a.length) { const b = new Uint32Array(this.a.length * 2); b.set(this.a); this.a = b; } const a = this.a, n = this.n; a[n] = x; a[n + 1] = y; a[n + 2] = z; this.n = n + 3; }
+    done() { return this.a.subarray(0, this.n); }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  PieceStructure — stage 3. Turns every surviving seed into one solid plate:
+//      Voronoi cell  →  inset by half the fissure gap  →  roughened edge  →  coverage shrink  →  lifted and curled
+//  and then extrudes side walls down to the trunk surface. Also emits the flat "bake" triangles (top fan plus a
+//  skirt) that UVProjection rasterises.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+function CurlFactor(mode, nx, ny)
+{
+    switch (mode)
+    {
+        case 'dome':     return 1 - Math.min(1, nx * nx + ny * ny);
+        case 'endCurl':  return nx * nx;
+        case 'edgeCurl': { const t = Math.max(0, nx); return t * t; }
+        case 'ridgeV':   return 1 - nx * nx;
+        case 'ridgeH':   return 1 - ny * ny;
+        default:         return 0;
+    }
+}
+
+// Subdivide the boundary, then push each vertex along the edge normal by coherent noise. The amplitude is held
+// below 0.4 * gap so a roughened edge can never reach the cell wall: gap/2 - 0.4 * gap = 0.1 * gap of clearance.
+function RoughenPolygon(poly, amplitude, seed, W)
+{
+    const n = poly.length;
+    if (n < 3 || amplitude <= 0) return poly;
+
+    let perimeter = 0;
+    for (let i = 0; i < n; i++) perimeter += Math.hypot(poly[(i + 1) % n][0] - poly[i][0], poly[(i + 1) % n][1] - poly[i][1]);
+    const target = Clamp(Math.round(perimeter / 0.0045), 14, 40);
+    const step = Math.max(0.0022, perimeter / target);
+
+    const out = [];
+    for (let i = 0; i < n; i++)
+    {
+        const a = poly[i], b = poly[(i + 1) % n];
+        const ex = b[0] - a[0], ey = b[1] - a[1];
+        const len = Math.hypot(ex, ey);
+        const segs = Math.max(1, Math.min(12, Math.round(len / step)));
+        // Outward normal of a CCW edge.
+        const nx = ey / len, ny = -ex / len;
+        for (let s = 0; s < segs; s++)
+        {
+            const t = s / segs;
+            const px = a[0] + ex * t, py = a[1] + ey * t;
+            const wob = NoiseField.value(px / (step * 1.6), py / (step * 1.6), seed);
+            const d = wob * amplitude;
+            out.push([px + nx * d, py + ny * d]);
+        }
+    }
+    return out;
+}
+
+function ScaleAboutPoint(poly, cx, cy, scale)
+{
+    return poly.map((p) => [cx + (p[0] - cx) * scale, cy + (p[1] - cy) * scale]);
+}
+
+export const PieceStructure =
+{
+    build(spec, trunk, clustering, seed, resolution)
+    {
+        const W = trunk.width, H = trunk.height;
+        const texel = W / Math.max(64, resolution | 0);
+        // The skirt is the sliver of fissure wall that lets the height field ramp down over a couple of texels
+        // instead of a single hard step, so the baked normal actually shows the plate edge.
+        const skirtWidth = Math.max(0.30 * spec.gap, 1.5 * texel);
+        const roll = NoiseField.random((seed ^ 0x9E3779B9) >>> 0);
+        const clusters = clustering.clusters;
+        const seeds = clustering.seeds;
+        const index = clustering.index;
+        const spacingX = clustering.spacingX, spacingY = clustering.spacingY;
+
+        const emitted = new Uint8Array(seeds.length);
+        const pieceOfSeed = new Int32Array(seeds.length).fill(-1);
+        const pieces = [];
+
+        const pos = new FloatSink(1 << 18);
+        const col = new FloatSink(1 << 18);
+        const uvs = new FloatSink(1 << 18);
+        const idx = new IndexSink(1 << 18);
+
+        // Bake triangles: (u, v, height) per corner + a flat colour and roughness per triangle.
+        const bakeUV = new FloatSink(1 << 19);
+        const bakeH = new FloatSink(1 << 18);
+        const bakeC = new FloatSink(1 << 18);
+        const bakeR = new FloatSink(1 << 16);
+        const bakeId = [];
+        const ranges = [];
+
+        const base = HexToRgb(spec.outerTop);
+        const side = HexToRgb(spec.outerSide);
+        const inset = spec.gap * 0.5;
+        const amplitude = spec.roughen * 0.4 * spec.gap;
+
+        let voidCells = 0, bareSkips = 0, degenerate = 0;
+        let surface = 0, covered = 0;
+
+        for (let si = 0; si < seeds.length; si++)
+        {
+            const s = seeds[si];
+            const cl = s.cluster >= 0 ? clusters[s.cluster] : null;
+            if (cl && cl.bare) { bareSkips++; continue; }
+            if (roll() < spec.voidChance) { voidCells++; continue; }
+
+            const local = ClusterSolver.cellForSeed(seeds, index, si, W, H,
+                clustering.hint, clustering.boxX, clustering.boxY);
+            if (!local || local.length < 3) { degenerate++; continue; }
+
+            // Local → global strip coordinates. x is deliberately NOT wrapped: uv = x / W is allowed to run
+            // slightly outside [0, 1) and the rasteriser draws u-1 / u / u+1 copies, which is what makes the
+            // seam invisible. In 3D the angle is continuous regardless.
+            let poly = local.map((p) => [s.x + p[0], s.y + p[1]]);
+            poly = ClipToBandY(poly, 0, H);
+            if (poly.length < 3) { degenerate++; continue; }
+
+            const cellArea = Math.abs(PolygonArea(poly));
+            surface += cellArea;
+
+            poly = InsetConvexPolygon(poly, inset);
+            if (poly.length < 3) { degenerate++; continue; }
+            poly = RoughenPolygon(poly, amplitude, seed, W);
+            if (poly.length < 3) { degenerate++; continue; }
+
+            const cen = PolygonCentroid(poly);
+            const bnd = BoundsOf(poly);
+            const cov = Clamp(spec.coverage - spec.coverageSpread * roll(), 0.35, 1);
+            const ax = cen[0] + (roll() - 0.5) * (bnd.x1 - bnd.x0) * 0.30;
+            const ay = cen[1] + (roll() - 0.5) * (bnd.y1 - bnd.y0) * 0.30;
+            poly = ScaleAboutPoint(poly, ax, ay, Math.sqrt(cov));
+            if (poly.length < 3) { degenerate++; continue; }
+
+            const area = Math.abs(PolygonArea(poly));
+            if (area < 2e-7) { degenerate++; continue; }
+            covered += area;
+
+            const pid = pieces.length;
+            pieces.push({ id: pid, seed: si, cluster: s.cluster, area, poly, bounds: BoundsOf(poly) });
+            emitted[si] = 1;
+            pieceOfSeed[si] = pid;
+
+            this._emit(spec, trunk, W, poly, {
+                thickness: spec.thickness * (1 + spec.thicknessJitter * (roll() - 0.5)),
+                curlMode: spec.curlMode, curlAmount: spec.curlAmount,
+                clusterTone: cl ? cl.tone : 0.5, seedTone: s.tone,
+                base, side, roughTop: spec.roughTop, roughSide: spec.roughSide,
+                pos, col, uvs, idx, bakeUV, bakeH, bakeC, bakeR, bakeId, ranges, pieces, pid,
+                skirt: skirtWidth
+            });
+        }
+
+        // --- lenticels: small dark plates that sit on top of the bark --------------------------
+        let lenticelCount = 0;
+        if (spec.lenticels)
+        {
+            const L = spec.lenticels;
+            const lc = HexToRgb(L.color);
+            for (let row = 0; row < L.rows; row++)
+            {
+                const y = ((row + 0.5 + (roll() - 0.5) * 0.7) / L.rows) * H;
+                const offset = roll() * W;
+                for (let k = 0; k < L.perRow; k++)
+                {
+                    if (roll() > 0.82) continue;
+                    const x = (((k + roll()) / L.perRow) * W + offset) % W;
+                    if (y < 0 || y > H) continue;
+
+                    const near = index.nearest(x, y, Math.max(spacingX, spacingY) * 1.2);
+                    if (near < 0 || !emitted[near]) continue;
+                    const host = seeds[near];
+
+                    const rw = L.width * (0.6 + roll() * 0.8);
+                    const rh = L.height * (0.6 + roll() * 0.8);
+                    const spin = (roll() - 0.5) * 0.5;
+                    const cs = Math.cos(spin), sn = Math.sin(spin);
+                    const verts = 9;
+                    const poly = [];
+                    for (let v = 0; v < verts; v++)
+                    {
+                        const a = (v / verts) * TWO_PI;
+                        const ex = Math.cos(a) * rw * 0.5, ey = Math.sin(a) * rh * 0.5;
+                        const px = x + ex * cs - ey * sn;
+                        const py = y + ex * sn + ey * cs;
+                        poly.push([((px % W) + W) % W, py]);
+                    }
+                    if (poly[0][0] > W * 0.5) for (const p of poly) p[0] -= W;
+
+                    const pid = pieces.length;
+                    pieces.push({ id: pid, seed: -1, cluster: host.cluster, area: Math.abs(PolygonArea(poly)), poly, bounds: BoundsOf(poly), lenticel: true });
+                    lenticelCount++;
+
+                    this._emit(spec, trunk, W, poly, {
+                        thickness: spec.thickness + L.lift,
+                        curlMode: 'dome', curlAmount: 0.25,
+                        clusterTone: host.cluster >= 0 ? clusters[host.cluster].tone : 0.5, seedTone: roll(),
+                        base: lc, side: [lc[0] * 0.7, lc[1] * 0.7, lc[2] * 0.7],
+                        roughTop: L.rough, roughSide: L.rough + 0.1,
+                        pos, col, uvs, idx, bakeUV, bakeH, bakeC, bakeR, bakeId, ranges, pieces, pid,
+                        skirt: false
+                    });
+                }
+            }
+        }
+
+        // --- smooth vertex normals by accumulating face normals --------------------------------
+        const vertexCount = pos.n / 3;
+        const nrm = new Float32Array(vertexCount * 3);
+        const P = pos.a, I = idx.a;
+        for (let t = 0; t < idx.n; t += 3)
+        {
+            const i0 = I[t] * 3, i1 = I[t + 1] * 3, i2 = I[t + 2] * 3;
+            const ax = P[i1] - P[i0], ay = P[i1 + 1] - P[i0 + 1], az = P[i1 + 2] - P[i0 + 2];
+            const bx = P[i2] - P[i0], by = P[i2 + 1] - P[i0 + 1], bz = P[i2 + 2] - P[i0 + 2];
+            let nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+            nrm[i0] += nx; nrm[i0 + 1] += ny; nrm[i0 + 2] += nz;
+            nrm[i1] += nx; nrm[i1 + 1] += ny; nrm[i1 + 2] += nz;
+            nrm[i2] += nx; nrm[i2 + 1] += ny; nrm[i2 + 2] += nz;
+        }
+        for (let v = 0; v < vertexCount; v++)
+        {
+            const o = v * 3;
+            const len = Math.hypot(nrm[o], nrm[o + 1], nrm[o + 2]);
+            if (len > 1e-12) { nrm[o] /= len; nrm[o + 1] /= len; nrm[o + 2] /= len; }
+            else { nrm[o] = P[o]; nrm[o + 1] = P[o + 1]; nrm[o + 2] = 0; const l2 = Math.hypot(nrm[o], nrm[o + 1]) || 1; nrm[o] /= l2; nrm[o + 1] /= l2; }
+        }
+
+        return {
+            pieces, emitted, pieceOfSeed,
+            positions: pos.done(), normals: nrm, colors: col.done(), uvs: uvs.done(), indices: idx.done(),
+            vertexCount, triangleCount: idx.n / 3,
+            ranges,
+            bake: {
+                uv: bakeUV.done(), height: bakeH.done(), color: bakeC.done(),
+                rough: bakeR.done(), id: Int32Array.from(bakeId),
+                triangleCount: bakeUV.n / 6
+            },
+            stats: {
+                clusters: clusters.length, seeds: seeds.length, pieces: pieces.length,
+                lenticels: lenticelCount, voidCells, bareSkips, degenerate,
+                fillRatio: surface > 0 ? covered / surface : 0
+            }
+        };
+    },
+
+    // Extrude one polygon into a plate and record its bake triangles.
+    _emit(spec, trunk, W, poly, o)
+    {
+        const R = poly.length;
+        const bnd = BoundsOf(poly);
+        const cx = (bnd.x0 + bnd.x1) * 0.5, cy = (bnd.y0 + bnd.y1) * 0.5;
+        const hw = Math.max(1e-6, (bnd.x1 - bnd.x0) * 0.5);
+        const hh = Math.max(1e-6, (bnd.y1 - bnd.y0) * 0.5);
+
+        const tone = 1 + (o.seedTone - 0.5) * 0.20 + (o.clusterTone - 0.5) * 0.14;
+        const topR = Clamp(o.base[0] * tone, 0, 1);
+        const topG = Clamp(o.base[1] * tone, 0, 1);
+        const topB = Clamp(o.base[2] * tone * (1 + (o.seedTone - 0.5) * 0.10), 0, 1);
+        const sideR = Clamp(o.side[0] * tone * 0.85, 0, 1);
+        const sideG = Clamp(o.side[1] * tone * 0.85, 0, 1);
+        const sideB = Clamp(o.side[2] * tone * 0.85, 0, 1);
+
+        const liftAt = (x, y) =>
+        {
+            const nx = Clamp((x - cx) / hw, -1, 1);
+            const ny = Clamp((y - cy) / hh, -1, 1);
+            return o.thickness * (1 + o.curlAmount * CurlFactor(o.curlMode, nx, ny));
+        };
+
+        const surfacePoint = (x, y, lift) =>
+        {
+            const a = (x / W) * TWO_PI;
+            const r = trunk.radiusAt(Clamp(y, 0, trunk.height)) + lift;
+            return [r * Math.cos(a), r * Math.sin(a), y];
+        };
+
+        // --- vertices -------------------------------------------------------------------------
+        const vertexStart = o.pos.n / 3;
+        let peakLift = 0;
+        const topStart = o.pos.n / 3;
+        const cenLift = liftAt(cx, cy);
+        const cp = surfacePoint(cx, cy, cenLift);
+        o.pos.push3(cp[0], cp[1], cp[2]);
+        o.col.push3(topR, topG, topB);
+        o.uvs.push2(cx / W, cy / trunk.height);
+
+        const topRing = new Int32Array(R);
+        for (let i = 0; i < R; i++)
+        {
+            const p = poly[i];
+            const lift = liftAt(p[0], p[1]);
+            if (lift > peakLift) peakLift = lift;
+            const sp = surfacePoint(p[0], p[1], lift);
+            topRing[i] = o.pos.n / 3;
+            o.pos.push3(sp[0], sp[1], sp[2]);
+            o.col.push3(topR, topG, topB);
+            o.uvs.push2(p[0] / W, p[1] / trunk.height);
+        }
+
+        const wallTop = new Int32Array(R);
+        const wallBottom = new Int32Array(R);
+        for (let i = 0; i < R; i++)
+        {
+            const p = poly[i];
+            const lift = liftAt(p[0], p[1]);
+            const sp = surfacePoint(p[0], p[1], lift);
+            wallTop[i] = o.pos.n / 3;
+            o.pos.push3(sp[0], sp[1], sp[2]);
+            o.col.push3(sideR, sideG, sideB);
+            o.uvs.push2(p[0] / W, p[1] / trunk.height);
+        }
+        for (let i = 0; i < R; i++)
+        {
+            const p = poly[i];
+            const sp = surfacePoint(p[0], p[1], 0);
+            wallBottom[i] = o.pos.n / 3;
+            o.pos.push3(sp[0], sp[1], sp[2]);
+            o.col.push3(sideR * 0.5, sideG * 0.5, sideB * 0.5);
+            o.uvs.push2(p[0] / W, p[1] / trunk.height);
+        }
+
+        // --- indices --------------------------------------------------------------------------
+        for (let i = 0; i < R; i++)
+        {
+            const j = (i + 1) % R;
+            o.idx.push3(topStart, topRing[i], topRing[j]);
+            o.idx.push3(wallBottom[i], wallBottom[j], wallTop[j]);
+            o.idx.push3(wallBottom[i], wallTop[j], wallTop[i]);
+        }
+
+        // --- bake triangles: top fan with true uv, plus a skirt that ramps the height to zero --
+        for (let i = 0; i < R; i++)
+        {
+            const j = (i + 1) % R;
+            o.bakeUV.push2(cx / W, cy / trunk.height);
+            o.bakeUV.push2(poly[i][0] / W, poly[i][1] / trunk.height);
+            o.bakeUV.push2(poly[j][0] / W, poly[j][1] / trunk.height);
+            o.bakeH.push3(liftAt(cx, cy), liftAt(poly[i][0], poly[i][1]), liftAt(poly[j][0], poly[j][1]));
+            o.bakeC.push3(topR, topG, topB);
+            o.bakeR.push1(o.roughTop);
+            o.bakeId.push(o.pid);
+        }
+
+        if (o.skirt > 0)
+        {
+            // Never let the descending wall swallow the plate: on thin strips (birch, cherry) the skirt
+            // would otherwise be most of the plate's short axis.
+            const thin = Math.min(bnd.x1 - bnd.x0, bnd.y1 - bnd.y0);
+            const skirt = Math.min(o.skirt, 0.22 * thin);
+            const skirtR = Clamp(o.side[0] * 0.55, 0, 1);
+            const skirtG = Clamp(o.side[1] * 0.55, 0, 1);
+            const skirtB = Clamp(o.side[2] * 0.55, 0, 1);
+            for (let i = 0; i < R; i++)
+            {
+                const j = (i + 1) % R;
+                const ex = poly[j][0] - poly[i][0], ey = poly[j][1] - poly[i][1];
+                const len = Math.hypot(ex, ey);
+                if (len < 1e-9) continue;
+                // Outward normal of a CCW edge.
+                const nx = ey / len, ny = -ex / len;
+                const ox = nx * skirt, oy = ny * skirt;
+                const li = liftAt(poly[i][0], poly[i][1]);
+                const lj = liftAt(poly[j][0], poly[j][1]);
+
+                o.bakeUV.push2(poly[i][0] / W, poly[i][1] / trunk.height);
+                o.bakeUV.push2((poly[i][0] + ox) / W, (poly[i][1] + oy) / trunk.height);
+                o.bakeUV.push2((poly[j][0] + ox) / W, (poly[j][1] + oy) / trunk.height);
+                o.bakeH.push3(li, 0, 0);
+                o.bakeC.push3(skirtR, skirtG, skirtB);
+                o.bakeR.push1(o.roughSide);
+                o.bakeId.push(o.pid);
+
+                o.bakeUV.push2(poly[i][0] / W, poly[i][1] / trunk.height);
+                o.bakeUV.push2((poly[j][0] + ox) / W, (poly[j][1] + oy) / trunk.height);
+                o.bakeUV.push2(poly[j][0] / W, poly[j][1] / trunk.height);
+                o.bakeH.push3(li, 0, lj);
+                o.bakeC.push3(skirtR, skirtG, skirtB);
+                o.bakeR.push1(o.roughSide);
+                o.bakeId.push(o.pid);
+            }
+        }
+
+        o.ranges.push({ piece: o.pid, start: vertexStart, count: o.pos.n / 3 - vertexStart });
+        o.pieces[o.pid].maxLift = Math.max(peakLift, cenLift);
+        o.pieces[o.pid].topColour = [topR, topG, topB];
+    }
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  UVProjection — stage 4. Rasterises every plate's top fan (plus its skirt) into the trunk's uv frame and
+//  derives the three baked outputs. Row 0 of every field is v ≈ 0 (the bottom of the trunk); the PNG writer
+//  flips so that the image's top row is v ≈ 1, matching the OpenGL convention.
+//
+//  Normal convention for the port: tangent X = +u (increasing θ), tangent Y = +v (up the trunk),
+//  Z = outward. Green channel = +v, i.e. OpenGL style; flip green for DirectX.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+function BoxBlurSeparable(src, tmp, dst, N, radius)
+{
+    if (radius < 1) { dst.set(src); return; }
+    const win = radius * 2 + 1;
+    // Horizontal, wrapping in x (the strip is periodic).
+    for (let y = 0; y < N; y++)
+    {
+        const row = y * N;
+        let sum = 0;
+        for (let k = -radius; k <= radius; k++) sum += src[row + ((k % N) + N) % N];
+        for (let x = 0; x < N; x++)
+        {
+            tmp[row + x] = sum / win;
+            sum -= src[row + (((x - radius) % N) + N) % N];
+            sum += src[row + (((x + radius + 1) % N) + N) % N];
+        }
+    }
+    // Vertical, clamping in y.
+    for (let x = 0; x < N; x++)
+    {
+        let sum = 0;
+        for (let k = -radius; k <= radius; k++) sum += tmp[Clamp(k, 0, N - 1) * N + x];
+        for (let y = 0; y < N; y++)
+        {
+            dst[y * N + x] = sum / win;
+            sum -= tmp[Clamp(y - radius, 0, N - 1) * N + x];
+            sum += tmp[Clamp(y + radius + 1, 0, N - 1) * N + x];
+        }
+    }
+}
+
+// Two-pass chamfer distance transform. `seed` marks the texels whose distance is zero.
+function ChamferDistance(seed, N, out)
+{
+    const INF = 60000;
+    const D = 1, Q = 1.41421356;
+    for (let i = 0; i < out.length; i++) out[i] = seed[i] ? 0 : INF;
+
+    for (let y = 0; y < N; y++)
+    {
+        const i = y * N;
+        for (let x = 0; x < N; x++)
+        {
+            let d = out[i + x];
+            if (y > 0)
+            {
+                const up = i - N;
+                d = Math.min(d, out[up + x] + D);
+                d = Math.min(d, out[up + ((x + N - 1) % N)] + Q);
+                d = Math.min(d, out[up + ((x + 1) % N)] + Q);
+            }
+            if (x > 0) d = Math.min(d, out[i + x - 1] + D);
+            out[i + x] = d;
+        }
+    }
+    for (let y = N - 1; y >= 0; y--)
+    {
+        const i = y * N;
+        for (let x = N - 1; x >= 0; x--)
+        {
+            let d = out[i + x];
+            if (y < N - 1)
+            {
+                const dn = i + N;
+                d = Math.min(d, out[dn + x] + D);
+                d = Math.min(d, out[dn + ((x + N - 1) % N)] + Q);
+                d = Math.min(d, out[dn + ((x + 1) % N)] + Q);
+            }
+            if (x < N - 1) d = Math.min(d, out[i + x + 1] + D);
+            out[i + x] = d;
+        }
+    }
+    return out;
+}
+
+export const UVProjection =
+{
+    run(spec, trunk, structure, resolution)
+    {
+        const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        const N = resolution | 0;
+        const count = N * N;
+        const W = trunk.width, H = trunk.height;
+        const texelW = W / N, texelH = H / N;
+
+        const height = new Float32Array(count);
+        const rough = new Uint8Array(count);
+        const cr = new Uint8Array(count), cg = new Uint8Array(count), cb = new Uint8Array(count);
+
+        // --- 1. start from bare inner bark -----------------------------------------------------
+        const inner = HexToRgb(spec.inner);
+        const innerR = Clamp(Math.round(inner[0] * 255), 0, 255);
+        const innerG = Clamp(Math.round(inner[1] * 255), 0, 255);
+        const innerB = Clamp(Math.round(inner[2] * 255), 0, 255);
+        const innerRough = Clamp(Math.round(spec.roughInner * 255), 0, 255);
+        cr.fill(innerR); cg.fill(innerG); cb.fill(innerB); rough.fill(innerRough);
+
+        // --- 2. rasterise the plates, keeping the highest surface ------------------------------
+        const bake = structure.bake;
+        const buv = bake.uv, bh = bake.height, bc = bake.color, br = bake.rough;
+        const triCount = bake.triangleCount;
+
+        for (let t = 0; t < triCount; t++)
+        {
+            const u0 = buv[t * 6], v0 = buv[t * 6 + 1];
+            const u1 = buv[t * 6 + 2], v1 = buv[t * 6 + 3];
+            const u2 = buv[t * 6 + 4], v2 = buv[t * 6 + 5];
+            const h0 = bh[t * 3], h1 = bh[t * 3 + 1], h2 = bh[t * 3 + 2];
+            const R = Clamp(Math.round(bc[t * 3] * 255), 0, 255);
+            const G = Clamp(Math.round(bc[t * 3 + 1] * 255), 0, 255);
+            const B = Clamp(Math.round(bc[t * 3 + 2] * 255), 0, 255);
+            const RG = Clamp(Math.round(br[t] * 255), 0, 255);
+
+            const du1 = u1 - u0, dv1 = v1 - v0, du2 = u2 - u0, dv2 = v2 - v0;
+            const det = du1 * dv2 - du2 * dv1;
+            if (Math.abs(det) < 1e-14) continue;
+
+            // Three copies, u-1 / u / u+1, so a triangle straddling the seam lands correctly.
+            for (let copy = -1; copy <= 1; copy++)
+            {
+                const au0 = u0 + copy, au1 = u1 + copy, au2 = u2 + copy;
+                let px0 = Math.floor(Math.min(au0, au1, au2) * N - 0.5);
+                let px1 = Math.ceil(Math.max(au0, au1, au2) * N + 0.5);
+                if (px1 <= 0 || px0 >= N) continue;
+                px0 = Math.max(0, px0); px1 = Math.min(N, px1);
+                const py0 = Math.max(0, Math.floor(Math.min(v0, v1, v2) * N - 0.5));
+                const py1 = Math.min(N, Math.ceil(Math.max(v0, v1, v2) * N + 0.5));
+
+                for (let py = py0; py < py1; py++)
+                {
+                    const fy = (py + 0.5) / N;
+                    const row = py * N;
+                    for (let px = px0; px < px1; px++)
+                    {
+                        const fx = (px + 0.5) / N;
+                        const w1 = ((fx - au0) * dv2 - du2 * (fy - v0)) / det;
+                        if (w1 < -1e-9) continue;
+                        const w2 = (du1 * (fy - v0) - (fx - au0) * dv1) / det;
+                        if (w2 < -1e-9) continue;
+                        const w0 = 1 - w1 - w2;
+                        if (w0 < -1e-9) continue;
+
+                        const h = w0 * h0 + w1 * h1 + w2 * h2;
+                        const i = row + px;
+                        if (h <= height[i]) continue;
+                        height[i] = h;
+                        cr[i] = R; cg[i] = G; cb[i] = B; rough[i] = RG;
+                    }
+                }
+            }
+        }
+
+        // --- 3. coverage, distance fields, ambient occlusion -----------------------------------
+        let covered = 0, maxHeight = 0;
+        for (let i = 0; i < count; i++)
+        {
+            if (height[i] > 0) covered++;
+            if (height[i] > maxHeight) maxHeight = height[i];
+        }
+        const coverage = covered / count;
+
+        const gapSeed = new Uint8Array(count);
+        for (let i = 0; i < count; i++) gapSeed[i] = height[i] > 0 ? 0 : 1;
+        const distToGap = ChamferDistance(gapSeed, N, new Uint16Array(count));
+        for (let i = 0; i < count; i++) gapSeed[i] = height[i] > 0 ? 1 : 0;
+        const distToPlate = ChamferDistance(gapSeed, N, new Uint16Array(count));
+
+        const blurTmp = new Float32Array(count);
+        const heightBlur = new Float32Array(count);
+        const aoRadius = Clamp(Math.round(0.008 / texelH), 1, 48);
+        BoxBlurSeparable(height, blurTmp, heightBlur, N, aoRadius);
+        BoxBlurSeparable(heightBlur, blurTmp, heightBlur, N, aoRadius);
+
+        const aoDepth = Math.max(1e-5, spec.thickness * 1.25);
+        const ao = new Float32Array(count);
+        for (let i = 0; i < count; i++)
+        {
+            const occ = Clamp((heightBlur[i] - height[i]) / aoDepth, 0, 1);
+            ao[i] = 1 - occ * 0.88;
+        }
+
+        // --- 4. compose the three outputs -------------------------------------------------------
+        const albedo = new Uint8Array(count * 3);
+        const normal = new Uint8Array(count * 3);
+        const orm = new Uint8Array(count * 3);
+
+        const streak = spec.grainScale;
+        const cross = Math.max(0.0015, spec.grainScale * 0.15);
+        // Contact darkening is a physical width (~1.8 mm), so it stays the same size on the trunk
+        // whatever the bake resolution is.
+        const edgeTexels = Clamp(Math.round(0.0018 / texelH), 1, 16);
+        const invMax = maxHeight > 0 ? 1 / maxHeight : 0;
+
+        for (let y = 0; y < N; y++)
+        {
+            const v = (y + 0.5) / N;
+            const my = v * H;
+            for (let x = 0; x < N; x++)
+            {
+                const i = y * N + x;
+                const u = (x + 0.5) / N;
+                const mx = u * W;
+
+                // Height gradient → tangent-space normal (central difference, wrapping in u).
+                const xl = (x + N - 1) % N, xr = (x + 1) % N;
+                const yu = Math.min(N - 1, y + 1) * N, yd = Math.max(0, y - 1) * N;
+                const dhds = (height[yu + x] - height[yd + x]) / (2 * texelH);
+                const dhdu = (height[y * N + xr] - height[y * N + xl]) / (2 * texelW);
+                let nx = -dhdu, ny = -dhds, nz = 1;
+                const len = Math.hypot(nx, ny, nz);
+                nx /= len; ny /= len; nz /= len;
+
+                const o = i * 3;
+                normal[o] = Clamp(Math.round((nx * 0.5 + 0.5) * 255), 0, 255);
+                normal[o + 1] = Clamp(Math.round((ny * 0.5 + 0.5) * 255), 0, 255);
+                normal[o + 2] = Clamp(Math.round((nz * 0.5 + 0.5) * 255), 0, 255);
+
+                // Albedo: base colour, directional grain, speckle, edge contact darkening.
+                let r = cr[i], g = cg[i], b = cb[i];
+                const onPlate = height[i] > 0;
+
+                const gx = spec.grainDirection === 'x' ? mx / streak : mx / cross;
+                const gy = spec.grainDirection === 'x' ? my / cross : my / streak;
+                const grain = NoiseField.fbm(gx, gy, 1337, 3);
+                const spk = (NoiseField.hash(x, y, 7717) - 0.5) * spec.speckle;
+                let shade = 1 + grain * spec.grainStrength + spk;
+
+                if (onPlate)
+                {
+                    const d = distToGap[i];
+                    if (d < edgeTexels) shade *= Lerp(0.55, 1, Smoothstep(0, edgeTexels, d));
+                }
+                else
+                {
+                    const d = distToPlate[i];
+                    if (d < edgeTexels * 2) shade *= Lerp(0.62, 1, Smoothstep(0, edgeTexels * 2, d));
+                }
+
+                albedo[o] = Clamp(Math.round(r * shade), 0, 255);
+                albedo[o + 1] = Clamp(Math.round(g * shade), 0, 255);
+                albedo[o + 2] = Clamp(Math.round(b * shade), 0, 255);
+
+                orm[o] = Clamp(Math.round(ao[i] * 255), 0, 255);
+                orm[o + 1] = rough[i];
+                orm[o + 2] = Clamp(Math.round(height[i] * invMax * 255), 0, 255);
+            }
+        }
+
+        const t1 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        return {
+            resolution: N, width: N, height: N,
+            albedo, normal, orm,
+            height, ao, coverage, maxHeight,
+            distanceToGap: distToGap, distanceToPlate: distToPlate,
+            texelW, texelH, elapsed: t1 - t0
+        };
+    }
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  TextureCodec — PNG (truecolour, 8 bit) encoding via CompressionStream, plus the recipe sidecar.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+const CrcTable = (function ()
+{
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++)
+    {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        t[n] = c >>> 0;
+    }
+    return t;
+})();
+
+function Crc32(bytes, start, length)
+{
+    let c = 0xFFFFFFFF;
+    for (let i = start; i < start + length; i++) c = CrcTable[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+export const TextureCodec =
+{
+    async deflate(bytes)
+    {
+        const cs = new CompressionStream('deflate');
+        const stream = new Blob([bytes]).stream().pipeThrough(cs);
+        return new Uint8Array(await new Response(stream).arrayBuffer());
+    },
+
+    // rgb: Uint8Array of width*height*3, row 0 = top of the image.
+    async encodePng(rgb, width, height, flipVertically)
+    {
+        const stride = width * 3;
+        const raw = new Uint8Array((stride + 1) * height);
+        for (let y = 0; y < height; y++)
+        {
+            const srcRow = flipVertically ? (height - 1 - y) : y;
+            raw[y * (stride + 1)] = 0;
+            raw.set(rgb.subarray(srcRow * stride, srcRow * stride + stride), y * (stride + 1) + 1);
+        }
+        const idat = await this.deflate(raw);
+
+        const chunk = (type, data) =>
+        {
+            const b = new Uint8Array(8 + data.length + 4);
+            const dv = new DataView(b.buffer);
+            dv.setUint32(0, data.length);
+            b[4] = type.charCodeAt(0); b[5] = type.charCodeAt(1); b[6] = type.charCodeAt(2); b[7] = type.charCodeAt(3);
+            b.set(data, 8);
+            dv.setUint32(8 + data.length, Crc32(b, 4, 4 + data.length));
+            return b;
+        };
+
+        const ihdr = new Uint8Array(13);
+        const dv = new DataView(ihdr.buffer);
+        dv.setUint32(0, width); dv.setUint32(4, height);
+        ihdr[8] = 8; ihdr[9] = 2; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+
+        const sig = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+        const parts = [sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', new Uint8Array(0))];
+        let total = 0;
+        for (const p of parts) total += p.length;
+        const out = new Uint8Array(total);
+        let at = 0;
+        for (const p of parts) { out.set(p, at); at += p.length; }
+        return out;
+    },
+
+    recipe(spec, trunk, clustering, structure, projection, seed)
+    {
+        return {
+            format: 'Slate.BarkRecipe/1',
+            seed,
+            species: spec.key,
+            label: spec.label,
+            note: spec.note,
+            trunk: {
+                units: 'metres', up: '+Z',
+                rBase: trunk.config.rBase, rTop: trunk.config.rTop,
+                height: trunk.height, circumference: trunk.width, rRef: trunk.rRef,
+                taper: trunk.config.taper, flare: trunk.config.flare, flareFall: trunk.config.flareFall
+            },
+            uv: {
+                convention: 'u wraps once around the trunk counter-clockwise seen from +Z; v runs from 0 at the base to 1 at the top',
+                u: 'theta / 2pi', v: 'z / height'
+            },
+            normal: { convention: 'tangent-space, X = +u, Y = +v, Z = outward, green = +v (OpenGL)', flipGreenForDirectX: true },
+            orm: { R: 'ambient occlusion', G: 'roughness', B: 'height / maxHeight' },
+            solver: {
+                clusters: clustering.clusters.length,
+                clusterCentres: clustering.clusters.map((c) => ({ x: +c.x.toFixed(5), y: +c.y.toFixed(5), r: +c.radius.toFixed(5), bare: !!c.bare })),
+                seeds: clustering.seeds.length,
+                spacingX: clustering.spacingX, spacingY: clustering.spacingY,
+                spacing: spec.spacing, stretch: spec.stretch, jitter: spec.jitter
+            },
+            structure: {
+                pieces: structure.stats.pieces,
+                lenticels: structure.stats.lenticels,
+                triangles: structure.triangleCount,
+                vertices: structure.vertexCount,
+                voidCells: structure.stats.voidCells,
+                bareCells: structure.stats.bareSkips,
+                fillRatio: +structure.stats.fillRatio.toFixed(4)
+            },
+            bake: {
+                resolution: projection.resolution,
+                coverage: +projection.coverage.toFixed(4),
+                maxHeight: +projection.maxHeight.toFixed(6),
+                texelMetresX: +projection.texelW.toFixed(7),
+                texelMetresY: +projection.texelH.toFixed(7),
+                milliseconds: +projection.elapsed.toFixed(1)
+            },
+            specification: {
+                thickness: spec.thickness, gap: spec.gap, roughen: spec.roughen,
+                curlMode: spec.curlMode, curlAmount: spec.curlAmount,
+                clusterSize: spec.clusterSize, bareChance: spec.bareChance, voidChance: spec.voidChance,
+                coverage: spec.coverage, relaxIterations: spec.relaxIterations,
+                outerTop: spec.outerTop, outerSide: spec.outerSide, inner: spec.inner,
+                roughTop: spec.roughTop, roughSide: spec.roughSide, roughInner: spec.roughInner
+            }
+        };
+    }
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  GeometryCodec — Wavefront OBJ, so the simulated plates can be inspected outside the browser.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+export const GeometryCodec =
+{
+    toObj(trunk, structure, includeTrunk)
+    {
+        const lines = ['# Slate BarkSolver — simulated bark plates', '# units: metres, up: +Z', 'o BarkPlates'];
+        const P = structure.positions;
+        for (let i = 0; i < structure.vertexCount; i++)
+        {
+            const o = i * 3;
+            lines.push(`v ${P[o].toFixed(6)} ${P[o + 1].toFixed(6)} ${P[o + 2].toFixed(6)}`);
+        }
+        if (includeTrunk)
+        {
+            lines.push('o TrunkSurface');
+            const T = trunk.positions;
+            const base = structure.vertexCount;
+            for (let i = 0; i < trunk.vertexCount; i++)
+            {
+                const o = i * 3;
+                lines.push(`v ${T[o].toFixed(6)} ${T[o + 1].toFixed(6)} ${T[o + 2].toFixed(6)}`);
+            }
+            const I = trunk.indices;
+            for (let t = 0; t < I.length; t += 3) lines.push(`f ${I[t] + base + 1} ${I[t + 1] + base + 1} ${I[t + 2] + base + 1}`);
+        }
+        const I = structure.indices;
+        for (let t = 0; t < I.length; t += 3) lines.push(`f ${I[t] + 1} ${I[t + 1] + 1} ${I[t + 2] + 1}`);
+        return lines.join('\n');
+    }
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  BarkSequence — the ordered pipeline. Stages 1 → 4, deterministic for a given seed.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+export const BarkSequence =
+{
+    run(spec, trunkConfig, seed, resolution)
+    {
+        const trunk = TrunkStructure.build(trunkConfig);
+        const clustering = ClusterSolver.solve(spec, trunk, seed);
+        const structure = PieceStructure.build(spec, trunk, clustering, seed, resolution);
+        const projection = UVProjection.run(spec, trunk, structure, resolution);
+        return { spec, trunk, clustering, structure, projection, seed };
+    }
+};
+// ==CORE-END==
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  OrbitSolver — minimal orbiting camera over a Z-up scene.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+function Mat4Perspective(fovY, aspect, near, far)
+{
+    const f = 1 / Math.tan(fovY * 0.5);
+    return new Float32Array([
+        f / aspect, 0, 0, 0,
+        0, f, 0, 0,
+        0, 0, (far + near) / (near - far), -1,
+        0, 0, (2 * far * near) / (near - far), 0
+    ]);
+}
+
+function Mat4LookAt(eye, centre, up)
+{
+    let zx = eye[0] - centre[0], zy = eye[1] - centre[1], zz = eye[2] - centre[2];
+    let l = Math.hypot(zx, zy, zz) || 1; zx /= l; zy /= l; zz /= l;
+    let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx;
+    l = Math.hypot(xx, xy, xz) || 1; xx /= l; xy /= l; xz /= l;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    return new Float32Array([
+        xx, yx, zx, 0,
+        xy, yy, zy, 0,
+        xz, yz, zz, 0,
+        -(xx * eye[0] + xy * eye[1] + xz * eye[2]),
+        -(yx * eye[0] + yy * eye[1] + yz * eye[2]),
+        -(zx * eye[0] + zy * eye[1] + zz * eye[2]), 1
+    ]);
+}
+
+function Mat4Multiply(a, b)
+{
+    const o = new Float32Array(16);
+    for (let c = 0; c < 4; c++)
+        for (let r = 0; r < 4; r++)
+        {
+            let s = 0;
+            for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
+            o[c * 4 + r] = s;
+        }
+    return o;
+}
+
+const OrbitSolver =
+{
+    yaw: 0.85, pitch: 0.18, distance: 1.15,
+    target: [0, 0, 0.30],
+
+    eye()
+    {
+        const cp = Math.cos(this.pitch);
+        return [
+            this.target[0] + this.distance * cp * Math.cos(this.yaw),
+            this.target[1] + this.distance * cp * Math.sin(this.yaw),
+            this.target[2] + this.distance * Math.sin(this.pitch)
+        ];
+    },
+
+    viewProjection(aspect)
+    {
+        const proj = Mat4Perspective(50 * Math.PI / 180, aspect, 0.01, 60);
+        const view = Mat4LookAt(this.eye(), this.target, [0, 0, 1]);
+        return Mat4Multiply(proj, view);
+    },
+
+    attach(canvas)
+    {
+        let dragging = false, mode = 0, lx = 0, ly = 0;
+        canvas.addEventListener('pointerdown', (e) =>
+        {
+            dragging = true; mode = (e.button === 2 || e.shiftKey) ? 1 : 0;
+            lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId);
+        });
+        canvas.addEventListener('pointerup', (e) => { dragging = false; canvas.releasePointerCapture(e.pointerId); });
+        canvas.addEventListener('pointermove', (e) =>
+        {
+            if (!dragging) return;
+            const dx = e.clientX - lx, dy = e.clientY - ly;
+            lx = e.clientX; ly = e.clientY;
+            if (mode === 0)
+            {
+                this.yaw -= dx * 0.008;
+                this.pitch = Clamp(this.pitch + dy * 0.008, -1.35, 1.35);
+            }
+            else
+            {
+                const pan = this.distance * 0.0016;
+                const right = [Math.sin(this.yaw), -Math.cos(this.yaw), 0];
+                for (let i = 0; i < 3; i++) this.target[i] -= right[i] * dx * pan;
+                this.target[2] += dy * pan;
+            }
+        });
+        canvas.addEventListener('wheel', (e) =>
+        {
+            e.preventDefault();
+            this.distance = Clamp(this.distance * Math.exp(e.deltaY * 0.0012), 0.18, 8);
+        }, { passive: false });
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  Shaders
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+const ShaderSource =
+{
+    piecesVertex: `#version 300 es
+    precision highp float;
+    in vec3 aPosition;
+    in vec3 aNormal;
+    in vec3 aColor;
+    in vec3 aDebug;
+    uniform mat4 uViewProjection;
+    out vec3 vNormal;
+    out vec3 vColor;
+    out vec3 vDebug;
+    out vec3 vWorld;
+    void main()
+    {
+        vNormal = aNormal;
+        vColor = aColor;
+        vDebug = aDebug;
+        vWorld = aPosition;
+        gl_Position = uViewProjection * vec4(aPosition, 1.0);
+    }`,
+
+    piecesFragment: `#version 300 es
+    precision highp float;
+    in vec3 vNormal;
+    in vec3 vColor;
+    in vec3 vDebug;
+    in vec3 vWorld;
+    uniform vec3 uEye;
+    uniform int uDebugMode;
+    out vec4 outColour;
+    void main()
+    {
+        vec3 base = vColor;
+        if (uDebugMode == 1) base = vDebug;
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uEye - vWorld);
+        if (dot(N, V) < 0.0) N = -N;
+
+        vec3 keyDir = normalize(vec3(0.55, -0.75, 0.65));
+        vec3 fillDir = normalize(vec3(-0.6, 0.4, 0.25));
+        float key = max(dot(N, keyDir), 0.0);
+        float fill = max(dot(N, fillDir), 0.0);
+        float sky = 0.5 + 0.5 * N.z;
+
+        vec3 lit = base * (0.10 + 0.95 * key + 0.22 * fill + 0.20 * sky);
+        vec3 H = normalize(keyDir + V);
+        float spec = pow(max(dot(N, H), 0.0), 42.0) * 0.16;
+        lit += vec3(spec);
+        lit = pow(clamp(lit, 0.0, 1.0), vec3(1.0 / 2.2));
+        outColour = vec4(lit, 1.0);
+    }`,
+
+    trunkVertex: `#version 300 es
+    precision highp float;
+    in vec3 aPosition;
+    in vec3 aNormal;
+    in vec2 aUv;
+    uniform mat4 uViewProjection;
+    out vec3 vNormal;
+    out vec2 vUv;
+    out vec3 vWorld;
+    void main()
+    {
+        vNormal = aNormal;
+        vUv = aUv;
+        vWorld = aPosition;
+        gl_Position = uViewProjection * vec4(aPosition, 1.0);
+    }`,
+
+    trunkFragment: `#version 300 es
+    precision highp float;
+    in vec3 vNormal;
+    in vec2 vUv;
+    in vec3 vWorld;
+    uniform vec3 uEye;
+    uniform vec3 uInnerColour;
+    uniform float uInnerRoughness;
+    uniform int uHasTextures;
+    uniform sampler2D uAlbedo;
+    uniform sampler2D uNormal;
+    uniform sampler2D uOrm;
+    out vec4 outColour;
+
+    void main()
+    {
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uEye - vWorld);
+        if (dot(N, V) < 0.0) N = -N;
+
+        // Tangent frame: X runs along +u (increasing theta), Y along +v (up the trunk).
+        vec3 T = normalize(cross(vec3(0.0, 0.0, 1.0), N));
+        vec3 B = cross(N, T);
+
+        vec3 base = uInnerColour;
+        float rough = uInnerRoughness;
+        float ao = 1.0;
+
+        if (uHasTextures == 1)
+        {
+            vec4 albedo = texture(uAlbedo, vUv);
+            vec3 nt = texture(uNormal, vUv).xyz * 2.0 - 1.0;
+            vec3 orm = texture(uOrm, vUv).xyz;
+            base = albedo.rgb;
+            rough = orm.g;
+            ao = orm.r;
+            N = normalize(T * nt.x + B * nt.y + N * nt.z);
+            if (dot(N, V) < 0.0) N = -N;
+        }
+
+        vec3 keyDir = normalize(vec3(0.55, -0.75, 0.65));
+        vec3 fillDir = normalize(vec3(-0.6, 0.4, 0.25));
+        float key = max(dot(N, keyDir), 0.0);
+        float fill = max(dot(N, fillDir), 0.0);
+        float sky = 0.5 + 0.5 * N.z;
+
+        float gloss = mix(70.0, 6.0, rough);
+        float specStrength = mix(0.30, 0.03, rough);
+
+        vec3 lit = base * ao * (0.10 + 0.95 * key + 0.22 * fill + 0.20 * sky);
+        vec3 H = normalize(keyDir + V);
+        lit += vec3(specStrength * pow(max(dot(N, H), 0.0), gloss));
+        lit = pow(clamp(lit, 0.0, 1.0), vec3(1.0 / 2.2));
+        outColour = vec4(lit, 1.0);
+    }`
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  Compilation helpers
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+function CompileProgram(gl, vertexSource, fragmentSource, label)
+{
+    const build = (type, source) =>
+    {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+            throw new Error(`${label} ${type === gl.VERTEX_SHADER ? 'vertex' : 'fragment'} shader: ${gl.getShaderInfoLog(shader)}`);
+        return shader;
+    };
+    const program = gl.createProgram();
+    gl.attachShader(program, build(gl.VERTEX_SHADER, vertexSource));
+    gl.attachShader(program, build(gl.FRAGMENT_SHADER, fragmentSource));
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+        throw new Error(`${label} link: ${gl.getProgramInfoLog(program)}`);
+    return program;
+}
+
+function UniformMap(gl, program, names)
+{
+    const map = {};
+    for (const n of names) map[n] = gl.getUniformLocation(program, n);
+    return map;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  Colour helpers for the debug shading modes
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+function HueColour(index)
+{
+    const h = (index * 0.381966) % 1;
+    const a = h * 6, s = a - Math.floor(a);
+    const c = [0, 0, 0];
+    const sector = Math.floor(a) % 6;
+    if (sector === 0) { c[0] = 1; c[1] = s; }
+    else if (sector === 1) { c[0] = 1 - s; c[1] = 1; }
+    else if (sector === 2) { c[1] = 1; c[2] = s; }
+    else if (sector === 3) { c[1] = 1 - s; c[2] = 1; }
+    else if (sector === 4) { c[0] = s; c[2] = 1; }
+    else { c[0] = 1; c[2] = 1 - s; }
+    const lift = 0.45;
+    return [lift + c[0] * (1 - lift), lift + c[1] * (1 - lift), lift + c[2] * (1 - lift)];
+}
+
+function RampColour(t)
+{
+    const stops = [[0.10, 0.18, 0.55], [0.15, 0.62, 0.72], [0.35, 0.78, 0.35], [0.95, 0.82, 0.25], [0.92, 0.28, 0.18]];
+    const x = Clamp(t, 0, 1) * (stops.length - 1);
+    const i = Math.min(stops.length - 2, Math.floor(x));
+    const f = x - i;
+    return [
+        Lerp(stops[i][0], stops[i + 1][0], f),
+        Lerp(stops[i][1], stops[i + 1][1], f),
+        Lerp(stops[i][2], stops[i + 1][2], f)
+    ];
+}
+
+function BuildDebugFields(structure)
+{
+    const n = structure.vertexCount;
+    const byCluster = new Float32Array(n * 3);
+    const byPlate = new Float32Array(n * 3);
+    const byRelief = new Float32Array(n * 3);
+    let peak = 0;
+    for (const piece of structure.pieces) if (piece.maxLift > peak) peak = piece.maxLift;
+    const inv = peak > 0 ? 1 / peak : 0;
+
+    for (const group of structure.ranges)
+    {
+        const piece = structure.pieces[group.piece];
+        const c = HueColour(Math.max(0, piece.cluster) + 1);
+        const p = HueColour(group.piece);
+        const r = RampColour((piece.maxLift || 0) * inv);
+        for (let v = group.start; v < group.start + group.count; v++)
+        {
+            const o = v * 3;
+            byCluster[o] = c[0]; byCluster[o + 1] = c[1]; byCluster[o + 2] = c[2];
+            byPlate[o] = p[0]; byPlate[o + 1] = p[1]; byPlate[o + 2] = p[2];
+            byRelief[o] = r[0]; byRelief[o + 1] = r[1]; byRelief[o + 2] = r[2];
+        }
+    }
+    return { byCluster, byPlate, byRelief };
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  TextureMetrics — the counters shown in the readout.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+const TextureMetrics =
+{
+    render(target, entries)
+    {
+        target.innerHTML = entries.map(([k, v, cls]) =>
+            `<dt>${k}</dt><dd class="${cls || ''}">${v}</dd>`).join('');
+    }
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  BarkPanel — the parameter overlay.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+const BarkPanel =
+{
+    schema:
+    [
+        {
+            title: 'Species', items: [
+                { type: 'select', key: 'species', label: 'Preset' },
+                { type: 'range', key: 'seed', label: 'Seed', min: 0, max: 99999, step: 1, digits: 0 },
+                { type: 'select', key: 'resolution', label: 'Bake size', options: [[512, '512 ²'], [1024, '1024 ²'], [2048, '2048 ²']] }
+            ]
+        },
+        {
+            title: 'Lattice', items: [
+                { type: 'range', key: 'spacing', label: 'Cell size', min: 4, max: 120, step: 1, unit: 'mm' },
+                { type: 'range', key: 'stretch', label: 'Cell aspect', min: 0.08, max: 8, step: 0.02, digits: 2 },
+                { type: 'range', key: 'clusterSize', label: 'Cluster size', min: 15, max: 300, step: 1, unit: 'mm' }
+            ]
+        },
+        {
+            title: 'Plates', items: [
+                { type: 'range', key: 'thickness', label: 'Relief', min: 0.2, max: 12, step: 0.1, unit: 'mm', digits: 1 },
+                { type: 'range', key: 'gap', label: 'Fissure', min: 0.2, max: 14, step: 0.1, unit: 'mm', digits: 1 },
+                { type: 'range', key: 'roughen', label: 'Edge break-up', min: 0, max: 1, step: 0.01, digits: 2 },
+                { type: 'range', key: 'coverage', label: 'Plate fill', min: 50, max: 100, step: 1, unit: '%', digits: 0 }
+            ]
+        },
+        {
+            title: 'Gaps', items: [
+                { type: 'range', key: 'bareChance', label: 'Flaked patches', min: 0, max: 60, step: 1, unit: '%', digits: 0 },
+                { type: 'range', key: 'voidChance', label: 'Empty cells', min: 0, max: 45, step: 1, unit: '%', digits: 0 },
+                { type: 'range', key: 'relaxIterations', label: 'Relaxation', min: 0, max: 4, step: 1, digits: 0 }
+            ]
+        }
+    ],
+
+    build(container, state, onInput)
+    {
+        container.innerHTML = '';
+        this.inputs = {};
+
+        for (const group of this.schema)
+        {
+            const section = document.createElement('div');
+            section.className = 'sec';
+            const heading = document.createElement('div');
+            heading.className = 'h';
+            heading.textContent = group.title;
+            section.appendChild(heading);
+
+            for (const item of group.items)
+            {
+                const field = document.createElement('div');
+                field.className = 'field';
+                const label = document.createElement('div');
+                label.className = 'lab';
+                const name = document.createElement('span');
+                name.textContent = item.label;
+                const readout = document.createElement('b');
+                label.appendChild(name);
+                label.appendChild(readout);
+                field.appendChild(label);
+
+                let control;
+                let paint = null;
+                if (item.type === 'select')
+                {
+                    control = document.createElement('select');
+                    const options = item.options || BarkSpecification.presets.map((p) => [p.key, p.label]);
+                    for (const [value, text] of options)
+                    {
+                        const option = document.createElement('option');
+                        option.value = String(value);
+                        option.textContent = text;
+                        control.appendChild(option);
+                    }
+                    control.value = String(state[item.key]);
+                    control.addEventListener('change', () =>
+                    {
+                        state[item.key] = isNaN(Number(control.value)) ? control.value : Number(control.value);
+                        onInput(item.key, true);
+                    });
+                }
+                else
+                {
+                    control = document.createElement('input');
+                    control.type = 'range';
+                    control.min = item.min; control.max = item.max; control.step = item.step;
+                    control.value = state[item.key];
+                    paint = () =>
+                    {
+                        const digits = item.digits === undefined ? 0 : item.digits;
+                        readout.textContent = Number(control.value).toFixed(digits) + (item.unit ? ' ' + item.unit : '');
+                    };
+                    if (paint) paint();
+                    control.addEventListener('input', () =>
+                    {
+                        state[item.key] = Number(control.value);
+                        if (paint) paint();
+                        onInput(item.key, false);
+                    });
+                    control.addEventListener('change', () => onInput(item.key, true));
+                }
+
+                field.appendChild(control);
+                section.appendChild(field);
+                this.inputs[item.key] = { control, item, paint };
+            }
+            container.appendChild(section);
+        }
+
+        const viewSection = document.createElement('div');
+        viewSection.className = 'sec';
+        const viewHeading = document.createElement('div');
+        viewHeading.className = 'h';
+        viewHeading.textContent = 'View';
+        viewSection.appendChild(viewHeading);
+
+        viewSection.appendChild(this.segmented('Surface', [['pieces', 'Simulated pieces'], ['baked', 'Baked texture']], state.view,
+            (v) => { state.view = v; onInput('view', true); }));
+
+        const shadeLabel = document.createElement('div');
+        shadeLabel.className = 'h';
+        shadeLabel.style.marginTop = '12px';
+        shadeLabel.textContent = 'Shading';
+        viewSection.appendChild(shadeLabel);
+        viewSection.appendChild(this.segmented('shading', [['shaded', 'Lit'], ['clusters', 'Clusters'], ['plates', 'Plates'], ['relief', 'Relief']], state.shading,
+            (v) => { state.shading = v; onInput('shading', true); }));
+        container.appendChild(viewSection);
+
+        const actionSection = document.createElement('div');
+        actionSection.className = 'sec';
+        const actionHeading = document.createElement('div');
+        actionHeading.className = 'h';
+        actionHeading.textContent = 'Output';
+        actionSection.appendChild(actionHeading);
+        const note = document.createElement('div');
+        note.className = 'note';
+        note.textContent = 'Albedo, normal and ORM are baked from the plates above. Normal is tangent space, X = +u, Y = +v, green = +v.';
+        actionSection.appendChild(note);
+
+        const pair = document.createElement('div');
+        pair.className = 'row2';
+        pair.style.marginBottom = '7px';
+        const pngButton = document.createElement('button');
+        pngButton.className = 'btn ghost';
+        pngButton.textContent = 'PNG set';
+        pngButton.addEventListener('click', () => onInput('exportPng', true));
+        const jsonButton = document.createElement('button');
+        jsonButton.className = 'btn ghost';
+        jsonButton.textContent = 'Recipe';
+        jsonButton.addEventListener('click', () => onInput('exportJson', true));
+        pair.appendChild(pngButton);
+        pair.appendChild(jsonButton);
+        actionSection.appendChild(pair);
+
+        const objButton = document.createElement('button');
+        objButton.className = 'btn ghost';
+        objButton.textContent = 'Plates as OBJ';
+        objButton.addEventListener('click', () => onInput('exportObj', true));
+        actionSection.appendChild(objButton);
+
+        container.appendChild(actionSection);
+    },
+
+    segmented(key, options, current, onPick)
+    {
+        const wrap = document.createElement('div');
+        wrap.className = 'seg';
+        const buttons = [];
+        for (const [value, text] of options)
+        {
+            const button = document.createElement('button');
+            button.textContent = text;
+            if (value === current) button.classList.add('on');
+            button.addEventListener('click', () =>
+            {
+                for (const b of buttons) b.classList.remove('on');
+                button.classList.add('on');
+                onPick(value);
+            });
+            buttons.push(button);
+            wrap.appendChild(button);
+        }
+        return wrap;
+    },
+
+    sync(state)
+    {
+        for (const key in this.inputs)
+        {
+            const entry = this.inputs[key];
+            if (String(entry.control.value) === String(state[key])) continue;
+            entry.control.value = state[key];
+            if (entry.paint) entry.paint();
+        }
+    }
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  BarkHost — root coordinator: owns the GL context, the rebuild pipeline and the export actions.
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+const BarkHost =
+{
+    state: null,
+    result: null,
+    gl: null,
+    canvas: null,
+
+    init()
+    {
+        this.canvas = document.getElementById('stage');
+        const gl = this.canvas.getContext('webgl2', { antialias: true, alpha: false });
+        if (!gl)
+        {
+            document.getElementById('err').style.display = 'block';
+            document.getElementById('err').textContent = 'WebGL2 is not available in this browser.';
+            return false;
+        }
+        this.gl = gl;
+
+        this.piecesProgram = CompileProgram(gl, ShaderSource.piecesVertex, ShaderSource.piecesFragment, 'pieces');
+        this.trunkProgram = CompileProgram(gl, ShaderSource.trunkVertex, ShaderSource.trunkFragment, 'trunk');
+        this.piecesUniforms = UniformMap(gl, this.piecesProgram, ['uViewProjection', 'uEye', 'uDebugMode']);
+        this.trunkUniforms = UniformMap(gl, this.trunkProgram,
+            ['uViewProjection', 'uEye', 'uInnerColour', 'uInnerRoughness', 'uHasTextures', 'uAlbedo', 'uNormal', 'uOrm']);
+
+        this.piecesAttrib = {
+            aPosition: gl.getAttribLocation(this.piecesProgram, 'aPosition'),
+            aNormal: gl.getAttribLocation(this.piecesProgram, 'aNormal'),
+            aColor: gl.getAttribLocation(this.piecesProgram, 'aColor'),
+            aDebug: gl.getAttribLocation(this.piecesProgram, 'aDebug')
+        };
+        this.trunkAttrib = {
+            aPosition: gl.getAttribLocation(this.trunkProgram, 'aPosition'),
+            aNormal: gl.getAttribLocation(this.trunkProgram, 'aNormal'),
+            aUv: gl.getAttribLocation(this.trunkProgram, 'aUv')
+        };
+
+        this.buffers = {};
+        this.textures = {};
+        for (const name of ['albedo', 'normal', 'orm'])
+        {
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            this.textures[name] = texture;
+        }
+
+        OrbitSolver.attach(this.canvas);
+        gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.CULL_FACE);
+        gl.clearColor(0.027, 0.027, 0.039, 1);
+        return true;
+    },
+
+    defaultState()
+    {
+        const preset = BarkSpecification.presets[0];
+        return {
+            species: preset.key, seed: 20250808, resolution: 1024,
+            spacing: preset.spacing * 1000, stretch: preset.stretch,
+            thickness: preset.thickness * 1000, gap: preset.gap * 1000,
+            roughen: preset.roughen, coverage: preset.coverage * 100,
+            clusterSize: preset.clusterSize * 1000,
+            bareChance: preset.bareChance * 100, voidChance: preset.voidChance * 100,
+            relaxIterations: preset.relaxIterations,
+            view: 'pieces', shading: 'shaded'
+        };
+    },
+
+    adoptPreset()
+    {
+        const preset = BarkSpecification.find(this.state.species);
+        this.state.spacing = preset.spacing * 1000;
+        this.state.stretch = preset.stretch;
+        this.state.thickness = preset.thickness * 1000;
+        this.state.gap = preset.gap * 1000;
+        this.state.roughen = preset.roughen;
+        this.state.coverage = preset.coverage * 100;
+        this.state.clusterSize = preset.clusterSize * 1000;
+        this.state.bareChance = preset.bareChance * 100;
+        this.state.voidChance = preset.voidChance * 100;
+        this.state.relaxIterations = preset.relaxIterations;
+    },
+
+    specification()
+    {
+        const s = this.state;
+        return BarkSpecification.resolve(s.species, {
+            spacing: s.spacing / 1000,
+            stretch: s.stretch,
+            thickness: s.thickness / 1000,
+            gap: s.gap / 1000,
+            roughen: s.roughen,
+            coverage: s.coverage / 100,
+            clusterSize: s.clusterSize / 1000,
+            bareChance: s.bareChance / 100,
+            voidChance: s.voidChance / 100,
+            relaxIterations: s.relaxIterations
+        });
+    },
+
+    async rebuild()
+    {
+        const veil = document.getElementById('veil');
+        veil.classList.add('on');
+        await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+        try
+        {
+            const spec = this.specification();
+            const t0 = performance.now();
+            this.result = BarkSequence.run(spec, {}, this.state.seed | 0, this.state.resolution);
+            this.result.elapsed = performance.now() - t0;
+            this.upload();
+            this.refreshTextures();
+            this.refreshReadout();
+        }
+        catch (error)
+        {
+            const box = document.getElementById('err');
+            box.style.display = 'block';
+            box.textContent = String(error && error.stack || error);
+        }
+        finally
+        {
+            veil.classList.remove('on');
+        }
+    },
+
+    upload()
+    {
+        const gl = this.gl;
+        const { trunk, structure } = this.result;
+        const debug = BuildDebugFields(structure);
+        this.debugFields = debug;
+
+        const make = (name, data, target) =>
+        {
+            if (!this.buffers[name]) this.buffers[name] = gl.createBuffer();
+            gl.bindBuffer(target, this.buffers[name]);
+            gl.bufferData(target, data, gl.STATIC_DRAW);
+        };
+
+        make('piecePosition', structure.positions, gl.ARRAY_BUFFER);
+        make('pieceNormal', structure.normals, gl.ARRAY_BUFFER);
+        make('pieceColour', structure.colors, gl.ARRAY_BUFFER);
+        make('pieceCluster', debug.byCluster, gl.ARRAY_BUFFER);
+        make('piecePlate', debug.byPlate, gl.ARRAY_BUFFER);
+        make('pieceRelief', debug.byRelief, gl.ARRAY_BUFFER);
+        make('pieceIndex', structure.indices, gl.ELEMENT_ARRAY_BUFFER);
+
+        make('trunkPosition', trunk.positions, gl.ARRAY_BUFFER);
+        make('trunkNormal', trunk.normals, gl.ARRAY_BUFFER);
+        make('trunkUv', trunk.uvs, gl.ARRAY_BUFFER);
+        make('trunkIndex', trunk.indices, gl.ELEMENT_ARRAY_BUFFER);
+
+        this.pieceIndexCount = structure.indices.length;
+        this.trunkIndexCount = trunk.indices.length;
+    },
+
+    async refreshTextures()
+    {
+        const gl = this.gl;
+        const projection = this.result.projection;
+        const N = projection.resolution;
+        for (const [name, data] of [['albedo', projection.albedo], ['normal', projection.normal], ['orm', projection.orm]])
+        {
+            gl.bindTexture(gl.TEXTURE_2D, this.textures[name]);
+            // Row 0 of every field is v = 0 (the base of the trunk), so flip into the image's top-down order.
+            gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, N, N, 0, gl.RGB, gl.UNSIGNED_BYTE, data, 0);
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+            gl.generateMipmap(gl.TEXTURE_2D);
+        }
+        this.updateStrip();
+    },
+
+    async updateStrip()
+    {
+        const strip = document.getElementById('strip');
+        if (!this.result) return;
+        const projection = this.result.projection;
+        const N = projection.resolution;
+        for (const [name, data] of [['albedo', projection.albedo], ['normal', projection.normal], ['orm', projection.orm]])
+        {
+            const png = await TextureCodec.encodePng(data, N, N, true);
+            let element = strip.querySelector(`img[data-name="${name}"]`);
+            if (!element)
+            {
+                const figure = document.createElement('figure');
+                const caption = document.createElement('figcaption');
+                caption.textContent = name;
+                element = document.createElement('img');
+                element.dataset.name = name;
+                figure.appendChild(caption);
+                figure.appendChild(element);
+                strip.appendChild(figure);
+            }
+            if (this.stripUrls && this.stripUrls[name]) URL.revokeObjectURL(this.stripUrls[name]);
+            const url = URL.createObjectURL(new Blob([png], { type: 'image/png' }));
+            this.stripUrls = this.stripUrls || {};
+            this.stripUrls[name] = url;
+            element.src = url;
+        }
+    },
+
+    refreshReadout()
+    {
+        const r = this.result;
+        const st = r.structure.stats;
+        const p = r.projection;
+        document.getElementById('ro-species').textContent =
+            `${r.spec.label} — ${r.trunk.width.toFixed(3)} m around × ${r.trunk.height.toFixed(2)} m tall`;
+        TextureMetrics.render(document.getElementById('ro-list'), [
+            ['clusters', st.clusters],
+            ['seeds', st.seeds],
+            ['plates', st.pieces + (st.lenticels ? ` +${st.lenticels}` : '')],
+            ['triangles', r.structure.triangleCount.toLocaleString()],
+            ['bake', `${p.resolution}²`],
+            ['coverage', `${(p.coverage * 100).toFixed(1)} %`],
+            ['relief', `${(p.maxHeight * 1000).toFixed(2)} mm`],
+            ['bake time', `${p.elapsed.toFixed(0)} ms`],
+            ['total', `${r.elapsed.toFixed(0)} ms`, r.elapsed > 1500 ? 'warn' : 'on']
+        ]);
+    },
+
+    debugBuffer()
+    {
+        const mode = this.state.shading;
+        if (mode === 'clusters') return { buffer: this.buffers.pieceCluster, mode: 1 };
+        if (mode === 'plates') return { buffer: this.buffers.piecePlate, mode: 1 };
+        if (mode === 'relief') return { buffer: this.buffers.pieceRelief, mode: 1 };
+        return { buffer: this.buffers.pieceColour, mode: 0 };
+    },
+
+    draw()
+    {
+        const gl = this.gl;
+        const canvas = this.canvas;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const width = Math.max(1, Math.round(canvas.clientWidth * dpr));
+        const height = Math.max(1, Math.round(canvas.clientHeight * dpr));
+        if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        if (!this.result) return;
+
+        const viewProjection = OrbitSolver.viewProjection(canvas.clientWidth / Math.max(1, canvas.clientHeight));
+        const eye = OrbitSolver.eye();
+        const spec = this.result.spec;
+        const inner = HexToRgb(spec.inner);
+
+        // The trunk surface always draws: in "pieces" mode it is the inner bark showing through the fissures.
+        const baked = this.state.view === 'baked';
+        gl.disable(gl.CULL_FACE);
+        gl.useProgram(this.trunkProgram);
+        gl.uniformMatrix4fv(this.trunkUniforms.uViewProjection, false, viewProjection);
+        gl.uniform3fv(this.trunkUniforms.uEye, eye);
+        gl.uniform3f(this.trunkUniforms.uInnerColour, inner[0], inner[1], inner[2]);
+        gl.uniform1f(this.trunkUniforms.uInnerRoughness, spec.roughInner);
+        gl.uniform1i(this.trunkUniforms.uHasTextures, baked ? 1 : 0);
+        if (baked)
+        {
+            gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.textures.albedo); gl.uniform1i(this.trunkUniforms.uAlbedo, 0);
+            gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.textures.normal); gl.uniform1i(this.trunkUniforms.uNormal, 1);
+            gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.textures.orm); gl.uniform1i(this.trunkUniforms.uOrm, 2);
+        }
+        this.bindTrunk();
+        gl.drawElements(gl.TRIANGLES, this.trunkIndexCount, gl.UNSIGNED_INT, 0);
+
+        if (!baked)
+        {
+            gl.enable(gl.CULL_FACE);
+            const debug = this.debugBuffer();
+            gl.useProgram(this.piecesProgram);
+            gl.uniformMatrix4fv(this.piecesUniforms.uViewProjection, false, viewProjection);
+            gl.uniform3fv(this.piecesUniforms.uEye, eye);
+            gl.uniform1i(this.piecesUniforms.uDebugMode, debug.mode);
+            this.bindPieces(debug.buffer);
+            gl.drawElements(gl.TRIANGLES, this.pieceIndexCount, gl.UNSIGNED_INT, 0);
+        }
+    },
+
+    bindTrunk()
+    {
+        const gl = this.gl, a = this.trunkAttrib;
+        const attach = (location, buffer, size) =>
+        {
+            if (location < 0) return;
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.enableVertexAttribArray(location);
+            gl.vertexAttribPointer(location, size, gl.FLOAT, false, 0, 0);
+        };
+        attach(a.aPosition, this.buffers.trunkPosition, 3);
+        attach(a.aNormal, this.buffers.trunkNormal, 3);
+        attach(a.aUv, this.buffers.trunkUv, 2);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.trunkIndex);
+    },
+
+    bindPieces(debugBuffer)
+    {
+        const gl = this.gl, a = this.piecesAttrib;
+        const attach = (location, buffer, size) =>
+        {
+            if (location < 0) return;
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.enableVertexAttribArray(location);
+            gl.vertexAttribPointer(location, size, gl.FLOAT, false, 0, 0);
+        };
+        attach(a.aPosition, this.buffers.piecePosition, 3);
+        attach(a.aNormal, this.buffers.pieceNormal, 3);
+        attach(a.aColor, this.buffers.pieceColour, 3);
+        attach(a.aDebug, debugBuffer, 3);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.pieceIndex);
+    },
+
+    save(name, blob)
+    {
+        try
+        {
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = name;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 4000);
+            return true;
+        }
+        catch (error)
+        {
+            window.open(URL.createObjectURL(blob), '_blank');
+            return false;
+        }
+    },
+
+    async exportPngs()
+    {
+        if (!this.result) return;
+        const projection = this.result.projection;
+        const N = projection.resolution;
+        const tag = this.result.spec.key;
+        for (const [name, data] of [['albedo', projection.albedo], ['normal', projection.normal], ['orm', projection.orm]])
+        {
+            const png = await TextureCodec.encodePng(data, N, N, true);
+            this.save(`BarkSolver_${tag}_${name}_${N}.png`, new Blob([png], { type: 'image/png' }));
+        }
+    },
+
+    async exportJson()
+    {
+        if (!this.result) return;
+        const r = this.result;
+        const recipe = TextureCodec.recipe(r.spec, r.trunk, r.clustering, r.structure, r.projection, this.state.seed | 0);
+        this.save(`BarkSolver_${r.spec.key}_recipe.json`,
+            new Blob([JSON.stringify(recipe, null, 2)], { type: 'application/json' }));
+    },
+
+    exportObj()
+    {
+        if (!this.result) return;
+        const text = GeometryCodec.toObj(this.result.trunk, this.result.structure, true);
+        this.save(`BarkSolver_${this.result.spec.key}_plates.obj`, new Blob([text], { type: 'text/plain' }));
+    }
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//  Entry point
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+function StartBarkHost()
+{
+    if (!BarkHost.init()) return;
+    BarkHost.state = BarkHost.defaultState();
+
+    let debounce = 0;
+    const schedule = (immediate) =>
+    {
+        clearTimeout(debounce);
+        debounce = setTimeout(() => BarkHost.rebuild(), immediate ? 0 : 180);
+    };
+
+    BarkPanel.build(document.getElementById('panel-scroll'), BarkHost.state, (key, settled) =>
+    {
+        if (key === 'species') { BarkHost.adoptPreset(); BarkPanel.sync(BarkHost.state); schedule(true); return; }
+        if (key === 'exportPng') { BarkHost.exportPngs(); return; }
+        if (key === 'exportJson') { BarkHost.exportJson(); return; }
+        if (key === 'exportObj') { BarkHost.exportObj(); return; }
+        if (key === 'view' || key === 'shading') return;
+        schedule(settled);
+    });
+
+    const frame = () => { BarkHost.draw(); requestAnimationFrame(frame); };
+    requestAnimationFrame(frame);
+    BarkHost.rebuild();
+}
+
+StartBarkHost();
+window.__SlateBark = { BarkHost, BarkSequence, BarkSpecification, OrbitSolver };
+</script>
+</body>
+</html>
