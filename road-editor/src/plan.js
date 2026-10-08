@@ -3,7 +3,8 @@
    Tools: select / draw / pan. Space-drag pans in any tool.
    ════════════════════════════════════════════════════════════════════ */
 import {distToSegment} from './spline.js';
-import {SURFACES, baseWidth} from './geometry.js';
+import {SURFACES, baseWidth, pierStations} from './geometry.js';
+import {sampleAtStation} from './topology.js';
 import {effectivePoints, linkForPoint, setPointPosition, roadById} from './state.js';
 import {allocId, defaultRoad, downloadCanvasPNG} from './io.js';
 
@@ -57,8 +58,8 @@ export function createPlanView(canvas, store, env) {
     return out;
   }
 
-  function resolveSnap(wx, wz, forDrag = null) {
-    let x = wx, z = wz, node = null, grid = false;
+  function resolveSnap(wx, wz, forDrag = null, allowCurve = false) {
+    let x = wx, z = wz, y = null, node = null, curve = null, grid = false;
     if (store.ui.snapNode) {
       let best = 12 / cam.scale;
       for (const t of snapTargets(forDrag?.roadId, forDrag?.index ?? -1)) {
@@ -67,12 +68,37 @@ export function createPlanView(canvas, store, env) {
       }
       if (node) { x = node.x; z = node.z; }
     }
-    if (!node && store.ui.snapGrid) {
+    // Curve snap: endpoints land on other roads' centrelines (T / merge terminals).
+    if (!node && allowCurve && store.ui.snapNode) {
+      let best = 12 / cam.scale, hit = null;
+      for (const road of store.project.roads) {
+        if (road.visible === false) continue;
+        if (forDrag && road.id === forDrag.roadId) continue;
+        const smp = env.getSamples(road.id);
+        if (!smp || !smp.count) continue;
+        const S = smp.samples, n = S.length;
+        const end = smp.closed ? n : n - 1;
+        for (let i = 0; i < end; i++) {
+          const a = S[i], b = S[(i + 1) % n];
+          if (wx < Math.min(a.x, b.x) - best || wx > Math.max(a.x, b.x) + best ||
+              wz < Math.min(a.z, b.z) - best || wz > Math.max(a.z, b.z) + best) continue;
+          const {d, t} = distToSegment(wx, wz, a.x, a.z, b.x, b.z);
+          if (d < best) { best = d; hit = {a, b, t, roadId: road.id}; }
+        }
+      }
+      if (hit) {
+        const {a, b, t} = hit;
+        x = a.x + (b.x - a.x) * t; z = a.z + (b.z - a.z) * t;
+        y = a.y + (b.y - a.y) * t;
+        curve = {roadId: hit.roadId};
+      }
+    }
+    if (!node && !curve && store.ui.snapGrid) {
       const g = store.ui.gridSize || 1;
       x = Math.round(wx / g) * g; z = Math.round(wz / g) * g;
       grid = true;
     }
-    return {x, z, node, grid};
+    return {x, z, y, node, curve, grid};
   }
 
   /* ── hit testing ──────────────────────────────────────────────── */
@@ -192,8 +218,7 @@ export function createPlanView(canvas, store, env) {
     ctx.closePath();
   }
 
-  function drawRoad(road, smp, selected) {
-    const S = smp.samples;
+  function drawRoad(road, S, closed, selected, label) {
     if (!S.length) return;
     const pal = PLAN_SURFACE[road.surface] || PLAN_SURFACE.asphalt;
     const laneHalf = (p) => (road.lanes * road.laneWidth * (p.w || 1)) / 2;
@@ -206,20 +231,20 @@ export function createPlanView(canvas, store, env) {
       // Accent under-glow.
       ctx.save();
       ctx.shadowColor = ACCENT; ctx.shadowBlur = 14;
-      strokePath(S, smp.closed, 'rgba(74,144,226,.55)', Math.max(3, approxW * cam.scale + 5));
+      strokePath(S, closed, 'rgba(74,144,226,.55)', Math.max(3, approxW * cam.scale + 5));
       ctx.restore();
     }
     if (detailed) {
       ctx.fillStyle = 'rgba(0,0,0,.9)';
-      ribbonPolygon(S, smp.closed, (p) => oL(p) - 0.35, (p) => oR(p) + 0.35);
+      ribbonPolygon(S, closed, (p) => oL(p) - 0.35, (p) => oR(p) + 0.35);
       ctx.fill();
       if (road.shoulderL > 0 || road.shoulderR > 0) {
         ctx.fillStyle = pal.shoulder;
-        ribbonPolygon(S, smp.closed, oL, oR);
+        ribbonPolygon(S, closed, oL, oR);
         ctx.fill();
       }
       ctx.fillStyle = pal.road;
-      ribbonPolygon(S, smp.closed, (p) => -laneHalf(p), (p) => laneHalf(p));
+      ribbonPolygon(S, closed, (p) => -laneHalf(p), (p) => laneHalf(p));
       ctx.fill();
       // Markings.
       const cm = road.centerMarking;
@@ -233,7 +258,7 @@ export function createPlanView(canvas, store, env) {
             const [sx, sy] = w2s(p.x - p.tz * o, p.z + p.tx * o);
             if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
           });
-          if (smp.closed) ctx.closePath();
+          if (closed) ctx.closePath();
           ctx.stroke();
         }
       } else if (cm === 'dashed') {
@@ -274,12 +299,12 @@ export function createPlanView(canvas, store, env) {
         }
       }
     } else {
-      strokePath(S, smp.closed, 'rgba(0,0,0,.9)', 5);
-      strokePath(S, smp.closed, road.color || pal.road, 3);
+      strokePath(S, closed, 'rgba(0,0,0,.9)', 5);
+      strokePath(S, closed, road.color || pal.road, 3);
     }
 
     // Direction chevrons.
-    if (cam.scale >= 1.2 && !smp.closed) {
+    if (cam.scale >= 1.2 && !closed) {
       ctx.fillStyle = selected ? '#fff' : 'rgba(255,255,255,.5)';
       const every = Math.max(1, Math.round(28 / (cam.scale * 1.0)));
       for (let i = every; i < S.length - 1; i += every * 3) {
@@ -295,7 +320,7 @@ export function createPlanView(canvas, store, env) {
       }
     }
     // Name label at mid-station.
-    if (cam.scale >= 2.2) {
+    if (label && cam.scale >= 2.2) {
       const mid = S[Math.floor(S.length / 2)];
       const [sx, sy] = w2s(mid.x, mid.z);
       ctx.font = '600 11px "Segoe UI",system-ui,sans-serif';
@@ -352,12 +377,79 @@ export function createPlanView(canvas, store, env) {
         ctx.arc(sx, sy, s / 2 + 4, 0, Math.PI * 2);
         ctx.stroke();
       }
+      if (road.points[i]?.bridge) {
+        ctx.fillStyle = '#6cd5e0';
+        ctx.fillRect(sx - 2.5, sy + 7, 5, 5);
+      }
       // End ticks.
       if (!road.closed && (i === 0 || i === pts.length - 1)) {
         ctx.fillStyle = 'rgba(255,255,255,.85)';
         ctx.font = '700 8px "Segoe UI",system-ui,sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(i === 0 ? 'A' : 'B', sx, sy - 9);
+      }
+    }
+  }
+
+  function drawTopology(topo) {
+    if (!topo) return;
+    // Paved intersection discs.
+    for (const ix of topo.intersections || []) {
+      const [sx, sy] = w2s(ix.x, ix.z);
+      const r = ix.radius * cam.scale;
+      if (r < 6) continue;
+      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(38,40,45,.92)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(246,198,106,.55)'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const l of ix.legs) {
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + l.dirx * r * 0.8, sy + l.dirz * r * 0.8);
+      }
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(246,198,106,.95)';
+      ctx.font = '700 10px "Segoe UI",system-ui,sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText({cross: 'X', tee: 'T', merge: 'M', wye: 'Y', elbow: 'L', multi: '*'}[ix.kind] || '?', sx, sy);
+    }
+    // Overpass markers (upper > lower, clearance).
+    for (const o of topo.overpasses || []) {
+      const [sx, sy] = w2s(o.x, o.z);
+      const low = o.gap < 4.5;
+      ctx.strokeStyle = low ? '#ef4444' : 'rgba(125,231,165,.85)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(sx, sy, 9, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = low ? '#ef4444' : 'rgba(125,231,165,.95)';
+      ctx.font = '600 10px "Segoe UI",system-ui,sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(`${o.gap.toFixed(1)}m`, sx + 12, sy);
+    }
+    // Bridge spans: deck edges + pier ticks.
+    for (const b of topo.bridges || []) {
+      const road = roadById(store.project, b.roadId);
+      const smp = env.getSamples(b.roadId);
+      if (!road || !smp) continue;
+      const S = smp.samples.filter((q) => q.s >= b.s0 && q.s <= b.s1);
+      if (S.length > 1) {
+        for (const side of [-1, 1]) {
+          ctx.strokeStyle = 'rgba(125,213,224,.9)'; ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          S.forEach((q, i) => {
+            const hr = (road.lanes * road.laneWidth * (q.w || 1)) / 2;
+            const sh = (side < 0 ? road.shoulderL : road.shoulderR) * (q.w || 1);
+            const o = side * (hr + sh + 0.18);
+            const [qx, qy] = w2s(q.x - q.tz * o, q.z + q.tx * o);
+            if (i === 0) ctx.moveTo(qx, qy); else ctx.lineTo(qx, qy);
+          });
+          ctx.stroke();
+        }
+      }
+      ctx.fillStyle = 'rgba(125,213,224,.95)';
+      for (const ps of pierStations(b, +road.bridgeSpacing || 12)) {
+        const st = sampleAtStation(smp.samples, ps);
+        const [qx, qy] = w2s(st.x, st.z);
+        ctx.fillRect(qx - 2.5, qy - 2.5, 5, 5);
       }
     }
   }
@@ -501,11 +593,19 @@ export function createPlanView(canvas, store, env) {
     drawGrid();
     const p = store.project;
     const sel = store.selection;
+    const topo = env.getTopology?.();
     for (const road of p.roads) {
       if (road.visible === false) continue;
       const smp = env.getSamples(road.id);
-      if (smp && smp.count) drawRoad(road, smp, sel.roadId === road.id);
+      if (!smp || !smp.count) continue;
+      const runs = topo?.runs?.get(road.id) || [smp.samples];
+      const whole = runs.length === 1 && runs[0].length === smp.samples.length;
+      const longest = runs.reduce((a, b) => (b.length > a.length ? b : a), runs[0]);
+      for (const run of runs) {
+        drawRoad(road, run, whole && smp.closed, sel.roadId === road.id, run === longest);
+      }
     }
+    drawTopology(topo);
     // Control points for every visible road when zoomed, full handles for selected.
     for (const road of p.roads) {
       if (road.visible === false) continue;
@@ -517,7 +617,7 @@ export function createPlanView(canvas, store, env) {
     // Snap glyph.
     if (snapMark) {
       const [sx, sy] = w2s(snapMark.x, snapMark.z);
-      ctx.strokeStyle = snapMark.node ? '#f59e0b' : 'rgba(74,144,226,.8)';
+      ctx.strokeStyle = snapMark.node ? '#f59e0b' : snapMark.curve ? '#7ee7a5' : 'rgba(74,144,226,.8)';
       ctx.lineWidth = 1.6;
       ctx.beginPath(); ctx.arc(sx, sy, 9, 0, Math.PI * 2); ctx.stroke();
       ctx.beginPath();
@@ -704,8 +804,9 @@ export function createPlanView(canvas, store, env) {
           return;
         }
       }
-      const sn = resolveSnap(w.x, w.z);
-      const y = road.points.length ? road.points[road.points.length - 1].y : 0;
+      const sn = resolveSnap(w.x, w.z, null, true);
+      const y = sn.curve && sn.y != null ? +sn.y.toFixed(2)
+        : road.points.length ? road.points[road.points.length - 1].y : 0;
       store.transient((p) => {
         const r = roadById(p, road.id);
         r.points.push({x: +sn.x.toFixed(3), z: +sn.z.toFixed(3), y, w: 1});
@@ -807,20 +908,24 @@ export function createPlanView(canvas, store, env) {
     }
     if (drag?.mode === 'point') {
       drag.moved = true;
-      const sn = resolveSnap(w.x, w.z, {roadId: drag.roadId, index: drag.index});
+      const droad = roadById(store.project, drag.roadId);
+      const isEnd = droad && !droad.closed &&
+        (drag.index === 0 || drag.index === droad.points.length - 1);
+      const sn = resolveSnap(w.x, w.z, {roadId: drag.roadId, index: drag.index}, !!isEnd);
       store.transient((p) => {
-        setPointPosition(p, drag.roadId, drag.index, +sn.x.toFixed(3), +sn.z.toFixed(3), undefined);
+        setPointPosition(p, drag.roadId, drag.index, +sn.x.toFixed(3), +sn.z.toFixed(3),
+          sn.curve && sn.y != null ? +sn.y.toFixed(2) : undefined);
       });
-      snapMark = sn.node || sn.grid ? {x: sn.x, z: sn.z, node: !!sn.node} : null;
+      snapMark = sn.node || sn.curve || sn.grid ? {x: sn.x, z: sn.z, node: !!sn.node, curve: !!sn.curve} : null;
       drag.snapNode = sn.node;
       redraw();
       return;
     }
     // Hover.
     if (store.tool === 'draw') {
-      const sn = resolveSnap(w.x, w.z);
+      const sn = resolveSnap(w.x, w.z, null, true);
       cursor = {x: sn.x, z: sn.z};
-      snapMark = sn.node || sn.grid ? {x: sn.x, z: sn.z, node: !!sn.node} : null;
+      snapMark = sn.node || sn.curve || sn.grid ? {x: sn.x, z: sn.z, node: !!sn.node, curve: !!sn.curve} : null;
       hover = null;
     } else {
       hover = hitTest(sx, sy);

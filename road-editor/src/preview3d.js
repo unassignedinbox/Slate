@@ -4,7 +4,7 @@
    ════════════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
-import {buildRoadMesh} from './geometry.js';
+import {buildNetworkMesh} from './geometry.js';
 
 const SKY = '#16191f';
 
@@ -73,36 +73,42 @@ export function createPreview(container, store, env) {
     const p = store.project;
     const sel = store.selection;
     const terrain = terrainSampler();
-    for (const road of p.roads) {
-      if (road.visible === false) continue;
-      let built;
-      try {
-        built = buildRoadMesh(road, {step: 1.0, terrain});
-      } catch (e) {
-        console.error('mesh build failed for', road.name, e);
-        continue;
-      }
+    let built;
+    try {
+      built = buildNetworkMesh(p, env.getSampleMap(), env.getTopology(), terrain);
+    } catch (e) {
+      console.error('mesh build failed', e);
+      return;
+    }
+    const matFor = (roadId) => {
       const mat = new THREE.MeshStandardMaterial({
         vertexColors: true, roughness: 0.93, metalness: 0.0, side: THREE.DoubleSide
       });
-      if (sel.roadId === road.id) {
+      if (roadId && sel.roadId === roadId) {
         mat.emissive = new THREE.Color('#4a90e2');
         mat.emissiveIntensity = 0.22;
       }
       if (store.ui.wireframe) mat.wireframe = true;
-      for (const part of built.parts) {
-        const g = new THREE.BufferGeometry();
-        g.setAttribute('position', new THREE.BufferAttribute(part.positions, 3));
-        g.setAttribute('normal', new THREE.BufferAttribute(part.normals, 3));
-        g.setAttribute('color', new THREE.BufferAttribute(part.colors, 3));
-        g.setAttribute('uv', new THREE.BufferAttribute(part.uvs, 2));
-        g.setIndex(new THREE.BufferAttribute(part.indices, 1));
-        const mesh = new THREE.Mesh(g, mat);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        mesh.name = `${road.name}__${part.name}`;
-        roadsGroup.add(mesh);
-      }
+      return mat;
+    };
+    const mats = new Map();
+    const getMat = (roadId) => {
+      const k = roadId || '';
+      if (!mats.has(k)) mats.set(k, matFor(roadId));
+      return mats.get(k);
+    };
+    for (const part of built.parts) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(part.positions, 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(part.normals, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(part.colors, 3));
+      g.setAttribute('uv', new THREE.BufferAttribute(part.uvs, 2));
+      g.setIndex(new THREE.BufferAttribute(part.indices, 1));
+      const mesh = new THREE.Mesh(g, getMat(part.roadId));
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.name = part.junction ? `junction__${part.name}` : `${part.roadId || '?'}__${part.name}`;
+      roadsGroup.add(mesh);
     }
     // Junction diamonds.
     const jmat = new THREE.MeshStandardMaterial({color: 0xf59e0b, roughness: 0.5, emissive: 0x7a4a00, emissiveIntensity: 0.4});

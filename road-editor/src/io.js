@@ -21,6 +21,7 @@ export function defaultRoad(id, n, overrides = {}) {
     kerbL: false, kerbR: false, camber: 0.06,
     surface: 'asphalt', centerMarking: 'dashed', edgeMarking: true,
     guardrailL: false, guardrailR: false,
+    bridgeParapet: 'rail', bridgeSpacing: 12,
     conform: 'design', drapeOffset: 0.15,
     points: [],
     ...overrides
@@ -32,7 +33,8 @@ export function newProject(name = 'Untitled route') {
     format: ROAD_FORMAT, version: ROAD_VERSION,
     units: 'meters', up: '+Y',
     name, nextId: 1,
-    roads: [], junctions: [], heightmap: null
+    roads: [], junctions: [], heightmap: null,
+    settings: {cornerRadius: 6}, intersectionOverrides: {}
   };
 }
 
@@ -45,7 +47,9 @@ function sanitizeRoad(r, warnings) {
     if (!Number.isFinite(+p?.x) || !Number.isFinite(+p?.z)) {
       warnings.push(`point #${i + 1} had bad XZ and was reset to origin`);
     }
-    return {x: num(p?.x, 0), z: num(p?.z, 0), y: num(p?.y, 0), w: num(p?.w, 1) || 1};
+    const q = {x: num(p?.x, 0), z: num(p?.z, 0), y: num(p?.y, 0), w: num(p?.w, 1) || 1};
+    if (p?.bridge) q.bridge = true;
+    return q;
   });
   const lanes = Math.min(6, Math.max(1, Math.round(num(r.lanes, 2))));
   return {
@@ -64,6 +68,8 @@ function sanitizeRoad(r, warnings) {
     centerMarking: ['none', 'single', 'double', 'dashed'].includes(r.centerMarking) ? r.centerMarking : 'dashed',
     edgeMarking: r.edgeMarking !== false,
     guardrailL: !!r.guardrailL, guardrailR: !!r.guardrailR,
+    bridgeParapet: r.bridgeParapet === 'wall' ? 'wall' : 'rail',
+    bridgeSpacing: Math.min(30, Math.max(4, num(r.bridgeSpacing, 12))),
     conform: r.conform === 'drape' ? 'drape' : 'design',
     drapeOffset: Math.min(50, Math.max(-50, num(r.drapeOffset, 0.15))),
     points
@@ -114,6 +120,15 @@ export function parseProject(input) {
     if ((project.heightmap.width <= 0 || !project.heightmap.image) && h.grid) {
       // Compact numeric grids are accepted too (tests / synthetic terrain).
       project.heightmap.grid = h.grid;
+    }
+  }
+  project.settings = {cornerRadius: Math.min(14, Math.max(2, num(raw.settings?.cornerRadius, 6)))};
+  project.intersectionOverrides = {};
+  if (raw.intersectionOverrides && typeof raw.intersectionOverrides === 'object') {
+    for (const [k, v] of Object.entries(raw.intersectionOverrides)) {
+      if (/^[\w@.-]{1,80}$/.test(k) && v && typeof v === 'object') {
+        project.intersectionOverrides[k] = {enabled: v.enabled !== false};
+      }
     }
   }
   // Ensure unique road/junction ids.

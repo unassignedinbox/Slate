@@ -6,6 +6,7 @@ import './style.css';
 import {createStore, roadById, effectivePoints, loadAutosave} from './state.js';
 import {sampleRoad} from './spline.js';
 import {validateProject, summarize} from './validate.js';
+import {buildTopology} from './topology.js';
 import {
   newProject, parseProject, starterProject, samplerFromImage, fileToDataURL,
   createGridSampler, createDemoHills
@@ -18,6 +19,7 @@ import {createPanels} from './panels.js';
 const samples = new Map();
 let issues = [];
 let summary = {length: 0, minRadius: Infinity, maxGrade: 0, points: 0, roads: 0};
+let topology = {intersections: [], disabled: [], overpasses: [], runs: new Map(), bridges: []};
 let terrain = null; // {sample, rev, bounds, minY, maxY, w, h, name, kind, image?}
 let terrainRev = 0;
 let lastCursor = null;
@@ -33,7 +35,8 @@ function recompute(live = false) {
   }
   // Validation runs segment-pair tests; skip it mid-gesture on huge networks
   // (it always refreshes on release via the committed 'project' tag).
-  if (!live || total < 8000) issues = validateProject(store.project);
+  topology = buildTopology(store.project, samples);
+  if (!live || total < 8000) issues = validateProject(store.project, topology);
   summary = summarize(store.project, samples);
 }
 
@@ -54,6 +57,8 @@ const store = createStore(initial);
 const api = {
   plan: null, preview: null,
   getSamples: (id) => samples.get(id) || null,
+  getSampleMap: () => samples,
+  getTopology: () => topology,
   getIssues: () => issues,
   getSummary: () => summary,
   getTerrain: () => terrain,
@@ -265,6 +270,7 @@ const plan = createPlanView(document.getElementById('plan'), store, {
   getSamples: api.getSamples,
   getIssues: api.getIssues,
   getTerrain: api.getTerrain,
+  getTopology: api.getTopology,
   toast: (m) => panels.toast(m),
   onCursor: (x, z) => {
     lastCursor = x == null ? null : {x, z};
@@ -275,6 +281,8 @@ api.plan = plan;
 
 const preview = createPreview(document.getElementById('view3d'), store, {
   getSamples: api.getSamples,
+  getSampleMap: api.getSampleMap,
+  getTopology: api.getTopology,
   getTerrain: api.getTerrain,
   toast: (m) => panels.toast(m),
   onDriveState: (on) => {

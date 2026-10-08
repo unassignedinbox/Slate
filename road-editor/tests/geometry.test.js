@@ -88,3 +88,67 @@ test('OBJ export follows the engine header convention with valid faces', () => {
   assert.equal(countProjectTriangles(p, {step: 2}) > 0, true);
   assert.ok(Object.keys(SURFACES).length >= 4);
 });
+
+test('network: junction patch trims approaches watertight, bridge spans deck over terrain', async () => {
+  const {buildNetworkMesh} = await import('../src/geometry.js');
+  const {buildTopology} = await import('../src/topology.js');
+  const {sampleRoad} = await import('../src/spline.js');
+  const p = newProject('net');
+  p.roads = [
+    defaultRoad('r1', 1, {lanes: 2, laneWidth: 3.5, points: [{x: -40, z: 0, y: 0}, {x: 40, z: 0, y: 0}]}),
+    defaultRoad('r2', 2, {lanes: 2, laneWidth: 3.5, points: [{x: 0, z: -40, y: 0}, {x: 0, z: 40, y: 0}]}),
+    defaultRoad('r3', 3, {lanes: 2, laneWidth: 3, points: [{x: -40, z: -40, y: 10}, {x: 40, z: 40, y: 10}]}),
+  ];
+  p.roads[2].points[0].bridge = true; p.roads[2].points[1].bridge = true;
+  const samples = new Map(p.roads.map((r) => [r.id, sampleRoad(r.points, {step: 1})]));
+  const topo = buildTopology(p, samples);
+  assert.equal(topo.intersections.length, 1);
+  assert.equal(topo.intersections[0].kind, 'cross');
+  const terrain = {size: 400, seg: 8, heightAt: () => 0};
+  const {parts, stats} = buildNetworkMesh(p, samples, topo, terrain);
+  const names = parts.map((q) => q.name);
+  assert.ok(names.some((n) => n.startsWith('junction_')), 'junction patch present');
+  assert.ok(parts.some((q) => q.name.startsWith('bridge-') && q.roadId === 'r3'), 'bridge deck present');
+  for (const q of parts) {
+    assert.ok(q.positions.every(Number.isFinite), `${q.name} finite positions`);
+    assert.ok(q.normals.every(Number.isFinite), `${q.name} finite normals`);
+    assert.ok(q.triangles > 0, `${q.name} has triangles`);
+  }
+  // Approaches are trimmed back from the crossing: no approach surface vertex inside the patch.
+  const ix = topo.intersections[0];
+  const R = ix.radius - 0.05; // approaches must end at the patch boundary, not inside it
+  const members = new Set(ix.roads || []);
+  let checked = 0;
+  for (const q of parts) {
+    if (q.junction || !q.name.startsWith('surface')) continue;
+    if (!members.has(q.roadId)) continue; // overpassing roads legitimately fly over the patch
+    for (let i = 0; i < q.positions.length; i += 3) {
+      const dx = q.positions[i] - ix.x, dz = q.positions[i + 2] - ix.z;
+      assert.ok(Math.hypot(dx, dz) >= R, `${q.name} overlaps junction patch`);
+      checked++;
+    }
+  }
+  assert.ok(checked > 100, 'watertight scan covered approach vertices');
+  assert.ok(stats.junctions === 1 && stats.bridges === 1);
+  assert.equal(countProjectTriangles(p, {terrain, samples, topo}), stats.triangles);
+});
+
+test('network: overpass upper deck survives with a gap over the lower road', async () => {
+  const {buildNetworkMesh} = await import('../src/geometry.js');
+  const {buildTopology} = await import('../src/topology.js');
+  const {sampleRoad} = await import('../src/spline.js');
+  const p = newProject('over');
+  p.roads = [
+    defaultRoad('r1', 1, {lanes: 2, laneWidth: 3.5, points: [{x: -40, z: 0, y: 0}, {x: 40, z: 0, y: 0}]}),
+    defaultRoad('r2', 2, {lanes: 2, laneWidth: 3.5, points: [{x: 0, z: -40, y: 6}, {x: 0, z: 40, y: 6}]}),
+  ];
+  const samples = new Map(p.roads.map((r) => [r.id, sampleRoad(r.points, {step: 1})]));
+  const topo = buildTopology(p, samples);
+  assert.equal(topo.intersections.length, 0);
+  assert.equal(topo.overpasses.length, 1);
+  const terrain = {size: 400, seg: 8, heightAt: () => 0};
+  const {parts, stats} = buildNetworkMesh(p, samples, topo, terrain);
+  assert.ok(!parts.some((q) => q.name.startsWith('junction_')));
+  assert.ok(stats.triangles > 20);
+  for (const q of parts) assert.ok(q.positions.every(Number.isFinite), `${q.name} finite`);
+});

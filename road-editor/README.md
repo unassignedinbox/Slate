@@ -15,12 +15,13 @@ autosave to the browser.
 cd road-editor
 npm install
 npm run dev      # → http://localhost:5174
-npm test         # 32 tests: geometry/validation/codec/state + browser smoke (see below)
+npm test         # 44 tests: topology/network-mesh/validation/codec/state + browser smoke (see below)
 npm run build    # static dist/ — serve anywhere, no backend needed
 ```
 
 First launch opens a starter pass with a loop, a spur, and one welded
-junction. The **Samples** panel loads three authored networks.
+junction. The **Samples** panel loads four authored networks, headed by a
+diamond interchange with a bridge overpass, ramps, and guardrails.
 
 ## What it does
 
@@ -30,14 +31,25 @@ junction. The **Samples** panel loads three authored networks.
 - **Cross-sections** — 1–6 lanes, lane width, asymmetric shoulders, kerbs,
   camber, 4 surface presets, centre markings (single / double / dashed),
   edge lines, guardrails with posts.
+- **Bridges & guardrails** — flag control points as bridge to deck the span
+  (fascia, girders, piers/bents, abutments, parapet or rail); W-beam
+  guardrails with posts and end treatments run both verges and switch to
+  deck rails on bridges.
 - **Vertical design** — per-point heights, grade smoothing, flatten, reverse;
   import a **heightmap PNG** (white = high) or grow **demo hills**, then
   **Drape points** or set **Conform → Drape** so the ribbon hugs the ground.
+- **Intersections & interchanges** — crossings, T-touches, and shared nodes
+  are detected automatically and paved as watertight junction patches with
+  rounded corners, skirts, and stop-line paint; near-parallel legs warn.
+  Grade-separated crossings stay open as **overpasses** with clearance
+  checks, so diamonds and roundabout-free interchanges just work.
 - **Junctions** — drag an endpoint onto another endpoint and they weld into a
-  shared node; every road on the node follows it.
-- **Validation** — tight curves (<15 m warn / <7 m error), grades (>8% /
-  >12%), self-crossings, unresolved road↔road crossings, stacked points,
-  dangling junctions. Click an issue to fly to it.
+  shared node; every road on the node follows it. Endpoints also snap onto
+  other roads mid-span to form T-junctions.
+- **Validation** — tight curves (<15 m warn / <7 m error), grades (>9% /
+  >12%), self-crossings, pinched intersection angles, low overpass
+  clearance, stacked points, dangling junctions. Click an issue to fly to
+  it.
 - **3D preview** — orbit / top / wireframe / auto-rotate, heightfield terrain,
   PNG capture, and a **drive-through camera** (8/16/30 m/s) along any road.
 - **History** — labelled undo/redo, dirty tracking, autosave, unsaved-work
@@ -48,7 +60,7 @@ junction. The **Samples** panel loads three authored networks.
 | Format | Contents |
 |---|---|
 | `.road.json` | Versioned project. Reloadable here; readable by `integration/`. |
-| `.obj` | Y-up metre mesh, `o Road__part` groups, engine header comments. Geometry only — same convention as Terrain Lab exports. |
+| `.obj` | Y-up metre mesh, `o Road__part` + `o junction_*` groups, engine header comments. Geometry only — same convention as Terrain Lab exports. |
 | `.csv` | Centreline stations: `s,x,y,z,heading,grade,radius,width` per road. |
 | `.png` | Plan capture or 3D capture. |
 
@@ -74,7 +86,8 @@ junction. The **Samples** panel loads three authored networks.
 index.html            workspace shell (header / panels / viewports / dock)
 src/style.css         Exhibits design system (see below)
 src/spline.js         Catmull-Rom sampling, arc-length, curvature, grade (pure)
-src/geometry.js       ribbon meshing (surface/paint/kerb/rail) + OBJ (pure)
+src/topology.js       network analysis: runs, junctions, overpasses, bridges (pure)
+src/geometry.js       network meshing (runs/patches/bridges/rails) + OBJ (pure)
 src/validate.js       design checks (pure)
 src/io.js             schema, codecs, heightfield sampling, starter scene
 src/state.js          store: selection, tools, undo/redo, junctions, autosave
@@ -82,12 +95,12 @@ src/plan.js           2D canvas editor (tools, snapping, welding)
 src/preview3d.js      Three.js preview + drive-through
 src/panels.js         Exhibits controls, lists, inspector, toolbars, menus
 src/main.js           boot + refresh flow + shortcuts + files
-tests/                node --test regression suite (32 tests)
+tests/                node --test regression suite (44 tests)
 
 The browser tier (`tests/smoke.test.js`) boots the real `index.html` in jsdom and drives
 panels + canvas gestures end to end. jsdom is optional: the test self-skips without it.
 Enable with `npm i --no-save jsdom` (kept out of package.json so installs stay lean).
-public/samples/       three authored networks (served + bundled)
+public/samples/       four authored networks (served + bundled)
 integration/          engine-side loader + wiring guide
 ```
 
@@ -106,7 +119,8 @@ Theme, tokens, and components are ported from the Exhibits branch:
 
 ## Limits
 
-- Junctions weld **endpoints only** (loops have no ends to weld).
+- Junctions weld **endpoints only** (loops have no ends to weld), though
+  endpoints can land on other roads mid-span as T-junctions.
 - Validation is geometric, not a traffic or structural simulation.
 - OBJ carries no materials — paint and surfaces are vertex colours in the
   live view, plain geometry on disk.

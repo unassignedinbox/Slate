@@ -79,6 +79,7 @@ test('browser smoke: full UI flow in jsdom', { skip: !JSDOM }, async () => {
   if (!globalThis.URL.revokeObjectURL) globalThis.URL.revokeObjectURL = () => {};
 
   const { createStore } = await import('../src/state.js');
+  const { buildTopology } = await import('../src/topology.js');
   const { starterProject, parseProject, createDemoHills, createGridSampler, serializeProject } = await import('../src/io.js');
   const { validateProject, summarize } = await import('../src/validate.js');
   const { createPlanView } = await import('../src/plan.js');
@@ -98,7 +99,8 @@ test('browser smoke: full UI flow in jsdom', { skip: !JSDOM }, async () => {
     env.samples = new Map(p.roads.map((r) => [
       r.id, sampleRoad(effectivePoints(p, r), { closed: r.closed, step: 1.0 }),
     ]));
-    env.issues = validateProject(p, env.samples, env.terrain);
+    env.topo = buildTopology(p, env.samples);
+    env.issues = validateProject(p, env.topo);
     env.summary = summarize(p, env.samples, env.terrain);
   };
   resample();
@@ -106,6 +108,8 @@ test('browser smoke: full UI flow in jsdom', { skip: !JSDOM }, async () => {
   const calls = {};
   const api = {
     getSamples: (id) => env.samples.get(id) || null,
+    getSampleMap: () => env.samples,
+    getTopology: () => env.topo,
     getIssues: () => env.issues,
     getSummary: () => env.summary,
     getTerrain: () => env.terrain,
@@ -141,6 +145,7 @@ test('browser smoke: full UI flow in jsdom', { skip: !JSDOM }, async () => {
     getSamples: api.getSamples,
     getIssues: api.getIssues,
     getTerrain: api.getTerrain,
+    getTopology: api.getTopology,
     toast: (m) => panels.toast(m),
     onCursor: (c) => panels.renderStatus(c),
   });

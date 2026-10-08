@@ -4,6 +4,8 @@
    grade >8% warn / >12% error, plus crossings and data hygiene.
    ════════════════════════════════════════════════════════════════════ */
 import {sampleRoad, segmentsTouch} from './spline.js';
+import {buildTopology} from './topology.js';
+import {effectivePoints} from './state.js';
 
 export const LIMITS = {
   radiusWarn: 15, radiusErr: 7,
@@ -11,44 +13,10 @@ export const LIMITS = {
   minPointGap: 0.5, dupGap: 0.05,
   endTouchGuard: 0.6,   // touches this close to both roads' control endpoints don't warn
   maxPairTests: 400000, // per road-pair segment-test budget
+  minJunctionAngle: 25, // tighter approach angles warn
+  minClearance: 4.5,    // overpass gaps below this warn
   maxIssues: 240
 };
-
-function samplesBBox(S) {
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const p of S) {
-    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-    if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
-  }
-  return {minX, maxX, minZ, maxZ};
-}
-
-const bboxesOverlap = (a, b) => a.minX <= b.maxX && b.minX <= a.maxX && a.minZ <= b.maxZ && b.minZ <= a.maxZ;
-
-function nearControlEnd(pts, closed, x, z) {
-  if (!pts.length || closed) return false;
-  const a = pts[0], b = pts[pts.length - 1];
-  return Math.hypot(a.x - x, a.z - z) <= LIMITS.endTouchGuard ||
-    Math.hypot(b.x - x, b.z - z) <= LIMITS.endTouchGuard;
-}
-
-let issueSeq = 1;
-const mk = (severity, code, roadId, roadName, s, x, z, y, message) => ({
-  id: `i${issueSeq++}`, severity, code, roadId, roadName, s, x, z, y, message
-});
-
-function junctionPoints(project) {
-  const pts = [];
-  for (const j of project.junctions || []) {
-    pts.push({x: j.x, z: j.z, roads: (j.links || []).map((l) => l.road)});
-  }
-  return pts;
-}
-
-const nearJunction = (jpts, roadA, roadB, x, z, tol = 2.0) => jpts.some(
-  (j) => j.roads.includes(roadA) && j.roads.includes(roadB) &&
-    Math.hypot(j.x - x, j.z - z) <= tol
-);
 
 function checkRoad(project, road, issues) {
   const name = road.name || road.id;
@@ -129,7 +97,7 @@ function checkRoad(project, road, issues) {
     for (let k = i + 2; k < spanEnd && tests < LIMITS.maxPairTests; k += stride) {
       if (closed && i === 0 && k >= spanEnd - stride) continue;
       tests++;
-      const hit = segmentsTouch(a, b, S[k % n], S[(k + 1) % n]);
+      const hit = segmentsTouch(a, b, S[k % n], S[(k + 1) % n], 1e-6);
       if (hit) {
         selfFound++;
         issues.push(mk('error', 'self-crossing', road.id, name, a.s, hit.x, hit.z, a.y,
@@ -141,49 +109,50 @@ function checkRoad(project, road, issues) {
   return smp;
 }
 
-/** Full project validation. Returns issues sorted error → warn → info. */
-export function validateProject(project) {
+/** Full project validation. Returns issues sorted error → warn → info.
+ * Pass main's topology to reuse crossing detection; otherwise it is built. */
+let issueSeq = 1;
+
+function mk(sev, code, road, roadName, idx, x, z, y, text) {
+  return {id: `is${issueSeq++}`, severity: sev, code, road, roadName, idx, x, z, y, text};
+}
+
+export function validateProject(project, topo = null) {
   const issues = [];
-  const samples = new Map();
   for (const road of project.roads || []) {
-    const smp = checkRoad(project, road, issues);
-    if (smp) samples.set(road.id, smp);
+    checkRoad(project, road, issues);
     if (issues.length > LIMITS.maxIssues) break;
   }
+  const nameOf = (id) => (project.roads || []).find((r) => r.id === id)?.name || id || '—';
 
-  // Road↔road crossings not covered by a junction.
-  const jpts = junctionPoints(project);
-  const roads = project.roads || [];
-  const boxes = new Map();
-  for (const [id, smp] of samples) boxes.set(id, samplesBBox(smp.samples));
-  for (let a = 0; a < roads.length; a++) {
-    for (let b = a + 1; b < roads.length; b++) {
-      const A = samples.get(roads[a].id), B = samples.get(roads[b].id);
-      if (!A || !B) continue;
-      if (!bboxesOverlap(boxes.get(roads[a].id), boxes.get(roads[b].id))) continue;
-      const SA = A.samples, SB = B.samples;
-      const endA = (A.closed ? SA.length : SA.length - 1);
-      const endB = (B.closed ? SB.length : SB.length - 1);
-      const stride = Math.max(1, Math.ceil(Math.sqrt((endA * endB) / LIMITS.maxPairTests)));
-      let found = null, tests = 0;
-      for (let i = 0; i < endA && !found && tests < LIMITS.maxPairTests; i += stride) {
-        const p = SA[i % SA.length], q = SA[(i + 1) % SA.length];
-        for (let k = 0; k < endB && !found && tests < LIMITS.maxPairTests; k += stride) {
-          tests++;
-          const hit = segmentsTouch(p, q, SB[k % SB.length], SB[(k + 1) % SB.length]);
-          if (!hit) continue;
-          // Touches at both roads' control endpoints are joints, not crossings.
-          if (nearControlEnd(roads[a].points, A.closed, hit.x, hit.z) &&
-              nearControlEnd(roads[b].points, B.closed, hit.x, hit.z)) continue;
-          found = {hit, y: (p.y + q.y) / 2};
-        }
-      }
-      if (found && !nearJunction(jpts, roads[a].id, roads[b].id, found.hit.x, found.hit.z)) {
-        issues.push(mk('warn', 'unresolved-crossing', roads[a].id, roads[a].name || roads[a].id, 0,
-          found.hit.x, found.hit.z, found.y,
-          `<b>${roads[a].name}</b> crosses <b>${roads[b].name}</b> with no junction — weld the endpoints or add a bridge note.`));
-      }
-      if (issues.length > LIMITS.maxIssues) break;
+  // Topology-driven network checks (crossings auto-resolve into intersections;
+  // only bad geometry warns now).
+  let tp = topo;
+  if (!tp) {
+    const smp = new Map();
+    for (const road of project.roads || []) {
+      smp.set(road.id, sampleRoad(effectivePoints(project, road), {closed: road.closed, step: 1.0}));
+    }
+    tp = buildTopology(project, smp);
+  }
+  for (const ix of tp.intersections) {
+    if (ix.kind !== 'merge' && ix.minAngleDeg < LIMITS.minJunctionAngle) {
+      issues.push(mk('warn', 'intersection-angle', ix.roads[0] || null, nameOf(ix.roads[0]), 0,
+        ix.x, ix.z, ix.y,
+        `Approach angle <b>${ix.minAngleDeg.toFixed(0)}°</b> at the ${ix.kind} — under ${LIMITS.minJunctionAngle}° pinches turning paths.`));
+    }
+  }
+  for (const o of tp.overpasses) {
+    if (o.gap < LIMITS.minClearance) {
+      issues.push(mk('warn', 'low-clearance', o.upper, nameOf(o.upper), o.sUpper,
+        o.x, o.z, 0,
+        `<b>${nameOf(o.upper)}</b> clears <b>${nameOf(o.lower)}</b> by <b>${o.gap.toFixed(1)} m</b> — under ${LIMITS.minClearance} m.`));
+    }
+    const spanned = tp.bridges.some((b) => b.roadId === o.upper && b.s0 - 2 <= o.sUpper && o.sUpper <= b.s1 + 2);
+    if (!spanned) {
+      issues.push(mk('info', 'overpass-span', o.upper, nameOf(o.upper), o.sUpper,
+        o.x, o.z, 0,
+        `<b>${nameOf(o.upper)}</b> flies over <b>${nameOf(o.lower)}</b> — flag a bridge span for deck + piers.`));
     }
   }
 

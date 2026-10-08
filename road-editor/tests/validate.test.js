@@ -45,13 +45,21 @@ test('bowtie alignment is caught as self-crossing', () => {
   assert.ok(issues.some((i) => i.code === 'self-crossing'), JSON.stringify(issues.map((i) => i.code)));
 });
 
-test('mid-span crossing warns unless the roads only meet at endpoints', () => {
+test('at-grade crossings resolve into intersections; only pinched angles warn', () => {
   const cross = newProject('t');
   cross.roads = [
     defaultRoad('r1', 1, {points: [{x: -20, z: 0, y: 0}, {x: 20, z: 0, y: 0}]}),
     defaultRoad('r2', 2, {points: [{x: 0, z: -20, y: 0}, {x: 0, z: 20, y: 0}]})
   ];
-  const w = validateProject(cross).find((i) => i.code === 'unresolved-crossing');
+  assert.ok(!validateProject(cross).some((i) => i.code === 'intersection-angle'));
+
+  // ~19° crossing pinches turning paths.
+  const acute = newProject('t');
+  acute.roads = [
+    defaultRoad('r1', 1, {points: [{x: -40, z: 0, y: 0}, {x: 40, z: 0, y: 0}]}),
+    defaultRoad('r2', 2, {points: [{x: -40, z: -14, y: 0}, {x: 40, z: 14, y: 0}]})
+  ];
+  const w = validateProject(acute).find((i) => i.code === 'intersection-angle');
   assert.ok(w && w.severity === 'warn');
 
   const touch = newProject('t');
@@ -60,7 +68,19 @@ test('mid-span crossing warns unless the roads only meet at endpoints', () => {
     defaultRoad('r2', 2, {points: [{x: 20, z: 0, y: 0}, {x: 20, z: 20, y: 0}]})
   ];
   touch.junctions = [{id: 'j1', name: 'J', x: 20, z: 0, y: 0, links: [{road: 'r1', end: 'end'}, {road: 'r2', end: 'start'}]}];
-  assert.ok(!validateProject(touch).some((i) => i.code === 'unresolved-crossing'));
+  assert.ok(!validateProject(touch).some((i) => i.code === 'intersection-angle'));
+});
+
+test('low overpasses warn on clearance and suggest a bridge span', () => {
+  const p = newProject('t');
+  p.roads = [
+    defaultRoad('r1', 1, {points: [{x: -40, z: 0, y: 0}, {x: 40, z: 0, y: 0}]}),
+    defaultRoad('r2', 2, {points: [{x: 0, z: -40, y: 3}, {x: 0, z: 40, y: 3}]})
+  ];
+  const issues = validateProject(p);
+  const c = issues.find((i) => i.code === 'low-clearance');
+  assert.ok(c && c.severity === 'warn', JSON.stringify(issues.map((i) => i.code)));
+  assert.ok(issues.some((i) => i.code === 'overpass-span'));
 });
 
 test('data hygiene: short roads, stacked points, dangling junctions', () => {

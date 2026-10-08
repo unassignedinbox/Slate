@@ -14,6 +14,7 @@ import {
   Scan, Triangle, Rotate3d, Car, LocateFixed, Pause, Play, Square
 } from 'lucide';
 import {roadById, linkForPoint, effectivePoints, setPointPosition} from './state.js';
+import {kindLabel, sampleAtStation} from './topology.js';
 import {SURFACES, SURFACE_IDS, CENTER_MARKINGS, baseWidth, roadNetworkToOBJ, countProjectTriangles} from './geometry.js';
 import {allocId, defaultRoad, serializeProject, centerlineCSV, downloadText} from './io.js';
 
@@ -41,6 +42,7 @@ function h(tag, cls, parent, html) {
 }
 
 export const SAMPLES = [
+  {key: 'diamond-interchange', name: 'Diamond Interchange', sub: 'Overpass · ramps · bridges'},
   {key: 'mountain-pass', name: 'Alpine Descent', sub: 'Hairpins · guardrails · grades'},
   {key: 'quarry-haul', name: 'Quarry Haul Road', sub: 'Wide gravel · switchbacks'},
   {key: 'village-loop', name: 'Village Loop', sub: 'Closed loop · junctions'}
@@ -341,6 +343,13 @@ export function createPanels(store, api) {
     toast('Endpoint unwelded from its junction');
   }
 
+  function toggleIntersection(id, off) {
+    store.commit(off ? 'enable intersection' : 'disable intersection', (pp) => {
+      pp.intersectionOverrides = pp.intersectionOverrides || {};
+      pp.intersectionOverrides[id] = {enabled: off};
+    });
+  }
+
   function deleteSelection(shift) {
     const sel = store.selection;
     if (shift && sel.roadId) { deleteRoad(sel.roadId); return; }
@@ -482,6 +491,50 @@ export function createPanels(store, api) {
         store.setTool('draw');
         toast('Click the plan to lay points · Enter finishes');
       }, 'primary');
+    });
+
+    section(wrap, 'intersections', `Intersections · ${api.getTopology().intersections.length}`, 'network', (c) => {
+      const topo = api.getTopology();
+      const all = [...topo.intersections, ...topo.disabled];
+      if (!all.length && !topo.overpasses.length && !topo.bridges.length) {
+        h('div', 'ctl-hint', c, 'Cross roads at grade for a paved junction · separate heights for an overpass · flag points to span a bridge.');
+      }
+      sliderRow(c, 'Corner radius', {min: 2, max: 14, step: 0.5, unit: 'm', value: p.settings?.cornerRadius ?? 6,
+        oninput: (v) => {
+          store.project.settings = store.project.settings || {};
+          store.project.settings.cornerRadius = v;
+        }});
+      for (const ix of all) {
+        const off = topo.disabled.includes(ix);
+        const names = ix.roads.map((id) => roadById(p, id)?.name || id).join(' × ');
+        const it = h('div', 'junc-item', c);
+        if (off) it.style.opacity = '.45';
+        it.innerHTML = `<span class="dia"></span><span class="meta"><span class="name">${kindLabel(ix.kind)} <small>· ${ix.legs.length} legs</small></span><span class="sub">${names}</span></span><span class="acts"></span>`;
+        it.title = 'Click to zoom';
+        it.onclick = () => api.gotoPoint(ix.x, ix.z);
+        const eye = h('button', 'mini-btn' + (off ? ' off' : ''), it.querySelector('.acts'),
+          `<i data-lucide="${off ? 'eye-off' : 'eye'}"></i>`);
+        eye.title = off ? 'Enable' : 'Disable (roads render uncut)';
+        eye.onclick = (e) => { e.stopPropagation(); toggleIntersection(ix.id, off); };
+      }
+      for (const o of topo.overpasses) {
+        const un = roadById(p, o.upper)?.name || o.upper, ln = roadById(p, o.lower)?.name || o.lower;
+        const it = h('div', 'junc-item', c);
+        it.innerHTML = `<span class="dia"></span><span class="meta"><span class="name">Overpass <small>· ${o.gap.toFixed(1)} m</small></span><span class="sub">${un} over ${ln}</span></span>`;
+        it.title = 'Click to zoom';
+        it.onclick = () => api.gotoPoint(o.x, o.z);
+      }
+      for (const b of topo.bridges) {
+        const r = roadById(p, b.roadId);
+        const it = h('div', 'junc-item', c);
+        it.innerHTML = `<span class="dia"></span><span class="meta"><span class="name">Bridge <small>· ${(b.s1 - b.s0).toFixed(0)} m</small></span><span class="sub">${r?.name || b.roadId}</span></span>`;
+        it.title = 'Click to zoom';
+        it.onclick = () => {
+          const smp = api.getSamples(b.roadId);
+          const st = smp && sampleAtStation(smp.samples, (b.s0 + b.s1) / 2);
+          if (st) api.gotoPoint(st.x, st.z);
+        };
+      }
     });
 
     section(wrap, 'terrain', 'Terrain', 'mountain', (c) => {
@@ -692,6 +745,25 @@ export function createPanels(store, api) {
         oninput: (v) => { roadById(store.project, road.id).drapeOffset = v; }});
     });
 
+    section(wrap, 'structure', 'Structure', 'landmark', (c) => {
+      const spans = api.getTopology().bridges.filter((b) => b.roadId === road.id);
+      const total = spans.reduce((a, b) => a + (b.s1 - b.s0), 0);
+      kv(c, 'Bridge spans', spans.length ? `${spans.length} · ${total.toFixed(0)} m deck` : 'None — flag 2+ adjacent points');
+      dropdownRow(c, 'Parapet', [
+        {value: 'rail', label: 'Steel rail', sub: 'W-beam on posts'},
+        {value: 'wall', label: 'Concrete wall', sub: 'Parapet + steel band'}
+      ], road.bridgeParapet || 'rail', (v) => { roadById(store.project, road.id).bridgeParapet = v; });
+      sliderRow(c, 'Pier spacing', {min: 4, max: 30, step: 1, unit: 'm', value: road.bridgeSpacing || 12,
+        oninput: (v) => { roadById(store.project, road.id).bridgeSpacing = v; }});
+      const br = h('div', 'btn-row', c);
+      actionBtn(br, 'Flag all', 'flag', () => {
+        store.commit('flag bridge span', (pp) => { roadById(pp, road.id).points.forEach((q) => { q.bridge = true; }); });
+      });
+      actionBtn(br, 'Clear', 'eraser', () => {
+        store.commit('clear bridge span', (pp) => { roadById(pp, road.id).points.forEach((q) => { delete q.bridge; }); });
+      });
+    });
+
     /* — point section — */
     if (sel.kind === 'point' && road.points[sel.index]) {
       const idx = sel.index;
@@ -716,6 +788,10 @@ export function createPanels(store, api) {
         mkAxis('Y height', 'y', 0.25);
         sliderRow(c, 'Width ×', {min: 0.3, max: 3, step: 0.05, unit: '×', value: pt.w || 1,
           oninput: (v) => { roadById(store.project, road.id).points[idx].w = v; }});
+        switchRow(c, 'Bridge deck', !!pt.bridge, (v) => {
+          const q = roadById(store.project, road.id).points[idx];
+          if (v) q.bridge = true; else delete q.bridge;
+        });
         const br = h('div', 'btn-row', c);
         actionBtn(br, '− Before', 'plus', () => insertAdjacent(road, idx, -1));
         actionBtn(br, '+ After', 'plus', () => insertAdjacent(road, idx, 1));
@@ -796,6 +872,8 @@ export function createPanels(store, api) {
 
   /* ── metrics + status + header ────────────────────────────────── */
   function renderMetrics() {
+    const topo = api.getTopology();
+    const topoN = {ix: topo.intersections.length, over: topo.overpasses.length, br: topo.bridges.length};
     const s = api.getSummary();
     const issues = api.getIssues();
     const errs = issues.filter((i) => i.severity === 'error').length;
@@ -807,6 +885,7 @@ export function createPanels(store, api) {
       <div class="metric"><i data-lucide="route"></i><div><div class="mm-label">Roads · Points</div><div class="mm-val">${s.roads} <small>· ${s.points} pts</small></div></div></div>
       <div class="metric ${rCls}"><i data-lucide="spline"></i><div><div class="mm-label">Min radius</div><div class="mm-val">${Number.isFinite(s.minRadius) ? `${fmt(s.minRadius, 1)} <small>m</small>` : '—'}</div></div></div>
       <div class="metric ${gCls}"><i data-lucide="trending-up"></i><div><div class="mm-label">Max grade</div><div class="mm-val">${fmt(s.maxGrade * 100, 1)} <small>%</small></div></div></div>
+      <div class="metric"><i data-lucide="network"></i><div><div class="mm-label">Junctions</div><div class="mm-val">${topoN.ix} <small>· ${topoN.over} over · ${topoN.br} br</small></div></div></div>
       <div class="metric ${errs ? 'bad' : warns ? 'warnm' : ''}"><i data-lucide="triangle-alert"></i><div><div class="mm-label">Validation</div><div class="mm-val">${errs ? `${errs} <small>errors</small>` : warns ? `${warns} <small>warnings</small>` : '<small>clean</small>'}</div></div></div>`;
     refreshIcons();
   }
@@ -898,9 +977,11 @@ export function createPanels(store, api) {
   }
 
   function exportOBJ() {
-    const tris = countProjectTriangles(store.project, {terrain: api.getTerrain()?.sample || null});
+    const terr = api.getTerrain()?.sample || null;
+    const sm = api.getSampleMap(), tp = api.getTopology();
+    const tris = countProjectTriangles(store.project, {terrain: terr, samples: sm, topo: tp});
     const name = (store.project.name || 'route').replace(/[^\w-]+/g, '-').toLowerCase();
-    const obj = roadNetworkToOBJ(store.project, {terrain: api.getTerrain()?.sample || null});
+    const obj = roadNetworkToOBJ(store.project, {terrain: terr, samples: sm, topo: tp});
     downloadText(`${name}.obj`, obj, 'text/plain');
     toast(`OBJ exported · ${tris.toLocaleString()} triangles · Y-up metres`);
   }
