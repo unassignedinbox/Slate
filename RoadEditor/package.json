@@ -1,0 +1,14 @@
+{
+  "name": "frontier-road-editor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone HTML road editor for the Frontier engine (Terrain Lab). Self-contained: three.js is vendored under vendor/.",
+  "scripts": {
+    "test": "node --test",
+    "start": "python3 -m http.server 5173 --bind 0.0.0.0"
+  },
+  "devDependencies": {
+    "three": "^0.180.0"
+  }
+}

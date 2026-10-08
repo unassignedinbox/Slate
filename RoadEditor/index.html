@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#171a19">
+<title>Frontier — Road Editor</title>
+<link rel="stylesheet" href="./src/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js",
+    "three/addons/": "./vendor/"
+  }
+}
+</script>
+</head>
+<body>
+<header>
+  <a class="brand" href="/" aria-label="Frontier home"><span class="brand-mark">F<span>↗</span></span>FRONTIER<span class="brand-divider"></span><span class="lab">Road editor</span></a>
+  <div class="project"><span class="status-dot" id="project-dot"></span><span id="project-name">Untitled road</span><span class="project-tag">LOCAL PROJECT</span></div>
+  <button class="button export-button" id="export" title="Export road geometry and project files"><i data-icon="download"></i>Export road<i data-icon="chevron-down"></i></button>
+  <div id="export-menu" class="export-menu" hidden>
+    <button id="export-obj"><i data-icon="download"></i>Export road mesh (.obj)</button>
+    <button id="export-json"><i data-icon="save"></i>Save road project (.json)</button>
+    <button id="import-json"><i data-icon="folder-open"></i>Load road project (.json)</button>
+  </div>
+</header>
+<main>
+  <aside>
+    <div class="panel-heading">
+      <div class="eyebrow">PROCEDURAL INFRASTRUCTURE</div>
+      <h1><span id="generator-title" class="heading-text">Road editor</span><span>01</span></h1>
+      <p id="generator-subtitle">Paved by design. Shaped by terrain.</p>
+    </div>
+    <div class="scroll-panel">
+      <section class="preset-section">
+        <div class="section-label">STARTING POINT <i data-icon="route"></i></div>
+        <button id="preset" class="preset-card">
+          <div class="mini-road"><svg viewBox="0 0 42 38" fill="none" aria-hidden="true"><path d="M4 32 C 13 32, 15 7, 24 7 C 31 7, 33 24, 38 8" stroke="#8d9575"/><path d="M4 32 C 13 32, 15 7, 24 7 C 31 7, 33 24, 38 8" stroke="#d5ec91" stroke-width="1" stroke-dasharray="2.5 3"/></svg></div>
+          <div><strong id="preset-name">Valley crossing</strong><span id="preset-kind">Open · asphalt ribbon</span></div>
+          <i data-icon="chevrons-up-down"></i>
+        </button>
+        <div id="preset-menu" class="preset-menu" hidden>
+          <button data-preset="straight">Straight haul road</button>
+          <button data-preset="valley">Valley crossing</button>
+          <button data-preset="switchback">Switchback climb</button>
+          <button data-preset="circuit">Closed circuit</button>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-label">01 <strong>ROAD GEOMETRY</strong><i data-icon="spline"></i></div>
+        <div class="control"><label for="width">Asphalt width</label><output id="width-out">7.0 <small>m</small></output><input id="width" type="range" min="2" max="20" value="7" step="0.5"><div class="range-label"><span>2 m</span><span>20 m</span></div></div>
+        <div class="control"><label for="lanes">Lanes</label><output id="lanes-out">2</output><input id="lanes" type="range" min="1" max="4" value="2" step="1"><div class="range-label"><span>1 lane</span><span>4 lanes</span></div></div>
+        <div class="control"><label for="shoulderWidth">Shoulder width</label><output id="shoulderWidth-out">1.5 <small>m</small></output><input id="shoulderWidth" type="range" min="0" max="4" value="1.5" step="0.5"><div class="range-label"><span>None</span><span>4 m</span></div></div>
+        <div class="control"><label for="banking">Curve banking <i data-icon="info" title="Superelevation: the outer edge rises on curves, up to the max bank angle"></i></label><output id="banking-out">60<small>%</small></output><input id="banking" type="range" min="0" max="100" value="60" step="5"></div>
+        <div class="control"><label for="maxBankAngle">Max bank angle</label><output id="maxBankAngle-out">8<small>°</small></output><input id="maxBankAngle" type="range" min="0" max="15" value="8" step="1"></div>
+        <div class="control"><label for="smoothing">Curve smoothing</label><output id="smoothing-out">65<small>%</small></output><input id="smoothing" type="range" min="0" max="100" value="65" step="5"><div class="range-label"><span>Sharp corners</span><span> Flowing</span></div></div>
+        <div class="control"><label for="sampleLength">Station spacing</label><output id="sampleLength-out">2.0 <small>m</small></output><input id="sampleLength" type="range" min="0.5" max="10" value="2" step="0.5"><div class="range-label"><span>0.5 m</span><span>10 m</span></div></div>
+        <div class="toggle-row"><div><label for="markings">Lane markings</label><p>Edge lines · dashed dividers</p></div><label class="switch"><input type="checkbox" id="markings" checked><span></span></label></div>
+        <div class="toggle-row"><div><label for="closed">Closed loop</label><p>Connect the last point to the first</p></div><label class="switch"><input type="checkbox" id="closed"><span></span></label></div>
+      </section>
+
+      <section>
+        <div class="section-label">02 <strong>TERRAIN &amp; SURFACE</strong><i data-icon="mountain"></i></div>
+        <label class="field-label" for="terrainSource">Terrain source</label>
+        <div class="select-wrap"><select id="terrainSource"><option value="procedural">Procedural heightfield</option><option value="obj">Loaded engine mesh (.obj)</option></select><i data-icon="chevron-down"></i></div>
+        <div id="procedural-controls">
+          <label class="field-label" for="seed">Terrain seed</label>
+          <div class="seed-wrap"><span>#</span><input id="seed" type="number" value="28491" min="0" max="999999"><button id="randomize" aria-label="Randomize seed" title="Randomize seed"><i data-icon="shuffle"></i></button></div>
+          <div class="control" style="margin-top:19px"><label for="terrainSize">Terrain size</label><output id="terrainSize-out">400 <small>m</small></output><input id="terrainSize" type="range" min="128" max="1024" value="400" step="8"><div class="range-label"><span>128 m</span><span>1024 m</span></div></div>
+          <div class="control"><label for="terrainHeight">Relief height</label><output id="terrainHeight-out">28 <small>m</small></output><input id="terrainHeight" type="range" min="4" max="80" value="28" step="2"><div class="range-label"><span>4 m</span><span>80 m</span></div></div>
+          <div class="control"><label for="roughness">Ridge roughness</label><output id="roughness-out">55<small>%</small></output><input id="roughness" type="range" min="0" max="100" value="55" step="5"></div>
+        </div>
+        <div class="file-row" id="obj-row" hidden>
+          <button id="load-obj" class="file-button"><i data-icon="upload"></i>Load engine OBJ…</button>
+          <div id="obj-chip" class="file-chip" hidden><i data-icon="box"></i><span id="obj-chip-name">No mesh loaded</span><button id="obj-clear" aria-label="Remove loaded mesh" title="Remove loaded mesh"><i data-icon="x"></i></button></div>
+        </div>
+        <label class="field-label" for="elevation" style="margin-top:21px">Elevation mode</label>
+        <div class="select-wrap"><select id="elevation"><option value="follow">Follow terrain</option><option value="flat">Constant height</option><option value="grade">End-to-end grade</option></select><i data-icon="chevron-down"></i></div>
+        <div class="control"><label for="rideHeight">Ride height <i data-icon="info" title="Asphalt height above the terrain surface"></i></label><output id="rideHeight-out">0.15 <small>m</small></output><input id="rideHeight" type="range" min="0" max="2" value="0.15" step="0.05"></div>
+      </section>
+
+      <section class="mode-section editing-section">
+        <div class="section-label">03 <strong>EDITING</strong><i data-icon="pen-tool"></i></div>
+        <div class="mode-switch" role="group" aria-label="Editor mode">
+          <button id="mode-add" aria-pressed="true"><i data-icon="plus"></i>Add points</button>
+          <button id="mode-move" aria-pressed="false"><i data-icon="move"></i>Select &amp; move</button>
+        </div>
+        <div class="toggle-row"><div><label for="snap">Snap to terrain</label><p>Points follow the surface height</p></div><label class="switch"><input type="checkbox" id="snap" checked><span></span></label></div>
+        <div class="toggle-row"><div><label for="gizmos">Show control points</label><p>Draggable handles on the map</p></div><label class="switch"><input type="checkbox" id="gizmos" checked><span></span></label></div>
+        <div class="tool-row" style="margin-top:22px">
+          <button id="undo" class="tool-button" title="Undo (Ctrl+Z)"><i data-icon="undo-2"></i>Undo</button>
+          <button id="redo" class="tool-button" title="Redo (Ctrl+Y)"><i data-icon="redo-2"></i>Redo</button>
+        </div>
+        <div class="tool-row">
+          <button id="insert-point" class="tool-button" title="Insert a point after the selected one (I)"><i data-icon="plus"></i>Insert</button>
+          <button id="delete-point" class="tool-button danger" title="Delete the selected point (Del)"><i data-icon="trash-2"></i>Delete</button>
+        </div>
+        <div class="tool-row">
+          <button id="clear-road" class="tool-button danger" style="grid-column:1/-1" title="Remove every control point"><i data-icon="route-off"></i>Clear road</button>
+        </div>
+        <div id="validation" class="status-line" aria-live="polite"></div>
+        <p class="hint"><span class="kbd">Click</span> terrain to add · <span class="kbd">Del</span> remove · <span class="kbd">I</span> insert · <span class="kbd">B</span> build · <span class="kbd">Ctrl+Z</span> undo</p>
+      </section>
+    </div>
+    <div class="panel-bottom">
+      <button id="build" class="generate"><i data-icon="sparkles"></i><b id="build-label">Build road</b><span>↗</span></button>
+      <div><span class="status-dot"></span><span id="build-status">Ready to edit</span><span id="build-time">—</span></div>
+    </div>
+  </aside>
+
+  <div class="workspace">
+    <div class="viewport-top">
+      <div class="breadcrumb">WORKSPACE <span>/</span> <strong id="workspace-name">Road 01</strong><span class="preview-tag">3D PREVIEW</span></div>
+      <button id="help" class="icon-button" aria-label="Viewport help"><i data-icon="circle-help"></i></button>
+    </div>
+    <div id="viewport">
+      <div class="scene-label"><span class="scene-marker"></span><div><b id="scene-name">ROAD NETWORK</b><span id="scene-subtitle">NO POINTS · FOLLOW TERRAIN</span></div></div>
+      <div id="canvas-container"></div>
+      <div id="webgl-fallback" hidden><i data-icon="triangle-alert"></i><span><strong>WebGL is unavailable.</strong><br>The road editor needs a WebGL-capable browser to draw the 3D preview.</span></div>
+      <div class="view-toolbar">
+        <button class="active" id="orbit-view" title="Perspective view"><i data-icon="box"></i></button>
+        <button id="top-view" title="Top view"><i data-icon="scan"></i></button>
+        <span></span>
+        <button id="wireframe" title="Toggle wireframe"><i data-icon="triangle"></i></button>
+        <button id="rotate" title="Auto-rotate"><i data-icon="rotate-3d"></i></button>
+        <span></span>
+        <button id="toggle-gizmos" title="Toggle control-point handles" aria-pressed="true"><i data-icon="waypoints"></i></button>
+        <button id="toggle-snap" title="Toggle terrain snapping" aria-pressed="true"><i data-icon="magnet"></i></button>
+        <button id="reset-view" title="Reset camera"><i data-icon="maximize"></i></button>
+        <button id="screenshot" title="Save screenshot"><i data-icon="camera"></i></button>
+      </div>
+      <div class="scale"><span></span>10 METERS</div>
+      <div class="axis"><span class="axis-y">Y</span><span class="axis-z">Z</span><span class="axis-x">X</span><svg viewBox="0 0 80 80" aria-hidden="true"><path d="M40 44V12" stroke="#9dad83"/><path d="M40 44L14 60" stroke="#89a2ac"/><path d="M40 44L67 57" stroke="#bc806b"/><circle cx="40" cy="44" r="3" fill="#c1c7ba"/></svg></div>
+      <div class="navigation-hint"><span><i data-icon="mouse"></i><span id="nav-hint-action">Click to add points</span></span><span>Drag to orbit</span><span>Shift + drag to pan</span><span>Scroll to zoom</span></div>
+      <div id="toast" role="status" hidden></div>
+      <div id="help-panel" hidden>
+        <strong>Lay a road, station by station</strong>
+        <p><span class="kbd">Click</span> the terrain in <b>Add points</b> mode to extend the centerline. Switch to <b>Select &amp; move</b> to drag the handles.</p>
+        <p>Drag to orbit · Scroll to zoom · Right-drag or Shift + drag to pan.</p>
+        <p><span class="kbd">Del</span> deletes the selected point · <span class="kbd">I</span> inserts after it · <span class="kbd">B</span> rebuilds the ribbon · <span class="kbd">Ctrl+Z</span> / <span class="kbd">Ctrl+Y</span> undo and redo.</p>
+        <p>Roads follow the terrain by default; try <b>Constant height</b> or <b>End-to-end grade</b> for bridges and viaducts. Banking lifts the outer edge of curves.</p>
+        <p>Export saves the road as a Y-up, meter-scale OBJ, or as a <b>.json</b> road project you can reload here. Your work autosaves in this browser.</p>
+      </div>
+    </div>
+    <div class="bottom-panel">
+      <div class="overview">
+        <div class="eyebrow">THE ROUTE</div>
+        <h2>A road, station by station.</h2>
+        <p>Draw a centerline over the terrain.<br>Real ribbon geometry—not a decal.</p>
+        <div class="tags"><span><span class="status-dot"></span>Mesh-based</span><span>Seeded terrain</span><span>Export-ready</span></div>
+      </div>
+      <div class="metrics">
+        <div><i data-icon="ruler"></i><span>ROAD LENGTH</span><strong id="stat-length">—</strong></div>
+        <div><i data-icon="waypoints"></i><span>CONTROL POINTS</span><strong id="stat-points">—</strong></div>
+        <div><i data-icon="triangle"></i><span>TRIANGLES</span><strong id="stat-tris">—</strong></div>
+        <div><i data-icon="gauge"></i><span>MAX GRADE</span><strong id="stat-grade">—</strong></div>
+      </div>
+    </div>
+    <footer>
+      <span><span class="status-dot"></span>All systems grounded</span>
+      <span>FRONTIER ENGINE <b>v0.1</b><span class="footer-sep">/</span> Y-UP · METERS</span>
+      <a href="#" id="about">Built from the ground up <span>↗</span></a>
+    </footer>
+  </div>
+</main>
+<input type="file" id="obj-file" accept=".obj" hidden>
+<input type="file" id="project-file" accept=".json,application/json" hidden>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
