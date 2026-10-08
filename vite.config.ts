@@ -19,6 +19,14 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: false,
+    // The bark laboratory is an intentionally separate HTML entry. It shares
+    // only the dependency graph, never the production vegetation UI or state.
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        barkLab: 'bark-lab.html',
+      },
+    },
   },
   test: {
     include: ['tests/**/*.test.ts'],
