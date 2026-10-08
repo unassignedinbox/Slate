@@ -199,6 +199,14 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    from the 3‑D strata model so beds read correctly on undercut faces. Only the band of voxels
    around the surface is sampled and polygonised; the fine roughness noise is band‑limited to ≥ 5
    voxels so it cannot alias into stair‑steps / "pancake" layers; the voxel size is either set
+   The face is a *sheet*, so a wall has to be sampled from its foot to its crest — that, not the
+   triangulation, is what costs: per chunk most of the time goes into the carving of each voxel
+   (bedding, joints, blocks, relief). Two things keep it down: the sampled y‑band of a column is
+   limited to where a carve can actually flip the sign, and everything that depends only on the
+   plan position and the bed (joint lattice, block offsets, hashes) is computed once per bed and
+   reused for every voxel of that bed. Chunks are built in a pool of workers (up to 8, one less
+   than `hardwareConcurrency`) and streamed into the scene as they finish, so the terrain is
+   interactive while the walls come in.
    explicitly or chosen automatically as the finest that fits a voxel budget (the HUD shows it).
 6. **Rocks** (`src/rock-geometry.js`, `src/rock-placement.js`) — eight archetypes per seed
    (boulder / block / slab / shard): displaced icosphere, anisotropic stretch, then clipped by

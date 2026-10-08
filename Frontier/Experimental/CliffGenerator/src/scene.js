@@ -312,9 +312,10 @@ export class CliffScene {
     if (!chunks || chunks.list.length === 0) { if (this.onSdfProgress) this.onSdfProgress(null); return; }
     const { jobs, transfer, meta } = packChunkJobs(field, chunks, v);
     this.sdfStats = { done: 0, total: chunks.list.length, candidates: chunks.candidates, triangles: 0, started: performance.now(), ms: 0, voxel: meta.cell, k: meta.k, workersDone: 0, workers: 0 };
-    // a small pool of workers; jobs are dealt round-robin from the biggest cliff area down
+    // a pool of up to 8 workers (one less than the machine has); jobs are dealt round-robin from
+    // the biggest cliff area down, so the long chunks start first
     const hw = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4;
-    const want = Math.max(1, Math.min(4, hw - 1, jobs.length));
+    const want = Math.max(1, Math.min(8, hw - 1, jobs.length));
     if (!this.sdfWorkers) this.sdfWorkers = [];
     while (this.sdfWorkers.length < want) {
       const worker = new Worker(new URL('./sdf.worker.js', import.meta.url), { type: 'module' });

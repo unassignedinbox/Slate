@@ -368,11 +368,51 @@ export function buildChunkGeometry(job, meta, v, ctx) {
         vdx = dxs / dl; vdz = dzs / dl; // unit uphill direction
       }
     }
-    return { x, z, h, w, slopeF, steep, oc, crest, foot, vW, vdx, vdz, visX, visZ, strata: w > 1e-6 && (steep > 0 || vW > 0) ? ctx.strata.column(x, z) : null };
+    return { x, z, h, w, slopeF, steep, oc, crest, foot, vW, vdx, vdz, visX, visZ, bc: null, strata: w > 1e-6 && (steep > 0 || vW > 0) ? ctx.strata.column(x, z) : null };
+  }
+  // per-column, per-bed constants: the joint lattice and the block lattice depend on the plan
+  // position and the bed only (spacing, stagger and hashes), so a column of samples reuses them
+  // for every voxel of that bed — the noise and hashing in them is the bulk of a carve sample
+  function bedPlan(col, bi, thick) {
+    const { x, z } = col;
+    const spacing = Math.max(2, Math.min(30, thick * 0.9));
+    const bc = {
+      bi,
+      jn: 0.5 + 0.5 * ctx.joint.fbm(x / spacing + bi * 3.1, z / spacing - bi * 1.7, 2),
+      gone0: hash2(Math.floor(x / spacing + bi * 0.37) + bi * 131, Math.floor(z / spacing - bi * 0.61), ctx.seed) < 0.05 * joints ? 1 : 0,
+    };
+    if (blockAmp <= 0) return bc;
+    // lattice of this bed: size and stagger from the bed index, so rows do not line up
+    const hb0 = hash2(bi, 0, ctx.seed + 101), hb1 = hash2(bi, 1, ctx.seed + 101);
+    const L = Math.max(blockMinL, Math.min(60, blockSize * (0.7 + 0.6 * hb0) * Math.min(1.6, Math.max(0.6, thick / blockSize + 0.4))));
+    const qx = (x + hb0 * L * 2.3) / L, qz = (z + hb1 * L * 1.7) / L;
+    const sX = Math.max(0.08, 1 - col.visX), sZ = Math.max(0.08, 1 - col.visZ);
+    const cx = qx - 0.5, cz = qz - 0.5;
+    const ix = Math.floor(cx), iz = Math.floor(cz);
+    const fx = qx - Math.floor(qx), fz = qz - Math.floor(qz);
+    Object.assign(bc, { ix, iz,
+      bX: smoothstep(0.5 - 0.5 * sX, 0.5 + 0.5 * sX, cx - ix), bZ: smoothstep(0.5 - 0.5 * sZ, 0.5 + 0.5 * sZ, cz - iz),
+      gbase: Math.min(L, thick, 4 * blockAmp + 2 * vox) * 0.7,
+      tf0: col.crest - 1.5 * thick - 2 * vox, tf1: col.crest - 0.3 * thick,
+      dPlan: Math.min(Math.min(fx, 1 - fx) * L + (1 - col.visX) * L, Math.min(fz, 1 - fz) * L + (1 - col.visZ) * L),
+      r: Math.min(L, thick) * (0.15 + 0.35 * hash2(Math.floor(qx) + bi * 31, Math.floor(qz) - bi * 17, ctx.seed + 19)) + crackW,
+      base: new Float64Array(4), S: new Float64Array(4), M: new Float64Array(4), lost: new Uint8Array(4) });
+    for (let c = 0; c < 4; c++) {
+      const i = ix + (c & 1), k = iz + (c >> 1);
+      if (hash2(i + bi * 7919, k, ctx.seed + 7) < blockLoss * 0.5) { bc.lost[c] = 1; continue; } // fallen out
+      const h2 = hash2(i - bi * 104729, k + 3, ctx.seed + 11), h3 = hash2(i * 3 + bi, k * 5 - bi, ctx.seed + 13);
+      bc.base[c] = (h2 - 0.5) * 2 * blockAmp;
+      // a slight tilt of the block face (not quite flush, like a slab that has shifted)
+      bc.S[c] = (h3 - 0.5) * (fx - 0.5) * col.visX + (h2 * 7 % 1 - 0.5) * (fz - 0.5) * col.visZ;
+      bc.M[c] = h3 * 5 % 1 - 0.5;
+    }
+    return bc;
   }
   function carve(col, y) {
     const { x, z } = col;
     const [hard, f, thick, bi] = ctx.strata.at(col.strata, y);
+    let bc = col.bc;
+    if (!bc || bc.bi !== bi) bc = col.bc = bedPlan(col, bi, thick);
     // soft beds recede into a notch that is deepest just under the hard bed above (where seepage
     // and frost work hardest); thin partings only make a shallow groove, thick soft beds a deep
     // undercut; hard beds keep their lip
@@ -385,11 +425,8 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     // hard beds break along joint sets spaced like their thickness → blocky columns; soft beds
     // weather smooth. Each bed has its own joint pattern, and now and then a whole block is gone.
     const hardness = smoothstep(0.45, 0.7, hard);
-    const spacing = Math.max(2, Math.min(30, thick * 0.9));
-    const jn = 0.5 + 0.5 * ctx.joint.fbm(x / spacing + bi * 3.1, z / spacing - bi * 1.7, 2);
-    let joint = smoothstep(0.7, 0.82, jn) * joints * hardness;
-    const bx = Math.floor(x / spacing + bi * 0.37), bz = Math.floor(z / spacing - bi * 0.61);
-    const fallen = hash2(bx + bi * 131, bz, ctx.seed) < 0.05 * joints ? smoothstep(0.04, 0.16, f) * smoothstep(0.98, 0.9, f) * hardness : 0;
+    let joint = smoothstep(0.7, 0.82, bc.jn) * joints * hardness;
+    const fallen = bc.gone0 ? smoothstep(0.04, 0.16, f) * smoothstep(0.98, 0.9, f) * hardness : 0;
     const pit = smoothstep(0.66, 0.82, n) * pits;
     const rough = ctx.rough.fbm(x * roughFreq, y * roughFreq, z * roughFreq, 2, 2.1, 0.55) * roughAmp;
     // embedded boulders are massive rock: no bedding undercuts, spheroidal weathering only
@@ -402,40 +439,22 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     }
     let block = 0;
     if (blockAmp > 0) {
-      // lattice of this bed: size and stagger from the bed index, so rows do not line up
-      const hb0 = hash2(bi, 0, ctx.seed + 101), hb1 = hash2(bi, 1, ctx.seed + 101);
-      const L = Math.max(blockMinL, Math.min(60, blockSize * (0.7 + 0.6 * hb0) * Math.min(1.6, Math.max(0.6, thick / blockSize + 0.4))));
-      const qx = (x + hb0 * L * 2.3) / L, qz = (z + hb1 * L * 1.7) / L;
-      // per-block offset (m): proud / recessed, now and then a block gone (a deep recess) — blended
-      // across the boundaries of a joint family the face does not show (sharp across visible ones)
-      const sX = Math.max(0.08, 1 - col.visX), sZ = Math.max(0.08, 1 - col.visZ);
-      const cx = qx - 0.5, cz = qz - 0.5;
-      const ix = Math.floor(cx), iz = Math.floor(cz);
-      const bX = smoothstep(0.5 - 0.5 * sX, 0.5 + 0.5 * sX, cx - ix), bZ = smoothstep(0.5 - 0.5 * sZ, 0.5 + 0.5 * sZ, cz - iz);
+      // the lattice of a bed over one plan position is the same for every voxel of that bed, and
+      // the hashing it needs is the costly part of a sample → cache it on the column
+      let bc = col.bc;
+      if (!bc || bc.bi !== bi) bc = col.bc = blockPlan(col, bi, thick);
+      const f05 = f - 0.5;
       // no block falls out of the top bed right under the crest (it would leave the lip floating)
-      const topFade = needCF ? smoothstep(col.crest - 1.5 * thick - 2 * vox, col.crest - 0.3 * thick, y) : 0;
-      const gone = Math.min(L, thick, 4 * blockAmp + 2 * vox) * 0.7 * (1 - topFade);
-      const fx = qx - Math.floor(qx), fz = qz - Math.floor(qz);
-      // each block: its own offset, a slight tilt of its face (not quite flush, like a slab that
-      // has shifted) and its own rounding
-      const P = (i, k) => {
-        const h1 = hash2(i + bi * 7919, k, ctx.seed + 7);
-        if (h1 < blockLoss * 0.5) return -gone; // fallen out
-        const h2 = hash2(i - bi * 104729, k + 3, ctx.seed + 11), h3 = hash2(i * 3 + bi, k * 5 - bi, ctx.seed + 13);
-        const tilt = ((h3 - 0.5) * (fx - 0.5) * col.visX + (h2 * 7 % 1 - 0.5) * (fz - 0.5) * col.visZ + (h3 * 5 % 1 - 0.5) * (f - 0.5)) * 0.8 * blockAmp;
-        return (h2 - 0.5) * 2 * blockAmp + tilt;
-      };
-      const p0 = P(ix, iz) + (P(ix + 1, iz) - P(ix, iz)) * bX, p1 = P(ix, iz + 1) + (P(ix + 1, iz + 1) - P(ix, iz + 1)) * bX;
-      const offs = p0 + (p1 - p0) * bZ;
+      const gone = needCF ? -bc.gbase * (1 - smoothstep(bc.tf0, bc.tf1, y)) : -bc.gbase;
+      const P = (c) => bc.lost[c] ? gone : bc.base[c] + (bc.S[c] + bc.M[c] * f05) * 0.8 * blockAmp;
+      const pa = P(0), pb = P(1);
+      const p0 = pa + (pb - pa) * bc.bX, p1 = P(2) + (P(3) - P(2)) * bc.bX;
+      const offs = p0 + (p1 - p0) * bc.bZ;
       // distance to the block's rim: visible joint planes and the bed boundaries
-      const dX = Math.min(fx, 1 - fx) * L + (1 - col.visX) * L, dZ = Math.min(fz, 1 - fz) * L + (1 - col.visZ) * L;
-      const dB = Math.min(f, 1 - f) * thick;
-      const e = Math.min(dX, dZ, dB);
+      const e = Math.min(bc.dPlan, Math.min(f, 1 - f) * thick);
       // bevelled rim: the block face is flat, its edges round off into the crack (some blocks are
       // crisp, some well rounded)
-      const hr = hash2(Math.floor(qx) + bi * 31, Math.floor(qz) - bi * 17, ctx.seed + 19);
-      const r = Math.min(L, thick) * (0.15 + 0.35 * hr) + crackW;
-      const rim = smoothstep(0, r, e);
+      const rim = smoothstep(0, bc.r, e);
       const crack = (1 - smoothstep(0, crackW, e)) * (0.6 * blockAmp + 0.8 * vox);
       // soft beds weather smooth; hard beds break into blocks (massive boulders: no jointing)
       const bh = (0.35 + 0.65 * smoothstep(0.35, 0.6, hard)) * (1 - col.oc);
