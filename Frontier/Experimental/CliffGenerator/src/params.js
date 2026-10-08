@@ -42,6 +42,7 @@ export const defaults = {
   strataPackaging: 0.6,
   strataHardShare: 0.35,
   strataLateral: 0.18,
+  strataRecut: 0.5,
   strataDip: 4,             // [°]
   strataDipDirection: 35,   // [°]
   hardnessContrast: 0.8,
@@ -52,6 +53,8 @@ export const defaults = {
   fluvialUplift: 0.3,
   fluvialFill: 0.6,
   fluvialPits: 8,
+  rillStrength: 0.5,
+  rillSteps: 6,
   fluvialDiffusion: 0.3,
   droplets: 180000,
   inertia: 0.08,
@@ -105,9 +108,11 @@ export const defaults = {
   meshSubdivision: 2,
   detailRelief: 0.5,        // [m]
   detailScale: 7,           // [m]
-  rockyAmount: 0.6,         // [m]
-  rockyScale: 3.5,          // [m]
+  rockyAmount: 1,           // [m]
+  rockyScale: 4,            // [m]
   rockyAngular: 0.7,
+  cragAmount: 2.5,          // [m]
+  cragScale: 12,            // [m]
   detailCliffBias: 0.8,
   // Rock material
   palette: 'granite',
@@ -373,7 +378,7 @@ Object.assign(presets, {
     droplets: 6000, erodeSpeed: 0.1, thermalIterations: 30, thermalRate: 0.6, talusSoft: 33, talusHard: 36,
     snowOn: 0, vegOn: 0, vegetation: 0, mossOn: 0, mossiness: 0, oxideAmount: 0.15, waterEnabled: 0, seaLevel: -100,
     rocksEnabled: 0, pebblesOn: 0, gravelAmount: 0, peelOn: 0, flakeStrength: 0.25, flakeSize3: 0.08, flakeCrystal3: 0.5, flakeSparkle: 1.2,
-    sdfOn: 0, overhang: 0, detailRelief: 0.15, rockyAmount: 0, riverSim: 0, riverWater: 0, riverLakes: 0, streakAmount: 0, wetness: 0.1,
+    sdfOn: 0, overhang: 0, detailRelief: 0.15, rockyAmount: 0, cragAmount: 0, fluvialStrength: 0, rillStrength: 0, riverSim: 0, riverWater: 0, riverLakes: 0, streakAmount: 0, wetness: 0.1,
     sunElevation: 28, sunAzimuth: 250, turbidity: 8, fogDensity: 0.15,
   },
   'Icelandic highlands': {
@@ -477,6 +482,7 @@ export const groups = [
         ['strataPackaging', 'Packaging', 0, 1, 0.05, '', 'How much beds group into thin-bedded (shale) and massive (sandstone / limestone) packages instead of a random stack'],
         ['strataHardShare', 'Hard share', 0, 1, 0.05, '', 'Share of resistant beds in the mixed packages'],
         ['strataLateral', 'Lateral change', 0, 0.4, 0.01, '', 'Beds thicken and thin across the tile'],
+        ['strataRecut', 'Re-cut after erosion', 0, 1, 0.05, '', 'Applies the beds once more (at this share of the strength) on the eroded surface so the ledges stay crisp — Gaea Stratify after Erosion'],
       ] },
       { title: 'Geological dip', controls: [
         ['strataDip', 'Dip angle', 0, 25, 0.5, '°', 'Tilt of the bedding planes'],
@@ -515,6 +521,8 @@ export const groups = [
         ['rockyAmount', 'Rocky facets', 0, 3, 0.05, 'm', 'Angular joint-bounded blocks on steep hard rock (soft beds stay smooth) — the "rocky" look of fractured faces'],
         ['rockyScale', 'Block size', 1, 20, 0.5, 'm', ''],
         ['rockyAngular', 'Blockiness', 0, 1, 0.05, '', '0 = rounded knobs, 1 = sharp-edged blocks'],
+        ['cragAmount', 'Crags', 0, 8, 0.25, 'm', 'Larger joint-bounded blocks on steep hard rock, each set back or protruding by its own amount — breaks a cliff face into rugged masses (also in the 3-D chunks)'],
+        ['cragScale', 'Crag size', 4, 40, 1, 'm', 'Size of the crag blocks'],
       ] },
     ],
   },
@@ -528,6 +536,8 @@ export const groups = [
         ['fluvialUplift', 'Uplift', 0, 1, 0.05, '', 'Tectonic uplift of the massifs during incision: keeps the relief high while the valleys deepen; 0 lets everything grade towards base level'],
         ['fluvialFill', 'Basin fill', 0, 1, 0.05, '', 'How fast closed basins silt up to their spill level: high = lakes become flat valley floors with a river through them, low = lakes survive'],
         ['fluvialPits', 'Silt up pits', 0, 30, 1, 'm', 'After the droplet erosion, hollows shallower than this are silted up so the valleys drain as one network; deeper basins stay lakes'],
+        ['rillStrength', 'Rills (flow lines)', 0, 1, 0.05, '', 'Fine converging runoff channels cut into the slopes after the droplet erosion — the flow-line texture of eroded mountains. 0 = off'],
+        ['rillSteps', 'Rill steps', 1, 20, 1, '', 'Erosion steps for the rills (more = deeper, longer lines)'],
         ['fluvialDiffusion', 'Hillslope diffusion', 0, 1, 0.05, '', 'Soil creep rounding the interfluves between valleys'],
       ] },
       { title: 'Hydraulic erosion', controls: [

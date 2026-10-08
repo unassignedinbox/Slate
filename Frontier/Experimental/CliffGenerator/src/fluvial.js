@@ -20,6 +20,7 @@
 // relief from being planed flat, and a light diffusion rounds the interfluves.
 
 import { fillDepressions, flowDirections } from './hydrology.js';
+import { SimplexNoise } from './noise.js';
 
 // opts: { strength 0..1, iterations, concavity (m), uplift 0..1 (fraction of relief re-added
 //         over the run), diffusion 0..1, seaLevel, relief [m] }
@@ -153,4 +154,49 @@ export function fillShallowPits(height, N, seaLevel, maxDepth = 8, residual = 0.
     for (const c of cells) { const t = filled[c] - residual; if (t > height[c]) { height[c] = t; filledCells++; } }
   }
   return filledCells;
+}
+
+// Rills / flow lines — the fine converging runoff channels that cover eroded slopes (the "flow"
+// texture of Gaea's Erosion node). Same stream-power solver with a low area exponent, so even
+// tiny catchments cut, no uplift / diffusion / basin fill, and a little noise on the routing
+// surface so the lines wander instead of running dead straight along the 8 grid directions.
+// Runs after the droplet erosion so the lines are not blurred away; returns the drainage area
+// for the flow map (the wet lines).
+export function rillErosion(height, hardness, N, size, opts, progress = () => {}) {
+  const total = N * N;
+  const cell = size / (N - 1);
+  const iterations = Math.max(1, Math.round(opts.iterations || 6));
+  const strength = opts.strength == null ? 0.5 : opts.strength;
+  const sea = opts.seaLevel == null ? -Infinity : opts.seaLevel;
+  const m = 0.3;
+  const kBase = strength * Math.pow(1e4, -m) * cell; // f ≈ 0.36·strength for a 20-cell rill
+  const area = cell * cell;
+  const acc = new Float32Array(total);
+  const routing = new Float32Array(total);
+  const wn = new SimplexNoise((opts.seed || 1) * 37 + 19);
+  const wander = new Float32Array(total);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) wander[j * N + i] = 0.8 * wn.fbm(i * cell / 45, j * cell / 45, 2, 2.1, 0.5);
+  let order = null, down = null;
+  for (let it = 0; it <= iterations; it++) {
+    for (let i = 0; i < total; i++) routing[i] = height[i] + wander[i];
+    const fd = fillDepressions(routing, N, sea);
+    order = fd.order; down = flowDirections(fd.filled, N);
+    acc.fill(1);
+    for (let k = total - 1; k >= 0; k--) { const c = order[k], d = down[c]; if (d >= 0) acc[d] += acc[c]; }
+    if (it === iterations) break; // last pass only refreshes the drainage area
+    for (let k = 0; k < total; k++) {
+      const c = order[k], d = down[c];
+      if (d < 0) continue;
+      const h0 = height[c], hr = height[d];
+      if (h0 <= hr + 0.02 || h0 <= sea) continue;
+      const ci = c % N, di = d % N;
+      const diag = (ci !== di) && (((c - ci) / N) !== ((d - di) / N));
+      const dx = diag ? cell * Math.SQRT2 : cell;
+      const soft = 1.25 - 0.9 * hardness[c];
+      const f = kBase * soft * Math.pow(acc[c] * area, m) / dx;
+      height[c] = (h0 + f * hr) / (1 + f);
+    }
+    progress((it + 1) / iterations);
+  }
+  return { acc };
 }

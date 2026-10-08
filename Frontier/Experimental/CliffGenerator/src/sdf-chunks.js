@@ -16,6 +16,7 @@ import { SimplexNoise, GradientNoise3, hash2, smoothstep, lerp, clamp01 } from '
 import { makeBedTable, bedAt, bedJitter, bedHardness } from './strata-model.js';
 import { NO_WATER } from './features.js';
 import { edgeTable, triTable } from './mc-tables.js';
+import { makeDetail } from './detail.js';
 
 const DX8 = [1, -1, 0, 0, 1, 1, -1, -1], DZ8 = [0, 0, 1, -1, 1, -1, 1, -1];
 
@@ -160,7 +161,8 @@ export function packChunkJobs(fine, chunks, v) {
 export function carveReach(v) {
   const undercut = Math.max(0, v.sdfUndercut == null ? 6 : v.sdfUndercut);
   const pits = v.sdfPits == null ? 0.3 : v.sdfPits, joints = v.sdfJoints == null ? 0.5 : v.sdfJoints;
-  return undercut * (1 + 0.5 * pits + 0.9 * joints) + 1.5;
+  const detail = (v.detailRelief || 0) + (v.rockyAmount || 0) + (v.cragAmount || 0);
+  return undercut * (1 + 0.5 * pits + 0.9 * joints) + 1.5 + detail;
 }
 
 // ---- strata hardness at a 3-D point (same model as heightfield.applyStrata) -----------------------
@@ -242,6 +244,10 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const band = Math.max(2, v.strataBand || 26);
   const hasOutcrop = !!m.outcrop;
 
+  // the same rocky facets / crags / relief as the heightfield mesh, evaluated in 3-D on the carved
+  // faces (feature size clamped to ≥ 2.5 voxels so blocks cannot alias into voxel steps)
+  const detail = makeDetail({ worldSize: size, resolution: N }, { ...v, detailRelief: 0 }, { minScale: vox * 2.5, limit: 1e9 }); // fbm relief is already there as `rough`
+  const bump = roughAmp + detail.amp;
   const maxCarve = carveReach(v);
   // everything that depends on the plan position only
   function column(x, z) {
@@ -278,14 +284,15 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     const rough = ctx.rough.fbm(x * roughFreq, y * roughFreq, z * roughFreq, 2, 2.1, 0.55) * roughAmp;
     // embedded boulders are massive rock: no bedding undercuts, spheroidal weathering only
     if (col.oc > 0) { soft *= 1 - col.oc; joint *= 1 - col.oc * 0.5; }
-    const d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + fallen * 0.9 + pit * 0.5 + col.oc * 0.12 * pocket) + rough;
+    const det = detail.amp > 0 ? detail.at(x, y, z, 1 / col.slopeF, hard) : 0;
+    const d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + fallen * 0.9 + pit * 0.5 + col.oc * 0.12 * pocket) + rough - det;
     return d * col.steep * col.w;
   }
   function fCol(col, y) {
     const plain = y - col.h;
     if (col.w <= 1e-6 || col.steep <= 0) return plain;
     // outside the band where carving can flip the sign the field is just the plain distance
-    if (plain < -maxCarve * col.slopeF - 2 * vox || plain > roughAmp + 2 * vox) return plain;
+    if (plain < -maxCarve * col.slopeF - 2 * vox || plain > bump + 2 * vox) return plain;
     const dist = plain / col.slopeF;
     return plain + (dist + carve(col, y) - plain) * col.w;
   }
@@ -293,7 +300,7 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   // vertical range: carving d along the normal moves the surface up to d·|∇| vertically
   const reach = maxCarve * Math.min(3, job.slopeF || 3);
   const yLo = Math.floor((job.hmin - reach - 2 * vox) / vox) * vox;
-  const yHi = Math.ceil((job.hmax + roughAmp + 2 * vox) / vox) * vox;
+  const yHi = Math.ceil((job.hmax + bump + 2 * vox) / vox) * vox;
   const ny = Math.max(1, Math.round((yHi - yLo) / vox));
   const sx = nx + 1, sy = ny + 1, sz = nz + 1;
   // only the band around the surface is sampled / polygonised; nodes outside it are the plain
@@ -305,7 +312,7 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     for (let jx = 0; jx < sx; jx++) {
       const col = column(x0 + jx * vox, z);
       const lo = Math.max(0, Math.floor((col.h - maxCarve * col.slopeF - 2 * vox - yLo) / vox) - 1);
-      const hi = Math.min(ny, Math.ceil((col.h + roughAmp + 2 * vox - yLo) / vox) + 1);
+      const hi = Math.min(ny, Math.ceil((col.h + bump + 2 * vox - yLo) / vox) + 1);
       bandLo[jz * sx + jx] = lo; bandHi[jz * sx + jx] = hi;
       const base = jz * sy * sx + jx;
       for (let jy = 0; jy < lo; jy++) vals[base + jy * sx] = yLo + jy * vox - col.h;

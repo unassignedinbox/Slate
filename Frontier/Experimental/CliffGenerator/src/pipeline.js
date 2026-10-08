@@ -9,7 +9,7 @@ import { hydraulicErosion, thermalErosion, blurField } from './erosion.js';
 import { carveRivers, NO_WATER } from './features.js';
 import { simulateRivers } from './hydrology.js';
 import { addOutcrops } from './outcrops.js';
-import { fluvialErosion, fillShallowPits } from './fluvial.js';
+import { fluvialErosion, fillShallowPits, rillErosion } from './fluvial.js';
 
 export function generateTerrain(params, progress = () => {}) {
   const N = params.resolution;
@@ -67,9 +67,28 @@ export function generateTerrain(params, progress = () => {}) {
   const slumped = thermalErosion(height, hardness, erosionParams,
     (f) => progress({ phase: 'Scree slumping', fraction: f }));
 
+  // Re-cut the beds: erosion rounds the terraces off, so the strata are applied once more (lighter)
+  // on the eroded surface — the ledges stay crisp where the slopes are steep.
+  if (params.strataRecut > 0 && params.strataStrength > 0) {
+    progress({ phase: 'Re-cutting strata', fraction: 0 });
+    const recut = applyStrata(height, { ...params, strataStrength: params.strataStrength * params.strataRecut },
+      (f) => progress({ phase: 'Re-cutting strata', fraction: f }), outcrop);
+    for (let i = 0; i < N * N; i++) { hardness[i] = recut[i]; if (outcrop[i] > 0) hardness[i] = Math.max(hardness[i], 0.55 + 0.4 * outcrop[i]); }
+  }
+
+  // Rills: fine converging flow lines on the slopes (sharp, after the droplets); their drainage
+  // area becomes the wet-line flow map.
+  let rills = null;
+  if (params.rillStrength > 0) {
+    progress({ phase: 'Cutting rills', fraction: 0 });
+    rills = rillErosion(height, hardness, N, params.worldSize, {
+      strength: params.rillStrength, iterations: params.rillSteps, seaLevel: params.waterEnabled ? params.seaLevel : -Infinity, seed: params.seed,
+    }, (f) => progress({ phase: 'Cutting rills', fraction: f }));
+  }
+
   // droplet fans dam the valley floors into chains of shallow pits — silt them up so the drainage
   // stays integrated (deep basins remain as lakes)
-  if (fluvial && params.fluvialPits > 0) fillShallowPits(height, N, params.waterEnabled ? params.seaLevel : -Infinity, params.fluvialPits, 0.2, cell);
+  if ((fluvial || rills) && params.fluvialPits > 0) fillShallowPits(height, N, params.waterEnabled ? params.seaLevel : -Infinity, params.fluvialPits, 0.2, cell);
 
   if (rivers.length) {
     // Restore the bed to its profile after erosion/slumping and take the final mask + water level.
@@ -107,14 +126,15 @@ export function generateTerrain(params, progress = () => {}) {
   const flowRaw = new Float32Array(N * N);
   const fluvialFlow = new Float32Array(N * N);
   for (let i = 0; i < N * N; i++) flowRaw[i] = Math.log1p(flow[i]);
-  if (fluvial) {
-    // stream-power drainage area → the valley floors read as wet even where droplets were sparse
-    let hiAcc = 1; for (let i = 0; i < N * N; i++) if (fluvial.acc[i] > hiAcc) hiAcc = fluvial.acc[i];
+  const accMap = rills ? rills.acc : fluvial ? fluvial.acc : null;
+  if (accMap) {
+    // stream-power drainage area → flow lines and valley floors read as wet even where droplets were sparse
+    let hiAcc = 1; for (let i = 0; i < N * N; i++) if (accMap[i] > hiAcc) hiAcc = accMap[i];
     const lh = Math.log1p(hiAcc);
-    for (let i = 0; i < N * N; i++) { const t = Math.log1p(fluvial.acc[i] - 1) / lh; fluvialFlow[i] = Math.max(0, Math.min(1, (t - 0.35) / 0.65)); }
+    for (let i = 0; i < N * N; i++) { const t = Math.log1p(accMap[i] - 1) / lh; fluvialFlow[i] = Math.max(0, Math.min(1, (t - 0.3) / 0.7)); }
   }
   const flowNorm = normalisePercentile(blurField(flowRaw, N, 1), 0.995);
-  if (fluvial) for (let i = 0; i < N * N; i++) flowNorm[i] = Math.max(flowNorm[i], fluvialFlow[i] * fluvialFlow[i] * 0.7);
+  if (accMap) for (let i = 0; i < N * N; i++) flowNorm[i] = Math.max(flowNorm[i], fluvialFlow[i] * fluvialFlow[i] * 0.8);
   if (hydro) {
     // drainage network → wet gully floors; channels and lake shores → gravel / silt deposits
     for (let i = 0; i < N * N; i++) {

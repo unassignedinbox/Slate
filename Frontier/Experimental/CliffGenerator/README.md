@@ -64,7 +64,10 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    river and only the deepest survive as lakes; after the droplet erosion, hollows shallower than
    *Silt up pits* are filled so the sediment fans do not dam the valleys into chains of ponds.
    The simulated rivers then run in valleys they shaped themselves instead of being carved into an
-   unrelated surface.
+   unrelated surface. After the droplet erosion a **rill** pass (same solver, low area exponent,
+   noisy routing, no fill) cuts the fine converging flow lines that cover eroded slopes — the
+   flow texture of Gaea's Erosion node — and its drainage area is the wet‑line flow map; the
+   strata are then **re‑cut** (lighter) on the eroded surface so the ledges stay crisp.
 4. **Erosion** (`src/erosion.js`) — thermal pre‑settle, Lagrangian droplet hydraulic erosion
    (cutting scaled by hardness so cliff bands survive, deposition builds fans), then talus
    slumping with a hardness‑dependent repose angle → scree aprons beneath the faces.
@@ -96,8 +99,12 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    capped at 2049) plus fine relief pushed along the surface normal (knobs on steep rock,
    hummocks on flat ground) and **rocky facets** (Gaea *Rocky*‑style: a cellular field of
    joint‑bounded blocks, wider than tall, pushed out of steep *hard* rock while soft beds stay
-   smooth; blockiness blends cones into sharp‑edged blocks) — cheap detail on top of the
-   expensive erosion. Rocks are seated on
+   smooth; blockiness blends cones into sharp‑edged blocks) and **crags** (larger joint‑bounded
+   blocks, each protruding or set back by its own amount, so a face is a stack of rugged masses
+   rather than a plane) — cheap detail on top of the expensive erosion. The same detail functions
+   (`src/detail.js`) are evaluated in 3‑D on the SDF chunk faces (feature size clamped to
+   ≥ 2.5 voxels), so cliffs are as rugged as the mesh around them and the seam stays continuous.
+   Rocks are seated on
    the final displaced surface. **True‑3D cliffs**: cells steeper than the cliff angle are grouped
    into chunks (16 cells, budgeted), the heightfield mesh skips their quads and masks its
    displacement around them, and a small pool of workers streams marching‑cubes meshes back in
