@@ -24,6 +24,15 @@ export const defaults = {
   duneDirection: 30,        // [°]
   duneAsymmetry: 0.68,
   duneCoverage: 0.6,
+  // Rugged outcrops (lateral push–pull of the steep faces)
+  ruggedOn: 1,
+  ruggedAmount: 14,         // [m]
+  ruggedScale: 70,          // [m]
+  ruggedBlockiness: 0.7,
+  ruggedLedges: 0.5,
+  ruggedBands: 3,
+  ruggedSlope: 28,          // [°]
+  ruggedAfter: 0.5,
   // Boulder outcrops (tors / core-stone clusters unioned into the landform)
   outcropDensity: 0,
   outcropSize: 16,          // [m]
@@ -478,6 +487,16 @@ export const groups = [
         ['mountainHeight', 'Mountain height', 100, 2500, 10, 'm', 'Peak elevation above the datum'],
         ['baseElevation', 'Base elevation', -200, 400, 5, 'm', 'Elevation of the plains'],
         ['worldSize', 'World size', 1024, 4096, 128, 'm', 'Side length of the generated tile'],
+      ] },
+      { title: 'Rugged outcrops', controls: [
+        ['ruggedOn', 'Enable push–pull', 0, 1, 1, '', 'Lateral (XZ) push–pull of the steep faces: blocky buttresses stand out of the face, recesses are cut back into it — applied to the base shape and again, finer, after erosion'],
+        ['ruggedAmount', 'Push–pull', 0, 60, 1, 'm', 'How far a face is moved sideways'],
+        ['ruggedScale', 'Block scale', 15, 300, 5, 'm', 'Size of the buttresses / recesses'],
+        ['ruggedBlockiness', 'Blockiness', 0, 1, 0.05, '', 'Plateaus and sharp risers (1) vs. rounded waves (0)'],
+        ['ruggedBands', 'Levels', 1, 6, 1, '', 'How many push–pull levels a face steps between'],
+        ['ruggedLedges', 'Ledges', 0, 1.5, 0.05, '', 'Vertical share of the push–pull: the blocks also step up and down'],
+        ['ruggedSlope', 'From slope', 10, 60, 1, '°', 'Ground gentler than this is not moved (valleys, plains, rivers keep their shape)'],
+        ['ruggedAfter', 'After erosion', 0, 1, 0.05, '', 'Fraction of the push–pull re-applied on the eroded faces (erosion smears the lateral structure)'],
       ] },
       { title: 'Dunes', controls: [
         ['duneAmount', 'Dune height', 0, 80, 1, 'm', 'Transverse sand dunes added to the relief: long windward slope, short slip face'],

@@ -35,7 +35,17 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    mask, optional mesa soft‑clamp and a meandering canyon incision. **Dunes**: transverse ridges
    across the wind with a concave windward slope steepening to a sharp brink, a straight slip
    face at the angle of repose, interdune flats and smaller compound dunes climbing the big ones.
-   **Boulder outcrops** (`src/outcrops.js`) — clusters of large core‑stones (tors, woolsacks,
+   **Rugged outcrops** (`src/rugged.js`, Gaea *Rugged / Outcrops*‑style) — a heightfield can only
+   move up and down, so the steep faces of the base shape are also pushed and pulled **sideways**:
+   every steep cell re‑samples the terrain from a point displaced along the face's own horizontal
+   normal by a blocky multi‑octave noise (3‑D coarse blocks turned into plateaus and risers, finer
+   blocks on top), so buttresses stand proud of the face where the noise is positive and recesses
+   / chimneys are cut back where it is negative, with a vertical share so the blocks also step
+   up and down as ledges. The slope mask is blurred so a whole buttress moves as one piece and
+   flat ground (valleys, rivers, plains) is never displaced. Applied to the base shape and again,
+   finer, after erosion (which smears lateral structure) — the hardness and boulder maps ride along
+   with the faces. Controls: push–pull distance, block scale, blockiness, levels, ledges, slope
+   threshold, after‑erosion share. **Boulder outcrops** (`src/outcrops.js`) — clusters of large core‑stones (tors, woolsacks,
    "encampments") are unioned into the relief *before* strata and erosion: superellipsoid stones
    with a plan rotation, a low‑frequency bulge and a burial depth, in clusters on a site grid
    filtered by slope and biased to ridges / hill tops. They come out as a landform the rest of the

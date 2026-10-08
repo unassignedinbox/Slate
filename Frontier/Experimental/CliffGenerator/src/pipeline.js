@@ -5,6 +5,7 @@
 //   → derived maps (deposit, flow, cavity, slope) packed for the vertex attributes.
 
 import { synthesizeBase, applyStrata, computeCavity, computeSlopeMap } from './heightfield.js';
+import { ruggedPushPull } from './rugged.js';
 import { hydraulicErosion, thermalErosion, blurField } from './erosion.js';
 import { carveRivers, NO_WATER } from './features.js';
 import { simulateRivers } from './hydrology.js';
@@ -18,6 +19,17 @@ export function generateTerrain(params, progress = () => {}) {
 
   progress({ phase: 'Synthesising base relief', fraction: 0 });
   const height = synthesizeBase(params, (f) => progress({ phase: 'Synthesising base relief', fraction: f }));
+
+  // rugged outcrops: the steep faces of the base shape are pushed and pulled sideways (blocky
+  // buttresses and recesses) before anything else is layered on them
+  const rugged = (params.ruggedOn == null ? 1 : params.ruggedOn) ? {
+    amount: params.ruggedAmount, scale: params.ruggedScale, blockiness: params.ruggedBlockiness, ledges: params.ruggedLedges,
+    slopeMin: params.ruggedSlope, slopeMax: params.ruggedSlope + 22, bands: params.ruggedBands, seed: params.seed,
+  } : null;
+  if (rugged && rugged.amount > 0) {
+    progress({ phase: 'Rugged outcrops', fraction: 0 });
+    ruggedPushPull(height, N, params.worldSize, rugged);
+  }
 
   // boulder outcrops are part of the landform: added before strata and erosion
   const outcrop = addOutcrops(height, params);
@@ -66,6 +78,13 @@ export function generateTerrain(params, progress = () => {}) {
   progress({ phase: 'Scree slumping', fraction: 0 });
   const slumped = thermalErosion(height, hardness, erosionParams,
     (f) => progress({ phase: 'Scree slumping', fraction: f }));
+
+  // Erosion smears the lateral structure, so part of the push–pull is applied again on the eroded
+  // faces (a second, finer pass) — the hardness and outcrop maps ride along with the faces.
+  if (rugged && rugged.amount > 0 && params.ruggedAfter > 0) {
+    progress({ phase: 'Rugged outcrops', fraction: 0.5 });
+    ruggedPushPull(height, N, params.worldSize, { ...rugged, amount: rugged.amount * params.ruggedAfter, scale: rugged.scale * 0.6, seed: params.seed + 3 }, [hardness, outcrop]);
+  }
 
   // Re-cut the beds: erosion rounds the terraces off, so the strata are applied once more (lighter)
   // on the eroded surface — the ledges stay crisp where the slopes are steep.
