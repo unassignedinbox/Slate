@@ -150,7 +150,9 @@ export class CliffScene {
   }
 
   setWater(v) {
-    this.water.visible = !!v.waterEnabled;
+    this.waterMeshes = !!v.waterMeshes;
+    this.water.visible = !!v.waterEnabled && this.waterMeshes;
+    if (this.waterBodies.geometry && this.waterBodies.geometry.index) this.waterBodies.visible = this.waterMeshes;
     const extent = this.field ? this.field.worldSize : 2048;
     this.water.scale.set(extent * 4, extent * 4, 1);
     this.water.position.y = v.seaLevel;
@@ -168,7 +170,7 @@ export class CliffScene {
     if (this.waterBodies.geometry) this.waterBodies.geometry.dispose();
     const geometry = this.meshField ? buildWaterGeometry(this.meshField) : null;
     this.waterBodies.geometry = geometry || new THREE.BufferGeometry();
-    this.waterBodies.visible = !!geometry;
+    this.waterBodies.visible = !!geometry && !!this.waterMeshes;
   }
 
   // ---- drawn features ----------------------------------------------------------------------------

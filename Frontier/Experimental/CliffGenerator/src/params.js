@@ -208,8 +208,9 @@ export const defaults = {
   // Simulated drainage
   riverSim: 1,
   riverCatchment: 0.04,     // [km²]
-  riverWidthScale: 40,      // [m per √km²]
-  riverMaxWidth: 150,       // [m]
+  riverWidthScale: 22,      // [m per √km²]
+  riverMaxWidth: 80,        // [m]
+  riverFloodplain: 0.5,
   riverDepthScale: 0.7,
   riverWaterFrac: 0.7,
   riverDrySlope: 12,        // [°]
@@ -224,6 +225,7 @@ export const defaults = {
   lakeLevelOffset: 6,       // [m]
   lakeWater: 1,
   // Water
+  waterMeshes: 0,
   waterColor: '#15303c',
   waterOpacity: 0.9,
   riverColor: '#1d4552',
@@ -401,7 +403,7 @@ Object.assign(presets, {
     plateauStrength: 0.45, plateauHeight: 560, canyonDepth: 0, strataBand: 22, strataStrength: 0.9, strataDip: 2, hardnessContrast: 1.0,
     droplets: 260000, erodeSpeed: 0.45, sedimentCapacity: 6, thermalIterations: 40, talusSoft: 34, talusHard: 86,
     snowOn: 1, snowLine: 520, snowSlope: 42, snowSoftness: 2.5, vegetation: 0.5, vegSlope: 30, vegPatchiness: 0.8, dryness: 0.3, mossiness: 0.9, mossScale: 6,
-    waterEnabled: 0, seaLevel: -100, riverCatchment: 0.03, riverWidthScale: 55, riverMaxWidth: 220, riverBraiding: 0.8, riverLakes: 0, riverLakeFill: 0.9,
+    waterEnabled: 0, seaLevel: -100, riverCatchment: 0.03, riverWidthScale: 28, riverMaxWidth: 110, riverBraiding: 0.8, riverLakes: 0, riverLakeFill: 0.9,
     rockDensity: 0.4, rockSizeMax: 6, pebbleDensity: 0.6, gravelAmount: 1, sdfOn: 1, sdfAngle: 60, sdfUndercut: 5,
     outcropDensity: 0.2, outcropSize: 10, outcropCount: 6, outcropSpacing: 180, outcropAspect: 0.55, outcropBury: 0.5, outcropRidge: 0.2, outcropWeather: 0.3,
     oxideAmount: 0.6, peelStrength: 0.35, flakeStrength: 0.5, sunElevation: 22, sunAzimuth: 200, turbidity: 4, fogDensity: 0.5,
@@ -412,7 +414,7 @@ Object.assign(presets, {
     plateauStrength: 0.2, plateauHeight: 420, canyonDepth: 0, strataBand: 20, strataStrength: 0.8, strataDip: 1.5, hardnessContrast: 0.9,
     droplets: 280000, erodeSpeed: 0.5, sedimentCapacity: 7, depositSpeed: 0.35, thermalIterations: 36, talusSoft: 33, talusHard: 84,
     snowOn: 1, snowLine: 380, snowSlope: 40, snowSoftness: 3, vegetation: 0.55, vegSlope: 28, vegPatchiness: 0.85, dryness: 0.35, mossiness: 0.85, mossScale: 7,
-    waterEnabled: 1, seaLevel: 0, riverCatchment: 0.02, riverWidthScale: 70, riverMaxWidth: 300, riverDepthScale: 0.8, riverBraiding: 1.0, riverLakes: 0, riverLakeFill: 0.95, riverGuideFlow: 2,
+    waterEnabled: 1, seaLevel: 0, riverCatchment: 0.02, riverWidthScale: 35, riverMaxWidth: 150, riverDepthScale: 0.8, riverBraiding: 1.0, riverLakes: 0, riverLakeFill: 0.95, riverGuideFlow: 2,
     rockDensity: 0.25, rockSizeMax: 5, pebbleDensity: 0.8, pebbleSize: 0.5, gravelAmount: 1, sdfOn: 1, sdfAngle: 60, sdfUndercut: 4,
     oxideAmount: 0.5, peelStrength: 0.3, flakeStrength: 0.45, sunElevation: 26, sunAzimuth: 190, turbidity: 5, fogDensity: 0.45,
   },
@@ -585,6 +587,7 @@ export const groups = [
         ['riverCatchment', 'Min. catchment', 0.01, 2, 0.01, 'km²', 'Drainage area needed before a channel forms — smaller = denser network'],
         ['riverWidthScale', 'Width per √km²', 4, 120, 1, 'm', 'Channel width = this × √catchment'],
         ['riverMaxWidth', 'Max width', 10, 400, 5, 'm', ''],
+        ['riverFloodplain', 'Floodplain', 0, 2, 0.05, '', 'Valley floor planed flat beside the river, in channel widths — the river valley of a mature stream. 0 = banks only'],
         ['riverDepthScale', 'Depth scale', 0.2, 3, 0.05, '', 'Channel depth ≈ scale × width^0.45'],
         ['riverWaterFrac', 'Water fill', 0.2, 0.9, 0.05, '', 'Fraction of the channel depth filled with water'],
         ['riverDrySlope', 'Dry above grade', 2, 45, 1, '°', 'Reaches steeper than this show the carved gully (wet rock, gravel) instead of standing water — mountain torrents do not read as flat water'],
@@ -818,7 +821,8 @@ export const groups = [
     id: 'water', name: 'Water', type: 'Sea level & water bodies', stage: 'live', color: '#5aa7c9',
     cards: [
       { title: 'Sea level', controls: [
-        ['waterEnabled', 'Sea', 0, 1, 1, '', 'Global water plane'],
+        ['waterMeshes', 'Water as meshes', 0, 1, 1, '', 'Off (Gaea-style): water is painted onto the terrain surface as a mask — flat colour, clear in the shallows — with no water geometry. On: a sea plane and river / lake sheets'],
+        ['waterEnabled', 'Sea', 0, 1, 1, '', 'Global water level: everything below is sea (painted or plane)'],
         ['seaLevel', 'Sea level', -200, 800, 1, 'm', 'Everything below this is flooded — live'],
       ] },
       { title: 'Appearance', controls: [

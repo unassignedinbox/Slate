@@ -80,9 +80,23 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    **Rivers** (`src/hydrology.js`, Gaea‑style): priority‑flood depression filling (sea and tile
    border as outlets), D8 flow routing and accumulation on the eroded surface, channels where the
    catchment exceeds a threshold with width ∝ √catchment, a monotone bed / water profile from the
-   outlets upstream, concave beds with sloped banks (chamfer distance from the nearest channel
-   cell, the cut fading out towards the bank height instead of leaving a wall), braided gravel
-   bars on wide gentle reaches, and lakes where basins fill (partial fill, area cap — the
+   outlets upstream, concave beds with sloped banks, braided gravel bars on wide gentle reaches,
+   and lakes where basins fill. The channel is cut around a **smoothed centreline**: the D8 path
+   is a staircase of cell centres, so each channel cell's position is averaged along its stream
+   (main donor ← cell → receivers, stopping where it joins a much bigger river) and the bed is
+   rasterised segment by segment as distance to that polyline — meanders are smooth curves,
+   junctions are owned by the trunk, and a dry gully can never punch a hole in the water beside
+   its mouth. Channels are narrow (≈ 22 m per √km² by default, capped at 80 m); the braid belt
+   only widens a loaded reach by half. Beside a stream of any size a **floodplain** (*Floodplain*,
+   in channel widths) planes ground that is not much higher than the water down to a gently
+   rising flat — the river valley of a mature stream — while mountainsides above it are left
+   alone. Water that is flowing stays wet downstream; only the ephemeral headwater gullies are
+   dry. **Water is painted, not meshed, by default** (*Water as meshes* off, Gaea‑style): the
+   surface shader colours everything under the water line with the river colour (clear tint over
+   the bed in the shallows, full colour where it is deep), flattens the normal and lowers the
+   roughness, so the terrain stays dry geometry with the water as a mask — exactly what the
+   mask/satmap exports carry. Turning *Water as meshes* on brings back the sea plane and the
+   river / lake sheets. Lakes are where basins fill (partial fill, area cap — the
    biggest/deepest basins first; over the cap a river that ends in a hollow keeps a small pond).
    Lakes are judged on the real surface, only basins large *and* deep enough qualify, the basin
    floor and the rim outside the water line are smoothed (sediment floor, wave‑worked shore) and

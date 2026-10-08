@@ -115,7 +115,7 @@ export function generateTerrain(params, progress = () => {}) {
       bankAngle: params.riverBank, maxBank: params.riverMaxBank, waterDepth: params.riverWaterFrac, braiding: params.riverBraiding, drySlope: params.riverDrySlope, dryBig: params.riverDryBig,
       lakes: params.riverLakes, lakeFill: params.riverLakeFill, lakeMaxArea: (params.riverLakeMax == null ? 8 : params.riverLakeMax) / 100, lakeMinArea: Math.round((params.riverLakeMin || 0.01) * 1e6 / (cell * cell)),
       seaLevel: params.waterEnabled ? params.seaLevel : -Infinity, sources: riverResult.sources, guideFlow: params.riverGuideFlow,
-      alluvium,
+      alluvium, floodplain: params.riverFloodplain,
     }, params.seed);
     for (let i = 0; i < N * N; i++) {
       riverResult.riverMask[i] = Math.max(riverResult.riverMask[i], hydro.riverMask[i]);

@@ -366,32 +366,82 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     bed[c] = b; wl[c] = l;
   }
 
+  // water that is flowing does not vanish on a steep reach and reappear below it: once a stream
+  // is wet it stays wet downstream (dry = only the ephemeral headwater gullies)
+  for (let n = 0; n < total; n++) {
+    const c = order[n];
+    if (!isRiver[c] || dry[c]) continue;
+    const d = down[c];
+    if (d >= 0 && isRiver[d]) dry[d] = 0;
+  }
+
   for (let c = 0; c < total; c++) if (isRiver[c]) { stats.maxWidth = Math.max(stats.maxWidth, width[c]); stats.maxKm2 = Math.max(stats.maxKm2, acc[c] * cellKm2); }
   stats.riverCells = riverCells;
 
-  // ---- carve channels: chamfer distance from the nearest channel cell -----------------------
+  // ---- carve channels: distance to the smoothed centreline --------------------------------------
+  // The D8 path is a chain of cell centres (staircase at bends); the channel is cut around a
+  // centreline smoothed along the stream (main donor ← cell → receivers), rasterised segment by
+  // segment, so the banks are smooth curves and a meander is a meander, not a zigzag.
   const sea = opts.seaLevel == null ? -Infinity : opts.seaLevel;
   const bankSlope = Math.tan((Math.max(10, Math.min(80, opts.bankAngle || 35)) * Math.PI) / 180);
   const maxBank = Math.max(1, opts.maxBank == null ? 30 : opts.maxBank);
+  const floodplain = Math.max(0, opts.floodplain || 0);
   const dist = new Float32Array(total).fill(Infinity);
   const src = new Int32Array(total).fill(-1);
-  const heap = new Heap(total * 2 + 8);
-  for (let c = 0; c < total; c++) if (isRiver[c]) { dist[c] = 0; src[c] = c; heap.push(0, c); }
+  const segT = new Float32Array(total);
+  const mainDonor = new Int32Array(total).fill(-1);
+  for (let c = 0; c < total; c++) {
+    if (!isRiver[c]) continue;
+    const d = down[c];
+    if (d >= 0 && isRiver[d] && (mainDonor[d] < 0 || acc[c] > acc[mainDonor[d]])) mainDonor[d] = c;
+  }
+  const px = new Float32Array(total), pz = new Float32Array(total);
+  const SW = [0.08, 0.16, 0.26, 0.26, 0.16, 0.08]; // weights for −3..+3 (centre weight added below)
+  for (let c = 0; c < total; c++) {
+    if (!isRiver[c]) continue;
+    let sx = (c % N) * 0.3, sz = ((c - (c % N)) / N) * 0.3, sw = 0.3;
+    let u = c, dn = c;
+    for (let k = 0; k < 3; k++) {
+      const w = SW[k];
+      if (u >= 0) { u = mainDonor[u]; if (u >= 0) { sx += (u % N) * w; sz += ((u - (u % N)) / N) * w; sw += w; } }
+      // the walk stops where the stream joins a much bigger one, so a tributary's centreline
+      // bends into the trunk instead of being dragged along it
+      if (dn >= 0) { dn = down[dn]; if (dn >= 0 && isRiver[dn] && acc[dn] < acc[c] * 2.5) { sx += (dn % N) * w; sz += ((dn - (dn % N)) / N) * w; sw += w; } else dn = -1; }
+    }
+    px[c] = sx / sw; pz[c] = sz / sw;
+  }
+  // the nearest *wet* segment is tracked separately, so a dry gully joining a river can never
+  // punch a hole in the water next to the junction
+  const distWet = new Float32Array(total).fill(Infinity);
+  const srcWet = new Int32Array(total).fill(-1);
+  const segTWet = new Float32Array(total);
   const touched = [];
-  while (heap.size) {
-    const c = heap.pop();
-    const dc = dist[c];
-    const s = src[c];
-    const reach = width[s] * 0.5 + width[s] * 1.6 + maxBank / bankSlope; // channel + water margin + banks
-    if (dc * cell > reach) continue;
-    touched.push(c);
-    const ci = c % N, cj = (c - ci) / N;
-    for (let d = 0; d < 8; d++) {
-      const ni = ci + DX[d], nj = cj + DZ[d];
-      if (ni < 0 || nj < 0 || ni >= N || nj >= N) continue;
-      const nidx = nj * N + ni;
-      const nd = dc + DL[d];
-      if (nd < dist[nidx]) { dist[nidx] = nd; src[nidx] = s; heap.push(nd, nidx); }
+  const seen = new Uint8Array(total);
+  for (let s0 = 0; s0 < total; s0++) {
+    if (!isRiver[s0]) continue;
+    const d0 = down[s0];
+    const hasSeg = d0 >= 0 && isRiver[d0];
+    const ax = px[s0], az = pz[s0], bx = hasSeg ? px[d0] : ax, bz = hasSeg ? pz[d0] : az;
+    const reach = (width[s0] * 0.5 + width[s0] * 1.6 + maxBank / bankSlope + (floodplain > 0 ? width[s0] * 4 * floodplain : 0)) / cell + 1;
+    const i0 = Math.max(0, Math.floor(Math.min(ax, bx) - reach)), i1 = Math.min(N - 1, Math.ceil(Math.max(ax, bx) + reach));
+    const j0 = Math.max(0, Math.floor(Math.min(az, bz) - reach)), j1 = Math.min(N - 1, Math.ceil(Math.max(az, bz) + reach));
+    const vx = bx - ax, vz = bz - az, vv = vx * vx + vz * vz;
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        let t = vv > 1e-9 ? ((i - ax) * vx + (j - az) * vz) / vv : 0;
+        t = Math.max(0, Math.min(1, t));
+        const qx = ax + vx * t - i, qz = az + vz * t - j;
+        const dd = Math.sqrt(qx * qx + qz * qz);
+        if (dd > reach) continue;
+        const c = j * N + i;
+        // near-ties go to the bigger stream, so a tributary never owns the trunk's channel cells
+        const cur = src[c];
+        if (dd < dist[c] - 0.6 || (dd < dist[c] + 0.6 && (cur < 0 || acc[s0] > acc[cur]))) {
+          dist[c] = dd; src[c] = s0; segT[c] = t;
+          if (!seen[c]) { seen[c] = 1; touched.push(c); }
+        }
+        if (!dry[s0] && dd < distWet[c]) { distWet[c] = dd; srcWet[c] = s0; segTWet[c] = t; }
+      }
     }
   }
 
@@ -409,7 +459,6 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     // where a loaded river spreads into shifting channels and bars
     let bar = 0;
     const allu = opts.alluvium ? opts.alluvium[s] : 0;
-    if (allu > 0) half *= 1 + 0.35 * allu;
     if (braiding > 0 && w > cell * 4) {
       const dn = down[s];
       const grad = dn >= 0 ? (bed[s] - bed[dn]) / (cell * 1.2) : 0;
@@ -417,7 +466,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
       const wide = smoothstep(cell * 6, cell * 14, w);
       const br = braiding * Math.max(gentle * wide, allu * (1 - smoothstep(0.01, 0.03, grad)) * smoothstep(cell * 4, cell * 9, w));
       if (br > 0) {
-        half *= 1 + br * 1.2;
+        half *= 1 + br * 0.5;
         const n = braidNoise.fbm(x / (w * 0.9), z / (w * 0.9), 3, 2.1, 0.55);
         const n2 = braidNoise.fbm(x / (w * 0.3) + 7, z / (w * 0.3) - 4, 2, 2, 0.5);
         bar = br * smoothstep(-0.05, 0.35, n + n2 * 0.35);
@@ -428,9 +477,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     let bedHere = bed[s], waterHere = wl[s];
     const ds = down[s];
     if (ds >= 0 && isRiver[ds]) {
-      const si = s % N, sj = (s - si) / N, di = ds % N, dj = (ds - di) / N;
-      const vx = di - si, vz = dj - sj, vl = Math.hypot(vx, vz) || 1;
-      const t = Math.max(-1.5, Math.min(1.5, ((ci - si) * vx + (cj - sj) * vz) / (vl * vl)));
+      const t = segT[c];
       bedHere += (bed[ds] - bed[s]) * t;
       waterHere += (wl[ds] - wl[s]) * t;
     }
@@ -442,11 +489,28 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
       if (bar > 0) target = Math.max(target, target + (waterHere + 0.35 - target) * bar);
     } else {
       const rise = (d - half) * bankSlope;
-      if (rise > maxBank) continue;
-      target = bedHere + dep * 0.35 + rise;
-      // the bank cut fades out towards its limit instead of leaving a wall
-      const fade = smoothstep(maxBank * 0.45, maxBank, rise);
-      if (target < height[c]) target += (height[c] - target) * fade;
+      target = height[c];
+      if (rise <= maxBank) {
+        target = bedHere + dep * 0.35 + rise;
+        // the bank cut fades out towards its limit instead of leaving a wall
+        const fade = smoothstep(maxBank * 0.45, maxBank, rise);
+        if (target < height[c]) target += (height[c] - target) * fade;
+      }
+      // floodplain: a river of any size has levelled a valley floor beside it — ground within a
+      // few channel widths that is not much higher than the water is planed down to a gently
+      // rising flat (Gaea "river valley"); mountainsides above it are left alone
+      if (floodplain > 0 && w > cell * 2.5) {
+        const outer = half + w * 4 * floodplain;
+        const plain = waterHere + 0.8 + (d - half) * 0.012;
+        if (d < outer && height[c] > plain && height[c] - plain < maxBank * 2.5) {
+          const f = (1 - smoothstep(outer * 0.55, outer, d)) * smoothstep(cell * 2.5, cell * 7, w) * (1 - smoothstep(maxBank * 1.5, maxBank * 2.5, height[c] - plain));
+          target = Math.min(target, height[c] + (plain - height[c]) * f);
+        }
+      }
+      if (target >= height[c]) {
+        // nothing to cut here; the mask / water bookkeeping below still applies near the channel
+        if (d > half + w * 0.9) continue;
+      }
     }
     // lakes keep their floor
     if (lakeLevel[c] > NO_WATER * 0.5 && target < height[c]) target = Math.max(target, height[c] - dep * 0.3);
@@ -460,7 +524,13 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     }
     const m = 1 - smoothstep(half, half + w * 0.9, d);
     if (m > riverMask[c]) riverMask[c] = m;
-    if (d <= half + cell && waterHere > waterLevel[c] && !dry[s]) waterLevel[c] = waterHere;
+    const sw = srcWet[c];
+    if (sw >= 0 && distWet[c] * cell <= width[sw] * 0.5 * (half / (w * 0.5)) + cell) {
+      let wh = wl[sw];
+      const dw = down[sw];
+      if (dw >= 0 && isRiver[dw]) wh += (wl[dw] - wl[sw]) * segTWet[c];
+      if (wh > waterLevel[c]) waterLevel[c] = wh;
+    }
   }
 
   // smooth the carved channel floor (residual treads where the chamfer stripes meet at bends)

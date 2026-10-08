@@ -61,6 +61,8 @@ uniform float uMossiness, uMossScale;
 uniform float uSnowLine, uSnowSlopeCos, uSnowSoftness, uSnowRoughness;
 uniform float uBumpScale, uBaseRoughness;
 uniform float uSeaLevel, uSeed, uIsRock, uDebugView;
+uniform float uPaintWater, uWaterClear;
+uniform vec3 uWaterDeep, uWaterShallow;
 
 // lateral bed-thickness jitter — must match bedJitter() in strata-model.js
 float bedJitter( float x, float z ) {
@@ -518,6 +520,12 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   color *= mix( 1.0, 0.62, shore * uShoreWet );
   float under = 1.0 - smoothstep( waterLine - 2.5, waterLine, wp.y );
   color = mix( color, color * vec3( 0.55, 0.62, 0.62 ), under );
+  // painted water (Gaea-style: the river / lake / sea mask is part of the surface, no water
+  // mesh): clear tint over the bed in the shallows, the water colour where it is deep
+  float wdepth = waterLine - wp.y;
+  float paint = uPaintWater * ( 1.0 - smoothstep( -0.05, 0.25, -wdepth ) ) * ( 1.0 - uIsRock );
+  vec3 waterCol = mix( uWaterShallow, uWaterDeep, smoothstep( 0.0, uWaterClear * 3.0, wdepth ) );
+  color = mix( color, mix( color * 0.6, waterCol, smoothstep( 0.0, uWaterClear, wdepth ) * 0.6 + 0.4 ), paint );
 
   float roughness = uBaseRoughness - wet * 0.4 - fresh * 0.05 - shore * 0.35 * uShoreWet;
   roughness = mix( roughness, 0.95, roadSurf );
@@ -538,6 +546,8 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   ao = mix( ao, 1.0, snow * 0.6 );
 
   vec3 nFinal = normalize( mix( nW, n, max( snow, veg * 0.8 ) ) );
+  nFinal = normalize( mix( nFinal, vec3( 0.0, 1.0, 0.0 ), paint * 0.9 ) );
+  roughness = mix( roughness, 0.22, paint );
 
   Surface s;
   s.albedo = color;
@@ -616,6 +626,7 @@ export function makeSurfaceUniforms() {
     uBedTex: { value: makeBedTexture(new Float32Array(4), 1) }, uBedCount: { value: 1 }, uBedBase: { value: -1500 }, uWorldSize: { value: 2048 }, uBedLateral: { value: 0.18 },
     uVegSlope: { value: 0.72 }, uSnowLine: { value: 430 }, uSnowSlopeCos: { value: 0.67 },
     uSeaLevel: { value: 0 }, uSeed: { value: 428 },
+    uPaintWater: { value: 1 }, uWaterClear: { value: 1.5 }, uWaterDeep: { value: new THREE.Color(0x1d4552) }, uWaterShallow: { value: new THREE.Color(0x4f7f7a) },
   });
   return u;
 }
@@ -653,6 +664,10 @@ export function updateSurfaceUniforms(uniforms, v) {
   uniforms.uSnowSlopeCos.value = Math.cos((v.snowSlope * Math.PI) / 180);
   uniforms.uSeaLevel.value = v.waterEnabled ? v.seaLevel : -1e6;
   uniforms.uSeed.value = v.seed % 1000;
+  uniforms.uPaintWater.value = v.waterMeshes ? 0 : 1;
+  uniforms.uWaterClear.value = v.riverClearDepth == null ? 1.5 : Math.max(0.1, v.riverClearDepth);
+  uniforms.uWaterDeep.value.setStyle(v.riverColor || '#1d4552');
+  uniforms.uWaterShallow.value.setStyle(v.riverShallowColor || '#4f7f7a');
 }
 
 function makeBedTexture(data, count) {
