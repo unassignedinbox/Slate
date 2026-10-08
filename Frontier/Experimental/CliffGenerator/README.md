@@ -79,6 +79,13 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    cell, the cut fading out towards the bank height instead of leaving a wall), braided gravel
    bars on wide gentle reaches, and lakes where basins fill (partial fill, area cap — the
    biggest/deepest basins first; over the cap a river that ends in a hollow keeps a small pond).
+   Lakes are judged on the real surface, only basins large *and* deep enough qualify, the basin
+   floor and the rim outside the water line are smoothed (sediment floor, wave‑worked shore) and
+   the water area is morphologically opened, so the outline is a clean curve rather than the
+   cell‑by‑cell contour of droplet deposits. River and lake water has its own material
+   (`src/water-material.js`): per‑vertex depth makes the shallows clear (bed and gravel bars show
+   through) and only deeper water takes the water colour, so shores fade in instead of ending in
+   a hard dark edge.
    The bed and water of the nearest channel cell are interpolated along the channel direction
    and the floor smoothed, so a steep river is a ramp, not a staircase of treads. Reaches steeper
    than *Dry above grade* show the carved gully (wet rock, gravel) with no standing water — a

@@ -51,7 +51,7 @@ export const defaults = {
   fluvialIterations: 40,
   fluvialConcavity: 0.5,
   fluvialUplift: 0.3,
-  fluvialFill: 0.6,
+  fluvialFill: 0.45,
   fluvialPits: 8,
   rillStrength: 0.5,
   rillSteps: 6,
@@ -224,6 +224,10 @@ export const defaults = {
   // Water
   waterColor: '#15303c',
   waterOpacity: 0.9,
+  riverColor: '#1d4552',
+  riverShallowColor: '#4f7f7a',
+  riverOpacity: 0.85,
+  riverClearDepth: 1.5,
   shoreWet: 0.7,
   bedShading: 1,
   siltColor: '#b9ad94',
@@ -254,6 +258,7 @@ export const presets = {
     canyonDepth: 0, snowLine: 5000, vegetation: 0.15, seaLevel: -100, waterEnabled: 0, talusSoft: 30, talusHard: 86,
     droplets: 140000, erodeSpeed: 0.3, peelStrength: 0.7, peelScale: 3.0, peelCoverage: 0.45, flakeStrength: 0.4,
     sunElevation: 32, sunAzimuth: 240, turbidity: 6,
+    riverLakeMax: 0.5, fluvialFill: 0.8,
   },
   'Canyon': {
     palette: 'sandstone', mountainHeight: 260, baseElevation: 240, baseFrequency: 1.1, ridgeSharpness: 1.2, peakPower: 0.9, warpStrength: 0.4,
@@ -261,6 +266,7 @@ export const presets = {
     strataBand: 16, strataStrength: 1.0, strataDip: 1.5, hardnessContrast: 1.0, snowLine: 5000, vegetation: 0.1, seaLevel: -20, waterEnabled: 1,
     talusSoft: 31, talusHard: 86, droplets: 160000,
     peelStrength: 0.7, peelScale: 3.2, peelCoverage: 0.45, flakeStrength: 0.4, sunElevation: 38, sunAzimuth: 200, turbidity: 5,
+    riverLakeMax: 0.5, fluvialFill: 0.8,
   },
   'Sea cliffs': {
     palette: 'basalt', mountainHeight: 300, baseElevation: 20, baseFrequency: 1.4, ridgeSharpness: 1.6, peakPower: 1.1, warpStrength: 0.5,
@@ -275,6 +281,7 @@ export const presets = {
     plateauStrength: 0.35, plateauHeight: 400, canyonDepth: 0, snowLine: 5000, vegetation: 0.75, mossiness: 0.5, seaLevel: 0, waterEnabled: 0,
     talusSoft: 33, talusHard: 82, droplets: 170000,
     peelStrength: 0.55, peelScale: 2.4, flakeStrength: 0.5, sunElevation: 28, sunAzimuth: 160, turbidity: 4,
+    riverLakeMax: 2,
   },
 };
 
@@ -290,12 +297,14 @@ Object.assign(presets, {
     reliefFrequency: 2.2, reliefContrast: 0.5, strataBand: 9, strataStrength: 1, strataDip: 1, hardnessContrast: 0.9, plateauStrength: 0.6, plateauHeight: 220,
     canyonDepth: 0, snowOn: 0, vegetation: 0.05, mossiness: 0.1, waterEnabled: 0, seaLevel: -100, droplets: 320000, erodeSpeed: 0.6, sedimentCapacity: 7, evaporation: 0.01,
     talusSoft: 32, talusHard: 80, rockDensity: 0.15, oxideAmount: 0.8, peelStrength: 0.3, sunElevation: 40, sunAzimuth: 215, turbidity: 7, fogDensity: 0.25, riverWater: 0, riverLakes: 0, riverCatchment: 0.08,
+    riverLakeMax: 0.3, fluvialFill: 0.8,
   },
   'Dolomite towers': {
     palette: 'limestone', mountainHeight: 650, baseElevation: 120, baseFrequency: 2.0, ridgeSharpness: 3.2, peakPower: 1.9, warpStrength: 0.45,
     reliefContrast: 1, strataBand: 34, strataStrength: 0.9, strataDip: 3, hardnessContrast: 1, plateauStrength: 0, canyonDepth: 0,
     snowOn: 1, snowLine: 560, vegetation: 0.7, mossiness: 0.3, waterEnabled: 0, seaLevel: -100, talusSoft: 35, talusHard: 88, droplets: 150000,
     overhang: 5, rockDensity: 0.35, sunElevation: 30, sunAzimuth: 190, turbidity: 4, fogDensity: 0.3,
+    riverLakeMax: 1,
   },
   'Desert buttes': {
     palette: 'sandstone', mountainHeight: 240, baseElevation: 40, baseFrequency: 1.0, ridgeSharpness: 1.2, peakPower: 1.6, warpStrength: 0.3,
@@ -329,6 +338,7 @@ Object.assign(presets, {
     snowOn: 1, snowLine: 620, vegetation: 0.15, mossiness: 0.3, waterEnabled: 0, seaLevel: -100, droplets: 160000, thermalIterations: 60, thermalRate: 0.7, talusSoft: 37, talusHard: 84,
     rockDensity: 0.8, rockSlopeMin: 15, rockSlopeMax: 48, rockClustering: 0.2, rockSizeMin: 0.5, rockSizeMax: 6, pebbleDensity: 0.9, pebbleSize: 0.6, gravelAmount: 1,
     peelStrength: 0.5, sunElevation: 26, sunAzimuth: 200, turbidity: 3, fogDensity: 0.35,
+    riverLakeMax: 1,
   },
   'Granite domes': {
     palette: 'granite', mountainHeight: 520, baseElevation: 60, baseFrequency: 0.9, ridgeSharpness: 1.1, peakPower: 1.7, warpStrength: 0.35,
@@ -361,6 +371,7 @@ Object.assign(presets, {
     snowOn: 0, vegetation: 0.08, mossiness: 0.05, seaLevel: -20, waterEnabled: 0, droplets: 170000, thermalIterations: 50, thermalRate: 0.7, talusSoft: 33, talusHard: 87,
     rockDensity: 0.9, rockSlopeMin: 10, rockSlopeMax: 55, rockClustering: 0.3, rockSizeMin: 0.8, rockSizeMax: 14, pebbleDensity: 0.8, pebbleSize: 0.6, gravelAmount: 1,
     peelStrength: 0.6, peelScale: 3, oxideAmount: 0.7, sunElevation: 40, sunAzimuth: 205, turbidity: 6, fogDensity: 0.2, riverWater: 0, riverLakes: 0, riverCatchment: 0.08,
+    riverLakeMax: 0.5, fluvialFill: 0.8,
   },
   'Rocky mountains': {
     palette: 'granite', mountainHeight: 900, baseElevation: 60, baseFrequency: 1.5, ridgeSharpness: 2.8, peakPower: 1.6, warpStrength: 0.7,
@@ -387,7 +398,7 @@ Object.assign(presets, {
     plateauStrength: 0.45, plateauHeight: 560, canyonDepth: 0, strataBand: 22, strataStrength: 0.9, strataDip: 2, hardnessContrast: 1.0,
     droplets: 260000, erodeSpeed: 0.45, sedimentCapacity: 6, thermalIterations: 40, talusSoft: 34, talusHard: 86,
     snowOn: 1, snowLine: 520, snowSlope: 42, snowSoftness: 2.5, vegetation: 0.5, vegSlope: 30, vegPatchiness: 0.8, dryness: 0.3, mossiness: 0.9, mossScale: 6,
-    waterEnabled: 0, seaLevel: -100, riverCatchment: 0.03, riverWidthScale: 55, riverMaxWidth: 220, riverBraiding: 0.8, riverLakes: 1, riverLakeFill: 0.9,
+    waterEnabled: 0, seaLevel: -100, riverCatchment: 0.03, riverWidthScale: 55, riverMaxWidth: 220, riverBraiding: 0.8, riverLakes: 1, riverLakeFill: 0.9, fluvialFill: 0.2,
     rockDensity: 0.4, rockSizeMax: 6, pebbleDensity: 0.6, gravelAmount: 1, sdfOn: 1, sdfAngle: 60, sdfUndercut: 5,
     outcropDensity: 0.2, outcropSize: 10, outcropCount: 6, outcropSpacing: 180, outcropAspect: 0.55, outcropBury: 0.5, outcropRidge: 0.2, outcropWeather: 0.3,
     oxideAmount: 0.6, peelStrength: 0.35, flakeStrength: 0.5, sunElevation: 22, sunAzimuth: 200, turbidity: 4, fogDensity: 0.5,
@@ -407,6 +418,7 @@ Object.assign(presets, {
     reliefFrequency: 2.4, reliefContrast: 0.9, strataBand: 20, strataStrength: 0.5, hardnessContrast: 0.8, plateauStrength: 0, canyonDepth: 0,
     snowOn: 0, vegetation: 0.85, mossiness: 0.9, waterEnabled: 1, seaLevel: 0, droplets: 200000, talusSoft: 36, talusHard: 88,
     overhang: 4, rockDensity: 0.25, sunElevation: 45, sunAzimuth: 170, turbidity: 6, fogDensity: 0.45,
+    riverLakeMax: 1,
   },
 });
 
@@ -535,7 +547,7 @@ export const groups = [
         ['fluvialConcavity', 'Concavity', 0.3, 0.7, 0.05, '', 'Area exponent m: higher = big rivers dominate, flatter valley floors and steeper headwaters'],
         ['fluvialUplift', 'Uplift', 0, 1, 0.05, '', 'Tectonic uplift of the massifs during incision: keeps the relief high while the valleys deepen; 0 lets everything grade towards base level'],
         ['fluvialFill', 'Basin fill', 0, 1, 0.05, '', 'How fast closed basins silt up to their spill level: high = lakes become flat valley floors with a river through them, low = lakes survive'],
-        ['fluvialPits', 'Silt up pits', 0, 30, 1, 'm', 'After the droplet erosion, hollows shallower than this are silted up so the valleys drain as one network; deeper basins stay lakes'],
+        ['fluvialPits', 'Silt up pits', 0, 30, 1, 'm', 'After the droplet erosion, small hollows (and large ones shallower than this) are silted up so the valleys drain as one network; large basins deeper than 1.5 m stay lakes'],
         ['rillStrength', 'Rills (flow lines)', 0, 1, 0.05, '', 'Fine converging runoff channels cut into the slopes after the droplet erosion — the flow-line texture of eroded mountains. 0 = off'],
         ['rillSteps', 'Rill steps', 1, 20, 1, '', 'Erosion steps for the rills (more = deeper, longer lines)'],
         ['fluvialDiffusion', 'Hillslope diffusion', 0, 1, 0.05, '', 'Soil creep rounding the interfluves between valleys'],
@@ -805,8 +817,12 @@ export const groups = [
         ['seaLevel', 'Sea level', -200, 800, 1, 'm', 'Everything below this is flooded — live'],
       ] },
       { title: 'Appearance', controls: [
-        ['waterColor', 'Water colour', 0, 0, 0, 'color', ''],
-        ['waterOpacity', 'Opacity', 0.2, 1, 0.05, '', ''],
+        ['waterColor', 'Sea colour', 0, 0, 0, 'color', ''],
+        ['waterOpacity', 'Sea opacity', 0.2, 1, 0.05, '', ''],
+        ['riverColor', 'River / lake colour', 0, 0, 0, 'color', 'Colour of deep river and lake water'],
+        ['riverShallowColor', 'Shallows tint', 0, 0, 0, 'color', 'Tint of the clear water over the bed near the shore'],
+        ['riverOpacity', 'River / lake opacity', 0.2, 1, 0.05, '', ''],
+        ['riverClearDepth', 'Clear depth', 0.2, 6, 0.1, 'm', 'Water shallower than this is see-through, showing the gravel bed; deeper water takes the river colour'],
         ['shoreWet', 'Shoreline wetness', 0, 1, 0.05, '', 'Dark wet band just above the waterline'],
         ['bedShading', 'Bed shading', 0, 1, 1, '', 'Silt / cobble shading on river and lake beds'],
         ['siltColor', 'Silt colour', 0, 0, 0, 'color', ''],

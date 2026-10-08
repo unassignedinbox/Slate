@@ -342,10 +342,13 @@ export function buildWaterGeometry(field) {
     }
     return lvl;
   };
+  const depths = [];
   const vertex = (i, j, idx) => {
     if (index[idx] >= 0) return index[idx];
     const x = (i / (N - 1) - 0.5) * size, z = (j / (N - 1) - 0.5) * size;
-    positions.push(x, vertexLevel(i, j, idx), z);
+    const lvl = vertexLevel(i, j, idx);
+    positions.push(x, lvl, z);
+    depths.push(Math.max(0, lvl - height[idx]));
     index[idx] = positions.length / 3 - 1;
     return index[idx];
   };
@@ -363,6 +366,7 @@ export function buildWaterGeometry(field) {
   if (!indices.length) return null;
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('aDepth', new THREE.Float32BufferAttribute(depths, 1));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();

@@ -138,7 +138,9 @@ export function applyStrata(height, params, progress = () => {}, outcrop = null)
   const gz = Math.tan(dipRad) * Math.sin(dirRad);
 
   const detail = new SimplexNoise(params.seed * 5 + 77);
-  const slopeMaskLo = 0.12, slopeMaskHi = 0.55;
+  // beds only show where the ground is steep enough to expose them (≈ 17° → full at 38°); gentle
+  // slopes keep their soil / scree profile instead of a contour-line staircase
+  const slopeMaskLo = 0.3, slopeMaskHi = 0.78;
   const table = makeBedTable(params);
   const lateral = params.strataLateral == null ? 0.18 : params.strataLateral;
   const bed = {};
@@ -183,7 +185,11 @@ export function applyStrata(height, params, progress = () => {}, outcrop = null)
       const terraced = (table.tops[bi] - bed.thick + lerp(f, fp, thin) * bed.thick) * jitter - tilt;
 
       const sm = smoothstep(slopeMaskLo, slopeMaskHi, slope[idx]);
-      let amount = strength * lerp(0.25, 1, sm);
+      // hard beds snap almost fully (vertical riser, flat bench); soft beds keep more of the slope;
+      // and a bed's expression varies along strike (benches pinch out, ledges come and go) so the
+      // hillside is not a machine-cut staircase
+      const expr = 0.55 + 0.45 * (0.5 + 0.5 * detail.fbm(x * 0.0045 + bi * 1.9, z * 0.0045 - bi * 0.7, 2));
+      let amount = Math.min(0.95, strength * sm * lerp(0.5, 1.1, hard) * expr);
       if (outcrop && outcrop[idx] > 0) amount *= 1 - outcrop[idx]; // massive core-stones are not bedded
       height[idx] = lerp(h, terraced, amount);
       hardness[idx] = hard;

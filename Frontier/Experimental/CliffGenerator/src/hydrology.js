@@ -82,6 +82,33 @@ export function fillDepressions(height, N, seaLevel = -Infinity, eps = 1e-4) {
   return { filled, order };
 }
 
+// Box-smooth the heights of a cell set (separable 5×5, `passes` times; neighbours outside the set are read, not written).
+function smoothBasin(height, N, cells, passes = 1, floor = -Infinity) {
+  const mark = new Map();
+  for (const c of cells) {
+    const ci = c % N, cj = (c - ci) / N;
+    if (ci < 2 || cj < 2 || ci >= N - 2 || cj >= N - 2) continue;
+    mark.set(c, 0);
+  }
+  const idxs = Array.from(mark.keys());
+  for (let p = 0; p < passes; p++) {
+    for (const c of idxs) {
+      const ci = c % N;
+      let sum = 0, n = 0;
+      for (let d = -2; d <= 2; d++) { const ii = ci + d; if (ii < 0 || ii >= N) continue; sum += height[c + d]; n++; }
+      mark.set(c, sum / n);
+    }
+    for (const c of idxs) height[c] = Math.max(floor, mark.get(c));
+    for (const c of idxs) {
+      const ci = c % N, cj = (c - ci) / N;
+      let sum = 0, n = 0;
+      for (let d = -2; d <= 2; d++) { const jj = cj + d; if (jj < 0 || jj >= N) continue; sum += height[c + d * N]; n++; }
+      mark.set(c, sum / n);
+    }
+    for (const c of idxs) height[c] = Math.max(floor, mark.get(c));
+  }
+}
+
 // D8 downstream neighbour on the filled surface (-1 at outlets).
 export function flowDirections(filled, N) {
   const down = new Int32Array(N * N).fill(-1);
@@ -244,14 +271,49 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
       // partial fill: level between the deepest point and the spill level
       let minH = Infinity, spill = -Infinity;
       for (const c of lake.cells) { if (height[c] < minH) minH = height[c]; if (filledReal[c] > spill) spill = filledReal[c]; }
+      // a lake floor is sediment and its shore is worked by waves: smooth the basin before the
+      // shoreline is taken, so the outline is a clean curve and not the hummocky cell-by-cell
+      // contour of the droplet deposits (the rim is left alone so the spill level holds)
+      smoothBasin(height, N, lake.cells, 2);
+      minH = Infinity; for (const c of lake.cells) if (height[c] < minH) minH = height[c];
       const level = minH + (spill - minH) * fill - 0.05;
       let n = 0; for (const c of lake.cells) if (height[c] < level) n++;
       used += n;
-      for (const c of lake.cells) {
-        if (height[c] >= level) continue;
+      // morphological opening of the water area: one- and two-cell inlets (rill notches running
+      // into the lake) are not part of the lake outline
+      const below = new Set();
+      for (const c of lake.cells) if (height[c] < level) below.add(c);
+      const core = [];
+      for (const c of below) {
+        const ci = c % N, cj = (c - ci) / N;
+        if (ci < 1 || cj < 1 || ci >= N - 1 || cj >= N - 1) continue;
+        let full = true;
+        for (let dj = -1; dj <= 1 && full; dj++) for (let di = -1; di <= 1; di++) if (!below.has(c + dj * N + di)) { full = false; break; }
+        if (full) core.push(c);
+      }
+      const keep = new Set();
+      for (const c of core) for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) keep.add(c + dj * N + di);
+      const inLake = [];
+      for (const c of keep) {
         lakeLevel[c] = level;
         lakeMask[c] = 1;
         stats.lakeCells++;
+        inLake.push(c);
+      }
+      // wave-worked shore: the rim just outside the water line is smoothed too (never below the
+      // water, so the basin cannot spring a leak) — rill notches and single-cell spikes go
+      if (inLake.length) {
+        const rim = new Set();
+        for (const c of inLake) {
+          const ci = c % N, cj = (c - ci) / N;
+          for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+            const ii = ci + di, jj = cj + dj;
+            if (ii < 2 || jj < 2 || ii >= N - 2 || jj >= N - 2) continue;
+            const n = jj * N + ii;
+            if (lakeLevel[n] <= NO_WATER * 0.5) rim.add(n);
+          }
+        }
+        smoothBasin(height, N, Array.from(rim), 1, level + 0.05);
       }
     }
   }

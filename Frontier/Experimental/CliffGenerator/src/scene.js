@@ -7,6 +7,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { buildTerrainGeometry, buildSkirtGeometry, refineField, buildWaterGeometry, makeSampler } from './terrain-geometry.js';
+import { makeWaterBodyMaterial, makeWaterBodyUniforms } from './water-material.js';
 import { selectChunks, packChunkJobs } from './sdf-chunks.js';
 import { sampleSpline } from './features.js';
 import { buildRockLibrary } from './rock-geometry.js';
@@ -73,8 +74,11 @@ export class CliffScene {
     this.water.rotation.x = -Math.PI / 2;
     this.water.receiveShadow = true;
     this.scene.add(this.water);
-    // rivers & lakes share the sea material; feature guide lines live in their own group
-    this.waterBodies = new THREE.Mesh(new THREE.BufferGeometry(), this.water.material);
+    // rivers & lakes: their own material — shallow water is clear and shows the bed, deeper water
+    // takes the water colour, so shores and gravel bars read naturally instead of a hard dark edge
+    this.bodyUniforms = makeWaterBodyUniforms();
+    this.bodyMaterial = makeWaterBodyMaterial(this.bodyUniforms);
+    this.waterBodies = new THREE.Mesh(new THREE.BufferGeometry(), this.bodyMaterial);
     this.waterBodies.receiveShadow = true;
     this.waterBodies.visible = false;
     this.scene.add(this.waterBodies);
@@ -152,6 +156,10 @@ export class CliffScene {
     this.water.position.y = v.seaLevel;
     this.water.material.color.setStyle(v.waterColor || '#15303c');
     this.water.material.opacity = v.waterOpacity == null ? 0.9 : v.waterOpacity;
+    this.bodyMaterial.color.setStyle(v.riverColor || v.waterColor || '#1d4552');
+    this.bodyMaterial.opacity = v.riverOpacity == null ? 0.85 : v.riverOpacity;
+    this.bodyUniforms.uShallow.value.setStyle(v.riverShallowColor || '#4f7f7a');
+    this.bodyUniforms.uClearDepth.value = v.riverClearDepth == null ? 1.5 : Math.max(0.1, v.riverClearDepth);
   }
 
   // River / lake water surfaces from the refined field's water-level map.
@@ -394,7 +402,7 @@ export class CliffScene {
       group.remove(child);
       if (child.geometry && !child.isInstancedMesh) child.geometry.dispose();
       if (child.isInstancedMesh) child.dispose();
-      if (child.material && child.material !== this.terrainMaterial && child.material !== this.rockMaterial && child.material !== this.water.material) child.material.dispose();
+      if (child.material && child.material !== this.terrainMaterial && child.material !== this.rockMaterial && child.material !== this.water.material && child.material !== this.bodyMaterial) child.material.dispose();
     }
   }
 

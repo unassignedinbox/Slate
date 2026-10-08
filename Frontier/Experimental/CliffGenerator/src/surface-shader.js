@@ -437,7 +437,9 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   float seamNoise = smoothstep( 0.35, 0.7, cgNoise3( wp * vec3( 0.09, 0.4, 0.09 ) ).x );
   float seam = ( 1.0 - smoothstep( 0.0, uSeamWidth, min( bf, 1.0 - bf ) ) ) * seamNoise;
   bandCol *= 1.0 - uSeamStrength * seam;
-  vec3 rock = mix( uRockA, bandCol, uStrataContrast );
+  // bedding shows on exposed faces; on gentle ground it is under soil and scree and only hinted
+  float bandVis = mix( 0.3, 1.0, smoothstep( 0.12, 0.45, wall ) );
+  vec3 rock = mix( uRockA, bandCol, uStrataContrast * bandVis );
   vec3 strataOnly = rock;
   // terrain beds carry the erosion hardness: caprock paler and cleaner, soft beds darker and warmer
   rock = mix( rock, rock * 1.12 + uRockC * 0.06, hardness * uHardnessTint * ( 1.0 - uIsRock ) );

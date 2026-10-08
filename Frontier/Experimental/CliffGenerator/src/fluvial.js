@@ -127,11 +127,12 @@ export function fluvialErosion(height, hardness, N, size, opts, progress = () =>
 }
 
 // Droplet erosion leaves the valley floors hummocky: sediment fans dam the channels into chains of
-// shallow pits that would otherwise all become ponds. Pits shallower than `maxDepth` are silted up
-// to just below their spill level (so the river still finds its way through them); deeper basins
-// are real lakes and are left alone.
-export function fillShallowPits(height, N, seaLevel, maxDepth = 8, residual = 0.2, cell = 4) {
+// shallow pits that would otherwise all become ponds. Pits are silted up to just below their spill
+// level (so the river still finds its way through them); basins that are large and deep enough to
+// be lakes are left alone.
+export function fillShallowPits(height, N, seaLevel, maxDepth = 8, residual = 0.2, cell = 4, keepArea = 6400) {
   const total = N * N;
+  const keepCells = Math.max(16, Math.round(keepArea / (cell * cell))); // basins at least this big (m²) and ≥ 1.5 m deep are lakes
   const { filled } = fillDepressions(height, N, seaLevel, 0.004 * cell);
   const seen = new Uint8Array(total);
   const stack = [];
@@ -150,7 +151,10 @@ export function fillShallowPits(height, N, seaLevel, maxDepth = 8, residual = 0.
       if (cj > 0 && !seen[c - N] && filled[c - N] - height[c - N] > 0.01) { seen[c - N] = 1; stack.push(c - N); }
       if (cj < N - 1 && !seen[c + N] && filled[c + N] - height[c + N] > 0.01) { seen[c + N] = 1; stack.push(c + N); }
     }
-    if (deepest >= maxDepth) continue;
+    // a real basin (big and deep enough for a lake) is kept; droplet pits — small however deep,
+    // or shallow however big — are silted up
+    if (cells.length >= keepCells && deepest >= 1.5) continue;
+    if (deepest >= maxDepth && cells.length >= keepCells * 0.25) continue;
     for (const c of cells) { const t = filled[c] - residual; if (t > height[c]) { height[c] = t; filledCells++; } }
   }
   return filledCells;
