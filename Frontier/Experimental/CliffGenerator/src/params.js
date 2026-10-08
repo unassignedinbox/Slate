@@ -139,6 +139,15 @@ export const defaults = {
   bedGradient: 0.6,
   hardnessTint: 0.8,
   grainOn: 1,
+  // Jointing (cracks that break the face into blocks)
+  jointOn: 1,
+  jointStrength: 0.7,
+  jointSpacing: 3,          // [m]
+  jointWidth: 0.22,         // [m]
+  jointDepth: 0.35,         // [m]
+  jointStagger: 1,
+  jointBlocks: 0.6,
+  jointDropout: 0.3,
   grainSize: 0.9,           // [m]
   grainStrength: 0.6,
   grainContrast: 0.5,
@@ -733,6 +742,16 @@ export const groups = [
         ['seamStrength', 'Seam darkness', 0, 1, 0.05, '', 'Dark lines along bedding planes'],
         ['seamWidth', 'Seam width', 0.01, 0.3, 0.01, '', 'Fraction of the bed taken by the seam'],
         ['hardnessTint', 'Caprock tint', 0, 1, 0.05, '', 'Hard beds paler, soft beds warmer'],
+      ] },
+      { title: 'Jointing', controls: [
+        ['jointOn', 'Enable jointing', 0, 1, 1, '', 'Cracks that break the face into blocks: two vertical joint sets (staggered bed to bed like brickwork) and the bedding planes, each joint with its own width, some missing, each block with its own tilt and tone'],
+        ['jointStrength', 'Jointing', 0, 1.5, 0.05, '', ''],
+        ['jointSpacing', 'Joint spacing', 0.6, 20, 0.1, 'm', 'Block size along the face (scaled by bed thickness)'],
+        ['jointWidth', 'Crack width', 0.05, 1, 0.01, 'm', ''],
+        ['jointDepth', 'Crack depth', 0, 1.5, 0.05, 'm', 'How far the grooves read into the face'],
+        ['jointStagger', 'Stagger', 0, 1, 0.05, '', 'Offset of the vertical joints from bed to bed (0 = continuous columns, 1 = brickwork)'],
+        ['jointBlocks', 'Block relief', 0, 1, 0.05, '', 'Per-block tilt and tone'],
+        ['jointDropout', 'Missing joints', 0, 0.8, 0.05, '', 'Share of joints that do not show, so block sizes vary'],
       ] },
       { title: 'Grain', controls: [
         ['grainOn', 'Enable grain', 0, 1, 1, '', ''],

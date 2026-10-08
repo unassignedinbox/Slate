@@ -62,6 +62,7 @@ uniform vec3 uSoilColor, uSoilLight;
 uniform float uMossiness, uMossScale;
 uniform float uSnowLine, uSnowSlopeCos, uSnowSoftness, uSnowRoughness;
 uniform float uBumpScale, uBaseRoughness;
+uniform float uJointStrength, uJointSpacing, uJointWidth, uJointDepth, uJointStagger, uJointBlocks, uJointDropout;
 uniform float uSeaLevel, uSeed, uIsRock, uDebugView;
 uniform float uPaintWater, uWaterClear;
 uniform vec3 uWaterDeep, uWaterShallow;
@@ -443,7 +444,56 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   bandCol *= 1.0 - uSeamStrength * seam;
   // bedding shows on exposed faces; on gentle ground it is under soil and scree and only hinted
   float bandVis = mix( 0.3, 1.0, smoothstep( 0.12, 0.45, wall ) );
+
+  // ---- jointing: the face is a wall of blocks ---------------------------------------------------
+  // Two vertical joint sets (families of planes x ≈ const and z ≈ const, warped, spaced like the
+  // bed thickness) and the bedding planes break the rock into blocks. Every bed has its own
+  // stagger so the vertical joints are offset bed to bed (brickwork), individual joints drop out
+  // or vary in width, and each block has its own slight tilt and tone — a jointed cliff face,
+  // not a grid. A joint family parallel to the face is invisible (weighted by the face normal).
+  float blockTone = 0.0, crackAO = 0.0;
+  if ( uJointStrength > 0.001 && rockMask > 0.01 ) {
+    float bedThick = max( 0.3, bedRec.w * bedJitter( sxj, szj ) * uStrataBand ); // [m]
+    float spacing = clamp( uJointSpacing * mix( 0.6, 1.4, fract( bh * 3.7 ) ) * clamp( bedThick / uStrataBand * 1.5, 0.5, 1.6 ), 0.6, 40.0 );
+    float bedIdx = floor( bedBase * 97.0 + 0.5 );
+    vec2 stagger = vec2( fract( bh * 5.13 ), fract( bh * 9.71 ) ) * spacing * uJointStagger;
+    vec2 jw = vec2( cgNoise3( wp * 0.11 + 3.0 ).x, cgNoise3( wp * 0.11 + 17.0 ).x ) * spacing * 0.35; // warp
+    vec2 q = ( wp.xz + stagger + jw ) / spacing;
+    vec2 cellId = floor( q ), fq = fract( q );
+    float jointFade = 1.0 - smoothstep( 0.25, 1.0, footprint / uJointWidth );
+    float jointAmt = uJointStrength * rockMask * jointFade * ( 0.45 + 0.55 * smoothstep( 0.15, 0.5, wall ) );
+    // per-joint presence and width (hash of the joint line and the bed)
+    float hx = cgHash3( ivec3( int( cellId.x ), int( bedIdx ), 11 ) );
+    float hz = cgHash3( ivec3( 23, int( bedIdx ), int( cellId.y ) ) );
+    float onX = step( uJointDropout, hx ), onZ = step( uJointDropout, hz );
+    float wX = uJointWidth * mix( 0.5, 1.6, fract( hx * 7.0 ) ), wZ = uJointWidth * mix( 0.5, 1.6, fract( hz * 7.0 ) );
+    // distance (m) to the nearest joint plane of each family, groove profile and its slope
+    float dX = min( fq.x, 1.0 - fq.x ) * spacing, dZ = min( fq.y, 1.0 - fq.y ) * spacing;
+    float gX = ( 1.0 - smoothstep( 0.0, wX, dX ) ) * onX * ( 1.0 - abs( n.x ) );
+    float gZ = ( 1.0 - smoothstep( 0.0, wZ, dZ ) ) * onZ * ( 1.0 - abs( n.z ) );
+    float sX = ( fq.x < 0.5 ? 1.0 : -1.0 ) * onX * ( 1.0 - abs( n.x ) ) * ( dX < wX ? ( 1.0 - dX / wX ) : 0.0 );
+    float sZ = ( fq.y < 0.5 ? 1.0 : -1.0 ) * onZ * ( 1.0 - abs( n.z ) ) * ( dZ < wZ ? ( 1.0 - dZ / wZ ) : 0.0 );
+    // bedding joints: a groove at every bed boundary (strongest on the walls)
+    float dB = min( bf, 1.0 - bf ) * bedThick;
+    float wB = uJointWidth * 1.2;
+    float gB = ( 1.0 - smoothstep( 0.0, wB, dB ) ) * smoothstep( 0.15, 0.5, wall );
+    float sB = ( bf < 0.5 ? 1.0 : -1.0 ) * ( dB < wB ? ( 1.0 - dB / wB ) : 0.0 ) * smoothstep( 0.15, 0.5, wall );
+    float depth = uJointDepth * jointAmt;
+    // gradient of the groove height field: the surface drops into each groove
+    vec3 crackG = vec3( sX / max( wX, 0.01 ), sB / max( wB, 0.01 ), sZ / max( wZ, 0.01 ) ) * depth * 1.5;
+    // each block: its own tilt (a slab that is not quite flush) and tone
+    float hb = cgHash3( ivec3( int( cellId.x ), int( bedIdx ), int( cellId.y ) ) );
+    vec3 tilt = ( vec3( hb, fract( hb * 13.1 ), fract( hb * 29.7 ) ) - 0.5 ) * 0.22 * uJointBlocks * jointAmt;
+    G += crackG + tilt;
+    crackAO = max( gX, max( gZ, gB ) ) * jointAmt;
+    blockTone = ( hb - 0.5 ) * 0.2 * uJointBlocks * jointAmt;
+    Gt = ( G - n * dot( n, G ) ) * uBumpScale;
+    nW = normalize( n - Gt );
+  }
+
   vec3 rock = mix( uRockA, bandCol, uStrataContrast * bandVis );
+  rock *= 1.0 + blockTone;
+  rock *= 1.0 - crackAO * 0.55;
   vec3 strataOnly = rock;
   // terrain beds carry the erosion hardness: caprock paler and cleaner, soft beds darker and warmer
   rock = mix( rock, rock * 1.12 + uRockC * 0.06, hardness * uHardnessTint * ( 1.0 - uIsRock ) );
@@ -577,7 +627,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   roughness = mix( roughness, 0.95, veg );
   roughness = mix( roughness, uSnowRoughness, snow );
 
-  float ao = ( 1.0 - rim * 0.25 * uPeelShadow ) * ( 1.0 - pit * 0.4 ) * ( 1.0 - max( 0.0, -cavity ) * 0.4 * uCavityStrength );
+  float ao = ( 1.0 - rim * 0.25 * uPeelShadow ) * ( 1.0 - pit * 0.4 ) * ( 1.0 - crackAO * 0.5 ) * ( 1.0 - max( 0.0, -cavity ) * 0.4 * uCavityStrength );
   ao = mix( ao, 1.0, snow * 0.6 );
 
   // soil hides the rock micro-relief under a softer, cloddy surface
@@ -637,6 +687,7 @@ const colorKeys = { uSoilColor: 'soilColor', uSoilLight: 'soilLight', uRoad: 'ro
 // uniform → [value key, enable key (optional), scale]
 const scalarKeys = {
   uStrataContrast: ['strataContrast', 'strataOn'], uSeamStrength: ['seamStrength', 'strataOn'], uSeamWidth: ['seamWidth'], uLaminae: ['laminae', 'strataOn'], uBedGradient: ['bedGradient', 'strataOn'], uHardnessTint: ['hardnessTint', 'strataOn'],
+  uJointStrength: ['jointStrength', 'jointOn'], uJointSpacing: ['jointSpacing'], uJointWidth: ['jointWidth'], uJointDepth: ['jointDepth'], uJointStagger: ['jointStagger'], uJointBlocks: ['jointBlocks'], uJointDropout: ['jointDropout'],
   uGrainSize: ['grainSize'], uGrainStrength: ['grainStrength', 'grainOn'], uGrainContrast: ['grainContrast', 'grainOn'], uGrainFineness: ['grainFineness'],
   uOxideAmount: ['oxideAmount', 'oxideOn'], uOxideScale: ['oxideScale'], uCavityStrength: ['cavityStrength'],
   uFlakeStrength: ['flakeStrength', 'flakesOn'], uFlakeSheen: ['flakeSheen'], uFlakeEdge: ['flakeEdge'], uFlakeOxide: ['flakeOxide'], uFlakeSparkle: ['flakeSparkle'],
