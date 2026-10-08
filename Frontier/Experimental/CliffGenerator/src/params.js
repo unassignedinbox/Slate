@@ -330,7 +330,7 @@ export const presets = {
     snowOn: 0, vegetation: 0.95, vegSlope: 32, vegPatchiness: 0.2, mossiness: 0.25, soilAmount: 0.6, dryness: 0.15,
     seaLevel: 0, waterEnabled: 1, waterMeshes: 0, riverCatchment: 0.4, riverLakes: 0,
     sdfOn: 1, sdfAngle: 50, sdfUndercut: 3, sdfJoints: 0.5, sdfPits: 0.1, sdfRough: 0.25, sdfPushPull: 1, sdfPushScale: 14,
-    sdfBlocks: 2.5, sdfBlockSize: 9, sdfBlockLoss: 0.12, sdfVertical: 1.15, sdfLean: 1.5, sdfLeanReach: 30, sdfMaxChunks: 1000, overhang: 2,
+    sdfBlocks: 2.5, sdfBlockSize: 9, sdfBlockLoss: 0.12, sdfVertical: 1.15, sdfLean: 1.5, sdfLeanReach: 30, sdfChunk: 32, sdfMaxChunks: 800, overhang: 2,
     jointStrength: 1.0, jointSpacing: 2.2, jointWidth: 0.2, jointDepth: 0.4, jointStagger: 1, jointBlocks: 0.7, jointDropout: 0.3,
     peelStrength: 0.25, flakeStrength: 0.3, oxideAmount: 0.25, wetness: 0.8, rockDensity: 0.45, rockSlopeMax: 30, rockSizeMin: 0.6, rockSizeMax: 6, gravelAmount: 1,
     sunElevation: 38, sunAzimuth: 235, turbidity: 3, fogDensity: 0.3,
