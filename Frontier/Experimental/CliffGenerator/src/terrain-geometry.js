@@ -342,13 +342,24 @@ export function buildWaterGeometry(field) {
     }
     return lvl;
   };
-  const depths = [];
+  const depths = [], foams = [];
+  const cell = size / (N - 1);
+  // grade of the water surface → white water on rapids and falls
+  const lvlAt = (i, j, fallback) => {
+    if (i < 0 || j < 0 || i >= N || j >= N) return fallback;
+    const n = j * N + i;
+    return wet(n) ? waterLevel[n] : fallback;
+  };
   const vertex = (i, j, idx) => {
     if (index[idx] >= 0) return index[idx];
     const x = (i / (N - 1) - 0.5) * size, z = (j / (N - 1) - 0.5) * size;
     const lvl = vertexLevel(i, j, idx);
     positions.push(x, lvl, z);
     depths.push(Math.max(0, lvl - height[idx]));
+    const gx = (lvlAt(i + 1, j, lvl) - lvlAt(i - 1, j, lvl)) / (2 * cell), gz = (lvlAt(i, j + 1, lvl) - lvlAt(i, j - 1, lvl)) / (2 * cell);
+    const grade = Math.hypot(gx, gz);
+    const t = Math.min(1, Math.max(0, (grade - 0.05) / 0.15));
+    foams.push(t * t * (3 - 2 * t));
     index[idx] = positions.length / 3 - 1;
     return index[idx];
   };
@@ -367,6 +378,7 @@ export function buildWaterGeometry(field) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('aDepth', new THREE.Float32BufferAttribute(depths, 1));
+  geometry.setAttribute('aFoam', new THREE.Float32BufferAttribute(foams, 1));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();

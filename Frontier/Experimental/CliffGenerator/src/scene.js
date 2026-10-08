@@ -160,6 +160,7 @@ export class CliffScene {
     this.bodyMaterial.opacity = v.riverOpacity == null ? 0.85 : v.riverOpacity;
     this.bodyUniforms.uShallow.value.setStyle(v.riverShallowColor || '#4f7f7a');
     this.bodyUniforms.uClearDepth.value = v.riverClearDepth == null ? 1.5 : Math.max(0.1, v.riverClearDepth);
+    this.bodyUniforms.uFoam.value = v.riverFoam == null ? 1 : v.riverFoam;
   }
 
   // River / lake water surfaces from the refined field's water-level map.

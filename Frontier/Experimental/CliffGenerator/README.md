@@ -90,7 +90,7 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    cell‑by‑cell contour of droplet deposits. River and lake water has its own material
    (`src/water-material.js`): per‑vertex depth makes the shallows clear (bed and gravel bars show
    through) and only deeper water takes the water colour, so shores fade in instead of ending in
-   a hard dark edge.
+   a hard dark edge; where the water surface drops steeply (rapids, falls) it turns to white water.
    The bed and water of the nearest channel cell are interpolated along the channel direction
    and the floor smoothed, so a steep river is a ramp, not a staircase of treads. Reaches steeper
    than *Dry above grade* show the carved gully (wet rock, gravel) with no standing water — a
