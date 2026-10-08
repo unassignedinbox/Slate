@@ -41,9 +41,18 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    filtered by slope and biased to ridges / hill tops. They come out as a landform the rest of the
    pipeline weathers — pinned hard, no bedding terraces, no scree skin, no bedding undercuts in
    the 3‑D chunks — and distinct from the scattered rock props.
-2. **Strata** — the heightfield is terraced in a tilted (geological dip) frame. Every bed gets a
-   hashed *hardness*; hard caprock beds become near‑vertical faces, soft beds become slopes.
-   Hardness is kept as a map and drives everything downstream.
+2. **Strata** (`src/strata-model.js`, Gaea *Stratify*‑style) — one stratigraphic column is shared
+   by the terracing, the erosion hardness, the 3‑D cliff carving and the shader, so the beds you
+   see are the beds that were carved. The column is a sequence of *packages*: thin‑bedded (mostly
+   soft, the odd hard ledge), massive (mostly hard, the odd soft parting) and mixed, each bed with
+   its own log‑normal thickness, hardness, tint and optional gradational base; beds thicken and
+   thin laterally (an expression evaluated identically in JS and GLSL). The heightfield is terraced
+   in the tilted (dip) frame — thin beds step less — and hardness is kept as a map that drives
+   everything downstream. In the 3‑D chunks soft beds recede into a notch deepest just under the
+   caprock (thin partings a groove, thick soft beds a deep undercut), hard beds break along joint
+   sets spaced like their thickness into blocky columns with the occasional fallen block, and the
+   shader paints each bed from the same table (hard = pale/clean, soft = darker/warmer, plus the
+   bed's tint, laminae and seams).
 3. **Erosion** (`src/erosion.js`) — thermal pre‑settle, Lagrangian droplet hydraulic erosion
    (cutting scaled by hardness so cliff bands survive, deposition builds fans), then talus
    slumping with a hardness‑dependent repose angle → scree aprons beneath the faces.
@@ -55,7 +64,11 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    cell, the cut fading out towards the bank height instead of leaving a wall), braided gravel
    bars on wide gentle reaches, and lakes where basins fill (partial fill, area cap — the
    biggest/deepest basins first; over the cap a river that ends in a hollow keeps a small pond).
-   Steep reaches run narrow and shallow (torrents); inside closed depressions water runs down the
+   The bed and water of the nearest channel cell are interpolated along the channel direction
+   and the floor smoothed, so a steep river is a ramp, not a staircase of treads. Reaches steeper
+   than *Dry above grade* show the carved gully (wet rock, gravel) with no standing water — a
+   mountain torrent does not read as flat water — unless the river is big; lake shores are eased
+   into a shelving beach. Steep reaches are wide shallow V gullies; inside closed depressions water runs down the
    real floor into the lake instead of in straight lines across the filled flat; a little noise on
    the routing surface breaks the dead‑straight D8 lines smooth slopes produce. The water mesh is
    one continuous sheet with per‑vertex levels (relaxed along the channel) so it follows the

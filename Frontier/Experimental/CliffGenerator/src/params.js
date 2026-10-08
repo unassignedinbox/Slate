@@ -38,6 +38,10 @@ export const defaults = {
   // Strata
   strataBand: 26,           // [m]
   strataStrength: 0.75,
+  strataVariation: 0.6,
+  strataPackaging: 0.6,
+  strataHardShare: 0.4,
+  strataLateral: 0.18,
   strataDip: 4,             // [°]
   strataDipDirection: 35,   // [°]
   hardnessContrast: 0.8,
@@ -191,6 +195,8 @@ export const defaults = {
   riverMaxWidth: 150,       // [m]
   riverDepthScale: 0.7,
   riverWaterFrac: 0.7,
+  riverDrySlope: 12,        // [°]
+  riverDryBig: 1.5,         // [km²]
   riverBraiding: 0.35,
   riverLakes: 1,
   riverLakeFill: 0.8,
@@ -452,9 +458,15 @@ export const groups = [
     id: 'strata', name: 'Strata', type: 'Cliff layering', stage: 'terrain', color: '#c29583',
     cards: [
       { title: 'Bedding', controls: [
-        ['strataBand', 'Bed thickness', 6, 80, 1, 'm', 'Vertical thickness of each rock layer'],
+        ['strataBand', 'Bed thickness', 6, 80, 1, 'm', 'Typical vertical thickness of a rock layer'],
         ['strataStrength', 'Terracing', 0, 1, 0.05, '', 'How strongly beds step into benches and faces'],
         ['hardnessContrast', 'Caprock contrast', 0, 1, 0.05, '', 'Resistant layers hold vertical faces; soft layers slope'],
+      ] },
+      { title: 'Stratigraphic column', controls: [
+        ['strataVariation', 'Thickness variation', 0, 1.5, 0.05, '', 'Spread of bed thicknesses around the typical value (0 = all beds alike)'],
+        ['strataPackaging', 'Packaging', 0, 1, 0.05, '', 'How much beds group into thin-bedded (shale) and massive (sandstone / limestone) packages instead of a random stack'],
+        ['strataHardShare', 'Hard share', 0, 1, 0.05, '', 'Share of resistant beds in the mixed packages'],
+        ['strataLateral', 'Lateral change', 0, 0.4, 0.01, '', 'Beds thicken and thin across the tile'],
       ] },
       { title: 'Geological dip', controls: [
         ['strataDip', 'Dip angle', 0, 25, 0.5, '°', 'Tilt of the bedding planes'],
@@ -526,6 +538,8 @@ export const groups = [
         ['riverMaxWidth', 'Max width', 10, 400, 5, 'm', ''],
         ['riverDepthScale', 'Depth scale', 0.2, 3, 0.05, '', 'Channel depth ≈ scale × width^0.45'],
         ['riverWaterFrac', 'Water fill', 0.2, 0.9, 0.05, '', 'Fraction of the channel depth filled with water'],
+        ['riverDrySlope', 'Dry above grade', 2, 45, 1, '°', 'Reaches steeper than this show the carved gully (wet rock, gravel) instead of standing water — mountain torrents do not read as flat water'],
+        ['riverDryBig', 'Always wet above', 0.1, 20, 0.1, 'km²', 'Rivers with a catchment this large keep water on any grade'],
         ['riverBraiding', 'Braiding', 0, 1, 0.05, '', 'Gravel bars and split threads on wide, gentle reaches (river plains)'],
         ['riverLakes', 'Lakes in depressions', 0, 1, 1, '', 'Closed basins fill to their spill level'],
         ['riverLakeFill', 'Lake fill', 0, 1, 0.05, '', '1 = basins fill to their spill level · lower leaves a dry floor with the river crossing it'],
@@ -604,7 +618,7 @@ export const groups = [
       { title: 'Strata', controls: [
         ['strataOn', 'Enable strata', 0, 1, 1, '', ''],
         ['strataContrast', 'Bed contrast', 0, 1, 0.05, '', 'Tonal difference between beds'],
-        ['strataBandScale', 'Band scale', 0.25, 4, 0.05, '×', 'Colour band thickness relative to the terrain bed thickness'],
+        ['strataBandScale', 'Band scale', 0.25, 4, 0.05, '×', 'Painted beds relative to the carved beds (1 = the colour follows the stratigraphic column exactly)'],
         ['laminae', 'Laminae', 0, 1, 0.05, '', 'Thin sub-bands inside each bed'],
         ['bedGradient', 'Bed shading', 0, 1, 0.05, '', 'Darkening towards the base of each bed'],
         ['seamStrength', 'Seam darkness', 0, 1, 0.05, '', 'Dark lines along bedding planes'],

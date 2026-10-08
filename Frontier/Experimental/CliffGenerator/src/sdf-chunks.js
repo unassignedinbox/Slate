@@ -13,6 +13,7 @@
 //          piecewise-linear border → watertight with the terrain mesh, which skips the covered quads
 
 import { SimplexNoise, GradientNoise3, hash2, smoothstep, lerp, clamp01 } from './noise.js';
+import { makeBedTable, bedAt, bedJitter, bedHardness } from './strata-model.js';
 import { NO_WATER } from './features.js';
 import { edgeTable, triTable } from './mc-tables.js';
 
@@ -159,38 +160,36 @@ export function packChunkJobs(fine, chunks, v) {
 export function carveReach(v) {
   const undercut = Math.max(0, v.sdfUndercut == null ? 6 : v.sdfUndercut);
   const pits = v.sdfPits == null ? 0.3 : v.sdfPits, joints = v.sdfJoints == null ? 0.5 : v.sdfJoints;
-  return undercut * (1 + 0.5 * pits + 0.6 * joints) + 1.5;
+  return undercut * (1 + 0.5 * pits + 0.9 * joints) + 1.5;
 }
 
 // ---- strata hardness at a 3-D point (same model as heightfield.applyStrata) -----------------------
 // column(x, z) caches everything that depends on the plan position; at(col, y) is cheap per voxel.
 export function makeStrataSampler(params) {
   const size = params.worldSize;
-  const band = Math.max(2, params.strataBand);
   const dipRad = (params.strataDip * Math.PI) / 180, dirRad = (params.strataDipDirection * Math.PI) / 180;
   const gx = Math.tan(dipRad) * Math.cos(dirRad), gz = Math.tan(dipRad) * Math.sin(dirRad);
   const detail = new SimplexNoise(params.seed * 5 + 77);
   const contrast = params.hardnessContrast;
-  const seed = params.seed;
+  const table = makeBedTable(params);
+  const lateral = params.strataLateral == null ? 0.18 : params.strataLateral;
   function column(xw, zw) {
     const x = xw + size / 2, z = zw + size / 2;
-    return { x, z, tilt: gx * x + gz * z, bandJ: band * (1 + 0.18 * detail.fbm(x * 0.0015, z * 0.0015, 3)), layers: new Map() };
+    return { x, z, tilt: gx * x + gz * z, jitter: bedJitter(x, z, lateral), layers: new Map(), bed: {} };
   }
+  // returns [hardness, fraction within bed (0 base → 1 top), bed thickness, bed index]
   function at(col, y) {
-    const t = (y + col.tilt) / col.bandJ;
-    const bi = Math.floor(t), f = t - bi;
-    let hard = col.layers.get(bi);
-    if (hard === undefined) {
-      const layerHash = hash2(bi, 0, seed);
-      hard = smoothstep(0.55, 0.85, layerHash);
-      hard = lerp(hard, hard * hard, 0.3);
-      hard = clamp01(hard + 0.12 * detail.fbm(col.x * 0.006 + bi * 3.7, col.z * 0.006, 3));
-      hard = lerp(0.35, hard, contrast);
-      col.layers.set(bi, hard);
+    const bed = bedAt(table, (y + col.tilt) / col.jitter, col.bed);
+    const bi = bed.index;
+    let lens = col.layers.get(bi);
+    if (lens === undefined) {
+      lens = 0.12 * detail.fbm(col.x * 0.006 + bi * 3.7, col.z * 0.006, 3);
+      col.layers.set(bi, lens);
     }
-    return [hard, f];
+    const hard = lerp(0.35, clamp01(bedHardness(bed) + lens), contrast);
+    return [hard, bed.f, bed.thick, bi];
   }
-  return { column, at, sample: (xw, zw, y) => at(column(xw, zw), y) };
+  return { column, at, table, sample: (xw, zw, y) => at(column(xw, zw), y) };
 }
 
 // ---- marching cubes ------------------------------------------------------------------------------
@@ -199,6 +198,7 @@ const EDGES = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [
 
 export function makeChunkContext(v) {
   return {
+    seed: (v.seed | 0) >>> 0,
     strata: makeStrataSampler(v),
     pocket: new GradientNoise3((v.seed || 1) * 41 + 9),
     joint: new SimplexNoise((v.seed || 1) * 23 + 5),
@@ -239,6 +239,7 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const roughAmp = (v.sdfRough == null ? 0.5 : v.sdfRough) * Math.min(1.2, vox * 0.3);
   const roughFreq = 1 / (vox * 5);
   const bedPower = v.sdfBedContrast == null ? 1 : v.sdfBedContrast;
+  const band = Math.max(2, v.strataBand || 26);
   const hasOutcrop = !!m.outcrop;
 
   const maxCarve = carveReach(v);
@@ -255,18 +256,29 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   }
   function carve(col, y) {
     const { x, z } = col;
-    const [hard, f] = ctx.strata.at(col.strata, y);
-    // soft beds recede, strongest mid-bed; hard beds keep their lip
-    let soft = Math.pow(1 - smoothstep(0.3, 0.6, hard), bedPower) * (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, Math.max(0, f))));
+    const [hard, f, thick, bi] = ctx.strata.at(col.strata, y);
+    // soft beds recede into a notch that is deepest just under the hard bed above (where seepage
+    // and frost work hardest); thin partings only make a shallow groove, thick soft beds a deep
+    // undercut; hard beds keep their lip
+    const softness = Math.pow(1 - smoothstep(0.3, 0.6, hard), bedPower);
+    const notch = 0.3 + 0.7 * Math.sin(Math.PI * Math.pow(Math.min(1, Math.max(0, f)), 1.6));
+    const thickF = Math.pow(Math.min(1, thick / (band * 0.7)), 0.6);
+    let soft = softness * notch * thickF;
     const n = 0.5 + 0.5 * ctx.pocket.fbm(x / pocketScale, y / (pocketScale * 0.6), z / pocketScale, 3, 2.1, 0.55);
     const pocket = smoothstep(0.32, 0.7, n);
-    const jn = 0.5 + 0.5 * ctx.joint.fbm(x * 0.03, z * 0.03 + y * 0.004, 2);
-    let joint = smoothstep(0.74, 0.86, jn) * joints;
+    // hard beds break along joint sets spaced like their thickness → blocky columns; soft beds
+    // weather smooth. Each bed has its own joint pattern, and now and then a whole block is gone.
+    const hardness = smoothstep(0.45, 0.7, hard);
+    const spacing = Math.max(2, Math.min(30, thick * 0.9));
+    const jn = 0.5 + 0.5 * ctx.joint.fbm(x / spacing + bi * 3.1, z / spacing - bi * 1.7, 2);
+    let joint = smoothstep(0.7, 0.82, jn) * joints * hardness;
+    const bx = Math.floor(x / spacing + bi * 0.37), bz = Math.floor(z / spacing - bi * 0.61);
+    const fallen = hash2(bx + bi * 131, bz, ctx.seed) < 0.05 * joints ? smoothstep(0.04, 0.16, f) * smoothstep(0.98, 0.9, f) * hardness : 0;
     const pit = smoothstep(0.66, 0.82, n) * pits;
     const rough = ctx.rough.fbm(x * roughFreq, y * roughFreq, z * roughFreq, 2, 2.1, 0.55) * roughAmp;
     // embedded boulders are massive rock: no bedding undercuts, spheroidal weathering only
     if (col.oc > 0) { soft *= 1 - col.oc; joint *= 1 - col.oc * 0.5; }
-    const d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + pit * 0.5 + col.oc * 0.12 * pocket) + rough;
+    const d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + fallen * 0.9 + pit * 0.5 + col.oc * 0.12 * pocket) + rough;
     return d * col.steep * col.w;
   }
   function fCol(col, y) {

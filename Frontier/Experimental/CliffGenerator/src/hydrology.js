@@ -255,6 +255,9 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   }
 
   const maxWidth = Math.max(cell * 2, opts.maxWidth || 120);
+  const steep = new Float32Array(total), dry = new Uint8Array(total);
+  const dryGrade = Math.tan(((opts.drySlope == null ? 12 : opts.drySlope) * Math.PI) / 180);
+  const dryBig = opts.dryBig == null ? 1.5 : opts.dryBig; // [km²] rivers this big keep water on any grade
   let riverCells = 0;
   // outlets first so the downstream bed is known
   for (let n = total - 1; n >= 0; n--) {
@@ -268,9 +271,22 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     const grade = run > 0 ? drop / run : 0;
     const torrent = 1 / (1 + 6 * grade);
     let w = Math.min(maxWidth, Math.max(cell * 1.5, (opts.widthScale || 25) * Math.sqrt(km2) * torrent));
-    const dep = Math.max(0.4, (opts.depthScale || 1) * Math.pow(w, 0.45) * (0.5 + 0.5 * torrent));
-    width[c] = w; depth[c] = dep;
+    let dep = Math.max(0.4, (opts.depthScale || 1) * Math.pow(w, 0.45) * (0.5 + 0.5 * torrent));
+    // on steep ground the channel is a gully: a wide shallow V, not a slot
+    const steepness = smoothstep(0.08, 0.35, grade);
+    w *= 1 + 1.6 * steepness;
+    dep *= 1 - 0.35 * steepness;
     const d = down[c];
+    if (d >= 0 && isRiver[d] && acc[c] >= 0.5 * acc[d]) {
+      // same stream: width / depth may only change gradually along it (a jump in depth made the
+      // bed a staircase of flat treads)
+      w = Math.max(width[d] * 0.92, Math.min(width[d] * 1.08, w));
+      dep = Math.max(depth[d] * 0.92, Math.min(depth[d] * 1.08, dep));
+    }
+    width[c] = w; depth[c] = dep;
+    steep[c] = steepness;
+    // water only stands on gentle reaches (or in big rivers); steep gullies show the carved bed
+    dry[c] = grade > dryGrade && km2 < dryBig ? 1 : 0;
     let b = filled[c] - dep;
     let l = b + dep * waterFrac;
     if (filled[c] - routing[c] > 0.3) {
@@ -279,7 +295,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
       b = height[c] - dep * 0.5;
       l = lakeLevel[c] > NO_WATER * 0.5 ? Math.max(lakeLevel[c], b + dep * waterFrac) : b + dep * waterFrac;
     } else if (d >= 0 && isRiver[d]) {
-      b = Math.max(b, bed[d] + 0.0004 * cell);
+      // the bed follows the surface (continuous); only the water is forced monotone
       l = Math.min(filled[c] - dep * 0.2, Math.max(b + dep * waterFrac, wl[d]));
       b = Math.min(b, l - dep * 0.25);
     }
@@ -290,6 +306,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   stats.riverCells = riverCells;
 
   // ---- carve channels: chamfer distance from the nearest channel cell -----------------------
+  const sea = opts.seaLevel == null ? -Infinity : opts.seaLevel;
   const bankSlope = Math.tan((Math.max(10, Math.min(80, opts.bankAngle || 35)) * Math.PI) / 180);
   const maxBank = Math.max(1, opts.maxBank == null ? 30 : opts.maxBank);
   const dist = new Float32Array(total).fill(Infinity);
@@ -317,6 +334,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   const braidNoise = new SimplexNoise(seed * 19 + 3);
   const braiding = opts.braiding || 0;
   for (const c of touched) {
+    if (height[c] <= sea) continue; // the sea bed is not a river bank
     const s = src[c];
     const d = dist[c] * cell;
     const w = width[s], dep = depth[s];
@@ -338,17 +356,27 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
         bar = br * smoothstep(-0.05, 0.35, n + n2 * 0.35);
       }
     }
-    const waterHere = wl[s];
+    // bed / water of the nearest channel cell, interpolated along the channel direction so the
+    // profile is a continuous ramp instead of one flat tread per channel cell
+    let bedHere = bed[s], waterHere = wl[s];
+    const ds = down[s];
+    if (ds >= 0 && isRiver[ds]) {
+      const si = s % N, sj = (s - si) / N, di = ds % N, dj = (ds - di) / N;
+      const vx = di - si, vz = dj - sj, vl = Math.hypot(vx, vz) || 1;
+      const t = Math.max(-1.5, Math.min(1.5, ((ci - si) * vx + (cj - sj) * vz) / (vl * vl)));
+      bedHere += (bed[ds] - bed[s]) * t;
+      waterHere += (wl[ds] - wl[s]) * t;
+    }
     let target;
     if (d <= half) {
       const t = d / half;
-      target = bed[s] + dep * 0.35 * t * t;
+      target = bedHere + dep * 0.35 * t * t;
       // bars rise to just above the water so they read as gravel islands
       if (bar > 0) target = Math.max(target, target + (waterHere + 0.35 - target) * bar);
     } else {
       const rise = (d - half) * bankSlope;
       if (rise > maxBank) continue;
-      target = bed[s] + dep * 0.35 + rise;
+      target = bedHere + dep * 0.35 + rise;
       // the bank cut fades out towards its limit instead of leaving a wall
       const fade = smoothstep(maxBank * 0.45, maxBank, rise);
       if (target < height[c]) target += (height[c] - target) * fade;
@@ -356,15 +384,30 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     // lakes keep their floor
     if (lakeLevel[c] > NO_WATER * 0.5 && target < height[c]) target = Math.max(target, height[c] - dep * 0.3);
     if (target < height[c]) height[c] = target;
-    else if (d <= half + w * 0.6 && lakeLevel[c] <= NO_WATER * 0.5) {
+    else if (d <= half + w * 0.6 && filled[c] - routing[c] <= 0.3 && height[c] > sea && target - height[c] < dep * 1.5) {
       // the channel also has a floor on its downhill side (a bench on cross-slopes) — otherwise
-      // the water would hang in the air over the lower ground
-      const fillW = d <= half ? 1 : 1 - (d - half) / (w * 0.6);
+      // the water would hang in the air over the lower ground; never built out over the sea,
+      // a lake / hollow, or ground that is much lower (a drop-off)
+      const fillW = (d <= half ? 1 : 1 - (d - half) / (w * 0.6)) * (1 - smoothstep(dep * 0.8, dep * 1.5, target - height[c]));
       height[c] += (target - height[c]) * fillW;
     }
     const m = 1 - smoothstep(half, half + w * 0.9, d);
     if (m > riverMask[c]) riverMask[c] = m;
-    if (d <= half + cell && waterHere > waterLevel[c]) waterLevel[c] = waterHere;
+    if (d <= half + cell && waterHere > waterLevel[c] && !dry[s]) waterLevel[c] = waterHere;
+  }
+
+  // smooth the carved channel floor (residual treads where the chamfer stripes meet at bends)
+  {
+    const tmp = Float32Array.from(height);
+    for (const c of touched) {
+      if (riverMask[c] < 0.2 || height[c] <= sea) continue;
+      const ci = c % N, cj = (c - ci) / N;
+      if (ci < 1 || cj < 1 || ci >= N - 1 || cj >= N - 1) continue;
+      let sum = 0, n = 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const k = (cj + dj) * N + ci + di; if (riverMask[k] >= 0.2) { sum += height[k]; n++; } }
+      if (n) tmp[c] = height[c] + (sum / n - height[c]) * Math.min(1, riverMask[c] * 1.5);
+    }
+    height.set(tmp);
   }
 
   // the water level was copied from the nearest channel cell, which on steep reaches gives a
@@ -391,6 +434,32 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
 
   // lakes: water at spill level over the depression (and a shore band in the mask)
   if (opts.lakes) {
+    // shelving shore: ground just above the water line is eased down into a shallow beach
+    const shoreW = Math.max(2, Math.round(12 / cell));
+    const shoreLvl = new Float32Array(total).fill(NO_WATER);
+    const shoreD = new Float32Array(total).fill(Infinity);
+    const q = [];
+    for (let c = 0; c < total; c++) if (lakeLevel[c] > NO_WATER * 0.5) { shoreD[c] = 0; shoreLvl[c] = lakeLevel[c]; q.push(c); }
+    for (let h = 0; h < q.length; h++) {
+      const c = q[h];
+      if (shoreD[c] >= shoreW) continue;
+      const ci = c % N, cj = (c - ci) / N;
+      for (let d = 0; d < 4; d++) {
+        const ni = ci + DX[d], nj = cj + DZ[d];
+        if (ni < 0 || nj < 0 || ni >= N || nj >= N) continue;
+        const n = nj * N + ni;
+        if (shoreD[n] < Infinity) continue;
+        shoreD[n] = shoreD[c] + 1; shoreLvl[n] = shoreLvl[c]; q.push(n);
+      }
+    }
+    for (let c = 0; c < total; c++) {
+      if (!(shoreD[c] > 0 && shoreD[c] < Infinity)) continue;
+      const lvl = shoreLvl[c], rise = height[c] - lvl;
+      if (rise <= 0 || rise > 6) continue;
+      const t = shoreD[c] / shoreW; // 0 at the water line → 1 at the back of the beach
+      const beach = lvl - 0.25 + rise * t * t;
+      if (beach < height[c]) { height[c] = beach; lakeMask[c] = Math.max(lakeMask[c], 0.6 * (1 - t)); }
+    }
     for (let c = 0; c < total; c++) {
       if (lakeLevel[c] <= NO_WATER * 0.5) continue;
       if (lakeLevel[c] > waterLevel[c]) waterLevel[c] = lakeLevel[c];
@@ -415,5 +484,5 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   let cut = 0;
   for (let c = 0; c < total; c++) cut += original[c] - height[c];
   stats.cutVolume = cut * cell * cell;
-  return { riverMask, waterLevel, lakeMask, flow, acc, filled, down, stats };
+  return { riverMask, waterLevel, lakeMask, flow, acc, filled, down, stats, debug: { bed, wl, width, depth, isRiver, dist, src } };
 }

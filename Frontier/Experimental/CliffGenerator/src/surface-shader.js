@@ -14,6 +14,7 @@
 // Vertex aux = (deposit, flow, hardness, cavity) from the erosion pipeline (zeros on rocks).
 
 import * as THREE from 'three';
+import { makeBedTable } from './strata-model.js';
 
 const vertexHead = /* glsl */`
 attribute vec4 aux;
@@ -42,6 +43,9 @@ varying vec3 vWorldPos;
 uniform vec3 uRockA, uRockB, uRockC, uFresh, uOxide, uGrassA, uGrassB, uDry, uMoss, uSnow, uGravel, uRoad, uSilt;
 uniform float uShoreWet, uRoadOn, uBedOn;
 uniform float uStrataBand, uStrataContrast, uDipX, uDipZ, uSeamStrength, uSeamWidth, uLaminae, uBedGradient, uHardnessTint;
+uniform sampler2D uBedTex;   // stratigraphic column: (top, hardness, tint, thickness) per bed
+uniform int uBedCount;
+uniform float uBedBase, uWorldSize, uBedLateral;
 uniform float uGrainSize, uGrainStrength, uGrainContrast, uGrainFineness;
 uniform float uOxideAmount, uOxideScale;
 uniform float uCavityStrength;
@@ -57,6 +61,25 @@ uniform float uMossiness, uMossScale;
 uniform float uSnowLine, uSnowSlopeCos, uSnowSoftness, uSnowRoughness;
 uniform float uBumpScale, uBaseRoughness;
 uniform float uSeaLevel, uSeed, uIsRock, uDebugView;
+
+// lateral bed-thickness jitter — must match bedJitter() in strata-model.js
+float bedJitter( float x, float z ) {
+  float a = sin( x * 0.0091 + 0.7 * sin( z * 0.0063 + 1.3 ) );
+  float b = cos( z * 0.0077 + 0.5 * sin( x * 0.0052 + 0.4 ) );
+  return 1.0 + uBedLateral * ( 0.6 * a + 0.4 * b );
+}
+// bed containing tilted elevation t (binary search in the column texture)
+vec4 bedLookup( float t, out float base ) {
+  int lo = 0, hi = uBedCount - 1;
+  for ( int k = 0; k < 13; k++ ) {
+    if ( lo >= hi ) break;
+    int mid = ( lo + hi ) / 2;
+    if ( t < texelFetch( uBedTex, ivec2( mid, 0 ), 0 ).x ) hi = mid; else lo = mid + 1;
+  }
+  vec4 b = texelFetch( uBedTex, ivec2( lo, 0 ), 0 );
+  base = b.x - b.w;
+  return b;
+}
 
 float cgHash( uvec3 q ) {
   uint h = q.x * 1597334677u ^ q.y * 3812015801u ^ q.z * 2798796415u;
@@ -391,17 +414,24 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
 
   // ---- colour --------------------------------------------------------------------------------
   // strata: beds of varying thickness in the dipped frame, wavy, with soft broken seams
-  float bandY = wp.y + uDipX * wp.x + uDipZ * wp.z;
-  float warp = cgNoise3( wp * 0.012 ).x * 9.0 + cgNoise3( wp * 0.07 + 3.0 ).x * 1.6;
-  float tb = ( bandY + warp ) / uStrataBand;
-  float bi = floor( tb );
-  float bf = fract( tb );
-  float bh = cgHash( uvec3( ivec3( int( bi ) + 2048, 17, int( uSeed ) ) ) );
-  float bh2 = cgHash( uvec3( ivec3( int( bi ) + 2048, 29, int( uSeed ) ) ) );
-  float bh3 = cgHash( uvec3( ivec3( int( bi ) + 2048, 43, int( uSeed ) ) ) );
+  // same frame as the heightfield / 3-D chunks: x,z measured from the tile corner, tilted by the
+  // dip, thinned / thickened by the lateral jitter, then looked up in the stratigraphic column
+  float sxj = wp.x + uWorldSize * 0.5, szj = wp.z + uWorldSize * 0.5;
+  float bandY = wp.y + uDipX * sxj + uDipZ * szj;
+  float warp = cgNoise3( wp * 0.012 ).x * 1.5 + cgNoise3( wp * 0.07 + 3.0 ).x * 0.5;
+  float bedBase;
+  vec4 bedRec = bedLookup( ( bandY + warp ) / ( bedJitter( sxj, szj ) * uStrataBand ), bedBase );
+  float bf = clamp( ( ( bandY + warp ) / ( bedJitter( sxj, szj ) * uStrataBand ) - bedBase ) / max( 0.01, bedRec.w ), 0.0, 1.0 );
+  float bedHard = bedRec.y;
+  float bh = bedRec.z;
+  float bh2 = fract( bh * 7.31 + 0.17 );
+  float bh3 = fract( bh * 13.7 + 0.43 );
   float lam = floor( bh3 * 3.0 * uLaminae ) + 1.0;
   float sf = fract( bf * lam );
-  vec3 bandCol = mix( uRockA, uRockB, smoothstep( 0.3, 0.7, bh ) );
+  // colour follows hardness (hard beds pale and clean, soft beds darker / warmer) with the bed's
+  // own tint on top, so what was carved is what is painted
+  vec3 bandCol = mix( uRockB, uRockA, smoothstep( 0.25, 0.7, bedHard ) );
+  bandCol = mix( bandCol, mix( uRockA, uRockB, smoothstep( 0.3, 0.7, bh ) ), 0.45 );
   bandCol = mix( bandCol, uRockC, smoothstep( 0.72, 0.95, bh2 ) * 0.85 );
   bandCol *= 1.0 - uBedGradient * ( 0.25 * ( 1.0 - bf ) + 0.12 * ( 1.0 - sf ) );
   float seamNoise = smoothstep( 0.35, 0.7, cgNoise3( wp * vec3( 0.09, 0.4, 0.09 ) ).x );
@@ -580,7 +610,8 @@ export function makeSurfaceUniforms() {
   u.uFlakeCol = { value: [new THREE.Color(), new THREE.Color(), new THREE.Color()] };
   u.uSunDir = { value: new THREE.Vector3(0.3, 0.8, 0.5) };
   Object.assign(u, {
-    uStrataBand: { value: 26 }, uDipX: { value: 0 }, uDipZ: { value: 0 },
+    uStrataBand: { value: 1 }, uDipX: { value: 0 }, uDipZ: { value: 0 },
+    uBedTex: { value: makeBedTexture(new Float32Array(4), 1) }, uBedCount: { value: 1 }, uBedBase: { value: -1500 }, uWorldSize: { value: 2048 }, uBedLateral: { value: 0.18 },
     uVegSlope: { value: 0.72 }, uSnowLine: { value: 430 }, uSnowSlopeCos: { value: 0.67 },
     uSeaLevel: { value: 0 }, uSeed: { value: 428 },
   });
@@ -595,7 +626,23 @@ export function updateSurfaceUniforms(uniforms, v) {
   }
   for (const [u, prefix] of Object.entries(flakeArrayKeys)) for (let L = 0; L < 3; L++) uniforms[u].value[L] = Number(v[`${prefix}${L + 1}`]);
   for (let L = 0; L < 3; L++) uniforms.uFlakeCol.value[L].setStyle(v[`flakeColor${L + 1}`] || '#808080');
-  uniforms.uStrataBand.value = v.strataBand * (v.strataBandScale || 1);
+  // the shader divides the tilted elevation by uStrataBand before the table lookup, so the
+  // colour-band scale (default 1) stretches the painted beds relative to the carved ones
+  uniforms.uStrataBand.value = v.strataBandScale || 1;
+  uniforms.uWorldSize.value = v.worldSize;
+  uniforms.uBedLateral.value = v.strataLateral == null ? 0.18 : v.strataLateral;
+  const bedKey = `${v.seed}|${v.strataBand}|${v.strataVariation}|${v.strataPackaging}|${v.strataHardShare}`;
+  if (uniforms.uBedTex.key !== bedKey) {
+    const table = makeBedTable(v);
+    const count = Math.min(4096, table.count);
+    const data = new Float32Array(count * 4);
+    for (let i = 0; i < count; i++) { data[i * 4] = table.tops[i]; data[i * 4 + 1] = table.hard[i]; data[i * 4 + 2] = table.tint[i]; data[i * 4 + 3] = table.thick[i]; }
+    if (uniforms.uBedTex.value) uniforms.uBedTex.value.dispose();
+    uniforms.uBedTex.value = makeBedTexture(data, count);
+    uniforms.uBedTex.key = bedKey;
+    uniforms.uBedCount.value = count;
+    uniforms.uBedBase.value = table.base;
+  }
   const dipRad = (v.strataDip * Math.PI) / 180, dirRad = (v.strataDipDirection * Math.PI) / 180;
   uniforms.uDipX.value = Math.tan(dipRad) * Math.cos(dirRad);
   uniforms.uDipZ.value = Math.tan(dipRad) * Math.sin(dirRad);
@@ -604,6 +651,13 @@ export function updateSurfaceUniforms(uniforms, v) {
   uniforms.uSnowSlopeCos.value = Math.cos((v.snowSlope * Math.PI) / 180);
   uniforms.uSeaLevel.value = v.waterEnabled ? v.seaLevel : -1e6;
   uniforms.uSeed.value = v.seed % 1000;
+}
+
+function makeBedTexture(data, count) {
+  const tex = new THREE.DataTexture(data, count, 1, THREE.RGBAFormat, THREE.FloatType);
+  tex.minFilter = THREE.NearestFilter; tex.magFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false; tex.needsUpdate = true;
+  return tex;
 }
 
 export function makeSurfaceMaterial(uniforms, { isRock = false } = {}) {
