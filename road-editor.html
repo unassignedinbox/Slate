@@ -7,7 +7,8 @@
 <meta name="description" content="Frontier engine road editor: spline roads, cross-sections, profiles, junctions, validation and OBJ/JSON export.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
 <style>
 /* ════════════════════════════════════════════════════════════════════
    FRONTIER · ROAD EDITOR — Slate editor UI language
@@ -143,6 +144,20 @@ svg{display:block;flex:0 0 auto}
 .heatlegend span{font:400 9.5px "JetBrains Mono",monospace;color:rgba(255,255,255,.6)}
 .stagetoast{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:rgba(12,12,14,.85);border:1px solid var(--stroke2);border-radius:11px;padding:7px 14px;font-size:11.5px;color:var(--t1);display:none;align-items:center;gap:8px;pointer-events:none;backdrop-filter:blur(6px)}
 .stagetoast.show{display:flex}
+/* split viewport: plan + 3D side by side */
+.stage{display:grid;grid-template-columns:minmax(0,1fr)}
+.stage .cell{position:relative;min-width:0;min-height:0;overflow:hidden}
+#stageGrip{display:none;cursor:col-resize;background:rgba(255,255,255,.05);border-left:1px solid var(--stroke);border-right:1px solid var(--stroke);position:relative;touch-action:none}
+#stageGrip:hover{background:rgba(255,255,255,.11)}
+#stageGrip::after{content:"";position:absolute;left:3px;top:50%;transform:translateY(-50%);width:2px;height:44px;border-radius:2px;background:rgba(255,255,255,.25)}
+#cell3d{display:none;background:#101114}
+.stage.split #stageGrip{display:block}
+.stage.split #cell3d{display:block}
+.stage.mode3d #cellPlan{display:none}
+.stage.mode3d #cell3d{display:block}
+.docknote{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;color:var(--t3);font-size:12px;text-align:center;padding:20px}
+.docknote[hidden]{display:none}
+.docknote p{max-width:260px;line-height:1.6}
 
 /* ── inspector ─────────────────────────────────────────────────────── */
 .ihead{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--wash);min-height:58px;flex:0 0 auto;border-bottom:1px solid var(--stroke)}
@@ -345,17 +360,22 @@ input[type=file]{display:none}
     <section class="panel mid">
       <div class="vptools">
         <div class="navpills" id="overlayPills"></div>
+        <div class="navpills" id="stageModePills"></div>
         <div class="vpsp"></div>
         <div class="dotpill" id="selPill"><span class="d"></span><span id="selPillTxt">Nothing selected</span><span class="n" id="selPillMeta"></span></div>
         <div class="navpills" id="viewPills"></div>
       </div>
       <div class="stage" id="stage">
-        <canvas id="plan"></canvas>
-        <div class="heatlegend" id="heatLegend"><span id="heatMin">0</span><div class="grad" id="heatGrad"></div><span id="heatMax">1</span><span id="heatUnit"></span></div>
-        <div class="vlegend" id="planLegend"></div>
-        <div class="stagetoast" id="stageToast"></div>
-        <div class="coords" id="coords">—</div>
-        <div class="scalebar"><span class="t" id="scaleTxt"></span><div class="bar" id="scaleBar"></div></div>
+        <div class="cell" id="cellPlan">
+          <canvas id="plan"></canvas>
+          <div class="heatlegend" id="heatLegend"><span id="heatMin">0</span><div class="grad" id="heatGrad"></div><span id="heatMax">1</span><span id="heatUnit"></span></div>
+          <div class="vlegend" id="planLegend"></div>
+          <div class="stagetoast" id="stageToast"></div>
+          <div class="coords" id="coords">—</div>
+          <div class="scalebar"><span class="t" id="scaleTxt"></span><div class="bar" id="scaleBar"></div></div>
+        </div>
+        <div class="grip" id="stageGrip" title="Drag to resize views"></div>
+        <div class="cell" id="cell3d"></div>
       </div>
     </section>
 
@@ -382,7 +402,7 @@ input[type=file]{display:none}
         <div class="paneside" id="xsecSide"></div>
       </div>
       <div class="dockpane" id="pane-3d">
-        <div class="panecanvas"><canvas id="view3d"></canvas><div class="coords" id="d3Coords">drag to orbit · wheel to zoom</div></div>
+        <div class="panecanvas" id="d3PaneCanvas"><canvas id="view3d"></canvas><div class="coords" id="d3Coords">drag to orbit · wheel to zoom</div><div class="docknote" id="d3DockNote" hidden><p>3D is docked in the main viewport.</p><button class="btn sm" id="d3BackBtn">Move back here</button></div></div>
         <div class="paneside" id="d3Side"></div>
       </div>
       <div class="dockpane" id="pane-checks"><div class="checklist" id="checkList"></div></div>
@@ -1793,7 +1813,7 @@ function renderChecks(){
 function dockVisible(tab){return S.dockTab===tab&&!S.dockCollapsed;}
 function lightRefresh(){
   if(S.overlay==='normal')$('heatLegend').classList.remove('show');
-  drawPlan();if(dockVisible('profile'))drawProfile();if(dockVisible('section'))drawXsec();if(dockVisible('3d'))draw3D();
+  drawPlan();if(dockVisible('profile'))drawProfile();if(dockVisible('section'))drawXsec();if(d3Visible())draw3D();
   renderSelPill();
 }
 function fullRefresh(){
@@ -1882,7 +1902,7 @@ function syncDock(rerender=true){
   document.querySelectorAll('.dockpane').forEach(p=>p.classList.remove('on'));
   $('pane-'+S.dockTab).classList.add('on');
   if(rerender)renderDockTabs();
-  requestAnimationFrame(()=>{drawProfile();drawXsec();draw3D();});
+  requestAnimationFrame(()=>{if(dockVisible('profile'))drawProfile();if(dockVisible('section'))drawXsec();if(d3Visible())draw3D();});
 }
 function setDock(t){S.dockTab=t;S.dockCollapsed=false;syncDock();}
 
@@ -2010,7 +2030,8 @@ function exportCSV(){
   toast('Centerline CSV exported');
 }
 function exportPNG(which){
-  const pane={profile:'profile','3d':'3d',section:'section'}[which];
+  if(which==='3d'&&!d3Visible()){setDock('3d');setTimeout(()=>exportPNG(which),150);return;}
+  const pane={profile:'profile',section:'section'}[which];
   if(pane&&!dockVisible(pane)){setDock(pane);setTimeout(()=>exportPNG(which),150);return;}
   const c=which==='profile'?$('profile'):which==='3d'?$('view3d'):which==='section'?$('xsec'):$('plan');
   c.toBlob(b=>{if(b){download(b,`road-${which}-${Date.now()}.png`);toast('PNG snapshot saved');}});
@@ -2052,11 +2073,13 @@ function renderExport(){
 function openDlg(html){$('dlg').innerHTML=html;$('scrim').classList.add('open');}
 function closeDlg(){$('scrim').classList.remove('open');}
 $('scrim').addEventListener('pointerdown',e=>{if(e.target===$('scrim'))closeDlg();});
+window.addEventListener('error',e=>{try{if(e&&e.message)toast('Hiccup: '+esc(e.message)+' — work is kept, undo is safe',5200);}catch(_){}});
 function showHelp(){
   openDlg(`<h2>${icon('help','ico18')}Road Editor — guide</h2>
   <div class="sub">Spline roads for the Frontier engine · metres · Y-up · OBJ + JSON export</div>
   <div class="keys">
     <div><span>Select / Draw / Measure / Pan</span><span><span class="kbd">V</span> <span class="kbd">D</span> <span class="kbd">M</span> <span class="kbd">P</span></span></div>
+    <div><span>Cycle viewport Plan / Split / 3D</span><span class="kbd">B</span></div>
     <div><span>New road (then click to trace)</span><span class="kbd">N</span></div>
     <div><span>Finish draw / clear measure</span><span class="kbd">Enter</span></div>
     <div><span>Insert node on road</span><span>double-click</span></div>
@@ -2106,6 +2129,48 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('keyup',e=>{if(e.key===' ')spaceDown=false;});
 window.addEventListener('resize',()=>{drawPlan();drawProfile();drawXsec();draw3D();});
+
+/* ════════════════ stage split viewport (plan + 3D) ════════════════ */
+let stageMode='plan', splitFrac=0.55; // plan | split | 3d
+function d3Visible(){return stageMode!=='plan'||dockVisible('3d');}
+function persistUi(){try{localStorage.setItem('frontier-road-editor:ui',JSON.stringify({stageMode,splitFrac}));}catch(e){}}
+function layoutStage(){
+  const st=$('stage');
+  if(stageMode==='split'){const r=st.getBoundingClientRect();
+    const w=clamp(r.width*splitFrac,140,Math.max(141,r.width-140));
+    st.style.gridTemplateColumns=w+'px 8px minmax(0,1fr)';}
+  else st.style.gridTemplateColumns='';
+}
+function setStageMode(m){
+  stageMode=m;
+  const st=$('stage');
+  st.classList.toggle('split',m==='split');st.classList.toggle('mode3d',m==='3d');
+  const cell=$('cell3d'),pane=$('d3PaneCanvas'),cv=$('view3d'),co=$('d3Coords');
+  if(m==='plan'){pane.insertBefore(cv,pane.firstChild);pane.appendChild(co);$('d3DockNote').hidden=true;}
+  else{cell.appendChild(cv);cell.appendChild(co);$('d3DockNote').hidden=false;}
+  layoutStage();
+  document.querySelectorAll('#stageModePills .npill').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+  drawPlan();draw3D();persistUi();
+}
+(function initStageMode(){
+  $('stageModePills').innerHTML=[['plan','Plan'],['split','Split'],['3d','3D']].map(([id,n])=>`<button class="npill${id==='plan'?' on':''}" data-m="${id}" title="${n} viewport${id==='split'?' — toggle with B':''}">${n}</button>`).join('');
+  $('stageModePills').querySelectorAll('.npill').forEach(b=>b.onclick=()=>setStageMode(b.dataset.m));
+  $('d3BackBtn').onclick=()=>setStageMode('plan');
+  const grip=$('stageGrip');let on=false;
+  grip.addEventListener('pointerdown',e=>{e.preventDefault();try{grip.setPointerCapture(e.pointerId);}catch(_){}on=true;});
+  grip.addEventListener('pointermove',e=>{if(!on)return;const r=$('stage').getBoundingClientRect();
+    if(r.width>10){splitFrac=clamp((e.clientX-r.left)/r.width,0.12,0.88);layoutStage();drawPlan();draw3D();}});
+  grip.addEventListener('pointerup',()=>{on=false;persistUi();});
+  grip.addEventListener('pointercancel',()=>{on=false;});
+  document.addEventListener('keydown',e=>{
+    const tag=(e.target.tagName||'').toLowerCase();if(tag==='input')return;
+    if(e.ctrlKey||e.metaKey||e.key.toLowerCase()!=='b')return;
+    setStageMode(stageMode==='plan'?'split':stageMode==='split'?'3d':'plan');
+  });
+  window.addEventListener('resize',()=>{if(stageMode==='split')layoutStage();});
+  setTimeout(()=>{try{const u=JSON.parse(localStorage.getItem('frontier-road-editor:ui')||'null');
+    if(u&&(u.stageMode==='split'||u.stageMode==='3d')){splitFrac=u.splitFrac||0.55;setStageMode(u.stageMode);}}catch(e){}},80);
+})();
 
 /* ════════════════ boot ════════════════ */
 function boot(){
