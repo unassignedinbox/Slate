@@ -277,6 +277,7 @@ export function createPanels(store, engine, api) {
       sliderRow(b, 'Size start', {min: 0.02, max: 2, step: 0.01, value: K.size0, onLive: (v) => { K.size0 = v; }});
       sliderRow(b, 'Size end', {min: 0.02, max: 2, step: 0.01, value: K.size1, onLive: (v) => { K.size1 = v; }});
       sliderRow(b, 'Streak', {min: 0, max: 6, step: 0.1, value: K.stretch, onLive: (v) => { K.stretch = v; }});
+      sliderRow(b, 'Tumble', {min: 0, max: 6, step: 0.1, value: K.tumble ?? 1.2, onLive: (v) => { K.tumble = v; }});
       sliderRow(b, 'Brightness', {min: 0, max: 3, step: 0.05, value: K.bright, onLive: (v) => { K.bright = v; }});
       colorRow(b, 'Born', K.colA, (v) => { K.colA = v; });
       colorRow(b, 'Mid-life', K.colB, (v) => { K.colB = v; });
@@ -284,6 +285,8 @@ export function createPanels(store, engine, api) {
       sliderRow(b, 'Colour bias', {min: 0.1, max: 0.9, step: 0.05, value: K.colBias, onLive: (v) => { K.colBias = v; }});
       selectRow(b, 'Blending', [['add', 'Additive (glow)'], ['normal', 'Normal']], K.blending,
         (v) => commit('blending', () => { K.blending = v; }));
+      selectRow(b, 'Particle', [['shard', 'Shard (3D gem)'], ['cube', 'Cube (3D voxel)']], K.shape || 'shard',
+        (v) => commit('particle solid', () => { K.shape = v; }));
     });
 
     section(el, 'burst', 'Starburst', 'bomb', (b) => {

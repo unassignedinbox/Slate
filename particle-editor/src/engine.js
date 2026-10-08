@@ -21,11 +21,94 @@ function mulberry32(seed) {
   };
 }
 
+/* ── unit-solid particle geometry (shared across layers) ──────────
+   Shard: non-indexed octahedron, 8 faces × 3 verts, flat facet normals
+   (winding-independent: normals are flipped to face outward). Cube: unit
+   BoxGeometry, 24 verts + index. Both span ±0.5 so shader size math for
+   the old quads carries over unchanged. */
+
+const _o = {
+  px: [0.5, 0, 0], nx: [-0.5, 0, 0], py: [0, 0.5, 0],
+  ny: [0, -0.5, 0], pz: [0, 0, 0.5], nz: [0, 0, -0.5],
+};
+const _faces = [
+  ['py', 'pz', 'px'], ['py', 'px', 'nz'], ['py', 'nz', 'nx'], ['py', 'nx', 'pz'],
+  ['ny', 'px', 'pz'], ['ny', 'pz', 'nx'], ['ny', 'nx', 'nz'], ['ny', 'nz', 'px'],
+];
+
+export function buildShard() {
+  const pos = new Float32Array(8 * 3 * 3);
+  const nrm = new Float32Array(8 * 3 * 3);
+  _faces.forEach((f, fi) => {
+    const a = _o[f[0]], b = _o[f[1]], c = _o[f[2]];
+    const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let n = [
+      ab[1] * ac[2] - ab[2] * ac[1],
+      ab[2] * ac[0] - ab[0] * ac[2],
+      ab[0] * ac[1] - ab[1] * ac[0],
+    ];
+    const nl = Math.hypot(n[0], n[1], n[2]) || 1;
+    n = [n[0] / nl, n[1] / nl, n[2] / nl];
+    const cx = (a[0] + b[0] + c[0]) / 3, cy = (a[1] + b[1] + c[1]) / 3, cz = (a[2] + b[2] + c[2]) / 3;
+    if (n[0] * cx + n[1] * cy + n[2] * cz < 0) n = [-n[0], -n[1], -n[2]];
+    [a, b, c].forEach((v, vi) => {
+      const o = (fi * 3 + vi) * 3;
+      pos[o] = v[0]; pos[o + 1] = v[1]; pos[o + 2] = v[2];
+      nrm[o] = n[0]; nrm[o + 1] = n[1]; nrm[o + 2] = n[2];
+    });
+  });
+  return {
+    index: null,
+    position: new THREE.BufferAttribute(pos, 3),
+    normal: new THREE.BufferAttribute(nrm, 3),
+  };
+}
+
+let _cubeBase = null;
+export function cubeBase() {
+  if (!_cubeBase) {
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    _cubeBase = {index: box.index, position: box.getAttribute('position'), normal: box.getAttribute('normal')};
+  }
+  return _cubeBase;
+}
+
+let _shardBase = null;
+export function shardBase() {
+  if (!_shardBase) _shardBase = buildShard();
+  return _shardBase;
+}
+
+export function solidOf(layer) {
+  return layer?.look?.shape === 'cube' ? 'cube' : 'shard';
+}
+
 export function createEngine(container, store, hooks = {}) {
+  // Capture console errors/warnings (three.js logs shader/program failures
+  // here) so the diagnostics badge can show them on screen.
+  const consoleLog = [];
+  for (const m of ['error', 'warn']) {
+    const orig = console[m].bind(console);
+    console[m] = (...a) => {
+      try {
+        const line = a.map((x) => {
+          if (typeof x === 'string') return x;
+          try { return JSON.stringify(x); } catch { return String(x); }
+        }).join(' ').slice(0, 1500);
+        consoleLog.push(`[${m}] ${line}`);
+        if (consoleLog.length > 14) consoleLog.shift();
+      } catch { /* noop */ }
+      orig(...a);
+    };
+  }
+
   const renderer = new THREE.WebGLRenderer({antialias: true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
+  // Accumulate stats over the whole composer chain (reset manually per frame).
+  renderer.info.autoReset = false;
   container.appendChild(renderer.domElement);
   const canvas = renderer.domElement;
 
@@ -39,7 +122,25 @@ export function createEngine(container, store, hooks = {}) {
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
 
-  const composer = new EffectComposer(renderer);
+  // Composer targets default to half-float; fall back to byte targets on
+  // GPUs without float renderability instead of rendering black.
+  let composer = null, floatTargets = true;
+  try {
+    const floatOK = renderer.extensions.has('EXT_color_buffer_float') ||
+      renderer.extensions.has('EXT_color_buffer_half_float');
+    if (floatOK) {
+      composer = new EffectComposer(renderer);
+    } else {
+      floatTargets = false;
+      const r = container.getBoundingClientRect();
+      const rt = new THREE.WebGLRenderTarget(
+        Math.max(50, Math.round(r.width) || 50), Math.max(50, Math.round(r.height) || 50),
+        {type: THREE.UnsignedByteType});
+      composer = new EffectComposer(renderer, rt);
+    }
+  } catch {
+    composer = new EffectComposer(renderer);
+  }
   composer.addPass(new RenderPass(scene, camera));
   const trailsPass = new AfterimagePass();
   composer.addPass(trailsPass);
@@ -47,8 +148,7 @@ export function createEngine(container, store, hooks = {}) {
   composer.addPass(bloomPass);
   composer.addPass(new OutputPass());
 
-  const basePlane = new THREE.PlaneGeometry(1, 1);
-  const layers = new Map(); // id → {mesh, geo, mat, seeds}
+  const layers = new Map(); // id → {mesh, geo, mat, seeds, shape}
   let time = 0, playing = false, loop = true;
   let afterimageReset = false;
   const wrapHandlers = new Set();
@@ -60,11 +160,12 @@ export function createEngine(container, store, hooks = {}) {
     attr.needsUpdate = true;
   }
 
-  function buildLayerMesh(layer) {
+  function buildLayerMesh(layer, shape) {
+    const base = shape === 'cube' ? cubeBase() : shardBase();
     const geo = new THREE.InstancedBufferGeometry();
-    geo.index = basePlane.index;
-    geo.setAttribute('position', basePlane.getAttribute('position'));
-    geo.setAttribute('uv', basePlane.getAttribute('uv'));
+    if (base.index) geo.setIndex(base.index);
+    geo.setAttribute('position', base.position);
+    geo.setAttribute('normal', base.normal);
     const seeds = new THREE.InstancedBufferAttribute(new Float32Array(MAXN * 4), 4);
     fillSeeds(seeds, layer.seed);
     const idx = new THREE.InstancedBufferAttribute(new Float32Array(MAXN), 1);
@@ -75,19 +176,26 @@ export function createEngine(container, store, hooks = {}) {
     const mat = new THREE.ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG,
       uniforms: makeUniforms(),
-      transparent: true, depthWrite: false, depthTest: false,
-      blending: THREE.AdditiveBlending,
+      transparent: true, depthWrite: false, depthTest: true,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.frustumCulled = false;
     mesh.renderOrder = 10;
-    return {mesh, geo, mat, seeds};
+    return {mesh, geo, mat, seeds, shape, seed: layer.seed};
   }
 
   function syncLayer(layer) {
+    const shape = solidOf(layer);
     let rec = layers.get(layer.id);
+    if (rec && rec.shape !== shape) {
+      scene.remove(rec.mesh);
+      rec.geo.dispose(); rec.mat.dispose();
+      layers.delete(layer.id);
+      rec = null;
+    }
     if (!rec) {
-      rec = buildLayerMesh(layer);
+      rec = buildLayerMesh(layer, shape);
       layers.set(layer.id, rec);
       scene.add(rec.mesh);
     }
@@ -112,10 +220,12 @@ export function createEngine(container, store, hooks = {}) {
     u.uEvo.value = (layer.seed % 1000) / 1000;
     u.uBurstTime.value = B.time; u.uBurstPower.value = B.on ? B.power : 0;
     u.uSize0.value = K.size0; u.uSize1.value = K.size1; u.uStretch.value = K.stretch;
+    u.uTumble.value = K.tumble ?? 1.2;
     u.uColA.value.set(K.colA); u.uColB.value.set(K.colB); u.uColC.value.set(K.colC);
     u.uColBias.value = K.colBias; u.uBright.value = K.bright;
     u.uOpacity.value = K.opacity ?? layer.opacity;
     mat.blending = K.blending === 'normal' ? THREE.NormalBlending : THREE.AdditiveBlending;
+    mat.depthWrite = K.blending === 'normal';
     mesh.visible = layer.visible !== false;
     mesh.renderOrder = 10 + store.layers.indexOf(layer);
   }
@@ -172,6 +282,7 @@ export function createEngine(container, store, hooks = {}) {
       hooks.onTime?.(time);
     }
     for (const rec of layers.values()) rec.mat.uniforms.uTime.value = time;
+    renderer.info.reset();
     if (afterimageReset && trailsPass.enabled) {
       const d = trailsPass.uniforms.damp.value;
       trailsPass.uniforms.damp.value = 0;
@@ -189,6 +300,39 @@ export function createEngine(container, store, hooks = {}) {
   function setPlaying(v) {
     playing = !!v;
     hooks.onPlaying?.(playing);
+  }
+
+  function report() {
+    const gl = renderer.getContext();
+    let glRenderer = '';
+    try {
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      glRenderer = String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    } catch { glRenderer = '(unavailable)'; }
+    const has = (n) => { try { return !!gl.getExtension(n); } catch { return false; } };
+    const info = renderer.info;
+    return {
+      calls: info.render.calls, tris: info.render.triangles, points: info.render.points,
+      programs: info.programs.length, geometries: info.memory.geometries, textures: info.memory.textures,
+      line: `${info.render.calls} calls · ${(info.render.triangles / 1000).toFixed(0)}k tris · ${info.programs.length} progs`,
+      glVersion: String(gl.getParameter(gl.VERSION)),
+      glRenderer,
+      floatTargets,
+      extFloat: has('EXT_color_buffer_float'),
+      extHalf: has('EXT_color_buffer_half_float'),
+      extFloatLinear: has('OES_texture_float_linear'),
+      canvasSize: `${canvas.width}×${canvas.height}`,
+      layers: store.layers.map((l) => {
+        const rec = layers.get(l.id);
+        return {
+          name: l.name, count: l.emitter.count, solid: solidOf(l),
+          instances: rec ? rec.geo.instanceCount : -1,
+          visible: rec ? rec.mesh.visible : false,
+          blend: l.look?.blending || 'add',
+        };
+      }),
+      console: [...consoleLog],
+    };
   }
 
   const api = {
@@ -228,6 +372,7 @@ export function createEngine(container, store, hooks = {}) {
       composer.render();
       return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
     },
+    debug: {report, renderer, scene, camera, composer, layers, consoleLog},
   };
 
   resize();

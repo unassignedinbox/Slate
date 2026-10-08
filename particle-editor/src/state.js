@@ -11,6 +11,7 @@ export function defaultLayer(id, n, over = {}) {
     },
     forces: {gravity: -2, wind: [0, 0], turbAmp: 1.2, turbScale: 0.35, turbSpeed: 0.7},
     look: {
+      shape: 'shard', tumble: 1.2,
       size0: 0.22, size1: 0.1, stretch: 1.5, bright: 1.4,
       colA: '#7ee7ff', colB: '#b78cff', colC: '#f6c66a', colBias: 0.5,
       blending: 'add',

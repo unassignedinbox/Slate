@@ -48,6 +48,8 @@ function sanitizeLayer(raw, i, warnings) {
       turbSpeed: num(F.turbSpeed, 0.7, 0, 6),
     },
     look: {
+      shape: K.shape === 'cube' ? 'cube' : 'shard',
+      tumble: num(K.tumble, 1.2, 0, 8),
       size0: num(K.size0, 0.22, 0.01, 4),
       size1: num(K.size1, 0.1, 0.01, 4),
       stretch: num(K.stretch, 1.5, 0, 8),

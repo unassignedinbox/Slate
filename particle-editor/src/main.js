@@ -246,6 +246,55 @@ window.addEventListener('beforeunload', (e) => {
   if (store.dirty) e.preventDefault();
 });
 
+/* ── diagnostics badge (GPU status always visible in viewport) ── */
+window.__flux = {store, engine};
+{
+  const badge = document.createElement('button');
+  badge.id = 'gl-badge';
+  badge.title = 'GPU status — click for full diagnostics';
+  badge.textContent = 'gpu …';
+  $('viewport').appendChild(badge);
+  const overlay = document.createElement('div');
+  overlay.id = 'diag-overlay';
+  overlay.className = 'hidden';
+  overlay.innerHTML = `<div class="diag-card">
+      <div class="diag-head"><b>Flux diagnostics</b>
+        <span><button id="diag-copy" class="pill-btn">Copy report</button>
+        <button id="diag-close" class="tbtn" title="Close">✕</button></span>
+      </div><pre id="diag-body">…</pre></div>`;
+  document.body.appendChild(overlay);
+  const fmtRep = (r) => [
+    `draw: ${r.line} · points ${r.points} · geometries ${r.geometries} · textures ${r.textures}`,
+    `gl: ${r.glVersion} · ${r.glRenderer}`,
+    `canvas: ${r.canvasSize} · composer targets: ${r.floatTargets ? 'half-float' : 'byte (fallback)'}`,
+    `ext: EXT_color_buffer_float=${r.extFloat} half=${r.extHalf} float_linear=${r.extFloatLinear}`,
+    ...r.layers.map((l) => `layer "${l.name}": solid=${l.solid} count=${l.count} instances=${l.instances} visible=${l.visible} blend=${l.blend}`),
+    '--- console (three.js logs shader failures here) ---',
+    ...(r.console.length ? r.console : ['(no errors or warnings)']),
+  ].join('\n');
+  badge.onclick = () => {
+    try { $('diag-body').textContent = fmtRep(engine.debug.report()); }
+    catch (e) { $('diag-body').textContent = `report failed: ${e?.message || e}`; }
+    overlay.classList.remove('hidden');
+  };
+  $('diag-close').onclick = () => overlay.classList.add('hidden');
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.add('hidden'); });
+  $('diag-copy').onclick = async () => {
+    try { await navigator.clipboard.writeText($('diag-body').textContent); toast('Diagnostics copied'); }
+    catch { toast('Copy failed — select the text manually'); }
+  };
+  setInterval(() => {
+    try {
+      const r = engine.debug.report();
+      badge.textContent = r.line;
+      badge.classList.toggle('bad', r.tris < 100);
+      badge.title = r.tris < 100
+        ? 'GPU drew almost nothing — click for full diagnostics'
+        : 'GPU status — click for full diagnostics';
+    } catch { badge.textContent = 'gpu error'; badge.classList.add('bad'); }
+  }, 1000);
+}
+
 /* ── go ────────────────────────────────────────────────────── */
 try {
   createIcons({icons: {SkipBack, Play, Pause, Repeat, Plus, Download, ChevronDown, CircleHelp, Sparkles, Spline, Focus, Image, Clapperboard, Save, FolderOpen}});

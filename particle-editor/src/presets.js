@@ -61,7 +61,7 @@ export const PRESETS = [
    layers: [
      {name: 'Petals', emitter: {shape: 'sphere', count: 9000, life: 3, speed: 5.5, spread: 1, radius: 0.8},
       forces: {gravity: 0.5, turbAmp: 1.4, turbScale: 0.5, turbSpeed: 0.9},
-      look: {size0: 0.16, size1: 0.05, stretch: 2.2, bright: 1.6, colA: '#eaffd0', colB: '#6ee85c', colC: '#ff8a3c'},
+      look: {size0: 0.16, size1: 0.05, stretch: 2.2, bright: 1.6, colA: '#eaffd0', colB: '#6ee85c', colC: '#ff8a3c', shape: 'cube', tumble: 2.4, blending: 'normal'},
       burst: {on: true, time: 0.3, power: 12}},
    ]},
   {key: 'silver-tide', name: 'Silver Tide', sub: 'Moonlit contour streams', grad: ['#f4f4f5', '#8a9aa8'],

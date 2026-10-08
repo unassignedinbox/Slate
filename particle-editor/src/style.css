@@ -286,3 +286,31 @@ select.combo {
 .help-grid b { color: var(--tx); font-weight: 600; white-space: nowrap; }
 .help-p { font-size: 12px; color: var(--tx-faint); line-height: 1.55; }
 .help-card .pill-btn { margin-top: 6px; }
+
+/* ── diagnostics badge + overlay ───────────────────────────── */
+#gl-badge {
+  position: absolute; left: 10px; bottom: 10px; z-index: 30;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--tx-faint); background: rgba(10, 10, 12, .72);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 3px 11px; cursor: pointer; backdrop-filter: blur(4px);
+}
+#gl-badge:hover { color: var(--tx); border-color: var(--tx-faint); }
+#gl-badge.bad { color: #ffb4b4; border-color: var(--danger); animation: blink 1.2s infinite; }
+#diag-overlay {
+  position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, .6);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+#diag-overlay.hidden { display: none; }
+.diag-card {
+  width: min(720px, 94vw); max-height: 84vh; display: flex; flex-direction: column;
+  background: var(--panel-bg); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: 0 24px 64px rgba(0, 0, 0, .6); overflow: hidden;
+}
+.diag-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.diag-head b { font-size: 13.5px; }
+.diag-head span { display: flex; gap: 8px; align-items: center; }
+#diag-body {
+  margin: 0; padding: 14px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  font: 11.5px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--tx-dim);
+}

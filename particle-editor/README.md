@@ -23,8 +23,13 @@ npm run build    # static dist/ — CSS is inlined so githack-style hosts stay s
   20 000 particles each: count, life, speed, spread, direction, position.
 - **Forces** — gravity, XZ wind, and trig flow-field turbulence
   (amount / scale / speed) with a re-seedable evolution.
-- **Look** — size over life, streak stretch (0 = soft bokeh dots), brightness,
-  3-stop colour-over-life gradient, additive or normal blending.
+- **Look** — true-3D solid particles (faceted **shards** or **voxel cubes**,
+  velocity-aligned with tumble, lit by key + rim + glint shading), size over
+  life, streak stretch, brightness, 3-stop colour-over-life gradient,
+  additive or normal blending.
+- **Diagnostics** — a live GPU badge in the viewport corner (draw calls,
+  triangles, programs); click it for GL info, per-layer status, and the
+  captured console log. `window.__flux` exposes store + engine.
 - **Starbursts** — per-layer radial shockwave + flash at a fixed event time,
   ticked in amber on the timeline.
 - **Timeline** — play / pause / loop, exact scrub (the sim is a pure function

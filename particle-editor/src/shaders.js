@@ -1,9 +1,13 @@
 /* Flux shaders — stateless GPU particles. Position is a pure function of
-   (seed, age, time), so the timeline scrubs exactly like AE. Streaks are
-   velocity-aligned instanced quads; with stretch 0 they render as soft dots. */
+   (seed, age, time), so the timeline scrubs exactly like AE. Particles are
+   TRUE 3D solids: unit shards/cubes instanced per particle, oriented along
+   velocity with tumble, lit by faceted key + rim + glint shading. */
 import * as THREE from 'three';
 
 export const SHAPES = ['point', 'sphere', 'box', 'disc', 'ring', 'line'];
+
+/** Per-layer solid geometry style. */
+export const SOLIDS = ['shard', 'cube'];
 
 export const VERT = /* glsl */`
 attribute vec4 aSeed;
@@ -16,10 +20,10 @@ uniform float uGravity;
 uniform vec2 uWind;
 uniform float uTurbAmp, uTurbScale, uTurbSpeed, uEvo;
 uniform float uBurstTime, uBurstPower;
-uniform float uSize0, uSize1, uStretch;
+uniform float uSize0, uSize1, uStretch, uTumble;
 uniform vec3 uColA, uColB, uColC;
 uniform float uColBias, uBright, uOpacity;
-varying vec2 vUv;
+varying vec3 vLocal;
 varying vec4 vCol;
 
 vec3 hash3(float n) {
@@ -87,7 +91,7 @@ void main() {
 
   vec3 rdir;
   vec3 p = calcPos(age, emitT, dir, off, spd, rdir);
-  // Analytic-ish velocity for streak alignment.
+  // Analytic-ish velocity for solid alignment.
   float e = 0.035;
   vec3 r2;
   vec3 vel = calcPos(min(age + e, uLife), emitT, dir, off, spd, r2)
@@ -105,34 +109,47 @@ void main() {
   float env = smoothstep(0.0, 0.08, t) * (1.0 - smoothstep(0.55, 1.0, t));
   float alpha = env * uOpacity;
 
-  // View-space streak quad.
+  // True-3D solid: unit shard/cube oriented along velocity + tumble.
   float wsize = mix(uSize0, uSize1, t);
   float speedN = clamp(length(vel) / 1.2, 0.0, 3.0);
   float len = wsize * (0.6 + uStretch * (0.4 + speedN));
   float wid = wsize * 0.6;
-  vec4 mvC = modelViewMatrix * vec4(p, 1.0);
-  vec3 mvV = (modelViewMatrix * vec4(vel + vec3(1e-6, 0.0, 0.0), 0.0)).xyz;
-  vec2 sd = normalize(mvV.xy + vec2(1e-6, 0.0));
-  vec2 pp = vec2(-sd.y, sd.x);
-  vec2 corner = position.xy;
-  vec3 voff = vec3(pp * corner.x * wid + sd * corner.y * len, 0.0);
-  if (dead) { voff = vec3(0.0); alpha = 0.0; }
-  mvC.xyz += voff;
-  gl_Position = projectionMatrix * mvC;
-  vUv = uv;
-  vCol = vec4(col, alpha);
+  vec3 fwd = normalize(vel + vec3(1e-6, 2e-6, 0.0));
+  vec3 refUp = abs(fwd.y) > 0.94 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+  vec3 right = normalize(cross(refUp, fwd));
+  vec3 up = cross(fwd, right);
+  float tang = h3v.y * 6.28318 + uTime * uTumble * (h3v.z - 0.5) * 2.0;
+  float ct = cos(tang), st = sin(tang);
+  vec3 tr = right * ct + up * st;
+  vec3 tu = up * ct - right * st;
+  vec3 wp = p + (tr * position.x + tu * position.y) * wid + fwd * position.z * len;
+  vec3 wn = normalize(tr * normal.x + tu * normal.y + fwd * normal.z);
+
+  // Faceted key + rim + glint lighting (world space; meshes sit at origin).
+  vec3 keyDir = normalize(vec3(0.45, 0.8, 0.35));
+  float dif = max(dot(wn, keyDir), 0.0);
+  vec3 V = normalize(cameraPosition - wp);
+  float rim = pow(1.0 - abs(dot(wn, V)), 2.0);
+  float spec = pow(max(dot(reflect(-keyDir, wn), V), 0.0), 24.0);
+  vec3 lit = col * (0.25 + 0.95 * dif) + col * rim * 0.8 + vec3(1.0) * spec * (0.35 + bright * 0.2);
+
+  if (dead) { wp = p; alpha = 0.0; }
+  gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+  vLocal = position;
+  vCol = vec4(lit, alpha);
 }
 `;
 
 export const FRAG = /* glsl */`
-varying vec2 vUv;
+varying vec3 vLocal;
 varying vec4 vCol;
 void main() {
-  vec2 q = vUv * 2.0 - 1.0;
-  float a = exp(-dot(q, q) * 3.5) * vCol.a;
+  float tip = smoothstep(0.15, 0.5, abs(vLocal.z));
+  vec3 rgb = vCol.rgb * (1.0 + tip * 0.5);
+  float a = vCol.a;
   a += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.008;
-  if (a < 0.003) discard;
-  gl_FragColor = vec4(vCol.rgb, a);
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(rgb, a);
 }
 `;
 
@@ -149,6 +166,7 @@ export function makeUniforms() {
     uEvo: {value: Math.random()},
     uBurstTime: {value: 0}, uBurstPower: {value: 0},
     uSize0: {value: 0.22}, uSize1: {value: 0.1}, uStretch: {value: 1.5},
+    uTumble: {value: 1.2},
     uColA: {value: new THREE.Color('#7ee7ff')},
     uColB: {value: new THREE.Color('#b78cff')},
     uColC: {value: new THREE.Color('#f6c66a')},
