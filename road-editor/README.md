@@ -15,7 +15,7 @@ autosave to the browser.
 cd road-editor
 npm install
 npm run dev      # → http://localhost:5174
-npm test         # geometry/validation/codec regression tests
+npm test         # 32 tests: geometry/validation/codec/state + browser smoke (see below)
 npm run build    # static dist/ — serve anywhere, no backend needed
 ```
 
@@ -82,7 +82,11 @@ src/plan.js           2D canvas editor (tools, snapping, welding)
 src/preview3d.js      Three.js preview + drive-through
 src/panels.js         Exhibits controls, lists, inspector, toolbars, menus
 src/main.js           boot + refresh flow + shortcuts + files
-tests/                node --test regression suite (31 tests)
+tests/                node --test regression suite (32 tests)
+
+The browser tier (`tests/smoke.test.js`) boots the real `index.html` in jsdom and drives
+panels + canvas gestures end to end. jsdom is optional: the test self-skips without it.
+Enable with `npm i --no-save jsdom` (kept out of package.json so installs stay lean).
 public/samples/       three authored networks (served + bundled)
 integration/          engine-side loader + wiring guide
 ```

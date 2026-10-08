@@ -30,7 +30,7 @@ const ICONS = {
 const refreshIcons = () => { try { createIcons({icons: ICONS}); } catch (e) { console.error(e); } };
 
 const fmt = (n, d = 1) => (Number.isFinite(n) ? n.toFixed(d) : '—');
-const fmtLen = (m) => (m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m.toFixed(m < 100 ? 1 : 0)} m`);
+const fmtLen = (m) => (!Number.isFinite(m) ? '—' : m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m.toFixed(m < 100 ? 1 : 0)} m`);
 
 function h(tag, cls, parent, html) {
   const el = document.createElement(tag);
@@ -914,8 +914,12 @@ export function createPanels(store, api) {
   function wireChrome() {
     document.querySelectorAll('#view-seg button').forEach((b) =>
       b.onclick = () => store.setView(b.dataset.view));
-    $('btn-undo').onclick = () => { const l = store.undo(); if (l) toast(`Undid ${l}`); };
-    $('btn-redo').onclick = () => { if (store.redo()) toast('Redone'); };
+    const guardDraw = () => {
+      if (api.plan?.drawing) { toast('Finish the draw first — Enter keeps it, Esc cancels'); return true; }
+      return false;
+    };
+    $('btn-undo').onclick = () => { if (guardDraw()) return; const l = store.undo(); if (l) toast(`Undid ${l}`); };
+    $('btn-redo').onclick = () => { if (guardDraw()) return; if (store.redo()) toast('Redone'); };
     $('btn-help').onclick = () => { $('help').hidden = false; };
     $('help-close').onclick = () => { $('help').hidden = true; };
     $('help').addEventListener('mousedown', (e) => { if (e.target === $('help')) $('help').hidden = true; });

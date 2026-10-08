@@ -357,6 +357,12 @@ window.addEventListener('keydown', (e) => {
     else preview.stopDrive();
     return;
   }
+  if (plan.drawing && (((e.ctrlKey || e.metaKey) && ['z', 'y'].includes(e.key.toLowerCase())) ||
+      (!e.ctrlKey && !e.metaKey) && (e.key === 'Delete' || e.key === 'Backspace'))) {
+    e.preventDefault();
+    panels.toast('Finish the draw first — Enter keeps it, Esc cancels');
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
     e.preventDefault();
     if (typing) e.target.blur();
