@@ -191,7 +191,9 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
      30 m), computed on the refined mesh grid so a 6 m road is resolved.
    - **lakes** (mesh stage, instant): flood fill from the clicked point up to a level (adjustable
      per lake), flat silt bed below, water surface; off = dried lake bed.
-   River / lake water is a mesh built from the water‑level map; the sea is the live level plane.
+   Water is painted onto the surface by default (see *Rivers* above); with *Water → Water as
+   meshes* on, river / lake water is a mesh built from the water‑level map and the sea is the
+   live level plane.
 8. **Lighting** — `Sky` with PMREM environment, shadowed directional sun, exponential fog,
    ACES tone mapping, water plane.
 
@@ -211,8 +213,9 @@ spread, spacing, height/width, burial, rounding, prefer‑high‑ground, max gro
 default in Granite tors, Granite domes, Boulder field and Icelandic highlands.
 
 **Rivers** (*Roads, rivers & lakes → Simulated rivers*): simulate drainage on/off, minimum
-catchment, width per √km², max width, depth scale, water fill, braiding, lakes in depressions,
-lake fill, lake area cap, minimum lake area, guide flow for drawn rivers. The drawn‑river card still shapes the
+catchment, width per √km², max width, floodplain, bank gullying (+ steps), depth scale, water
+fill, braiding, lakes in depressions, lake fill, lake area cap, minimum lake area, guide flow for
+drawn rivers. The drawn‑river card still shapes the
 guide channels (width, depth, bank angle, bank height, meander, water erosion).
 
 Every texture layer is fully exposed: each has an **enable** toggle, its own **scale**,
