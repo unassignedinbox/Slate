@@ -95,8 +95,14 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    surface shader colours everything under the water line with the river colour (clear tint over
    the bed in the shallows, full colour where it is deep), flattens the normal and lowers the
    roughness, so the terrain stays dry geometry with the water as a mask — exactly what the
-   mask/satmap exports carry. Turning *Water as meshes* on brings back the sea plane and the
-   river / lake sheets. Lakes are where basins fill (partial fill, area cap — the
+   mask/satmap exports carry. The painted level is a *continuous* per‑vertex field (extrapolated
+   outwards from the wet cells, falling away with distance) rather than the simulation's dry
+   sentinel, so the shoreline is a clean line through the triangles instead of a cell‑by‑cell
+   checkerboard. Turning *Water as meshes* on brings back the sea plane and the river / lake
+   sheets. **Bank gullying** (*Rivers → Bank gullying*): after the channels are cut, runoff off
+   the valley sides converges on the river and erodes small gullies into the soft bank material
+   (fine‑scale rills masked to the banks, never below the water line) — the soil erosion a river
+   valley shows on its flanks. Lakes are where basins fill (partial fill, area cap — the
    biggest/deepest basins first; over the cap a river that ends in a hollow keeps a small pond).
    Lakes are judged on the real surface, only basins large *and* deep enough qualify, the basin
    floor and the rim outside the water line are smoothed (sediment floor, wave‑worked shore) and
@@ -165,7 +171,12 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
      vertical faces; no cell networks or concentric contours;
    - cover: runoff staining from the flow map + face streaks, **pebble gravel** on deposits and
      river beds (two generations of domed stones in a sandy matrix, each with its own tone),
-     vegetation on gentle ground, moss in concavities, slope‑limited snow above the snow line.
+     **soil** — the regolith between the outcrops: gathers on gentle, soft, concave ground and on
+     every deposit while hard convex knolls and ribs stay rock; clods and grit give it its own
+     grain and micro‑relief, it darkens where it is damp (flow lines, the ground just above the
+     water) and in hollows, and fluvial alluvium (floodplains, fans, silted basins) is painted on
+     it as paler silt / sand — vegetation on gentle ground, moss in concavities, slope‑limited
+     snow above the snow line.
    All layers contribute height **and** an analytic gradient, combined triplanarly into one
    perturbed normal — no finite differences, no texture reads.
 8. **Drawn features** (`src/features.js`) — splines and points drawn in the viewport:
@@ -193,7 +204,7 @@ under **Rock material / Mineral flakes / Spalling / Ground cover / Sun & atmosph
 live. Presets: Alpine granite, Sandstone mesa, Canyon, Sea cliffs, Limestone escarpment, Fjord,
 Badlands, Dolomite towers, Desert buttes, Volcanic island, Highland glens, Boulder field, Scree
 slopes, Granite domes, Granite tors, Rocky coast, Talus canyon, Rocky mountains, Sand dunes,
-Icelandic highlands, Icelandic river plains, Karst pinnacles. **Landform → Dunes** adds transverse
+Icelandic highlands, Icelandic river plains, Himalayan peaks, Alpine peaks, Karst pinnacles. **Landform → Dunes** adds transverse
 dune fields (height, spacing, wind direction, asymmetry, coverage) to any preset. **Landform →
 Boulder outcrops** adds embedded core‑stone clusters (density, boulder size, boulders per cluster,
 spread, spacing, height/width, burial, rounding, prefer‑high‑ground, max ground slope) — on by
@@ -213,7 +224,7 @@ Every texture layer is fully exposed: each has an **enable** toggle, its own **s
 | Mineral flakes | three plate layers | global: coverage, rim highlight, sheen, crystal glitter, oxidise‑with‑runoff; per layer: enable, colour, plate size, density, plate height (mm), tint variation, shape, crystals, reveal by hardness |
 | Spalling | flaked‑off sheets | amount, coverage, patch size, sheet thickness (m), small spalls, weathering pits, follow bedding, fresh contrast, rim shadow |
 | Rocks → Gravel stones | instanced small stones | enable, density, largest stone |
-| Ground cover | runoff; pebble gravel; vegetation; moss; snow | wetness, face streaks + scale; gravel amount, stone size/relief/variation/colour; vegetation amount, slope limit, patch scale, patchiness, dry grass + three colours; moss amount/scale/colour; snow line, slope limit, transition, roughness, colour |
+| Ground cover | runoff; pebble gravel; soil; vegetation; moss; snow | wetness, face streaks + scale; gravel amount, stone size/relief/variation/colour; soil cover, slope limit, clods & grit, moisture, alluvium + two colours; vegetation amount, slope limit, patch scale, patchiness, dry grass + three colours; moss amount/scale/colour; snow line, slope limit, transition, roughness, colour |
 
 Picking a rock type fills the colour swatches; they can be edited freely afterwards.
 

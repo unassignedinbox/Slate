@@ -174,6 +174,14 @@ export const defaults = {
   vegetation: 0.6,
   vegScale: 20,             // [m]
   vegSlope: 44,             // [°]
+  soilOn: 1,
+  soilAmount: 0.85,
+  soilSlope: 40,            // [°]
+  soilClods: 0.7,
+  soilMoisture: 0.8,
+  soilAlluvium: 1,
+  soilColor: '#5d4d3c',
+  soilLight: '#917b60',
   vegPatchiness: 0.5,
   dryness: 0.5,
   grassA: '#6f8051', grassB: '#a8a26f', dryColor: '#ac9c7b',
@@ -211,6 +219,8 @@ export const defaults = {
   riverWidthScale: 22,      // [m per √km²]
   riverMaxWidth: 80,        // [m]
   riverFloodplain: 0.5,
+  riverBankErosion: 0.6,
+  riverBankSteps: 5,
   riverDepthScale: 0.7,
   riverWaterFrac: 0.7,
   riverDrySlope: 12,        // [°]
@@ -418,6 +428,28 @@ Object.assign(presets, {
     rockDensity: 0.25, rockSizeMax: 5, pebbleDensity: 0.8, pebbleSize: 0.5, gravelAmount: 1, sdfOn: 1, sdfAngle: 60, sdfUndercut: 4,
     oxideAmount: 0.5, peelStrength: 0.3, flakeStrength: 0.45, sunElevation: 26, sunAzimuth: 190, turbidity: 5, fogDensity: 0.45,
   },
+  'Himalayan peaks': {
+    palette: 'slate', worldSize: 4096, mountainHeight: 2100, baseElevation: 260, baseFrequency: 1.3, ridgeSharpness: 3.4, peakPower: 1.9, warpStrength: 0.55,
+    reliefFrequency: 0.9, reliefContrast: 0.95, strataBand: 42, strataStrength: 0.55, strataDip: 22, strataDipDirection: 150, hardnessContrast: 0.9, plateauStrength: 0, canyonDepth: 0,
+    snowOn: 1, snowLine: 720, snowSlope: 62, snowSoftness: 2.2, vegetation: 0.08, vegSlope: 30, mossiness: 0.05, soilAmount: 0.45, soilColor: '#574d44', soilLight: '#8a8070',
+    waterEnabled: 0, seaLevel: -100, droplets: 260000, erodeSpeed: 0.4, thermalIterations: 50, thermalRate: 0.6, talusSoft: 36, talusHard: 86,
+    fluvialStrength: 0.9, fluvialIterations: 50, fluvialConcavity: 0.45, rillStrength: 0.6,
+    rockDensity: 0.55, rockSlopeMax: 48, rockSizeMin: 1.5, rockSizeMax: 18, gravelAmount: 0.9,
+    sdfOn: 1, sdfAngle: 58, sdfUndercut: 6, sdfJoints: 0.8, overhang: 2,
+    riverCatchment: 0.3, riverWidthScale: 26, riverMaxWidth: 90, riverBraiding: 0.5, riverFloodplain: 0.9, riverDrySlope: 10, riverLakes: 0,
+    peelStrength: 0.4, flakeStrength: 0.5, sunElevation: 28, sunAzimuth: 205, turbidity: 2, fogDensity: 0.25,
+  },
+  'Alpine peaks': {
+    palette: 'granite', worldSize: 3072, mountainHeight: 1500, baseElevation: 160, baseFrequency: 1.5, ridgeSharpness: 3.0, peakPower: 1.7, warpStrength: 0.6,
+    reliefFrequency: 1.0, reliefContrast: 0.9, strataBand: 34, strataStrength: 0.6, strataDip: 12, hardnessContrast: 0.85, plateauStrength: 0, canyonDepth: 0,
+    snowOn: 1, snowLine: 600, snowSlope: 56, snowSoftness: 1.8, vegetation: 0.6, vegSlope: 36, vegPatchiness: 0.6, mossiness: 0.35, soilAmount: 0.8,
+    waterEnabled: 0, seaLevel: -100, droplets: 240000, erodeSpeed: 0.4, thermalIterations: 44, talusSoft: 35, talusHard: 85,
+    fluvialStrength: 0.8, fluvialIterations: 46, rillStrength: 0.55,
+    rockDensity: 0.6, rockSlopeMax: 50, rockSizeMin: 1, rockSizeMax: 14, gravelAmount: 0.85,
+    sdfOn: 1, sdfAngle: 56, sdfUndercut: 7, sdfJoints: 0.7, overhang: 3,
+    riverCatchment: 0.06, riverWidthScale: 24, riverMaxWidth: 80, riverBraiding: 0.4, riverFloodplain: 0.8, riverLakes: 0,
+    peelStrength: 0.5, flakeStrength: 0.7, sunElevation: 34, sunAzimuth: 220, turbidity: 2.5, fogDensity: 0.3,
+  },
   'Karst pinnacles': {
     palette: 'limestone', mountainHeight: 300, baseElevation: 30, baseFrequency: 3.2, ridgeSharpness: 3.0, peakPower: 1.7, warpStrength: 0.4,
     reliefFrequency: 2.4, reliefContrast: 0.9, strataBand: 20, strataStrength: 0.5, hardnessContrast: 0.8, plateauStrength: 0, canyonDepth: 0,
@@ -443,7 +475,7 @@ export const groups = [
     cards: [
       { title: 'Preset', kind: 'presets' },
       { title: 'Elevation', controls: [
-        ['mountainHeight', 'Mountain height', 100, 1200, 10, 'm', 'Peak elevation above the datum'],
+        ['mountainHeight', 'Mountain height', 100, 2500, 10, 'm', 'Peak elevation above the datum'],
         ['baseElevation', 'Base elevation', -200, 400, 5, 'm', 'Elevation of the plains'],
         ['worldSize', 'World size', 1024, 4096, 128, 'm', 'Side length of the generated tile'],
       ] },
@@ -588,6 +620,8 @@ export const groups = [
         ['riverWidthScale', 'Width per √km²', 4, 120, 1, 'm', 'Channel width = this × √catchment'],
         ['riverMaxWidth', 'Max width', 10, 400, 5, 'm', ''],
         ['riverFloodplain', 'Floodplain', 0, 2, 0.05, '', 'Valley floor planed flat beside the river, in channel widths — the river valley of a mature stream. 0 = banks only'],
+        ['riverBankErosion', 'Bank gullying', 0, 2, 0.05, '', 'Soil erosion on the valley sides beside the rivers: runoff cuts small gullies into the soft bank material (never below the water line)'],
+        ['riverBankSteps', 'Gullying steps', 1, 12, 1, '', ''],
         ['riverDepthScale', 'Depth scale', 0.2, 3, 0.05, '', 'Channel depth ≈ scale × width^0.45'],
         ['riverWaterFrac', 'Water fill', 0.2, 0.9, 0.05, '', 'Fraction of the channel depth filled with water'],
         ['riverDrySlope', 'Dry above grade', 2, 45, 1, '°', 'Reaches steeper than this show the carved gully (wet rock, gravel) instead of standing water — mountain torrents do not read as flat water'],
@@ -775,6 +809,16 @@ export const groups = [
         ['gravelRelief', 'Stone relief', 0, 1, 0.05, '', 'Dome normal on each stone'],
         ['gravelVariation', 'Stone variation', 0, 1, 0.05, '', 'Tone and warmth jitter per stone'],
         ['gravelColor', 'Stone colour', 0, 0, 0, 'color', 'Matrix between the stones is a mix of this and the silt colour'],
+      ] },
+      { title: 'Soil', controls: [
+        ['soilOn', 'Enable soil', 0, 1, 1, '', ''],
+        ['soilAmount', 'Soil cover', 0, 1, 0.05, '', 'Regolith over gentle, soft, concave ground; rock stays exposed on hard convex knolls and ribs'],
+        ['soilSlope', 'Slope limit', 15, 70, 1, '°', 'Steeper ground is bare rock'],
+        ['soilClods', 'Clods & grit', 0, 1, 0.05, '', 'Tonal variation and micro-relief of the soil surface'],
+        ['soilMoisture', 'Moisture', 0, 1, 0.05, '', 'Darker, less rough soil along flow lines and just above the water'],
+        ['soilAlluvium', 'Alluvium', 0, 1, 0.05, '', 'Sediment the rivers dropped (floodplains, fans, silted basins) painted as silt / sand on the soil'],
+        ['soilColor', 'Soil', 0, 0, 0, 'color', ''],
+        ['soilLight', 'Soil · pale', 0, 0, 0, 'color', 'Dry clods and grit'],
       ] },
       { title: 'Vegetation', controls: [
         ['vegOn', 'Enable vegetation', 0, 1, 1, '', ''],

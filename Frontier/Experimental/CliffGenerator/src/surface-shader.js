@@ -57,6 +57,8 @@ uniform float uWetness, uStreakScale, uStreakAmount;
 uniform float uGravelAmount, uGravelScale, uGravelRelief, uGravelVariation;
 uniform vec3 uSunDir;
 uniform float uVegetation, uVegScale, uVegSlope, uVegPatchiness, uDryness;
+uniform float uSoilAmount, uSoilSlopeCos, uSoilClods, uSoilMoisture, uSoilAlluvium;
+uniform vec3 uSoilColor, uSoilLight;
 uniform float uMossiness, uMossScale;
 uniform float uSnowLine, uSnowSlopeCos, uSnowSoftness, uSnowRoughness;
 uniform float uBumpScale, uBaseRoughness;
@@ -507,6 +509,31 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
     * smoothstep( 0.5, 0.78, cgNoise3( wp / uMossScale ).x * 0.6 + cgNoise3( wp / uMossScale * 0.15 + 9.0 ).x * 0.4 ) * belowSnow * aboveWater * ( 1.0 - fresh * 0.5 );
   moss = clamp( moss, 0.0, 1.0 );
 
+  // ---- soil: the regolith that covers gentle ground between the rock outcrops -----------------
+  // Rock shows where the ground is steep, hard and convex (knolls, ribs); soil gathers on gentle,
+  // soft and concave ground and on every deposit. Clods and fine grit give it its own grain; it
+  // darkens where it is damp (flow lines, the ground just above the water) and in hollows where
+  // humus collects; fluvial alluvium is paler silt / sand on top of it.
+  float soilSlope = smoothstep( uSoilSlopeCos - 0.14, uSoilSlopeCos + 0.1, n.y );
+  float soilNoise = cgNoise3( wp * 0.035 ).x * 0.55 + cgNoise3( wp * 0.19 + 11.0 ).x * 0.45;
+  float outcrop = smoothstep( 0.5, 0.9, hardness ) * smoothstep( -0.1, 0.5, cavity ) * ( 1.0 - deposit );
+  float soil = uSoilAmount * soilSlope * ( 1.0 - 0.85 * outcrop )
+    * smoothstep( 0.25, 0.6, soilNoise + 0.25 + deposit * 0.4 - cavity * 0.25 + ( 1.0 - hardness ) * 0.2 )
+    * belowSnow * ( 1.0 - uIsRock ) * ( 1.0 - smoothstep( 0.15, 0.6, bedCover ) ) * ( 1.0 - gravelMix * 0.5 );
+  soil = clamp( soil, 0.0, 1.0 );
+  vec4 clodN = cgNoise3( wp * 2.4 );
+  float clods = clodN.x * 0.5 + 0.5;
+  float grit = cgNoise3( wp * 11.0 + 5.0 ).x * 0.5 + 0.5;
+  vec3 soilCol = mix( uSoilColor, uSoilLight, clamp( clods * 0.7 + grit * 0.3, 0.0, 1.0 ) * uSoilClods + 0.15 );
+  soilCol *= 0.92 + 0.16 * grit;
+  float damp = clamp( flow * 1.1 + ( 1.0 - smoothstep( waterLine + 0.2, waterLine + 2.5, wp.y ) ) + streak * 0.3, 0.0, 1.0 ) * uSoilMoisture;
+  soilCol *= 1.0 - 0.4 * damp;
+  soilCol *= 1.0 - 0.18 * max( 0.0, -cavity );
+  // alluvium / silt on top of the soil (sediment the rivers dropped)
+  vec3 siltCol = uSilt * ( 0.92 + 0.16 * clods ) * ( 1.0 - 0.3 * damp );
+  soilCol = mix( soilCol, siltCol, lakeBed * uSoilAlluvium );
+  rock = mix( rock, soilCol, soil );
+
   vec3 color = mix( rock, grass, veg );
   color = mix( color, uMoss * ( 0.8 + 0.4 * speckle ), moss * 0.8 );
 
@@ -539,13 +566,17 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   vec3 facetN = normalize( nW + flakeFacet * 0.35 );
   float glint = pow( max( dot( facetN, H ), 0.0 ), 260.0 );
   vec3 emissive = vec3( glint * crystalMask * uFlakeSparkle * 2.5 ) * ( 1.0 - snow ) * ( 1.0 - veg );
+  roughness = mix( roughness, mix( 0.93, 0.7, damp ), soil * ( 1.0 - veg ) );
   roughness = mix( roughness, 0.95, veg );
   roughness = mix( roughness, uSnowRoughness, snow );
 
   float ao = ( 1.0 - rim * 0.25 * uPeelShadow ) * ( 1.0 - pit * 0.4 ) * ( 1.0 - max( 0.0, -cavity ) * 0.4 * uCavityStrength );
   ao = mix( ao, 1.0, snow * 0.6 );
 
-  vec3 nFinal = normalize( mix( nW, n, max( snow, veg * 0.8 ) ) );
+  // soil hides the rock micro-relief under a softer, cloddy surface
+  vec3 soilN = normalize( n + clodN.yzw * 0.12 * uSoilClods );
+  vec3 nFinal = normalize( mix( nW, soilN, soil * ( 1.0 - veg ) ) );
+  nFinal = normalize( mix( nFinal, n, max( snow, veg * 0.8 ) ) );
   nFinal = normalize( mix( nFinal, vec3( 0.0, 1.0, 0.0 ), paint * 0.9 ) );
   roughness = mix( roughness, 0.22, paint );
 
@@ -564,7 +595,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
     else if ( uDebugView < 3.5 ) dbg = mix( vec3( 0.12 ), flakeCol + vec3( 0.25 ) * clamp( flakeEdge, 0.0, 1.0 ) * uFlakeEdge + vec3( 0.3, 0.3, 0.6 ) * flakeCrystal, flakeCover );
     else if ( uDebugView < 4.5 ) dbg = vec3( 0.15 ) + vec3( 0.0, 0.7, 0.9 ) * fresh + vec3( 0.9, 0.2, 0.1 ) * rim + vec3( 0.0, 0.0, 0.6 ) * pit;
     else if ( uDebugView < 5.5 ) dbg = mix( vec3( 0.1 ), vec3( 0.3 + 0.6 * pebbleTone ), pebbleCover ) * ( 0.3 + 0.7 * gravelHere );
-    else if ( uDebugView < 6.5 ) dbg = vec3( 0.12 ) + vec3( 0.1, 0.7, 0.1 ) * veg + vec3( 0.05, 0.3, 0.15 ) * moss + vec3( 0.9 ) * snow + vec3( 0.5, 0.4, 0.3 ) * gravelMix;
+    else if ( uDebugView < 6.5 ) dbg = vec3( 0.12 ) + vec3( 0.1, 0.7, 0.1 ) * veg + vec3( 0.05, 0.3, 0.15 ) * moss + vec3( 0.9 ) * snow + vec3( 0.5, 0.4, 0.3 ) * gravelMix + vec3( 0.45, 0.3, 0.15 ) * soil * ( 1.0 - veg );
     else if ( uDebugView < 7.5 ) dbg = vec3( rockMask, wet, hardness );
     else dbg = vec3( road, riverBed, lakeBed ) + vec3( 0.0, 0.0, 0.4 ) * under;
     s.albedo = dbg;
@@ -594,7 +625,7 @@ const fragmentBody = /* glsl */`
 }
 `;
 
-const colorKeys = { uRoad: 'roadColor', uSilt: 'siltColor', uRockA: 'rockA', uRockB: 'rockB', uRockC: 'rockC', uFresh: 'fresh', uOxide: 'oxide', uGrassA: 'grassA', uGrassB: 'grassB', uDry: 'dryColor', uMoss: 'mossColor', uSnow: 'snowColor', uGravel: 'gravelColor' };
+const colorKeys = { uSoilColor: 'soilColor', uSoilLight: 'soilLight', uRoad: 'roadColor', uSilt: 'siltColor', uRockA: 'rockA', uRockB: 'rockB', uRockC: 'rockC', uFresh: 'fresh', uOxide: 'oxide', uGrassA: 'grassA', uGrassB: 'grassB', uDry: 'dryColor', uMoss: 'mossColor', uSnow: 'snowColor', uGravel: 'gravelColor' };
 
 // uniform → [value key, enable key (optional), scale]
 const scalarKeys = {
@@ -605,6 +636,7 @@ const scalarKeys = {
   uPeelStrength: ['peelStrength', 'peelOn'], uPeelScale: ['peelScale'], uPeelCoverage: ['peelCoverage'], uPeelThickness: ['peelThickness'], uPeelBedding: ['peelBedding'], uPeelFresh: ['peelFresh'], uPeelPits: ['peelPits'], uPeelShadow: ['peelShadow'], uPeelSecond: ['peelSecond'],
   uWetness: ['wetness', 'runoffOn'], uStreakScale: ['streakScale'], uStreakAmount: ['streakAmount'],
   uGravelAmount: ['gravelAmount', 'gravelOn'], uGravelScale: ['gravelScale'], uGravelRelief: ['gravelRelief'], uGravelVariation: ['gravelVariation'],
+  uSoilAmount: ['soilAmount', 'soilOn'], uSoilClods: ['soilClods'], uSoilMoisture: ['soilMoisture'], uSoilAlluvium: ['soilAlluvium'],
   uVegetation: ['vegetation', 'vegOn'], uVegScale: ['vegScale'], uVegPatchiness: ['vegPatchiness'], uDryness: ['dryness'],
   uMossiness: ['mossiness', 'mossOn'], uMossScale: ['mossScale'],
   uSnowSoftness: ['snowSoftness'], uSnowRoughness: ['snowRoughness'],
@@ -624,7 +656,7 @@ export function makeSurfaceUniforms() {
   Object.assign(u, {
     uStrataBand: { value: 1 }, uDipX: { value: 0 }, uDipZ: { value: 0 },
     uBedTex: { value: makeBedTexture(new Float32Array(4), 1) }, uBedCount: { value: 1 }, uBedBase: { value: -1500 }, uWorldSize: { value: 2048 }, uBedLateral: { value: 0.18 },
-    uVegSlope: { value: 0.72 }, uSnowLine: { value: 430 }, uSnowSlopeCos: { value: 0.67 },
+    uVegSlope: { value: 0.72 }, uSoilSlopeCos: { value: 0.75 }, uSnowLine: { value: 430 }, uSnowSlopeCos: { value: 0.67 },
     uSeaLevel: { value: 0 }, uSeed: { value: 428 },
     uPaintWater: { value: 1 }, uWaterClear: { value: 1.5 }, uWaterDeep: { value: new THREE.Color(0x1d4552) }, uWaterShallow: { value: new THREE.Color(0x4f7f7a) },
   });
@@ -660,6 +692,7 @@ export function updateSurfaceUniforms(uniforms, v) {
   uniforms.uDipX.value = Math.tan(dipRad) * Math.cos(dirRad);
   uniforms.uDipZ.value = Math.tan(dipRad) * Math.sin(dirRad);
   uniforms.uVegSlope.value = Math.cos((v.vegSlope * Math.PI) / 180);
+  uniforms.uSoilSlopeCos.value = Math.cos(((v.soilSlope == null ? 40 : v.soilSlope) * Math.PI) / 180);
   uniforms.uSnowLine.value = v.snowOn ? v.snowLine : 1e6;
   uniforms.uSnowSlopeCos.value = Math.cos((v.snowSlope * Math.PI) / 180);
   uniforms.uSeaLevel.value = v.waterEnabled ? v.seaLevel : -1e6;

@@ -217,6 +217,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   const wl = new Float32Array(total);
   const waterFrac = opts.waterDepth == null ? 0.6 : opts.waterDepth;
   const riverMask = new Float32Array(total);
+  const bankMask = new Float32Array(total); // valley sides beside the channels (for bank gullying)
   const waterLevel = new Float32Array(total).fill(NO_WATER);
   const lakeMask = new Float32Array(total);
   const stats = { riverCells: 0, lakeCells: 0, maxWidth: 0, maxKm2: 0 };
@@ -524,6 +525,11 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     }
     const m = 1 - smoothstep(half, half + w * 0.9, d);
     if (m > riverMask[c]) riverMask[c] = m;
+    {
+      const R = half + w * 1.6 + (maxBank / bankSlope) * 0.8;
+      const b = smoothstep(half * 0.9, half + w * 0.5, d) * (1 - smoothstep(R * 0.5, R, d)) * (0.4 + 0.6 * smoothstep(cell * 2, cell * 6, w));
+      if (b > bankMask[c]) bankMask[c] = b;
+    }
     const sw = srcWet[c];
     if (sw >= 0 && distWet[c] * cell <= width[sw] * 0.5 * (half / (w * 0.5)) + cell) {
       let wh = wl[sw];
@@ -621,5 +627,5 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   let cut = 0;
   for (let c = 0; c < total; c++) cut += original[c] - height[c];
   stats.cutVolume = cut * cell * cell;
-  return { riverMask, waterLevel, lakeMask, flow, acc, filled, down, stats, debug: { bed, wl, width, depth, isRiver, dist, src } };
+  return { riverMask, bankMask, waterLevel, lakeMask, flow, acc, filled, down, stats, debug: { bed, wl, width, depth, isRiver, dist, src } };
 }

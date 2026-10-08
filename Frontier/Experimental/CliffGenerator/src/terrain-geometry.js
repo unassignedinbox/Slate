@@ -125,15 +125,54 @@ export function refineField(field, v) {
   fine.road = roadMask;
   for (let i = 0; i < lakeMask.length; i++) lakeMask[i] = Math.max(lakeMask[i], fine.lakeSim[i]);
   fine.lake = lakeMask;
+  fine.waterPaint = continuousWaterLevel(fine.waterLevel, fine.height, fine.resolution, fine.worldSize / (fine.resolution - 1));
   field._refined = { key, field: fine };
   return fine;
+}
+
+// Water level as a *continuous* per-vertex field for the painted-water shader. The simulation
+// leaves NO_WATER (-1e6) on dry cells; interpolated across a triangle against a real level that
+// makes the water line jump within the triangle and the shore turns into a cell-by-cell
+// checkerboard. The level is extrapolated outwards from the wet cells, falling away with distance,
+// and far from any water it simply sits well below the ground.
+export function continuousWaterLevel(waterLevel, height, N, cell) {
+  const total = N * N;
+  const out = new Float32Array(total);
+  const wet = new Uint8Array(total);
+  for (let c = 0; c < total; c++) { wet[c] = waterLevel[c] > NO_WATER * 0.5 ? 1 : 0; out[c] = wet[c] ? waterLevel[c] : NO_WATER; }
+  const drop = Math.max(0.75, cell * 0.35);
+  let frontier = [];
+  for (let c = 0; c < total; c++) if (wet[c]) frontier.push(c);
+  const dist = new Uint8Array(total);
+  for (let pass = 1; pass <= 10 && frontier.length; pass++) {
+    const next = [];
+    for (const c of frontier) {
+      const ci = c % N, cj = (c - ci) / N;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const ii = ci + di, jj = cj + dj;
+        if (ii < 0 || jj < 0 || ii >= N || jj >= N) continue;
+        const n = jj * N + ii;
+        if (wet[n]) continue;
+        const v = out[c] - drop * (di && dj ? 1.414 : 1);
+        if (v > out[n]) { out[n] = v; if (!dist[n]) { dist[n] = pass; next.push(n); } }
+      }
+    }
+    frontier = next;
+  }
+  for (let c = 0; c < total; c++) {
+    if (wet[c]) continue;
+    if (out[c] <= NO_WATER * 0.5) out[c] = height[c] - 40;
+    else out[c] = Math.min(out[c], height[c] - 0.02 * dist[c]); // never above the ground it was extrapolated onto
+  }
+  return out;
 }
 
 // Fine relief added along the surface normal: rock bumps / knobs on steep faces, gentle hummocks on
 // flat ground. Independent of the heightfield so it survives any resolution.
 export function buildTerrainGeometry(field, v = {}, chunks = null) {
   const { resolution: N, worldSize: size, height, deposit, flow, hardness, cavity } = field;
-  const road = field.road, river = field.river, lake = field.lake, waterLevel = field.waterLevel;
+  const road = field.road, river = field.river, lake = field.lake;
+  const waterLevel = field.waterPaint || field.waterLevel;
   const cell = size / (N - 1);
   const count = N * N;
   const positions = new Float32Array(count * 3);

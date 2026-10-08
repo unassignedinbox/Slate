@@ -9,7 +9,7 @@ import { hydraulicErosion, thermalErosion, blurField } from './erosion.js';
 import { carveRivers, NO_WATER } from './features.js';
 import { simulateRivers } from './hydrology.js';
 import { addOutcrops } from './outcrops.js';
-import { fluvialErosion, fillShallowPits, rillErosion } from './fluvial.js';
+import { fluvialErosion, fillShallowPits, rillErosion, bankErosion } from './fluvial.js';
 
 export function generateTerrain(params, progress = () => {}) {
   const N = params.resolution;
@@ -121,6 +121,13 @@ export function generateTerrain(params, progress = () => {}) {
       riverResult.riverMask[i] = Math.max(riverResult.riverMask[i], hydro.riverMask[i]);
       riverResult.waterLevel[i] = Math.max(riverResult.waterLevel[i], hydro.waterLevel[i]);
       lake[i] = hydro.lakeMask[i];
+    }
+    if (params.riverBankErosion > 0) {
+      progress({ phase: 'Gullying the banks', fraction: 0 });
+      bankErosion(height, hardness, N, params.worldSize, {
+        mask: hydro.bankMask, floor: hydro.waterLevel, strength: params.riverBankErosion, iterations: params.riverBankSteps,
+        seaLevel: params.waterEnabled ? params.seaLevel : -Infinity, seed: params.seed,
+      }, (f) => progress({ phase: 'Gullying the banks', fraction: f }));
     }
   }
 

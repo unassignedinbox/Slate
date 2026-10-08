@@ -242,3 +242,48 @@ export function rillErosion(height, hardness, N, size, opts, progress = () => {}
   }
   return { acc };
 }
+
+// Bank gullying: soil erosion on the valley sides beside the simulated rivers. Runoff off the
+// slopes converges on the channel and cuts small gullies into the soft bank material (rills at a
+// finer scale and a stronger rate than the hillslope rills), masked to the banks and never below
+// the river's water line, so the channel itself is left as the river simulation shaped it.
+export function bankErosion(height, hardness, N, size, opts, progress = () => {}) {
+  const total = N * N;
+  const cell = size / (N - 1);
+  const iterations = Math.max(1, Math.round(opts.iterations || 5));
+  const strength = opts.strength == null ? 0.6 : opts.strength;
+  const sea = opts.seaLevel == null ? -Infinity : opts.seaLevel;
+  const mask = opts.mask, floorLvl = opts.floor;
+  const m = 0.4;
+  const kBase = strength * Math.pow(2e3, -m) * cell * 1.6;
+  const area = cell * cell;
+  const acc = new Float32Array(total);
+  const routing = new Float32Array(total);
+  const wn = new SimplexNoise((opts.seed || 1) * 53 + 7);
+  const wander = new Float32Array(total);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) wander[j * N + i] = 0.5 * wn.fbm(i * cell / 18, j * cell / 18, 2, 2.1, 0.5);
+  for (let it = 0; it < iterations; it++) {
+    for (let i = 0; i < total; i++) routing[i] = height[i] + wander[i] * mask[i];
+    const fd = fillDepressions(routing, N, sea);
+    const order = fd.order, down = flowDirections(fd.filled, N);
+    acc.fill(1);
+    for (let k = total - 1; k >= 0; k--) { const c = order[k], d = down[c]; if (d >= 0) acc[d] += acc[c]; }
+    for (let k = 0; k < total; k++) {
+      const c = order[k];
+      if (mask[c] <= 0.01) continue;
+      const d = down[c];
+      if (d < 0) continue;
+      const h0 = height[c], hr = height[d];
+      if (h0 <= hr + 0.02 || h0 <= sea) continue;
+      const ci = c % N, di = d % N;
+      const diag = (ci !== di) && (((c - ci) / N) !== ((d - di) / N));
+      const dx = diag ? cell * Math.SQRT2 : cell;
+      const soft = 1.3 - 1.0 * hardness[c];
+      const f = kBase * soft * mask[c] * Math.pow(acc[c] * area, m) / dx;
+      let h = (h0 + f * hr) / (1 + f);
+      if (floorLvl && floorLvl[c] > -1e5) h = Math.max(h, Math.min(h0, floorLvl[c] + 0.3));
+      height[c] = h;
+    }
+    progress((it + 1) / iterations);
+  }
+}
