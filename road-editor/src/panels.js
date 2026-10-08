@@ -14,7 +14,7 @@ import {
   Scan, Triangle, Rotate3d, Car, LocateFixed, Pause, Play, Square
 } from 'lucide';
 import {roadById, linkForPoint, effectivePoints, setPointPosition} from './state.js';
-import {kindLabel, sampleAtStation} from './topology.js';
+import {kindLabel, sampleAtStation, planOverpassBridge} from './topology.js';
 import {SURFACES, SURFACE_IDS, CENTER_MARKINGS, baseWidth, roadNetworkToOBJ, countProjectTriangles} from './geometry.js';
 import {allocId, defaultRoad, serializeProject, centerlineCSV, downloadText} from './io.js';
 
@@ -520,9 +520,24 @@ export function createPanels(store, api) {
       for (const o of topo.overpasses) {
         const un = roadById(p, o.upper)?.name || o.upper, ln = roadById(p, o.lower)?.name || o.lower;
         const it = h('div', 'junc-item', c);
-        it.innerHTML = `<span class="dia"></span><span class="meta"><span class="name">Overpass <small>· ${o.gap.toFixed(1)} m</small></span><span class="sub">${un} over ${ln}</span></span>`;
+        it.innerHTML = `<span class="dia"></span><span class="meta"><span class="name">Overpass <small>· ${o.gap.toFixed(1)} m</small></span><span class="sub">${un} over ${ln}</span></span><span class="acts"></span>`;
         it.title = 'Click to zoom';
         it.onclick = () => api.gotoPoint(o.x, o.z);
+        const bb = h('button', 'mini-btn', it.querySelector('.acts'), '<i data-lucide="landmark"></i>');
+        bb.title = 'Build a bridge span over the lower road';
+        bb.onclick = (e) => {
+          e.stopPropagation();
+          const plan = planOverpassBridge(store.project, api.getSampleMap(), api.getTopology(), o.id);
+          if (plan.error) { api.toast(plan.error); return; }
+          store.commit('Bridge overpass', () => {
+            const road = roadById(store.project, plan.roadId);
+            for (const ins of plan.inserts) {
+              road.points.splice(Math.min(ins.index, road.points.length), 0, {...ins.point});
+            }
+            for (const f of plan.flags) if (road.points[f]) road.points[f].bridge = true;
+          });
+          api.toast(`Bridge span planted on ${roadById(store.project, plan.roadId)?.name || 'road'}`);
+        };
       }
       for (const b of topo.bridges) {
         const r = roadById(p, b.roadId);

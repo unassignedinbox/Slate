@@ -83,6 +83,51 @@ function weldPoints(project) {
   return out;
 }
 
+/* ── candidate segment pairs via uniform grid (never skips, no stride misses) ── */
+const GRID_CELL = 4; // metres; resampled segments are ~1 m
+
+/**
+ * [i, k] segment-index pairs whose XZ bboxes overlap, ascending & deterministic.
+ * Self pairs skip node-sharing neighbours (and the wrap pair on closed roads).
+ */
+export function gridPairs(aS, endA, bS, endB, self, closed = false) {
+  const grid = new Map();
+  const cell = (v) => Math.floor(v / GRID_CELL);
+  for (let k = 0; k < endB; k++) {
+    const c = bS[k % bS.length], d = bS[(k + 1) % bS.length];
+    for (let cx = cell(Math.min(c.x, d.x)); cx <= cell(Math.max(c.x, d.x)); cx++) {
+      for (let cz = cell(Math.min(c.z, d.z)); cz <= cell(Math.max(c.z, d.z)); cz++) {
+        const kk = cx + ',' + cz;
+        let arr = grid.get(kk);
+        if (!arr) { arr = []; grid.set(kk, arr); }
+        arr.push(k);
+      }
+    }
+  }
+  const out = [];
+  const seen = new Int32Array(Math.max(1, endB)).fill(-1);
+  for (let i = 0; i < endA; i++) {
+    const p = aS[i % aS.length], q = aS[(i + 1) % aS.length];
+    const cands = [];
+    for (let cx = cell(Math.min(p.x, q.x)); cx <= cell(Math.max(p.x, q.x)); cx++) {
+      for (let cz = cell(Math.min(p.z, q.z)); cz <= cell(Math.max(p.z, q.z)); cz++) {
+        const arr = grid.get(cx + ',' + cz);
+        if (!arr) continue;
+        for (const k of arr) {
+          if (seen[k] === i) continue;
+          seen[k] = i;
+          if (self && k - i <= 1) continue; // dup + forward neighbour
+          if (self && closed && i === 0 && k === endB - 1) continue; // wrap neighbour
+          cands.push(k);
+        }
+      }
+    }
+    cands.sort((m, n) => m - n);
+    for (const k of cands) out.push([i, k]);
+  }
+  return out;
+}
+
 /* ── main build ─────────────────────────────────────────────────────── */
 export function buildTopology(project, samples, opts = {}) {
   const cornerRadius = Math.min(14, Math.max(2, +opts.cornerRadius || +project?.settings?.cornerRadius || 6));
@@ -106,22 +151,14 @@ export function buildTopology(project, samples, opts = {}) {
       const aS = SA.samples, bS = SB.samples;
       const endA = SA.closed ? aS.length : aS.length - 1;
       const endB = SB.closed ? bS.length : bS.length - 1;
-      const stride = Math.max(1, Math.ceil(Math.sqrt((endA * endB) / TOPO.maxPairTests)));
-      let tests = 0;
-      for (let i = 0; i < endA && tests < TOPO.maxPairTests; i += stride) {
+      const stepA = SA.length / endA, stepB = SB.length / endB;
+      for (const [i, k] of gridPairs(aS, endA, bS, endB, self, self && SA.closed)) {
         const p = aS[i % aS.length], q = aS[(i + 1) % aS.length];
-        const iS = i * (SA.length / endA);
-        for (let k = (self ? i + 2 : 0); k < endB && tests < TOPO.maxPairTests; k += stride) {
-          if (self && SA.closed && i === 0 && k >= endB - stride) continue;
-          tests++;
-          const c = bS[k % bS.length], d = bS[(k + 1) % bS.length];
-          // AABB reject before the exact test.
-          if (Math.max(p.x, q.x) < Math.min(c.x, d.x) || Math.min(p.x, q.x) > Math.max(c.x, d.x) ||
-              Math.max(p.z, q.z) < Math.min(c.z, d.z) || Math.min(p.z, q.z) > Math.max(c.z, d.z)) continue;
-          const hit = segmentsTouch(p, q, c, d, 1e-6); // node-exact crossings count
-          if (!hit) continue;
-          const sA = iS + (hit.t || 0) * (SA.length / endA);
-          const sB = k * (SB.length / endB) + (hit.u || 0) * (SB.length / endB);
+        const c = bS[k % bS.length], d = bS[(k + 1) % bS.length];
+        const hit = segmentsTouch(p, q, c, d, 1e-6); // node-exact crossings count
+        if (!hit) continue;
+        const sA = i * stepA + (hit.t || 0) * stepA;
+        const sB = k * stepB + (hit.u || 0) * stepB;
           if (self && Math.abs(sA - sB) < TOPO.selfGap) continue;
           const yA = p.y + (q.y - p.y) * (hit.t || 0);
           const yB = c.y + (d.y - c.y) * (hit.u || 0);
@@ -141,7 +178,6 @@ export function buildTopology(project, samples, opts = {}) {
         }
       }
     }
-  }
 
   /* 2 ─ endpoint-on-curve touches (T / merge terminals). */
   for (const B of roads) {
@@ -471,6 +507,72 @@ export function buildTopology(project, samples, opts = {}) {
 
   return {intersections: active, disabled, overpasses: overs, runs, bridges, cornerRadius,
     cuts: cutsByRoad, activeIds};
+}
+
+/**
+ * Plan a one-click bridge span over an overpass: picks upper-road control
+ * points (flagging existing ones, else planting new on-curve ones) so the
+ * resulting span clears the lower road with abutment room. Pure — returns
+ * operations for the caller to commit: {roadId, inserts, flags} with
+ * inserts ascending by index and flags as post-insert indices. On failure
+ * returns {error}.
+ */
+export function planOverpassBridge(project, samples, topo, overId) {
+  const o = (topo?.overpasses || []).find((g) => g.id === overId);
+  if (!o) return {error: 'Overpass not found — it may have moved.'};
+  const upper = roadById(project, o.upper), lower = roadById(project, o.lower);
+  const sU = samples.get(o.upper);
+  if (!upper || !lower || !sU || sU.count < 2) return {error: 'Upper road unavailable.'};
+  if (upper.closed) return {error: 'Loop bridges are not supported yet.'};
+  const need = halfWidth(lower, 1) + 5; // clear the lower road + abutment room
+  const L = sU.length;
+  const s0 = Math.max(1, o.sUpper - need), s1 = Math.min(L - 1, o.sUpper + need);
+  if (s1 - s0 < 4) return {error: 'No room for a bridge span here.'};
+  for (const c of topo?.cuts?.get(o.upper) || []) {
+    if (c.s0 < s1 - 1 && c.s1 > s0 + 1) return {error: 'Span would swallow a junction — flag points by hand.'};
+  }
+  const eff = effectivePoints(project, upper);
+  const S = sU.samples;
+  const st = eff.map((q) => stationOfPoint(S, q.x, q.z));
+  // Existing consecutive run covering the span?
+  for (let i = 0; i < eff.length; i++) {
+    if (st[i] < s0 - 1 || st[i] > s1 + 1) continue;
+    let j = i;
+    while (j + 1 < eff.length && st[j + 1] >= s0 - 1 && st[j + 1] <= s1 + 1) j++;
+    if (j > i && st[i] <= s0 + 1 && st[j] >= s1 - 1) {
+      const flags = [];
+      for (let k = i; k <= j; k++) flags.push(k);
+      return {roadId: upper.id, inserts: [], flags, s0, s1};
+    }
+    i = j;
+  }
+  // Plant span ends on the curve, reusing near-coincident points (avoids
+  // tight-spacing warnings from near-duplicate control points).
+  const at = (s) => {
+    const row = sampleAtStation(S, s);
+    return {x: row.x, z: row.z, y: row.y, w: row.w || 1, bridge: true};
+  };
+  const ends = [s0, s1].map((s) => {
+    let bi = -1, bd = 2.0;
+    st.forEach((v, i) => { const d = Math.abs(v - s); if (d < bd) { bd = d; bi = i; } });
+    if (bi >= 0) return {reuse: bi};
+    let idx = st.findIndex((v) => v > s);
+    if (idx < 0) idx = st.length;
+    return {insert: idx, point: at(s)};
+  });
+  const rawIns = ends.filter((e) => e.insert !== undefined).sort((a, b) => a.insert - b.insert);
+  const inserts = rawIns.map((e, k) => ({index: e.insert + k, point: e.point}));
+  const finalIdx = (e) => {
+    if (e.insert !== undefined) {
+      const k = rawIns.indexOf(e);
+      return e.insert + k;
+    }
+    return e.reuse + rawIns.filter((r) => r.insert <= e.reuse).length;
+  };
+  const i0 = finalIdx(ends[0]), i1 = finalIdx(ends[1]);
+  const flags = [];
+  for (let k = Math.min(i0, i1); k <= Math.max(i0, i1); k++) flags.push(k);
+  return {roadId: upper.id, inserts, flags, s0, s1};
 }
 
 /** Human label for an intersection kind. */

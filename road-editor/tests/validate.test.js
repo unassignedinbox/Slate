@@ -98,3 +98,13 @@ test('data hygiene: short roads, stacked points, dangling junctions', () => {
   const codes = validateProject(j).map((i) => i.code);
   assert.ok(codes.includes('dangling-junction'));
 });
+
+test('long-road self-crossing is still reported (scan/topology agree)', () => {
+  const p = newProject('t');
+  p.roads = [defaultRoad('r1', 1, {points: [
+    {x: -551.5, z: -551.5, y: 0}, {x: 550.5, z: 550.5, y: 0},
+    {x: -551.5, z: 550.5, y: 0}, {x: 550.5, z: -551.5, y: 0},
+  ]})];
+  const codes = validateProject(p).map((i) => i.code);
+  assert.ok(codes.includes('self-crossing'), `got ${codes.join(',')}`);
+});

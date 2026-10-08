@@ -4,7 +4,7 @@
    grade >8% warn / >12% error, plus crossings and data hygiene.
    ════════════════════════════════════════════════════════════════════ */
 import {sampleRoad, segmentsTouch} from './spline.js';
-import {buildTopology} from './topology.js';
+import {buildTopology, gridPairs} from './topology.js';
 import {effectivePoints} from './state.js';
 
 export const LIMITS = {
@@ -90,20 +90,15 @@ function checkRoad(project, road, issues) {
   // Self-intersection (non-adjacent spans, tolerant of node touches).
   const n = S.length, closed = !!road.closed;
   const spanEnd = closed ? n : n - 1;
-  const stride = Math.max(1, Math.ceil((spanEnd * spanEnd) / 2 / LIMITS.maxPairTests));
-  let selfFound = 0, tests = 0;
-  for (let i = 0; i < spanEnd && selfFound < 2 && tests < LIMITS.maxPairTests; i += stride) {
+  let selfFound = 0;
+  for (const [i, k] of gridPairs(S, spanEnd, S, spanEnd, true, closed)) {
+    if (selfFound >= 2) break;
     const a = S[i % n], b = S[(i + 1) % n];
-    for (let k = i + 2; k < spanEnd && tests < LIMITS.maxPairTests; k += stride) {
-      if (closed && i === 0 && k >= spanEnd - stride) continue;
-      tests++;
-      const hit = segmentsTouch(a, b, S[k % n], S[(k + 1) % n], 1e-6);
-      if (hit) {
-        selfFound++;
-        issues.push(mk('error', 'self-crossing', road.id, name, a.s, hit.x, hit.z, a.y,
-          `<b>${name}</b> crosses itself near (${hit.x.toFixed(1)}, ${hit.z.toFixed(1)}).`));
-        break;
-      }
+    const hit = segmentsTouch(a, b, S[k % n], S[(k + 1) % n], 1e-6);
+    if (hit) {
+      selfFound++;
+      issues.push(mk('error', 'self-crossing', road.id, name, a.s, hit.x, hit.z, a.y,
+        `<b>${name}</b> crosses itself near (${hit.x.toFixed(1)}, ${hit.z.toFixed(1)}).`));
     }
   }
   return smp;

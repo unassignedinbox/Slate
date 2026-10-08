@@ -15,7 +15,7 @@ autosave to the browser.
 cd road-editor
 npm install
 npm run dev      # → http://localhost:5174
-npm test         # 44 tests: topology/network-mesh/validation/codec/state + browser smoke (see below)
+npm test         # 48 tests: topology/network-mesh/validation/codec/state + browser smoke (see below)
 npm run build    # static dist/ — serve anywhere, no backend needed
 ```
 
@@ -46,10 +46,11 @@ diamond interchange with a bridge overpass, ramps, and guardrails.
 - **Junctions** — drag an endpoint onto another endpoint and they weld into a
   shared node; every road on the node follows it. Endpoints also snap onto
   other roads mid-span to form T-junctions.
-- **Validation** — tight curves (<15 m warn / <7 m error), grades (>9% /
+- **Validation** — tight curves (<15 m warn / <7 m error), grades (>8% /
   >12%), self-crossings, pinched intersection angles, low overpass
   clearance, stacked points, dangling junctions. Click an issue to fly to
-  it.
+  it. Overpasses show clearance poles in 3D and a one-click **Build
+  bridge** action in the Intersections panel.
 - **3D preview** — orbit / top / wireframe / auto-rotate, heightfield terrain,
   PNG capture, and a **drive-through camera** (8/16/30 m/s) along any road.
 - **History** — labelled undo/redo, dirty tracking, autosave, unsaved-work
@@ -95,7 +96,7 @@ src/plan.js           2D canvas editor (tools, snapping, welding)
 src/preview3d.js      Three.js preview + drive-through
 src/panels.js         Exhibits controls, lists, inspector, toolbars, menus
 src/main.js           boot + refresh flow + shortcuts + files
-tests/                node --test regression suite (44 tests)
+tests/                node --test regression suite (48 tests)
 
 The browser tier (`tests/smoke.test.js`) boots the real `index.html` in jsdom and drives
 panels + canvas gestures end to end. jsdom is optional: the test self-skips without it.

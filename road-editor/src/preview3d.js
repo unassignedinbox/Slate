@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {buildNetworkMesh} from './geometry.js';
+import {sampleAtStation} from './topology.js';
 
 const SKY = '#16191f';
 
@@ -117,6 +118,27 @@ export function createPreview(container, store, env) {
       m.position.set(j.x, j.y + 1.2, j.z);
       m.castShadow = true;
       juncGroup.add(m);
+    }
+    // Overpass clearance poles (upper deck ↔ lower road at the crossing).
+    for (const o of env.getTopology?.()?.overpasses || []) {
+      const sU = env.getSamples(o.upper), sL = env.getSamples(o.lower);
+      if (!sU || !sL) continue;
+      const a = sampleAtStation(sU.samples, o.sUpper), b = sampleAtStation(sL.samples, o.sLower);
+      if (!a || !b) continue;
+      const col = o.gap < 4.5 ? 0xef4444 : o.gap < 6 ? 0xf59e0b : 0x34d399;
+      const mat = new THREE.MeshBasicMaterial({color: col, transparent: true, opacity: 0.9});
+      const y0 = Math.min(a.y, b.y) + 0.15, y1 = Math.max(a.y, b.y) - 0.15;
+      if (y1 - y0 > 0.4) {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, y1 - y0, 6), mat);
+        pole.position.set(o.x, (y0 + y1) / 2, o.z);
+        juncGroup.add(pole);
+      }
+      for (const yy of [y0, y1]) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.09, 6, 18), mat);
+        ring.position.set(o.x, yy, o.z);
+        ring.rotation.x = Math.PI / 2;
+        juncGroup.add(ring);
+      }
     }
     fitSun();
     invalidate();
