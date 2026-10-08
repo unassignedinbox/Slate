@@ -129,12 +129,13 @@ export function selectChunks(fine, v) {
 export function packChunkJobs(fine, chunks, v) {
   const { resolution: N } = fine;
   const { C, list } = chunks;
-  const names = ['height', 'hardness', 'deposit', 'flow', 'cavity', 'road', 'river', 'lake', 'waterLevel', 'waterPaint', 'sdfWeight', 'outcrop', 'crest', 'foot'];
+  const names = ['height', 'hardness', 'deposit', 'flow', 'cavity', 'road', 'river', 'lake', 'waterLevel', 'waterPaint', 'sdfWeight', 'outcrop', 'crest', 'foot', 'gmax', 'gxs', 'gzs'];
   const jobs = [], transfer = [];
   const cell = fine.worldSize / (N - 1);
   const maxCarve = carveReach(v);
   const leanR = Math.max(2, Math.round(Math.min(80, (v.sdfLeanReach || 24)) / cell));
-  if ((v.sdfLean || 0) > 0 && (!fine.crest || fine._crestR !== leanR)) {
+  const vertical = Math.max(0, v.sdfVertical || 0);
+  if (((v.sdfLean || 0) > 0 || vertical > 0) && (!fine.crest || fine._crestR !== leanR)) {
     // local crest / foot of the face (separable max / min filters + a blur) for the lean
     const r = leanR;
     fine._crestR = r;
@@ -148,25 +149,61 @@ export function packChunkJobs(fine, chunks, v) {
     };
     fine.crest = run(fine.height, Math.max);
     fine.foot = run(fine.height, Math.min);
+    // steepest gradient in the window (→ plan width of the face) and the smoothed uphill direction
+    const H = fine.height, gm = new Float32Array(N * N), gx = new Float32Array(N * N), gz = new Float32Array(N * N);
+    for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
+      const idx = j * N + i;
+      const a = (H[idx + 1] - H[idx - 1]) / (2 * cell), b = (H[idx + N] - H[idx - N]) / (2 * cell);
+      gx[idx] = a; gz[idx] = b; gm[idx] = Math.hypot(a, b);
+    }
+    fine.gmax = run(gm, Math.max);
+    // the direction is weighted by the gradient magnitude so the face dictates it, not the plateau
+    const dirBox = (src) => {
+      const a = new Float32Array(N * N), b = new Float32Array(N * N);
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { let sum = 0; for (let d = -r; d <= r; d++) { const ii = i + d; if (ii >= 0 && ii < N) sum += src[j * N + ii]; } a[j * N + i] = sum; }
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { let sum = 0; for (let d = -r; d <= r; d++) { const jj = j + d; if (jj >= 0 && jj < N) sum += a[jj * N + i]; } b[j * N + i] = sum; }
+      return b;
+    };
+    const wx = new Float32Array(N * N), wz = new Float32Array(N * N), g2 = new Float32Array(N * N);
+    for (let i = 0; i < N * N; i++) { wx[i] = gx[i] * gm[i]; wz[i] = gz[i] * gm[i]; g2[i] = gm[i] * gm[i]; }
+    fine.gxs = dirBox(wx); fine.gzs = dirBox(wz);
+    // steepness-weighted mean gradient of the window: the face's own slope (the plateau and the
+    // foot hardly count, the steepest cell does not dominate) → plan width of the face
+    const sg = dirBox(gm), sg2 = dirBox(g2);
+    // the plan width of the face lies between (crest − foot) / max slope and / mean slope: use the
+    // geometric mean of the two (calibrated on escarpments: vertical = 1 → a vertical wall)
+    const gmx = fine.gmax;
+    for (let i = 0; i < N * N; i++) gmx[i] = sg[i] > 1e-6 ? Math.sqrt(gmx[i] * (sg2[i] / sg[i])) : gmx[i];
   }
+  // slices are padded so the vertical-wall shear can sample the heightfield beyond the chunk
+  const pad = vertical > 0 ? Math.min(24, Math.ceil((Math.min(80, v.sdfLeanReach || 24) * Math.max(1, vertical) * 0.6) / cell) + 1) : 0;
   for (const c of list) {
-    const Sx = c.cw + 1, Sz = c.ch + 1;
+    const Sx = c.cw + 1 + 2 * pad, Sz = c.ch + 1 + 2 * pad;
     const maps = {};
     for (const name of names) {
       const src = fine[name];
       const out = new Float32Array(Sx * Sz);
-      if (src) for (let j = 0; j < Sz; j++) out.set(src.subarray((c.j0 + j) * N + c.i0, (c.j0 + j) * N + c.i0 + Sx), j * Sx);
-      else if (name === 'waterLevel' || name === 'waterPaint') out.fill(NO_WATER);
+      if (src) {
+        for (let j = 0; j < Sz; j++) {
+          const jj = Math.min(N - 1, Math.max(0, c.j0 + j - pad));
+          for (let i = 0; i < Sx; i++) { const ii = Math.min(N - 1, Math.max(0, c.i0 + i - pad)); out[j * Sx + i] = src[jj * N + ii]; }
+        }
+      } else if (name === 'waterLevel' || name === 'waterPaint') out.fill(NO_WATER);
       maps[name] = out; transfer.push(out.buffer);
     }
-    jobs.push({ ci: c.ci, cj: c.cj, i0: c.i0, j0: c.j0, cw: c.cw, ch: c.ch, hmin: c.hmin, hmax: c.hmax, slopeF: c.slopeF, maps });
+    jobs.push({ ci: c.ci, cj: c.cj, i0: c.i0, j0: c.j0, cw: c.cw, ch: c.ch, pad, hmin: c.hmin, hmax: c.hmax, slopeF: c.slopeF, maps });
   }
   // voxel resolution: explicit, or the finest that fits the voxel budget (only the band around the
   // surface is polygonised, so the estimate is footprint × band thickness)
   let k = Math.max(1, Math.min(3, Math.round(v.sdfVoxel || 0)));
   if (!(v.sdfVoxel >= 1)) {
     let est = 0;
-    for (const c of list) est += c.cw * c.ch * ((maxCarve * Math.min(3, c.slopeF) * 2) / cell + 6);
+    for (const c of list) {
+      let band = (maxCarve * Math.min(3, c.slopeF) * 2) / cell + 6;
+      // a sheared (vertical) wall is polygonised over the whole foot…crest band of each column
+      if (vertical > 0) band = Math.max(band, 0.6 * ((c.hmax - c.hmin) / cell) + 6);
+      est += c.cw * c.ch * band;
+    }
     const budget = Math.max(1e6, (v.sdfVoxelBudget || 24) * 1e6);
     k = est * 27 <= budget ? 3 : est * 8 <= budget ? 2 : 1;
   }
@@ -236,7 +273,8 @@ export function makeChunkContext(v) {
 
 export function buildChunkGeometry(job, meta, v, ctx) {
   const { N, size } = meta;
-  const Sx = job.cw + 1, Sz = job.ch + 1;
+  const pad = job.pad || 0;
+  const Sx = job.cw + 1 + 2 * pad, Sz = job.ch + 1 + 2 * pad;
   const cell = size / (N - 1);
   const k = v.sdfVoxel >= 1 ? Math.max(1, Math.min(3, Math.round(v.sdfVoxel))) : (meta.k || 1);
   const vox = cell / k;
@@ -244,14 +282,16 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const x0 = (job.i0 / (N - 1) - 0.5) * size, z0 = (job.j0 / (N - 1) - 0.5) * size;
   const m = job.maps;
 
-  // local bilinear sampler on the slice (u, w in cells)
+  // local bilinear sampler on the (padded) slice (u, w in cells from the chunk origin)
   const bil = (arr, u, w) => {
+    u += pad; w += pad;
     const i = Math.min(Sx - 2, Math.max(0, Math.floor(u))), j = Math.min(Sz - 2, Math.max(0, Math.floor(w)));
     const fu = Math.min(1, Math.max(0, u - i)), fw = Math.min(1, Math.max(0, w - j));
     const a = arr[j * Sx + i], b = arr[j * Sx + i + 1], c = arr[(j + 1) * Sx + i], d = arr[(j + 1) * Sx + i + 1];
     return (a + (b - a) * fu) * (1 - fw) + (c + (d - c) * fu) * fw;
   };
   const grad = (u, w) => {
+    u += pad; w += pad;
     const i = Math.min(Sx - 2, Math.max(0, Math.floor(u))), j = Math.min(Sz - 2, Math.max(0, Math.floor(w)));
     const fu = Math.min(1, Math.max(0, u - i)), fw = Math.min(1, Math.max(0, w - j));
     const h = m.height;
@@ -282,6 +322,13 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   // vertical to overhanging — instead of the back-leaning slope a heightfield gives
   const leanAmp = Math.max(0, v.sdfLean || 0);
   const hasLean = leanAmp > 0 && !!m.crest && !!m.foot;
+  // vertical wall: the face is sheared so its crest moves out and its foot moves in — at 1 the
+  // contours of the face collapse onto one line (a vertical wall), above 1 the wall overhangs
+  // (\ /). A point at height y takes the heightfield from a plan position shifted uphill by
+  // (t − ½)·W·vertical, t = (y − foot)/(crest − foot), W = plan width of the face in the heightfield
+  const vertical = Math.max(0, v.sdfVertical || 0);
+  const hasVertical = vertical > 0 && !!m.crest && !!m.foot && !!m.gmax && pad > 0;
+  const vertMaxW = Math.min(80, v.sdfLeanReach || 24) * 1.2;
   const bump = roughAmp + detail.amp + pushAmp;
   const maxCarve = carveReach(v);
   // everything that depends on the plan position only
@@ -293,8 +340,19 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     const slopeF = Math.sqrt(1 + gx * gx + gz * gz);
     const steep = smoothstep(0.7, 1.7, Math.hypot(gx, gz));
     const oc = hasOutcrop ? bil(m.outcrop, u, wq) : 0;
-    const crest = hasLean ? bil(m.crest, u, wq) : 0, foot = hasLean ? bil(m.foot, u, wq) : 0;
-    return { x, z, h, w, slopeF, steep, oc, crest, foot, strata: w > 1e-6 && steep > 0 ? ctx.strata.column(x, z) : null };
+    const needCF = hasLean || hasVertical;
+    const crest = needCF ? bil(m.crest, u, wq) : 0, foot = needCF ? bil(m.foot, u, wq) : 0;
+    let vW = 0, vdx = 0, vdz = 0;
+    if (hasVertical && w > 1e-6) {
+      const gm = bil(m.gmax, u, wq);
+      const dxs = bil(m.gxs, u, wq), dzs = bil(m.gzs, u, wq);
+      const dl = Math.hypot(dxs, dzs);
+      if (gm > 0.5 && dl > 1e-6 && crest - foot > 2) {
+        vW = Math.min(vertMaxW, (crest - foot) / gm) * vertical * w;
+        vdx = dxs / dl; vdz = dzs / dl; // unit uphill direction
+      }
+    }
+    return { x, z, h, w, slopeF, steep, oc, crest, foot, vW, vdx, vdz, strata: w > 1e-6 && (steep > 0 || vW > 0) ? ctx.strata.column(x, z) : null };
   }
   function carve(col, y) {
     const { x, z } = col;
@@ -337,18 +395,37 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     return d * col.steep * col.w;
   }
   function fCol(col, y) {
-    const plain = y - col.h;
-    if (col.w <= 1e-6 || col.steep <= 0) return plain;
+    let h = col.h, slopeF = col.slopeF, steep = col.steep;
+    if (col.vW > 0) {
+      const t = Math.min(1, Math.max(0, (y - col.foot) / Math.max(1, col.crest - col.foot)));
+      // eased so the plateau behind the crest and the ground before the foot are not dragged
+      const e = t * t * (3 - 2 * t);
+      const shift = (e - 0.5) * col.vW;
+      const u = (col.x + col.vdx * shift - x0) / cell, wq = (col.z + col.vdz * shift - z0) / cell;
+      h = bil(m.height, u, wq);
+      const [gx, gz] = grad(u, wq);
+      const g = Math.hypot(gx, gz);
+      slopeF = Math.sqrt(1 + g * g);
+      steep = Math.max(steep, smoothstep(0.7, 1.7, g));
+    }
+    const plain = y - h;
+    if (col.w <= 1e-6 || steep <= 0) return plain;
     // outside the band where carving can flip the sign the field is just the plain distance
-    if (plain < -maxCarve * col.slopeF - 2 * vox || plain > bump + 2 * vox) return plain;
-    const dist = plain / col.slopeF;
+    if (plain < -maxCarve * slopeF - 2 * vox || plain > bump + 2 * vox) return plain;
+    const dist = plain / slopeF;
     return plain + (dist + carve(col, y) - plain) * col.w;
   }
 
   // vertical range: carving d along the normal moves the surface up to d·|∇| vertically
   const reach = maxCarve * Math.min(3, job.slopeF || 3);
-  const yLo = Math.floor((job.hmin - reach - 2 * vox) / vox) * vox;
-  const yHi = Math.ceil((job.hmax + bump + 2 * vox) / vox) * vox;
+  let yLo = Math.floor((job.hmin - reach - 2 * vox) / vox) * vox;
+  let yHi = Math.ceil((job.hmax + bump + 2 * vox) / vox) * vox;
+  if (hasVertical) {
+    // the sheared wall spans foot…crest in every column of the face
+    let fmin = Infinity, cmax = -Infinity;
+    for (let j = pad; j < Sz - pad; j++) for (let i = pad; i < Sx - pad; i++) { const q = j * Sx + i; if (m.sdfWeight[q] > 1e-6) { if (m.foot[q] < fmin) fmin = m.foot[q]; if (m.crest[q] > cmax) cmax = m.crest[q]; } }
+    if (fmin < Infinity) { yLo = Math.min(yLo, Math.floor((fmin - 2 * vox) / vox) * vox); yHi = Math.max(yHi, Math.ceil((cmax + bump + 2 * vox) / vox) * vox); }
+  }
   const ny = Math.max(1, Math.round((yHi - yLo) / vox));
   const sx = nx + 1, sy = ny + 1, sz = nz + 1;
   // only the band around the surface is sampled / polygonised; nodes outside it are the plain
@@ -359,8 +436,12 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     const z = z0 + jz * vox;
     for (let jx = 0; jx < sx; jx++) {
       const col = column(x0 + jx * vox, z);
-      const lo = Math.max(0, Math.floor((col.h - maxCarve * col.slopeF - 2 * vox - yLo) / vox) - 1);
-      const hi = Math.min(ny, Math.ceil((col.h + bump + 2 * vox - yLo) / vox) + 1);
+      let lo = Math.max(0, Math.floor((col.h - maxCarve * col.slopeF - 2 * vox - yLo) / vox) - 1);
+      let hi = Math.min(ny, Math.ceil((col.h + bump + 2 * vox - yLo) / vox) + 1);
+      if (col.vW > 0) {
+        lo = Math.min(lo, Math.max(0, Math.floor((col.foot - 2 * vox - yLo) / vox) - 1));
+        hi = Math.max(hi, Math.min(ny, Math.ceil((col.crest + bump + 2 * vox - yLo) / vox) + 1));
+      }
       bandLo[jz * sx + jx] = lo; bandHi[jz * sx + jx] = hi;
       const base = jz * sy * sx + jx;
       for (let jy = 0; jy < lo; jy++) vals[base + jy * sx] = yLo + jy * vox - col.h;
@@ -458,7 +539,7 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     aux2[n * 4] = bil(m.road, cu, cw);
     aux2[n * 4 + 1] = bil(m.river, cu, cw);
     aux2[n * 4 + 2] = bil(m.lake, cu, cw);
-    aux2[n * 4 + 3] = m.waterPaint ? bil(m.waterPaint, cu, cw) : m.waterLevel[Math.min(Sz - 1, Math.max(0, Math.round(cw))) * Sx + Math.min(Sx - 1, Math.max(0, Math.round(cu)))];
+    aux2[n * 4 + 3] = m.waterPaint ? bil(m.waterPaint, cu, cw) : m.waterLevel[Math.min(Sz - 1, Math.max(0, Math.round(cw) + pad)) * Sx + Math.min(Sx - 1, Math.max(0, Math.round(cu) + pad))];
   }
   const index = count > 65535 ? new Uint32Array(indices) : new Uint16Array(indices);
   return { positions: pos, normals, aux, aux2, index, voxels: nx * ny * nz, triangles: indices.length / 3 };

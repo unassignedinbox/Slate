@@ -52,10 +52,16 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    Mesa & canyon → Escarpment*): a near‑vertical cliff line along the edge of the massif — the
    high side is lifted onto a bench within a cell or two along a smoothed version of the
    continental mask (long headlands and bays), with optional *Stacks* — pillars of the former cliff left standing just off the line — then pushed and pulled in plan by the rugged stage;
-   this is the base of the *Coastal cliffs* and *Quarry walls* presets. In the 3‑D chunks *Lean*
-   cuts such a face back progressively from its crest to its foot (local crest / foot maps), so
-   the profile is | / — vertical to overhanging — instead of the back‑leaning slope a heightfield
-   can give. **Jointing** (*Rock material → Jointing*, shader): two vertical joint sets (families
+   this is the base of the *Coastal cliffs* and *Quarry walls* presets. In the 3‑D chunks
+   (*Cliff depth → True‑3D cliffs*) **Vertical wall** shears such a face in the SDF: the height
+   sample of every point is taken at a plan position shifted along the local uphill direction by
+   (t − ½)·W·vertical, t = position between the local foot and crest, W = plan width of the
+   face in the heightfield (crest − foot over the face slope) — so the crest moves out, the foot
+   moves in, and at 1 a back‑leaning / slope becomes a | wall, above 1 it overhangs ( \ / ). The
+   strata are still looked up at the true position, so the beds stay horizontal across the sheared
+   wall, and the shear fades to nothing where the chunk weight fades, so the seam to the heightfield
+   is untouched. The band is wider (the whole foot…crest column is polygonised) so it costs more
+   voxels. *Lean* additionally cuts the face back progressively from crest to foot (undercut). **Jointing** (*Rock material → Jointing*, shader): two vertical joint sets (families
    of warped planes spaced like the bed thickness, staggered bed to bed like brickwork) and the
    bedding planes break the face into blocks — each joint with its own width, some missing, each
    block with its own slight tilt and tone, grooves with normal and occlusion — the cracked, blocky
@@ -228,10 +234,10 @@ Outliner rows map to inspector groups: **Landform / Strata / Erosion** rebuild t
 (press *Generate* or Ctrl+Enter; the worker reports progress), **Rocks** re‑scatter automatically,
 **Cliff depth** (true‑3D cliffs, displacement, mesh detail) rebuilds the mesh live, and everything
 under **Rock material / Mineral flakes / Spalling / Ground cover / Sun & atmosphere / Viewport** is
-live. Presets: Alpine granite, Sandstone mesa, Canyon, Sea cliffs, Limestone escarpment, Fjord,
+live. Presets: Alpine granite, Sandstone mesa, Canyon, Sea cliffs, Coastal cliffs, Quarry walls, Limestone escarpment, Fjord,
 Badlands, Dolomite towers, Desert buttes, Volcanic island, Highland glens, Boulder field, Scree
 slopes, Granite domes, Granite tors, Rocky coast, Talus canyon, Rocky mountains, Sand dunes,
-Icelandic highlands, Icelandic river plains, Coastal cliffs, Quarry walls, Himalayan peaks, Alpine peaks, Karst pinnacles. **Landform → Dunes** adds transverse
+Icelandic highlands, Icelandic river plains, Himalayan peaks, Alpine peaks, Karst pinnacles. **Landform → Dunes** adds transverse
 dune fields (height, spacing, wind direction, asymmetry, coverage) to any preset. **Landform →
 Boulder outcrops** adds embedded core‑stone clusters (density, boulder size, boulders per cluster,
 spread, spacing, height/width, burial, rounding, prefer‑high‑ground, max ground slope) — on by
