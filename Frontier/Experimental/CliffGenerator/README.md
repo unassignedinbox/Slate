@@ -61,7 +61,21 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    strata are still looked up at the true position, so the beds stay horizontal across the sheared
    wall, and the shear fades to nothing where the chunk weight fades, so the seam to the heightfield
    is untouched. The band is wider (the whole foot…crest column is polygonised) so it costs more
-   voxels. *Lean* additionally cuts the face back progressively from crest to foot (undercut). **Jointing** (*Rock material → Jointing*, shader): two vertical joint sets (families
+   voxels. *Lean* additionally cuts the face back progressively from crest to foot (undercut).
+   **Rock blocks** (*Cliff depth → True‑3D cliffs → Rock blocks / Rock block size / Missing
+   blocks*) turn the face into a wall of discrete rock blocks in the SDF itself: the bed rows of
+   the strata model × two vertical joint families (world‑aligned planes, resized and staggered
+   bed to bed like brickwork). Every block stands proud of or sits back from the face by its own
+   amount, with its own slight tilt and its own rounding of the rim, every block boundary is a
+   crack groove and a share of the blocks have fallen out, leaving deep recesses; soft beds
+   weather smooth, hard beds break into blocks; a joint family parallel to the face is blended
+   away (it would only show as spurious lines). This is geometry — rocks and cracks you can look
+   along, not a shading trick — so blocks have to be at least ~3 voxels wide: the cliff presets use
+   a 1 km world (1 m voxels at 512²); raise *Voxel budget* or lower the world size for finer
+   blocks. **Cliff protection** (*Erosion → Fluvial incision → Cliff protection*): faces steeper
+   than the protection angle keep their pre‑erosion shape through every erosion stage, so the
+   plateau above a sea cliff or quarry wall can be eroded into a real landscape — valleys, rills,
+   streams that simply hang at the crest — while the wall stays a wall. **Jointing** (*Rock material → Jointing*, shader): two vertical joint sets (families
    of warped planes spaced like the bed thickness, staggered bed to bed like brickwork) and the
    bedding planes break the face into blocks — each joint with its own width, some missing, each
    block with its own slight tilt and tone, grooves with normal and occlusion — the cracked, blocky

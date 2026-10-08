@@ -11,6 +11,7 @@ import { carveRivers, NO_WATER } from './features.js';
 import { simulateRivers } from './hydrology.js';
 import { addOutcrops } from './outcrops.js';
 import { fluvialErosion, fillShallowPits, rillErosion, bankErosion } from './fluvial.js';
+import { smoothstep } from './noise.js';
 
 export function generateTerrain(params, progress = () => {}) {
   const N = params.resolution;
@@ -44,6 +45,36 @@ export function generateTerrain(params, progress = () => {}) {
   thermalErosion(height, hardness, { ...erosionParams, thermalIterations: Math.ceil(params.thermalIterations * 0.3) },
     (f) => progress({ phase: 'Thermal settling', fraction: f }));
 
+  // Cliff protection: the steep rock faces keep their shape through the erosion stages (the
+  // massive beds of a sea cliff or quarry wall erode far slower than the soil-covered ground),
+  // so the plateau above can be eroded into a real landscape — valleys, rills, streams — that
+  // simply hangs at the crest, while the wall stays a wall. The pre-erosion surface is kept and
+  // blended back in on a feathered mask of the steep cells.
+  const protect = Math.min(1, Math.max(0, params.cliffProtect || 0));
+  let protectMask = null, preErosion = null;
+  if (protect > 0) {
+    preErosion = height.slice();
+    const sl = computeSlopeMap(height, N, cell);
+    const steepMask = new Float32Array(N * N);
+    const g0 = Math.tan((params.cliffProtectAngle == null ? 38 : params.cliffProtectAngle) * Math.PI / 180);
+    for (let i = 0; i < N * N; i++) steepMask[i] = smoothstep(g0, g0 * 1.6, sl[i]);
+    // grow by a cell so the lip and the foot are covered too, then feather
+    const grown = new Float32Array(N * N);
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      let mx = 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const ii = Math.min(N - 1, Math.max(0, i + di)), jj = Math.min(N - 1, Math.max(0, j + dj));
+        const q = steepMask[jj * N + ii]; if (q > mx) mx = q;
+      }
+      grown[j * N + i] = mx;
+    }
+    protectMask = blurField(grown, N, 2);
+  }
+  const restoreCliffs = () => {
+    if (!protectMask) return;
+    for (let i = 0; i < N * N; i++) { const a = protectMask[i] * protect; if (a > 0) height[i] += (preErosion[i] - height[i]) * a; }
+  };
+
   // Fluvial incision: stream-power erosion re-shapes the relief into a drainage network of
   // branching valleys before the fine droplet erosion and the river simulation run on it.
   let fluvial = null;
@@ -71,6 +102,7 @@ export function generateTerrain(params, progress = () => {}) {
     erosionParams.sourceWater = 1.5 + 4 * params.riverErosion;
   }
 
+  restoreCliffs();
   progress({ phase: 'Hydraulic erosion', fraction: 0 });
   const { flow, delta } = hydraulicErosion(height, hardness, erosionParams,
     (f) => progress({ phase: 'Hydraulic erosion', fraction: f }));
@@ -78,6 +110,7 @@ export function generateTerrain(params, progress = () => {}) {
   progress({ phase: 'Scree slumping', fraction: 0 });
   const slumped = thermalErosion(height, hardness, erosionParams,
     (f) => progress({ phase: 'Scree slumping', fraction: f }));
+  restoreCliffs();
 
   // Erosion smears the lateral structure, so part of the push–pull is applied again on the eroded
   // faces (a second, finer pass) — the hardness and outcrop maps ride along with the faces.
@@ -100,9 +133,12 @@ export function generateTerrain(params, progress = () => {}) {
   let rills = null;
   if (params.rillStrength > 0) {
     progress({ phase: 'Cutting rills', fraction: 0 });
+    const preRill = protectMask ? height.slice() : null;
     rills = rillErosion(height, hardness, N, params.worldSize, {
       strength: params.rillStrength, iterations: params.rillSteps, seaLevel: params.waterEnabled ? params.seaLevel : -Infinity, seed: params.seed,
     }, (f) => progress({ phase: 'Cutting rills', fraction: f }));
+    // protected faces keep the (re-cut) wall; the rills stay on the ground above and below
+    if (preRill) for (let i = 0; i < N * N; i++) { const a = protectMask[i] * protect; if (a > 0) height[i] += (preRill[i] - height[i]) * a; }
   }
 
   // droplet fans dam the valley floors into chains of shallow pits — silt them up so the drainage
