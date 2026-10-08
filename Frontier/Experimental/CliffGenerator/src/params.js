@@ -98,6 +98,9 @@ export const defaults = {
   meshSubdivision: 2,
   detailRelief: 0.5,        // [m]
   detailScale: 7,           // [m]
+  rockyAmount: 0.6,         // [m]
+  rockyScale: 3.5,          // [m]
+  rockyAngular: 0.7,
   detailCliffBias: 0.8,
   // Rock material
   palette: 'granite',
@@ -363,7 +366,7 @@ Object.assign(presets, {
     droplets: 6000, erodeSpeed: 0.1, thermalIterations: 30, thermalRate: 0.6, talusSoft: 33, talusHard: 36,
     snowOn: 0, vegOn: 0, vegetation: 0, mossOn: 0, mossiness: 0, oxideAmount: 0.15, waterEnabled: 0, seaLevel: -100,
     rocksEnabled: 0, pebblesOn: 0, gravelAmount: 0, peelOn: 0, flakeStrength: 0.25, flakeSize3: 0.08, flakeCrystal3: 0.5, flakeSparkle: 1.2,
-    sdfOn: 0, overhang: 0, detailRelief: 0.15, riverSim: 0, riverWater: 0, riverLakes: 0, streakAmount: 0, wetness: 0.1,
+    sdfOn: 0, overhang: 0, detailRelief: 0.15, rockyAmount: 0, riverSim: 0, riverWater: 0, riverLakes: 0, streakAmount: 0, wetness: 0.1,
     sunElevation: 28, sunAzimuth: 250, turbidity: 8, fogDensity: 0.15,
   },
   'Icelandic highlands': {
@@ -502,6 +505,9 @@ export const groups = [
         ['detailRelief', 'Detail relief', 0, 3, 0.05, 'm', 'Fine bumps and knobs pushed along the surface normal — independent of the heightfield'],
         ['detailScale', 'Detail scale', 1, 40, 0.5, 'm', ''],
         ['detailCliffBias', 'Cliff bias', 0, 1, 0.05, '', '0 = everywhere, 1 = steep rock only'],
+        ['rockyAmount', 'Rocky facets', 0, 3, 0.05, 'm', 'Angular joint-bounded blocks on steep hard rock (soft beds stay smooth) — the "rocky" look of fractured faces'],
+        ['rockyScale', 'Block size', 1, 20, 0.5, 'm', ''],
+        ['rockyAngular', 'Blockiness', 0, 1, 0.05, '', '0 = rounded knobs, 1 = sharp-edged blocks'],
       ] },
     ],
   },

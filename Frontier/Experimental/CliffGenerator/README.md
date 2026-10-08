@@ -82,7 +82,10 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    genuine overhangs, ledges and recesses that the heightfield itself cannot represent.
    **Mesh detail**: the mesh can carry 1–4× the heightfield's vertices (bicubic upsample, side
    capped at 2049) plus fine relief pushed along the surface normal (knobs on steep rock,
-   hummocks on flat ground) — cheap detail on top of the expensive erosion. Rocks are seated on
+   hummocks on flat ground) and **rocky facets** (Gaea *Rocky*‑style: a cellular field of
+   joint‑bounded blocks, wider than tall, pushed out of steep *hard* rock while soft beds stay
+   smooth; blockiness blends cones into sharp‑edged blocks) — cheap detail on top of the
+   expensive erosion. Rocks are seated on
    the final displaced surface. **True‑3D cliffs**: cells steeper than the cliff angle are grouped
    into chunks (16 cells, budgeted), the heightfield mesh skips their quads and masks its
    displacement around them, and a small pool of workers streams marching‑cubes meshes back in

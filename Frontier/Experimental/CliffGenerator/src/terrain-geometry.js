@@ -133,22 +133,58 @@ export function makeDetail(field, v) {
   const amp = v.detailRelief || 0;
   const scale = Math.max(0.5, v.detailScale || 6);
   const cliffBias = v.detailCliffBias == null ? 0.8 : v.detailCliffBias;
-  if (amp <= 0) return { amp: 0, at: () => 0 };
+  // rocky facets (Gaea "Rocky"-style): angular, joint-bounded blocks on steep hard rock
+  const rocky = v.rockyAmount || 0;
+  const rockyScale = Math.max(0.5, v.rockyScale || 3);
+  const rockyAngular = v.rockyAngular == null ? 0.7 : v.rockyAngular;
+  if (amp <= 0 && rocky <= 0) return { amp: 0, at: () => 0 };
   const noise = new GradientNoise3((v.seed || 1) * 31 + 11);
+  const seed = ((v.seed || 1) * 7919) >>> 0;
   const cell = field.worldSize / (field.resolution - 1);
   const limit = cell * 0.9;
+  // cellular field: nearest jittered feature point in the 2×2×2 cells around p; the metric blends
+  // Euclidean (cones) with Chebyshev (boxes) → pyramids / blocks
+  const facet = (px, py, pz) => {
+    const bx = Math.floor(px - 0.5), by = Math.floor(py - 0.5), bz = Math.floor(pz - 0.5);
+    let best = 4;
+    for (let k = 0; k < 8; k++) {
+      const ix = bx + (k & 1), iy = by + ((k >> 1) & 1), iz = bz + (k >> 2);
+      const h = hash3(ix, iy, iz, seed);
+      const fx = ix + 0.5 + ((h & 1023) / 1023 - 0.5) * 0.8, fy = iy + 0.5 + (((h >> 10) & 1023) / 1023 - 0.5) * 0.8, fz = iz + 0.5 + (((h >> 20) & 1023) / 1023 - 0.5) * 0.8;
+      const dx = Math.abs(px - fx), dy = Math.abs(py - fy), dz = Math.abs(pz - fz);
+      const eu = Math.sqrt(dx * dx + dy * dy + dz * dz), ch = Math.max(dx, dy, dz);
+      const d = eu + (ch - eu) * rockyAngular;
+      if (d < best) best = d;
+    }
+    return best;
+  };
   return {
-    amp,
+    amp: amp + rocky,
     at(x, y, z, ny, hardness) {
       const steep = Math.min(1, Math.max(0, (1 - ny - 0.2) / 0.4));
       const weight = (1 - cliffBias) + cliffBias * steep;
       if (weight <= 0.001) return 0;
-      const n = noise.fbm(x / scale, y / scale, z / scale, 3, 2.1, 0.55);
-      // harder beds knobbly, softer beds smoother
-      const d = n * amp * weight * (0.6 + 0.6 * hardness);
+      let d = 0;
+      if (amp > 0) {
+        const n = noise.fbm(x / scale, y / scale, z / scale, 3, 2.1, 0.55);
+        // harder beds knobbly, softer beds smoother
+        d += n * amp * weight * (0.6 + 0.6 * hardness);
+      }
+      if (rocky > 0 && steep > 0) {
+        // blocks are wider than tall (bedding) and only hard rock is blocky; soft beds stay smooth
+        const f = facet(x / (rockyScale * 1.4), y / rockyScale, z / (rockyScale * 1.4));
+        const block = Math.max(0, 0.75 - f) / 0.75; // 1 at the block centre → 0 at the joints
+        d += (block - 0.45) * rocky * steep * (0.25 + 0.75 * hardness);
+      }
       return Math.max(-limit, Math.min(limit, d));
     },
   };
+}
+
+function hash3(x, y, z, seed) {
+  let h = (Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(z | 0, 2147483647) ^ seed) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+  return (h ^ (h >>> 16)) >>> 0;
 }
 
 export function buildTerrainGeometry(field, v = {}, chunks = null) {
@@ -234,7 +270,7 @@ export function buildTerrainGeometry(field, v = {}, chunks = null) {
   geometry.setAttribute('aux', new THREE.BufferAttribute(aux, 4));
   geometry.setAttribute('aux2', new THREE.BufferAttribute(aux2, 4));
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-  if ((v.overhang || 0) + (v.buttress || 0) + (v.detailRelief || 0) > 0) {
+  if ((v.overhang || 0) + (v.buttress || 0) + (v.detailRelief || 0) + (v.rockyAmount || 0) > 0) {
     // displaced faces need true mesh normals; blend with the heightfield normal to keep them smooth
     const smooth = normals.slice();
     geometry.computeVertexNormals();
@@ -321,7 +357,7 @@ export function makeSampler(field) {
         const [ox, oz, sag] = this._disp.at(0, 0, n[0], n[1], n[2], bilinear(field.hardness, gx, gz), x, z, h);
         px += ox; pz += oz; py += sag;
       }
-      if (v && (v.detailRelief || 0) > 0) {
+      if (v && ((v.detailRelief || 0) + (v.rockyAmount || 0)) > 0) {
         if (!this._det || this._det.v !== v) { this._det = makeDetail(field, v); this._det.v = v; }
         const d = this._det.at(x, h, z, n[1], bilinear(field.hardness, gx, gz));
         px += n[0] * d; py += n[1] * d; pz += n[2] * d;

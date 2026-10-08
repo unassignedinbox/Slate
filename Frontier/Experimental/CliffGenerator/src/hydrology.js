@@ -292,7 +292,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     if (filled[c] - routing[c] > 0.3) {
       // inside a closed depression: the channel follows the real floor down to the lake (or across
       // the dry hollow) instead of hovering at the spill level
-      b = height[c] - dep * 0.5;
+      b = Math.min(height[c], filled[c]) - dep * 0.5;
       l = lakeLevel[c] > NO_WATER * 0.5 ? Math.max(lakeLevel[c], b + dep * waterFrac) : b + dep * waterFrac;
     } else if (d >= 0 && isRiver[d]) {
       // the bed follows the surface (continuous); only the water is forced monotone
