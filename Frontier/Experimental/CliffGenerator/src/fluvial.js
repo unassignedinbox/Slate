@@ -1,6 +1,6 @@
 // Fluvial incision — the stream-power model that gives real terrain its dendritic valleys.
 //
-//   ∂h/∂t = U − K·A^m·S^n + D·∇²h
+//   ∂h/∂t = U − K·A^m·S^n + D·∇²h   (+ deposition where the sediment flux exceeds capacity)
 //
 // Rivers cut down at a rate set by their drainage area A (how much water they carry) and their
 // slope S, while the hillslopes diffuse towards them. Running it on the layered base relief
@@ -56,6 +56,14 @@ export function fluvialErosion(height, hardness, N, size, opts, progress = () =>
   // aggraded floors are not dead flat: the fill surface grades towards the spill point
   const floorGrade = 0.004 * cell;
   const diffusion = (opts.diffusion || 0) * 0.12; // explicit Laplacian weight per step (stable < 0.25)
+  // sediment: what the rivers cut is carried downstream and dropped where the stream can no
+  // longer carry it — transport capacity ∝ A^m·S, so fans form where slopes flatten, valley
+  // floors and basins aggrade, deltas build where a channel enters a basin
+  const deposition = Math.max(0, Math.min(1, opts.deposition == null ? 0.6 : opts.deposition));
+  const capacityK = kBase * cell * cell * 40 * (opts.capacity == null ? 1 : opts.capacity); // m³ per step at A^m·S = 1
+  const qs = new Float32Array(total);
+  const eroded = new Float32Array(total);
+  const sediment = new Float32Array(total); // total thickness deposited [m]
   const acc = new Float32Array(total);
   const tmp = new Float32Array(total);
   const seaMask = new Uint8Array(total);
@@ -78,6 +86,7 @@ export function fluvialErosion(height, hardness, N, size, opts, progress = () =>
     for (let i = 0; i < total; i++) if (height[i] > sea) height[i] += upliftMask[i];
 
     // 4. implicit incision, receiver before donor
+    eroded.fill(0);
     for (let k = 0; k < total; k++) {
       const c = order[k];
       const d = down[c];
@@ -98,9 +107,38 @@ export function fluvialErosion(height, hardness, N, size, opts, progress = () =>
       const h1 = (h0 + f * hr) / (1 + f);
       height[c] = h1;
       incision[c] += h0 - h1;
+      eroded[c] = h0 - h1;
     }
 
-    // 5. hillslope diffusion (keeps interfluves rounded, prevents needle ridges)
+    // 5. sediment transport and deposition, donors before receivers (reverse order)
+    if (deposition > 0) {
+      qs.fill(0);
+      for (let k = total - 1; k >= 0; k--) {
+        const c = order[k], d = down[c];
+        let q = qs[c] + eroded[c] * area;
+        if (d < 0 || q <= 0) continue;
+        const ci = c % N, di = d % N;
+        const diag = (ci !== di) && (((c - ci) / N) !== ((d - di) / N));
+        const dx = diag ? cell * Math.SQRT2 : cell;
+        const inBasin = filled[c] > height[c] + 0.01;
+        const slopeC = inBasin ? 0 : Math.max(0, (height[c] - height[d]) / dx);
+        const cap = capacityK * Math.pow(acc[c] * area, m) * slopeC;
+        if (q > cap) {
+          let dep = (q - cap) * deposition * (inBasin ? 1 : 0.5);
+          // never bury the cell above its receiver's level + the local drop it needs to drain
+          // (outside basins) nor above the water surface (inside)
+          const roof = inBasin ? filled[c] - 0.02 : height[d] + Math.max(0.05, slopeC * dx * 0.6) + 0.5;
+          const room = Math.max(0, roof - height[c]) * area;
+          if (dep > room) dep = room;
+          height[c] += dep / area;
+          sediment[c] += dep / area;
+          q -= dep;
+        }
+        qs[d] += q;
+      }
+    }
+
+    // 6. hillslope diffusion (keeps interfluves rounded, prevents needle ridges)
     if (diffusion > 0) {
       for (let j = 1; j < N - 1; j++) {
         for (let i = 1; i < N - 1; i++) {
@@ -123,7 +161,7 @@ export function fluvialErosion(height, hardness, N, size, opts, progress = () =>
   acc.fill(1);
   for (let k = total - 1; k >= 0; k--) { const c = order[k], d = down[c]; if (d >= 0) acc[d] += acc[c]; }
   for (let i = 0; i < total; i++) seaMask[i] = height[i] <= sea ? 1 : 0;
-  return { acc, incision, seaMask };
+  return { acc, incision, sediment, seaMask };
 }
 
 // Droplet erosion leaves the valley floors hummocky: sediment fans dam the channels into chains of

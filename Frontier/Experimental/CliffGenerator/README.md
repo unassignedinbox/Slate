@@ -59,9 +59,12 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    hillslopes diffuse towards the channels and the massifs are uplifted a little so the relief
    stays high while the valleys deepen. Solved with the Braun–Willett implicit scheme (cells
    processed from the outlets upwards, closed form per cell, unconditionally stable) over a few
-   dozen long steps, re‑routing the water (priority‑flood fill + D8) every step. Closed basins
-   silt up towards their spill level (*Basin fill*) so most become flat valley floors drained by a
-   river and only the deepest survive as lakes; after the droplet erosion, hollows shallower than
+   dozen long steps, re‑routing the water (priority‑flood fill + D8) every step. **Sedimentation**:
+   what the rivers cut is carried downstream (donors before receivers) and dropped wherever the
+   flux exceeds the transport capacity ∝ A^m·S — alluvial fans where slopes flatten, valley
+   fills, deltas and basin floors; the deposited thickness is painted as alluvium. Closed basins
+   silt up towards their spill level (*Basin fill*) so they become valley floors drained by a
+   river — standing‑water lakes are off by default (*Lakes in depressions* turns them back on); after the droplet erosion, hollows shallower than
    *Silt up pits* are filled so the sediment fans do not dam the valleys into chains of ponds.
    The simulated rivers then run in valleys they shaped themselves instead of being carved into an
    unrelated surface. After the droplet erosion a **rill** pass (same solver, low area exponent,

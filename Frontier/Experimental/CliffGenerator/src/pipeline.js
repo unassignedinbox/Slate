@@ -39,7 +39,7 @@ export function generateTerrain(params, progress = () => {}) {
     progress({ phase: 'Fluvial incision', fraction: 0 });
     fluvial = fluvialErosion(height, hardness, N, params.worldSize, {
       strength: params.fluvialStrength, iterations: params.fluvialIterations, concavity: params.fluvialConcavity,
-      uplift: params.fluvialUplift, diffusion: params.fluvialDiffusion, basinFill: params.fluvialFill,
+      uplift: params.fluvialUplift, diffusion: params.fluvialDiffusion, basinFill: params.fluvialFill, deposition: params.fluvialDeposition,
       seaLevel: params.waterEnabled ? params.seaLevel : -Infinity,
     }, (f) => progress({ phase: 'Fluvial incision', fraction: f }));
   }
@@ -142,6 +142,13 @@ export function generateTerrain(params, progress = () => {}) {
       flowNorm[i] = Math.max(flowNorm[i], f * f * 0.95);
       deposit[i] = Math.max(deposit[i], riverResult.riverMask[i] * 0.8, lake[i] * 0.5);
     }
+  }
+
+  // fluvial sediment: fans, valley fills and basin floors are alluvium
+  if (fluvial && fluvial.sediment) {
+    const sedScale = Math.max(0.5, params.fluvialSedimentShow == null ? 2.5 : params.fluvialSedimentShow);
+    const sed = blurField(fluvial.sediment, N, 1);
+    for (let i = 0; i < N * N; i++) deposit[i] = Math.max(deposit[i], Math.min(1, sed[i] / sedScale));
   }
 
   // core-stones shed their debris: no scree skin on the boulders themselves
