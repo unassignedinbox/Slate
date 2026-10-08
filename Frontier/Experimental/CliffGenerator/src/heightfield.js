@@ -24,6 +24,7 @@ export function synthesizeBase(params, progress = () => {}) {
   const cliffH = params.cliffHeight || 0;
   const cliffEdgeW = 0.5 * (1 - 0.97 * Math.min(1, Math.max(0, params.cliffSharpness == null ? 0.8 : params.cliffSharpness)));
   const cliffNoise = new SimplexNoise(params.seed * 13 + 29);
+  const cliffStacks = params.cliffStacks || 0;
 
   // Transverse dunes: asymmetric ridges across the wind, in fields.
   const duneAmp = params.duneAmount || 0;
@@ -67,7 +68,16 @@ export function synthesizeBase(params, progress = () => {}) {
         // fractal fringe of the full mask) with a little fine wobble; the rugged stage adds the
         // blocky push–pull afterwards
         const mEdge = 0.5 + 0.5 * maskNoise.fbm(u * params.reliefFrequency + 0.3, v * params.reliefFrequency - 0.6, 2, 2, 0.5);
-        const edge = smoothstep(0.5 - cliffEdgeW, 0.5 + cliffEdgeW, mEdge + 0.03 * cliffNoise.fbm(u * 7 + 4, v * 7 - 2, 3));
+        const me = mEdge + 0.03 * cliffNoise.fbm(u * 7 + 4, v * 7 - 2, 3);
+        let edge = smoothstep(0.5 - cliffEdgeW, 0.5 + cliffEdgeW, me);
+        // stacks: pillars of the former cliff left standing just off the line (the sea has cut
+        // the arch behind them away) — blobs of a fine noise inside a narrow band seaward of the edge
+        if (cliffStacks > 0 && me < 0.5) {
+          const band = smoothstep(0.5 - 0.06, 0.5 - 0.03, me) * (1 - smoothstep(0.5 - 0.018, 0.5 - 0.004, me));
+          const blob = 0.5 + 0.5 * cliffNoise.fbm(u * 22 + 9, v * 22 + 3, 2, 2, 0.5);
+          const stack = smoothstep(0.9 - 0.12 * cliffStacks, 0.94 - 0.12 * cliffStacks, blob) * band;
+          edge = Math.max(edge, stack * (0.8 + 0.2 * blob));
+        }
         h += cliffH * edge;
       }
 

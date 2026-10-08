@@ -20,6 +20,7 @@ export const defaults = {
   canyonDepth: 0,           // [m]
   cliffHeight: 0,           // [m]
   cliffSharpness: 0.8,
+  cliffStacks: 0,
   canyonWidth: 260,         // [m]
   duneAmount: 0,            // [m]
   duneWavelength: 140,      // [m]
@@ -454,7 +455,7 @@ Object.assign(presets, {
   },
   'Coastal cliffs': {
     palette: 'shale', worldSize: 2048, mountainHeight: 70, baseElevation: -25, baseFrequency: 1.0, ridgeSharpness: 1.2, peakPower: 1.0, warpStrength: 0.4,
-    reliefFrequency: 0.7, reliefContrast: 0.6, cliffHeight: 110, cliffSharpness: 1, plateauStrength: 0.6, plateauHeight: 120, canyonDepth: 0,
+    reliefFrequency: 0.7, reliefContrast: 0.6, cliffHeight: 110, cliffSharpness: 1, cliffStacks: 0.6, plateauStrength: 0.6, plateauHeight: 120, canyonDepth: 0,
     ruggedAmount: 26, ruggedScale: 90, ruggedBlockiness: 0.8, ruggedLedges: 0.3, ruggedSlope: 30, ruggedAfter: 0.4,
     strataBand: 9, strataStrength: 0.9, strataVariation: 0.5, strataHardShare: 0.6, strataDip: 1.5, hardnessContrast: 0.5, strataRecut: 0.6,
     fluvialStrength: 0.1, fluvialIterations: 8, droplets: 25000, erodeSpeed: 0.15, thermalIterations: 12, talusSoft: 46, talusHard: 89, rillStrength: 0.1,
@@ -574,6 +575,7 @@ export const groups = [
         ['canyonWidth', 'Canyon width', 60, 900, 10, 'm', 'Rim-to-rim width'],
         ['cliffHeight', 'Escarpment', 0, 400, 5, 'm', 'A near-vertical cliff line along the edge of the massif (coastal cliffs, quarry walls): the high side is lifted onto a bench by this much within a cell or two'],
         ['cliffSharpness', 'Escarpment edge', 0, 1, 0.05, '', 'How abrupt the drop is (1 = a wall)'],
+        ['cliffStacks', 'Stacks', 0, 1, 0.05, '', 'Pillars of the former cliff left standing just off the line (sea stacks, quarry remnants)'],
       ] },
       { title: 'Grid', controls: [
         ['seed', 'Seed', 1, 9999, 1, '', 'Deterministic noise seed'],

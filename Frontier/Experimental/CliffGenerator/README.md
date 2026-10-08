@@ -51,7 +51,7 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    — real XZ push–pull with overhangs, not just contour wiggles. **Escarpment** (*Landform →
    Mesa & canyon → Escarpment*): a near‑vertical cliff line along the edge of the massif — the
    high side is lifted onto a bench within a cell or two along a smoothed version of the
-   continental mask (long headlands and bays), then pushed and pulled in plan by the rugged stage;
+   continental mask (long headlands and bays), with optional *Stacks* — pillars of the former cliff left standing just off the line — then pushed and pulled in plan by the rugged stage;
    this is the base of the *Coastal cliffs* and *Quarry walls* presets. In the 3‑D chunks *Lean*
    cuts such a face back progressively from its crest to its foot (local crest / foot maps), so
    the profile is | / — vertical to overhanging — instead of the back‑leaning slope a heightfield
