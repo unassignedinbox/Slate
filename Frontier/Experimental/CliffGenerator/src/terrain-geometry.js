@@ -46,7 +46,9 @@ export function makeDisplacement(field, v) {
 
 // Catmull-Rom bicubic upsampling of every field map, so the mesh can carry more vertices than the
 // simulated heightfield (erosion cost grows with N², mesh detail is cheap by comparison).
-const MAX_MESH_SIDE = 2049;
+// The mesh can be subdivided well past the simulated grid; this is the vertex count per side it
+// is allowed to reach, and the subdivision factor is clamped so it never does.
+const MAX_MESH_SIDE = 4097;
 export function meshSubdivision(field, v) {
   const want = Math.max(1, Math.round(v.meshSubdivision || 1));
   const maxK = Math.max(1, Math.floor((MAX_MESH_SIDE - 1) / (field.resolution - 1)));

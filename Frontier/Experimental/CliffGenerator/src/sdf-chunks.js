@@ -195,7 +195,7 @@ export function packChunkJobs(fine, chunks, v) {
   }
   // voxel resolution: explicit, or the finest that fits the voxel budget (only the band around the
   // surface is polygonised, so the estimate is footprint × band thickness)
-  let k = Math.max(1, Math.min(3, Math.round(v.sdfVoxel || 0)));
+  let k = Math.max(1, Math.min(4, Math.round(v.sdfVoxel || 0)));
   if (!(v.sdfVoxel >= 1)) {
     let est = 0;
     for (const c of list) {
@@ -205,7 +205,7 @@ export function packChunkJobs(fine, chunks, v) {
       est += c.cw * c.ch * band;
     }
     const budget = Math.max(1e6, (v.sdfVoxelBudget || 24) * 1e6);
-    k = est * 27 <= budget ? 3 : est * 8 <= budget ? 2 : 1;
+    k = est * 64 <= budget ? 4 : est * 27 <= budget ? 3 : est * 8 <= budget ? 2 : 1;
   }
   return { jobs, transfer, meta: { N, size: fine.worldSize, C, k, cell: cell / k } };
 }
@@ -278,7 +278,7 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const pad = job.pad || 0;
   const Sx = job.cw + 1 + 2 * pad, Sz = job.ch + 1 + 2 * pad;
   const cell = size / (N - 1);
-  const k = v.sdfVoxel >= 1 ? Math.max(1, Math.min(3, Math.round(v.sdfVoxel))) : (meta.k || 1);
+  const k = v.sdfVoxel >= 1 ? Math.max(1, Math.min(4, Math.round(v.sdfVoxel))) : (meta.k || 1);
   const vox = cell / k;
   const nx = job.cw * k, nz = job.ch * k;
   const x0 = (job.i0 / (N - 1) - 0.5) * size, z0 = (job.j0 / (N - 1) - 0.5) * size;
@@ -341,6 +341,7 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const blockSize = Math.max(2, v.sdfBlockSize || 8);
   const blockLoss = Math.min(1, Math.max(0, v.sdfBlockLoss == null ? 0.12 : v.sdfBlockLoss));
   const blockMinL = vox * 3; // a block narrower than 3 voxels cannot be resolved
+  const blockSwing = Math.max(0, Math.min(1, v.sdfBlockSwing == null ? 0.6 : v.sdfBlockSwing));
   const crackW = Math.max(vox * 1.2, blockSize * 0.07);
   // joint-set domains: real rock is broken into panels, each with its own joint spacing and its
   // own block grid (and the grids do not line up across a panel boundary). Without this the blocks
@@ -360,7 +361,12 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     const oc = hasOutcrop ? bil(m.outcrop, u, wq) : 0;
     // visibility of the joint families on this face: planes x = const show when the face normal
     // has little x (the gradient points along z), and vice versa
-    const visX = gl > 1e-6 ? Math.abs(gz) / gl : 0.7, visZ = gl > 1e-6 ? Math.abs(gx) / gl : 0.7;
+    // the block lattice swings slowly across the massif: joint sets curve around a dome in the
+    // real thing, and a single axis-aligned grid over every wall is what reads as a tiled texture
+    const dang = blockSwing * 0.85 * ctx.joint.fbm(x * 0.0062, z * 0.0062, 1);
+    const ca = Math.cos(dang), sa = Math.sin(dang);
+    const grx = gx * ca - gz * sa, grz = gx * sa + gz * ca;
+    const visX = gl > 1e-6 ? Math.abs(grz) / gl : 0.7, visZ = gl > 1e-6 ? Math.abs(grx) / gl : 0.7;
     const crest = needCF ? bil(m.crest, u, wq) : 0, foot = needCF ? bil(m.foot, u, wq) : 0;
     let vW = 0, vdx = 0, vdz = 0;
     if (hasVertical && w > 1e-6) {
@@ -375,7 +381,7 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     // this column's joint-set domain: block size, block depth and the phase of the block grid
     const dgx = Math.floor(x / blkDom), dgz = Math.floor(z / blkDom);
     const d0 = hash2(dgx, dgz, ctx.seed + 337), d1 = hash2(dgx, dgz, ctx.seed + 431);
-    return { x, z, h, w, slopeF, steep, oc, crest, foot, vW, vdx, vdz, visX, visZ, bc: null,
+    return { x, z, h, w, slopeF, steep, oc, crest, foot, vW, vdx, vdz, visX, visZ, ca, sa, bc: null,
       bf: 0.6 + 0.95 * d0, jf: 0.62 + 0.66 * d1, bpx: (d1 - 0.5) * 1.1, bpz: (d0 - 0.5) * 1.1, strata: w > 1e-6 && (steep > 0 || vW > 0) ? ctx.strata.column(x, z) : null };
   }
   // per-column, per-bed constants: the joint lattice and the block lattice depend on the plan
@@ -393,7 +399,8 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     // lattice of this bed: size and stagger from the bed index, so rows do not line up
     const hb0 = hash2(bi, 0, ctx.seed + 101), hb1 = hash2(bi, 1, ctx.seed + 101);
     const L = Math.max(blockMinL, Math.min(60, blockSize * col.bf * (0.7 + 0.6 * hb0) * Math.min(1.6, Math.max(0.6, thick / blockSize + 0.4))));
-    const qx = (x + hb0 * L * 2.3) / L + col.bpx, qz = (z + hb1 * L * 1.7) / L + col.bpz;
+    const ex = (x - x0) * col.ca - (z - z0) * col.sa, ez = (x - x0) * col.sa + (z - z0) * col.ca;
+    const qx = (ex + hb0 * L * 2.3) / L + col.bpx, qz = (ez + hb1 * L * 1.7) / L + col.bpz;
     const sX = Math.max(0.08, 1 - col.visX), sZ = Math.max(0.08, 1 - col.visZ);
     const cx = qx - 0.5, cz = qz - 0.5;
     const ix = Math.floor(cx), iz = Math.floor(cz);

@@ -53,7 +53,7 @@ export const defaults = {
   strataVariation: 0.6,
   strataPackaging: 0.6,
   strataHardShare: 0.35,
-  strataLateral: 0.18,
+  strataLateral: 0.26,
   strataRecut: 0.5,
   strataDip: 4,             // [°]
   strataDipDirection: 35,   // [°]
@@ -100,7 +100,7 @@ export const defaults = {
   talusSoft: 33,            // [°]
   talusHard: 78,            // [°]
   // Rocks (plain scatter)
-  rocksEnabled: 1,
+  rocksEnabled: 0,          // the placer is off by default while the cliff faces are finished
   rockSeed: 7,
   rockDensity: 0.35,
   rockSlopeMin: 0,          // [°]
@@ -122,7 +122,7 @@ export const defaults = {
   rockShore: 0.55,          // cobble cord laid along standing water
   rockSoilHide: 0.7,
   rockSizeSpread: 0.7,
-  pebblesOn: 1,
+  pebblesOn: 0,
   pebbleDensity: 0.45,
   pebbleSize: 0.45,         // [m]
   // True-3D cliffs (SDF chunks)
@@ -131,7 +131,7 @@ export const defaults = {
   sdfBlend: 2,              // [cells]
   sdfChunk: 16,             // [cells]
   sdfVoxel: 0,              // voxels per cell (0 = auto from budget)
-  sdfVoxelBudget: 24,       // [M voxels]
+  sdfVoxelBudget: 36,       // [M voxels]
   sdfUndercut: 6,           // [m]
   sdfBedContrast: 1,
   sdfPockets: 12,           // [m]
@@ -143,7 +143,8 @@ export const defaults = {
   sdfVertical: 0,
   sdfLeanReach: 24,         // [m]
   sdfPushScale: 18,         // [m]
-  sdfBlocks: 0,             // [m] rock blocks: per-block in/out of the face
+  sdfBlocks: 0,
+  sdfBlockSwing: 0.6,       // how far the block lattice swings from world-aligned             // [m] rock blocks: per-block in/out of the face
   sdfBlockSize: 8,          // [m]
   sdfBlockLoss: 0.12,
   sdfMaxChunks: 400,
@@ -151,7 +152,7 @@ export const defaults = {
   overhang: 3.5,            // [m]
   buttress: 0.5,
   ledgeNoise: 0.6,
-  meshSubdivision: 2,
+  meshSubdivision: 3,
   detailRelief: 0.5,        // [m]
   detailScale: 7,           // [m]
   rockyAmount: 1,           // [m]
@@ -176,6 +177,10 @@ export const defaults = {
   jointOn: 1,
   jointStrength: 0.7,
   jointSpacing: 3,          // [m]
+  texWarp: 0.55,            // how far the cell lattices are warped and stretched
+  jointBend: 0.6,           // how much the joint sets swing across the massif
+  jointVary: 0.7,           // block size varies panel to panel (the true-3D domain grid)
+  facePatch: 0.5,           // some panels are massive, some are busy
   jointWidth: 0.22,         // [m]
   jointDepth: 0.35,         // [m]
   jointStagger: 1,
@@ -671,7 +676,7 @@ export const groups = [
         ['strataVariation', 'Thickness variation', 0, 1.5, 0.05, '', 'Spread of bed thicknesses around the typical value (0 = all beds alike)'],
         ['strataPackaging', 'Packaging', 0, 1, 0.05, '', 'How much beds group into thin-bedded (shale) and massive (sandstone / limestone) packages instead of a random stack'],
         ['strataHardShare', 'Hard share', 0, 1, 0.05, '', 'Share of resistant beds in the mixed packages'],
-        ['strataLateral', 'Lateral change', 0, 0.4, 0.01, '', 'Beds thicken and thin across the tile'],
+        ['strataLateral', 'Lateral change', 0, 0.8, 0.01, '', 'Beds thicken, thin, rise and dip across the map: at 0 every wall in the world shows the same bed rhythm at the same heights, which is the fastest way to make a cliff read as a repeated tile'],
         ['strataRecut', 'Re-cut after erosion', 0, 1, 0.05, '', 'Applies the beds once more (at this share of the strength) on the eroded surface so the ledges stay crisp — Gaea Stratify after Erosion'],
       ] },
       { title: 'Geological dip', controls: [
@@ -697,13 +702,14 @@ export const groups = [
         ['sdfBlocks', 'Rock blocks', 0, 6, 0.25, 'm', 'The face becomes a wall of discrete rock blocks — bed rows × two vertical joint families, staggered bed to bed — each block proud of or set back from the face by up to this much, with a bevelled rim and a crack groove around it (3-D geometry, not shading). Blocks smaller than ~3 voxels cannot be resolved: lower the world size or raise the voxel budget for finer blocks'],
         ['sdfBlockSize', 'Rock block size', 2, 40, 0.5, 'm', 'Width of the rock blocks (each bed varies it; thick beds give wider blocks)'],
         ['sdfBlockLoss', 'Missing blocks', 0, 1, 0.05, '', 'Share of blocks that have fallen out of the face, leaving a deep recess'],
+        ['sdfBlockSwing', 'Block swing', 0, 1, 0.05, '', 'How far the block lattice rotates across the cliff: joint sets curve around a dome in the real thing, and one axis-aligned grid over every wall is what reads as tiling'],
         ['sdfVertical', 'Vertical wall', 0, 1.6, 0.05, '', 'Shears every steep face so its crest moves out and its foot moves in: 1 = the face stands truly vertical (|) whatever the heightfield slope, above 1 it overhangs (\\ /). Cliffs only — the ground before and behind the face is left alone'],
         ['sdfLean', 'Lean (| /)', 0, 12, 0.5, 'm', 'The face is cut back progressively from crest to foot, so a cliff stands vertical to overhanging (| /) instead of leaning back (| \\)'],
         ['sdfLeanReach', 'Lean reach', 8, 80, 2, 'm', 'Plan distance over which crest and foot of a face are found'],
         ['sdfBlend', 'Blend margin', 1, 5, 1, 'cells', 'Cells over which the 3D field fades back to the plain heightfield'],
         ['sdfChunk', 'Chunk size', 8, 32, 8, 'cells', ''],
-        ['sdfVoxel', 'Voxels per cell', 0, 3, 1, '', '0 = auto: the finest resolution that fits the voxel budget. 2 = voxels half the grid cell (8× the work), 3 = a third'],
-        ['sdfVoxelBudget', 'Voxel budget', 2, 80, 2, 'M', 'Total voxels (in the surface band) auto mode may spend; raise it for finer cliffs if the machine can take it'],
+        ['sdfVoxel', 'Voxels per cell', 0, 4, 1, '', '0 = auto: the finest resolution that fits the voxel budget. 2 = voxels half the grid cell (8× the work), 4 = a quarter (64× — only the steepest walls need it)'],
+        ['sdfVoxelBudget', 'Voxel budget', 2, 160, 2, 'M', 'Total voxels (in the surface band) auto mode may spend; raise it for finer cliffs if the machine can take it'],
         ['sdfMaxChunks', 'Chunk budget', 50, 2000, 50, '', 'Chunks with the most cliff area are built first; the rest fall back to the displaced heightfield'],
       ] },
       { title: 'Face displacement', controls: [
@@ -712,7 +718,7 @@ export const groups = [
         ['ledgeNoise', 'Ledge irregularity', 0, 1, 0.05, '', 'Breaks ledges into blocks and notches'],
       ] },
       { title: 'Mesh detail', controls: [
-        ['meshSubdivision', 'Mesh subdivision', 1, 4, 1, '×', 'Vertices per heightfield cell (bicubic). Mesh side is capped at 2049 vertices'],
+        ['meshSubdivision', 'Mesh subdivision', 1, 6, 1, '×', 'Vertices per heightfield cell (bicubic). Higher = finer relief detail on the faces; the mesh side is capped at 4097 vertices'],
         ['detailRelief', 'Detail relief', 0, 3, 0.05, 'm', 'Fine bumps and knobs pushed along the surface normal — independent of the heightfield'],
         ['detailScale', 'Detail scale', 1, 40, 0.5, 'm', ''],
         ['detailCliffBias', 'Cliff bias', 0, 1, 0.05, '', '0 = everywhere, 1 = steep rock only'],
@@ -875,6 +881,10 @@ export const groups = [
         ['jointOn', 'Enable jointing', 0, 1, 1, '', 'Cracks that break the face into blocks: two vertical joint sets (staggered bed to bed like brickwork) and the bedding planes, each joint with its own width, some missing, each block with its own tilt and tone'],
         ['jointStrength', 'Jointing', 0, 1.5, 0.05, '', ''],
         ['jointSpacing', 'Joint spacing', 0.6, 20, 0.1, 'm', 'Block size along the face (scaled by bed thickness)'],
+        ['jointBend', 'Joint swing', 0, 1, 0.05, '', 'How much the two joint sets curve and rotate across the massif, so the lattice is never square to the view over a whole cliff'],
+        ['jointVary', 'Block size varies', 0, 1, 0.05, '', 'Coarse panels of different block size, on the same grid the true-3D blocks are varied by — massive slabs here, closely jointed rock there'],
+        ['texWarp', 'Pattern warp', 0, 1, 0.05, '', 'Warps and stretches the cells of every face pattern (joints, spalls, flakes, gravel) so nothing marches along the world axes'],
+        ['facePatch', 'Detail patchiness', 0, 1, 0.05, '', 'How much the *amount* of jointing, spalling and flaking varies from patch to patch — 0 = the whole cliff is finished the same way'],
         ['jointWidth', 'Crack width', 0.05, 1, 0.01, 'm', ''],
         ['jointDepth', 'Crack depth', 0, 1.5, 0.05, 'm', 'How far the grooves read into the face'],
         ['jointStagger', 'Stagger', 0, 1, 0.05, '', 'Offset of the vertical joints from bed to bed (0 = continuous columns, 1 = brickwork)'],

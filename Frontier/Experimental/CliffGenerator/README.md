@@ -96,6 +96,22 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    bedding planes break the face into blocks — each joint with its own width, some missing, each
    block with its own slight tilt and tone, grooves with normal and occlusion — the cracked, blocky
    rock face of a quarry wall or a sea cliff; a joint family parallel to the face is invisible.
+   **Breaking the tile.** A cliff that reads as a repeated tile is almost never a geometry problem:
+   the eye catches a *lattice* of equal rectangles with the same finish everywhere. Five controls act
+   on it together, and they move the texture and the 3‑D geometry at once so the two never disagree:
+   *Joint swing* (shader) and *Block swing* (true‑3D) rotate the joint and block frames slowly across
+   the map, the way joint sets curve around a dome, so no wall stays square to the view; *Block size
+   varies* hashes the same coarse domain grid the carved blocks use, so one panel is massive slabs and
+   the next is closely jointed; *Pattern warp* stretches and shifts the cells of every non‑bedding
+   pattern (joints, spalls, flakes, gravel) so nothing marches along the world axes; *Detail
+   patchiness* varies how much weathering each patch carries at all. *Strata → Lateral change* goes to
+   0.8 now (default 0.26): bed boundaries thicken, thin, rise and dip across the map, instead of every
+   cliff in the world showing the same rhythm at the same heights.
+   **Subdivision.** The mesh can be refined well past the simulated grid — *Mesh subdivision* now
+   reaches ×6 with the mesh side capped at 4097 vertices instead of 2049, and ×3 (1534²) is the
+   default: at a 512² grid that is 4.7 M triangles instead of 2.1 M, which is what the displacement
+   detail (knobs, buttresses, rocky facets — pushed per vertex) was waiting for. The true‑3D cliffs
+   gain a 4th voxel level (voxels a quarter of a grid cell) and the auto budget defaults to 36 M.
    **Boulder outcrops** (`src/outcrops.js`) — clusters of large core‑stones (tors, woolsacks,
    "encampments") are unioned into the relief *before* strata and erosion: superellipsoid stones
    with a plan rotation, a low‑frequency bulge and a burial depth, in clusters on a site grid
@@ -215,7 +231,9 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    than `hardwareConcurrency`) and streamed into the scene as they finish, so the terrain is
    interactive while the walls come in.
    explicitly or chosen automatically as the finest that fits a voxel budget (the HUD shows it).
-6. **Rocks** (`src/rock-geometry.js`, `src/rock-placement.js`) — eight archetypes per seed
+6. **Rocks** (`src/rock-geometry.js`, `src/rock-placement.js`) — *off by default for now "
+   `rocksEnabled` / `pebblesOn` are 0 while the cliff faces are being finished; switch them on
+   in the **Rocks** card.* Eight archetypes per seed
    (boulder / block / slab / shard): displaced icosphere, anisotropic stretch, then clipped by
    bedding + joint‑set planes, crease‑aware normals. **Placement follows origins, not a scatter**:
    seven fields are derived from the terrain first — *face* (steep, hard, soil‑free), *crest*

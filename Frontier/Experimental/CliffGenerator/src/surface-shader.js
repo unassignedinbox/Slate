@@ -63,6 +63,7 @@ uniform float uMossiness, uMossScale;
 uniform float uSnowLine, uSnowSlopeCos, uSnowSoftness, uSnowRoughness;
 uniform float uBumpScale, uBaseRoughness;
 uniform float uJointStrength, uJointSpacing, uJointWidth, uJointDepth, uJointStagger, uJointBlocks, uJointDropout;
+uniform float uTexWarp, uJointBend, uJointVary, uJointDomain, uFacePatch;
 uniform float uSeaLevel, uSeed, uIsRock, uDebugView;
 uniform float uPaintWater, uWaterClear;
 uniform vec3 uWaterDeep, uWaterShallow;
@@ -273,6 +274,19 @@ PebbleOut pebbleLayer( vec2 p, float size, float aa, float seed ) {
   return o;
 }
 
+// ---- breaking the lattice -------------------------------------------------------------------
+// One spacing, aligned to the world axes, is the tell of a generated cliff: the eye reads wallpaper
+// however good the noise is. Three things undo it. The sample coordinates of every pattern that is
+// not bedding are warped and locally stretched, so cells bend and change size from patch to patch.
+// The joint frame swings slowly across the massif, the way joint sets curve around a dome. And a
+// coarse domain hash — the same grid the true-3D blocks are varied by — sets the block size and how
+// much weathering detail that panel carries, so one face is massive slabs and the next is closely
+// jointed and busy.
+vec2 cgWarp2( vec3 wp, float amp, float seed ) {
+  return vec2( cgNoise3( wp * 0.011 + seed ).x, cgNoise3( wp * 0.011 + seed + 31.7 ).x ) * amp;
+}
+float cgPatch( vec3 wp, float scale, float seed ) { return clamp( cgNoise3( wp / scale + seed ).x * 0.5 + 0.5, 0.0, 1.0 ); }
+
 struct Surface { vec3 albedo; vec3 normalW; float roughness; float ao; float metal; vec3 emissive; };
 
 Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
@@ -288,6 +302,11 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   float cavity = aux.w;
   float footprint = max( length( dFdx( wp ) ), length( dFdy( wp ) ) ) + 1e-5;
   float wall = 1.0 - abs( n.y );
+  // the shared deformation of every pattern that is not bedding, and the mask that lets some
+  // panels be massive and others busy
+  vec2 cgFreq = vec2( 1.0 ) + ( vec2( cgPatch( wp, 170.0, 3.7 ), cgPatch( wp, 215.0, 11.3 ) ) - 0.5 ) * 0.8 * uTexWarp;
+  vec2 cgOff = cgWarp2( wp, 4.5 * uTexWarp, 0.0 );
+  float faceVar = mix( 1.0, 0.3 + 1.35 * cgPatch( wp, 145.0, 21.0 ), uFacePatch );
 
   // ---- cover masks first, so rock micro-detail only grows where rock is exposed ----------------
   float speckle = cgNoise3( wp * 2.3 ).x;
@@ -315,9 +334,9 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   float pebbleCover = 0.0, pebbleTone = 0.0, pebbleHue = 0.0;
 
   // spalling happens in patches (uPeelCoverage = share of the rock), on exposed rock only
-  float peelAmount = uPeelStrength * rockMask;
+  float peelAmount = uPeelStrength * rockMask * faceVar;
   float peelThick = uPeelThickness * peelAmount;                 // [m] sheet thickness
-  float flakeAmount = uFlakeStrength * rockMask;
+  float flakeAmount = uFlakeStrength * rockMask * ( 0.45 + 0.8 * faceVar );
   float gravelHere = max( gravelMix, smoothstep( 0.3, 0.9, riverBed ) );
   float hsel = smoothstep( 0.3, 0.7, hardness );
 
@@ -326,6 +345,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
     if ( wa < 0.02 ) continue;
     vec2 pp = axis == 0 ? wp.yz : ( axis == 1 ? wp.xz : wp.xy );
     pp += vec2( float( axis ) * 37.0, uSeed );
+    pp = pp * cgFreq + cgOff;                    // cells stretch and shift instead of marching
     vec2 g2 = vec2( 0.0 );
     // vertical projections: compress the up axis so spalls follow bedding
     vec2 bedStretch = axis == 1 ? vec2( 1.0 ) : ( axis == 0 ? vec2( 1.0 - 0.4 * uPeelBedding, 1.0 + 0.4 * uPeelBedding ) : vec2( 1.0 + 0.4 * uPeelBedding, 1.0 - 0.4 * uPeelBedding ) );
@@ -454,14 +474,20 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   float blockTone = 0.0, crackAO = 0.0;
   if ( uJointStrength > 0.001 && rockMask > 0.01 ) {
     float bedThick = max( 0.3, bedRec.w * bedJitter( sxj, szj ) * uStrataBand ); // [m]
-    float spacing = clamp( uJointSpacing * mix( 0.6, 1.4, fract( bh * 3.7 ) ) * clamp( bedThick / uStrataBand * 1.5, 0.5, 1.6 ), 0.6, 40.0 );
+    float spacing = uJointSpacing * mix( 0.6, 1.4, fract( bh * 3.7 ) ) * clamp( bedThick / uStrataBand * 1.5, 0.5, 1.6 );
+    // block size varies panel by panel, on the same coarse grid the true-3D blocks use
+    if ( uJointDomain > 1.0 ) spacing *= mix( 1.0, 0.55 + 1.25 * cgHash3( ivec3( floor( wp.xz / uJointDomain ), 7 ) ), uJointVary );
+    // the joint sets swing slowly across the massif, so the lattice is never square to the view
+    float jang = uJointBend * 0.75 * ( cgNoise3( wp * 0.0045 + 5.0 ).x + cgNoise3( wp * 0.0045 + 27.0 ).x * 0.4 );
+    mat2 Rw = mat2( cos( jang ), sin( jang ), -sin( jang ), cos( jang ) );
+    spacing = clamp( spacing, 0.5, 60.0 );
     float bedIdx = floor( bedBase * 97.0 + 0.5 );
     vec2 stagger = vec2( fract( bh * 5.13 ), fract( bh * 9.71 ) ) * spacing * uJointStagger;
     vec2 jw = vec2( cgNoise3( wp * 0.11 + 3.0 ).x, cgNoise3( wp * 0.11 + 17.0 ).x ) * spacing * 0.35; // warp
-    vec2 q = ( wp.xz + stagger + jw ) / spacing;
+    vec2 q = ( Rw * ( wp.xz * cgFreq + cgOff ) + stagger + jw ) / spacing;
     vec2 cellId = floor( q ), fq = fract( q );
     float jointFade = 1.0 - smoothstep( 0.25, 1.0, footprint / uJointWidth );
-    float jointAmt = uJointStrength * rockMask * jointFade * ( 0.45 + 0.55 * smoothstep( 0.15, 0.5, wall ) );
+    float jointAmt = uJointStrength * rockMask * jointFade * ( 0.45 + 0.55 * smoothstep( 0.15, 0.5, wall ) ) * mix( 1.0, 0.3 + 1.15 * faceVar, 0.85 );
     // per-joint presence and width (hash of the joint line and the bed)
     float hx = cgHash3( ivec3( int( cellId.x ), int( bedIdx ), 11 ) );
     float hz = cgHash3( ivec3( 23, int( bedIdx ), int( cellId.y ) ) );
@@ -469,10 +495,11 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
     float wX = uJointWidth * mix( 0.5, 1.6, fract( hx * 7.0 ) ), wZ = uJointWidth * mix( 0.5, 1.6, fract( hz * 7.0 ) );
     // distance (m) to the nearest joint plane of each family, groove profile and its slope
     float dX = min( fq.x, 1.0 - fq.x ) * spacing, dZ = min( fq.y, 1.0 - fq.y ) * spacing;
-    float gX = ( 1.0 - smoothstep( 0.0, wX, dX ) ) * onX * ( 1.0 - abs( n.x ) );
-    float gZ = ( 1.0 - smoothstep( 0.0, wZ, dZ ) ) * onZ * ( 1.0 - abs( n.z ) );
-    float sX = ( fq.x < 0.5 ? 1.0 : -1.0 ) * onX * ( 1.0 - abs( n.x ) ) * ( dX < wX ? ( 1.0 - dX / wX ) : 0.0 );
-    float sZ = ( fq.y < 0.5 ? 1.0 : -1.0 ) * onZ * ( 1.0 - abs( n.z ) ) * ( dZ < wZ ? ( 1.0 - dZ / wZ ) : 0.0 );
+    vec2 nr = Rw * n.xz;
+    float gX = ( 1.0 - smoothstep( 0.0, wX, dX ) ) * onX * ( 1.0 - abs( nr.x ) );
+    float gZ = ( 1.0 - smoothstep( 0.0, wZ, dZ ) ) * onZ * ( 1.0 - abs( nr.y ) );
+    float sX = ( fq.x < 0.5 ? 1.0 : -1.0 ) * onX * ( 1.0 - abs( nr.x ) ) * ( dX < wX ? ( 1.0 - dX / wX ) : 0.0 );
+    float sZ = ( fq.y < 0.5 ? 1.0 : -1.0 ) * onZ * ( 1.0 - abs( nr.y ) ) * ( dZ < wZ ? ( 1.0 - dZ / wZ ) : 0.0 );
     // bedding joints: a groove at every bed boundary (strongest on the walls)
     float dB = min( bf, 1.0 - bf ) * bedThick;
     float wB = uJointWidth * 1.2;
@@ -480,7 +507,8 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
     float sB = ( bf < 0.5 ? 1.0 : -1.0 ) * ( dB < wB ? ( 1.0 - dB / wB ) : 0.0 ) * smoothstep( 0.15, 0.5, wall );
     float depth = uJointDepth * jointAmt;
     // gradient of the groove height field: the surface drops into each groove
-    vec3 crackG = vec3( sX / max( wX, 0.01 ), sB / max( wB, 0.01 ), sZ / max( wZ, 0.01 ) ) * depth * 1.5;
+    vec2 cg2 = transpose( Rw ) * vec2( sX / max( wX, 0.01 ), sZ / max( wZ, 0.01 ) );
+    vec3 crackG = vec3( cg2.x, sB / max( wB, 0.01 ), cg2.y ) * depth * 1.5;
     // each block: its own tilt (a slab that is not quite flush) and tone
     float hb = cgHash3( ivec3( int( cellId.x ), int( bedIdx ), int( cellId.y ) ) );
     vec3 tilt = ( vec3( hb, fract( hb * 13.1 ), fract( hb * 29.7 ) ) - 0.5 ) * 0.22 * uJointBlocks * jointAmt;
@@ -688,6 +716,7 @@ const colorKeys = { uSoilColor: 'soilColor', uSoilLight: 'soilLight', uRoad: 'ro
 const scalarKeys = {
   uStrataContrast: ['strataContrast', 'strataOn'], uSeamStrength: ['seamStrength', 'strataOn'], uSeamWidth: ['seamWidth'], uLaminae: ['laminae', 'strataOn'], uBedGradient: ['bedGradient', 'strataOn'], uHardnessTint: ['hardnessTint', 'strataOn'],
   uJointStrength: ['jointStrength', 'jointOn'], uJointSpacing: ['jointSpacing'], uJointWidth: ['jointWidth'], uJointDepth: ['jointDepth'], uJointStagger: ['jointStagger'], uJointBlocks: ['jointBlocks'], uJointDropout: ['jointDropout'],
+  uTexWarp: ['texWarp'], uJointBend: ['jointBend'], uJointVary: ['jointVary'], uFacePatch: ['facePatch'],
   uGrainSize: ['grainSize'], uGrainStrength: ['grainStrength', 'grainOn'], uGrainContrast: ['grainContrast', 'grainOn'], uGrainFineness: ['grainFineness'],
   uOxideAmount: ['oxideAmount', 'oxideOn'], uOxideScale: ['oxideScale'], uCavityStrength: ['cavityStrength'],
   uFlakeStrength: ['flakeStrength', 'flakesOn'], uFlakeSheen: ['flakeSheen'], uFlakeEdge: ['flakeEdge'], uFlakeOxide: ['flakeOxide'], uFlakeSparkle: ['flakeSparkle'],
@@ -715,7 +744,7 @@ export function makeSurfaceUniforms() {
     uStrataBand: { value: 1 }, uDipX: { value: 0 }, uDipZ: { value: 0 },
     uBedTex: { value: makeBedTexture(new Float32Array(4), 1) }, uBedCount: { value: 1 }, uBedBase: { value: -1500 }, uWorldSize: { value: 2048 }, uBedLateral: { value: 0.18 },
     uVegSlope: { value: 0.72 }, uSoilSlopeCos: { value: 0.75 }, uSnowLine: { value: 430 }, uSnowSlopeCos: { value: 0.67 },
-    uSeaLevel: { value: 0 }, uSeed: { value: 428 },
+    uSeaLevel: { value: 0 }, uSeed: { value: 428 }, uJointDomain: { value: 0 },
     uPaintWater: { value: 1 }, uWaterClear: { value: 1.5 }, uWaterDeep: { value: new THREE.Color(0x1d4552) }, uWaterShallow: { value: new THREE.Color(0x4f7f7a) },
   });
   return u;
@@ -734,6 +763,9 @@ export function updateSurfaceUniforms(uniforms, v) {
   uniforms.uStrataBand.value = v.strataBandScale || 1;
   uniforms.uWorldSize.value = v.worldSize;
   uniforms.uBedLateral.value = v.strataLateral == null ? 0.18 : v.strataLateral;
+  // the block-size hash reads the same coarse domain grid as the true-3D chunks, so texture and
+  // geometry go coarse and fine together instead of fighting each other
+  uniforms.uJointDomain.value = v.sdfOn && v.sdfBlocks > 0 ? Math.max(14, (v.sdfBlockSize || 9) * 5) : 0;
   const bedKey = `${v.seed}|${v.strataBand}|${v.strataVariation}|${v.strataPackaging}|${v.strataHardShare}`;
   if (uniforms.uBedTex.key !== bedKey) {
     const table = makeBedTable(v);
