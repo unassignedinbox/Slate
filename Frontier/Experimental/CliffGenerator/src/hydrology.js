@@ -342,7 +342,8 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     // tapering ends instead of a constant-width stripe that begins and stops abruptly)
     const head = smoothstep(threshold, threshold * 8, acc[c]);
     w = Math.max(cell * 0.35, w * (0.12 + 0.88 * head));
-    dep = Math.max(0.15, dep * (0.25 + 0.75 * head));
+    // depth tapers less than width: a dry gully keeps a readable cut down to its source
+    dep = Math.max(0.6, dep * (0.55 + 0.45 * head));
     // on steep ground the channel is a gully: a wide shallow V, not a slot
     const steepness = smoothstep(0.08, 0.35, grade);
     w *= 1 + 1.6 * steepness;
@@ -545,18 +546,27 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     }
   }
 
-  // smooth the carved channel floor (residual treads where the chamfer stripes meet at bends)
+  // smooth the carved channel and its banks. The carve is written one height per simulation cell,
+  // so every bank is a stair of cell-sized terraces that the surface shows as pixelation even at a
+  // finer mesh. A few passes of a 3×3 binomial blur over the river band (weighted by the band, so
+  // the valley floor outside it is untouched) turn the stair into a continuous bank.
   {
-    const tmp = Float32Array.from(height);
-    for (const c of touched) {
-      if (riverMask[c] < 0.2 || height[c] <= sea) continue;
-      const ci = c % N, cj = (c - ci) / N;
-      if (ci < 1 || cj < 1 || ci >= N - 1 || cj >= N - 1) continue;
-      let sum = 0, n = 0;
-      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const k = (cj + dj) * N + ci + di; if (riverMask[k] >= 0.2) { sum += height[k]; n++; } }
-      if (n) tmp[c] = height[c] + (sum / n - height[c]) * Math.min(1, riverMask[c] * 1.5);
+    const band = new Float32Array(total);
+    for (let c = 0; c < total; c++) band[c] = Math.min(1, riverMask[c] * 1.5 + bankMask[c] * 0.5);
+    let cur = Float32Array.from(height);
+    let nxt = new Float32Array(total);
+    for (let pass = 0; pass < 4; pass++) {
+      nxt.set(cur);
+      for (let cj = 1; cj < N - 1; cj++) for (let ci = 1; ci < N - 1; ci++) {
+        const c = cj * N + ci, w = band[c];
+        if (w <= 0.01 || cur[c] <= sea) continue;
+        const s = 4 * cur[c] + 2 * (cur[c - 1] + cur[c + 1] + cur[c - N] + cur[c + N])
+          + cur[c - N - 1] + cur[c - N + 1] + cur[c + N - 1] + cur[c + N + 1];
+        nxt[c] = cur[c] + (s / 16 - cur[c]) * w;
+      }
+      const t = cur; cur = nxt; nxt = t;
     }
-    height.set(tmp);
+    height.set(cur);
   }
 
   // the water level was copied from the nearest channel cell, which on steep reaches gives a
