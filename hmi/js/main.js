@@ -26,15 +26,8 @@ function fit() {
 }
 window.addEventListener('resize', fit);
 fit();
-// On the 3D page, the pointer leans the screen a few degrees (hover devices only).
-if (tiltPage && matchMedia('(hover: hover)').matches) {
-  window.addEventListener('pointermove', (e) => {
-    const nx = e.clientX / window.innerWidth - 0.5;
-    const ny = e.clientY / window.innerHeight - 0.5;
-    document.documentElement.style.setProperty('--tilt-x', `${(4 - ny * 5).toFixed(2)}deg`);
-    document.documentElement.style.setProperty('--tilt-y', `${(-6 + nx * 7).toFixed(2)}deg`);
-  });
-}
+// The 3D page keeps its fixed tilt (css/stage3d.css). No pointer-driven tilt: moving targets under the cursor
+// would make presses and releases land on different elements.
 
 // One telemetry frame per display refresh (dt clamped for tab switches).
 let last = performance.now();
