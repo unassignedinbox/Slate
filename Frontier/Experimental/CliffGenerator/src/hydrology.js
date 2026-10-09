@@ -337,6 +337,12 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     const torrent = 1 / (1 + 6 * grade);
     let w = Math.min(maxWidth, Math.max(cell * 1.5, (opts.widthScale || 25) * Math.sqrt(km2) * torrent));
     let dep = Math.max(0.4, (opts.depthScale || 1) * Math.pow(w, 0.45) * (0.5 + 0.5 * torrent));
+    // headwaters taper: a channel just over the catchment threshold is a thread that thins to a
+    // point at its source, and only reaches full width once the drainage has built up (Gaea-style
+    // tapering ends instead of a constant-width stripe that begins and stops abruptly)
+    const head = smoothstep(threshold, threshold * 8, acc[c]);
+    w = Math.max(cell * 0.35, w * (0.12 + 0.88 * head));
+    dep = Math.max(0.15, dep * (0.25 + 0.75 * head));
     // on steep ground the channel is a gully: a wide shallow V, not a slot
     const steepness = smoothstep(0.08, 0.35, grade);
     w *= 1 + 1.6 * steepness;
