@@ -96,6 +96,7 @@ export function refineField(field, v) {
     resolution: N, worldSize: field.worldSize,
     height: field.height.slice(), hardness: field.hardness, deposit: field.deposit, flow: field.flow, cavity: field.cavity, slope: field.slope,
     river: field.river || empty(), waterLevel: (field.waterLevel || empty().fill(NO_WATER)).slice(), lakeSim: field.lake || empty(),
+    silt: field.silt || empty(),
     outcrop: field.outcrop || null,
     stats: field.stats, base: field,
   } : {
@@ -110,6 +111,7 @@ export function refineField(field, v) {
     river: upsampleMap(field.river || empty(), N, k, true),
     waterLevel: upsampleWaterLevel(field.waterLevel || empty().fill(NO_WATER), N, k),
     lakeSim: upsampleMap(field.lake || empty(), N, k, true),
+    silt: upsampleMap(field.silt || empty(), N, k, true),
     outcrop: field.outcrop ? upsampleMap(field.outcrop, N, k, true) : null,
     stats: field.stats,
     base: field,
@@ -192,6 +194,8 @@ export function buildTerrainGeometry(field, v = {}, chunks = null) {
   const normals = new Float32Array(count * 3);
   const aux = new Float32Array(count * 4);
   const aux2 = new Float32Array(count * 4);
+  const aux3 = new Float32Array(count * 4);
+  const silt = field.silt;
   const disp = makeDisplacement(field, v);
   const detail = makeDetail(field, v);
   const fadeCells = 3;
@@ -233,6 +237,7 @@ export function buildTerrainGeometry(field, v = {}, chunks = null) {
       aux2[idx * 4] = rd;
       aux2[idx * 4 + 1] = river ? river[idx] : 0;
       aux2[idx * 4 + 2] = lake ? lake[idx] : 0;
+      aux3[idx * 4] = silt ? silt[idx] : 0;
       aux2[idx * 4 + 3] = waterLevel ? waterLevel[idx] : NO_WATER;
       if (rd > 0.5) {
         // roads are flat: strip the normal-space detail off the carriageway
@@ -265,6 +270,7 @@ export function buildTerrainGeometry(field, v = {}, chunks = null) {
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute('aux', new THREE.BufferAttribute(aux, 4));
   geometry.setAttribute('aux2', new THREE.BufferAttribute(aux2, 4));
+  geometry.setAttribute('aux3', new THREE.BufferAttribute(aux3, 4));
   geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   if ((v.overhang || 0) + (v.buttress || 0) + (v.detailRelief || 0) + (v.rockyAmount || 0) > 0) {
     // displaced faces need true mesh normals; blend with the heightfield normal to keep them smooth
@@ -291,7 +297,7 @@ export function buildSkirtGeometry(field, floorY) {
     { count: N, at: (t) => [0, N - 1 - t], normal: [-1, 0, 0] },    // west   (i = 0)
     { count: N, at: (t) => [N - 1, t], normal: [1, 0, 0] },         // east   (i = N-1)
   ];
-  const positions = [], normals = [], aux = [], aux2 = [], indices = [];
+  const positions = [], normals = [], aux = [], aux2 = [], aux3 = [], indices = [];
   let base = 0;
   for (const edge of edges) {
     for (let t = 0; t < edge.count; t++) {
@@ -303,6 +309,7 @@ export function buildSkirtGeometry(field, floorY) {
       normals.push(...edge.normal, ...edge.normal);
       aux.push(0, 0, hardness[idx], 0, 0, 0, hardness[idx], 0);
       aux2.push(0, 0, 0, NO_WATER, 0, 0, 0, NO_WATER);
+      aux3.push(0, 0, 0, 0, 0, 0, 0, 0);
     }
     for (let t = 0; t < edge.count - 1; t++) {
       const a = base + t * 2, b = a + 1, c = a + 2, d = a + 3;
@@ -315,6 +322,7 @@ export function buildSkirtGeometry(field, floorY) {
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   geometry.setAttribute('aux', new THREE.Float32BufferAttribute(aux, 4));
   geometry.setAttribute('aux2', new THREE.Float32BufferAttribute(aux2, 4));
+  geometry.setAttribute('aux3', new THREE.Float32BufferAttribute(aux3, 4));
   geometry.setIndex(indices);
   geometry.computeBoundingSphere();
   return geometry;

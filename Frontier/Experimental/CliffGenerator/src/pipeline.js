@@ -154,7 +154,8 @@ export function generateTerrain(params, progress = () => {}) {
   // Simulated drainage: the drawn rivers are guides (already carved + injected as flow); the
   // network itself comes from the eroded surface.
   let hydro = null;
-  const lake = new Float32Array(N * N);
+  const lake = new Float32Array(N * N);       // real lakes only
+  const siltMap = new Float32Array(N * N);    // sediment that lies flat near water (alluvium), own channel
   // alluvium (0..1): fluvial sediment thickness relative to the "shows at" thickness — floodplains,
   // fans and silted basins; the rivers braid on it and the surface paints it as silt / sand
   const alluvium = new Float32Array(N * N);
@@ -228,7 +229,7 @@ export function generateTerrain(params, progress = () => {}) {
       const flat = 1 - smoothstep(0.12, 0.35, slopeNow[i]);
       const near = smoothstep(0.02, 0.2, nearWater[i]);
       const silt = a * flat * near;
-      lake[i] = Math.max(lake[i], silt * 0.85);
+      siltMap[i] = Math.max(siltMap[i], silt * 0.85);
       deposit[i] = Math.max(deposit[i], a * 0.45);
     }
   }
@@ -253,7 +254,7 @@ export function generateTerrain(params, progress = () => {}) {
     resolution: N,
     worldSize: params.worldSize,
     height, hardness, deposit, flow: flowNorm, cavity, slope,
-    river: riverResult.riverMask, waterLevel: riverResult.waterLevel, lake, outcrop,
+    river: riverResult.riverMask, waterLevel: riverResult.waterLevel, lake, silt: siltMap, outcrop,
     stats: { min, max, elapsedMs: now() - t0, rivers: hydro ? hydro.stats : null },
     network: hydro ? hydro.network : null,
   };

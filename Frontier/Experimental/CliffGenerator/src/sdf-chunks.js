@@ -129,7 +129,7 @@ export function selectChunks(fine, v) {
 export function packChunkJobs(fine, chunks, v) {
   const { resolution: N } = fine;
   const { C, list } = chunks;
-  const names = ['height', 'hardness', 'deposit', 'flow', 'cavity', 'road', 'river', 'lake', 'waterLevel', 'waterPaint', 'sdfWeight', 'outcrop', 'crest', 'foot', 'gmax', 'gxs', 'gzs'];
+  const names = ['height', 'hardness', 'deposit', 'flow', 'cavity', 'road', 'river', 'lake', 'silt', 'waterLevel', 'waterPaint', 'sdfWeight', 'outcrop', 'crest', 'foot', 'gmax', 'gxs', 'gzs'];
   const jobs = [], transfer = [];
   const cell = fine.worldSize / (N - 1);
   const maxCarve = carveReach(v);
@@ -599,7 +599,7 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const count = positions.length / 3;
   const pos = new Float32Array(positions);
   const normals = new Float32Array(count * 3);
-  const aux = new Float32Array(count * 4), aux2 = new Float32Array(count * 4);
+  const aux = new Float32Array(count * 4), aux2 = new Float32Array(count * 4), aux3 = new Float32Array(count * 4);
   const g = new Float64Array(3);
   const gAt = (ix, iy, iz) => {
     const xa = Math.max(0, ix - 1), xb = Math.min(nx, ix + 1), ya = Math.max(0, iy - 1), yb = Math.min(ny, iy + 1), za = Math.max(0, iz - 1), zb = Math.min(nz, iz + 1);
@@ -630,8 +630,9 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     aux2[n * 4] = bil(m.road, cu, cw);
     aux2[n * 4 + 1] = bil(m.river, cu, cw);
     aux2[n * 4 + 2] = bil(m.lake, cu, cw);
+    aux3[n * 4] = m.silt ? bil(m.silt, cu, cw) : 0;
     aux2[n * 4 + 3] = m.waterPaint ? bil(m.waterPaint, cu, cw) : m.waterLevel[Math.min(Sz - 1, Math.max(0, Math.round(cw) + pad)) * Sx + Math.min(Sx - 1, Math.max(0, Math.round(cu) + pad))];
   }
   const index = count > 65535 ? new Uint32Array(indices) : new Uint16Array(indices);
-  return { positions: pos, normals, aux, aux2, index, voxels: nx * ny * nz, triangles: indices.length / 3 };
+  return { positions: pos, normals, aux, aux2, aux3, index, voxels: nx * ny * nz, triangles: indices.length / 3 };
 }

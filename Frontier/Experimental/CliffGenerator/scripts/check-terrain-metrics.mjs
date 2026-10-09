@@ -4,7 +4,8 @@
 //   gridBias    how strongly slope directions snap to the 8 D8 directions (0 isotropic … 1 snapped)
 //   bankRough   mean |h − mean of 4 neighbours| on the river band (stair-steps raise it)
 //   wetCells    cells where the water level stands above the ground (higher = more water kept)
-//   siltShare   share of land cells painted as silt / lake bed
+//   lakeShare   share of land cells that are real lake beds
+//   siltShare   share of land cells painted as flat alluvial silt (its own channel)
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -26,7 +27,7 @@ const ms = Date.now() - t0;
 const N = res, H = r.height, cell = params.worldSize / (N - 1);
 const sea = params.waterEnabled ? params.seaLevel : -1e9;
 
-let re = 0, im = 0, wsum = 0, rough = 0, rn = 0, wet = 0, land = 0, silt = 0;
+let re = 0, im = 0, wsum = 0, rough = 0, rn = 0, wet = 0, land = 0, silt = 0, lakes = 0;
 for (let j = 2; j < N - 2; j++) for (let i = 2; i < N - 2; i++) {
   const c = j * N + i;
   const gx = (H[c + 1] - H[c - 1]) / (2 * cell), gz = (H[c + N] - H[c - N]) / (2 * cell);
@@ -36,13 +37,13 @@ for (let j = 2; j < N - 2; j++) for (let i = 2; i < N - 2; i++) {
 }
 for (let c = 0; c < N * N; c++) {
   if (r.waterLevel[c] > NO_WATER * 0.5 && r.waterLevel[c] - H[c] > 0.02) wet++;
-  if (H[c] > sea) { land++; if (r.lake[c] > 0.3) silt++; }
+  if (H[c] > sea) { land++; if (r.lake[c] > 0.3) lakes++; if (r.silt[c] > 0.3) silt++; }
 }
 const metrics = {
   preset: presetArg, res, overrides: JSON.parse(ovrArg), ms,
   gridBias: +(Math.hypot(re, im) / Math.max(1e-9, wsum)).toFixed(4),
   bankRough: +(rough / Math.max(1, rn)).toFixed(4),
-  wetCells: wet, siltShare: +(silt / Math.max(1, land)).toFixed(4),
+  wetCells: wet, lakeShare: +(lakes / Math.max(1, land)).toFixed(4), siltShare: +(silt / Math.max(1, land)).toFixed(4),
 };
 console.log(JSON.stringify(metrics));
 

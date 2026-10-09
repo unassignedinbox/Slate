@@ -15,7 +15,7 @@ self.onmessage = (event) => {
       const g = buildChunkGeometry(job, meta, v, ctx);
       g.ci = job.ci; g.cj = job.cj;
       batch.push(g);
-      transfer.push(g.positions.buffer, g.normals.buffer, g.aux.buffer, g.aux2.buffer, g.index.buffer);
+      transfer.push(g.positions.buffer, g.normals.buffer, g.aux.buffer, g.aux2.buffer, g.aux3.buffer, g.index.buffer);
       if (batch.length >= 24 || n === jobs.length - 1) flush(n === jobs.length - 1);
     }
     if (jobs.length === 0) self.postMessage({ id, type: 'batch', chunks: [], done: true });

@@ -345,6 +345,7 @@ export class CliffScene {
       g.setAttribute('normal', new THREE.BufferAttribute(c.normals, 3));
       g.setAttribute('aux', new THREE.BufferAttribute(c.aux, 4));
       g.setAttribute('aux2', new THREE.BufferAttribute(c.aux2, 4));
+      g.setAttribute('aux3', new THREE.BufferAttribute(c.aux3, 4));
       g.setIndex(new THREE.BufferAttribute(c.index, 1));
       g.computeBoundingSphere();
       const mesh = new THREE.Mesh(g, this.terrainMaterial);

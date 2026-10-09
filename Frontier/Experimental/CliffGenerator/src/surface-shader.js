@@ -19,8 +19,10 @@ import { makeBedTable } from './strata-model.js';
 const vertexHead = /* glsl */`
 attribute vec4 aux;
 attribute vec4 aux2;
+attribute vec4 aux3;
 varying vec4 vAux;
 varying vec4 vAux2;
+varying vec4 vAux3;
 varying vec3 vWorldPos;
 `;
 
@@ -33,12 +35,14 @@ const vertexBody = /* glsl */`
   vWorldPos = ( modelMatrix * wp4 ).xyz;
   vAux = aux;
   vAux2 = aux2;
+  vAux3 = aux3;
 }
 `;
 
 const fragmentHead = /* glsl */`
 varying vec4 vAux;
 varying vec4 vAux2;
+varying vec4 vAux3;
 varying vec3 vWorldPos;
 uniform vec3 uRockA, uRockB, uRockC, uFresh, uOxide, uGrassA, uGrassB, uDry, uMoss, uSnow, uGravel, uRoad, uSilt;
 uniform float uShoreWet, uRoadOn, uBedOn;
@@ -289,13 +293,14 @@ float cgPatch( vec3 wp, float scale, float seed ) { return clamp( cgNoise3( wp /
 
 struct Surface { vec3 albedo; vec3 normalW; float roughness; float ao; float metal; vec3 emissive; };
 
-Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
+Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2, vec4 aux3 ) {
   float road = aux2.x * ( 1.0 - uIsRock ) * uRoadOn;
   float riverBed = aux2.y * ( 1.0 - uIsRock ) * uBedOn;
-  float lakeBed = aux2.z * ( 1.0 - uIsRock ) * uBedOn; // lake beds and fluvial alluvium: silt / sand
+  float lakeBed = aux2.z * ( 1.0 - uIsRock ) * uBedOn; // real lake beds (flat silt under standing water)
+  float silt = aux3.x * ( 1.0 - uIsRock ) * uBedOn;   // fluvial alluvium that lies flat near water: silt / sand
   float localWater = mix( -1.0e6, aux2.w, 1.0 - uIsRock );
   float waterLine = max( uSeaLevel, localWater );
-  float bedCover = clamp( max( road, max( riverBed, lakeBed ) ), 0.0, 1.0 );
+  float bedCover = clamp( max( road, max( riverBed, max( lakeBed, silt ) ) ), 0.0, 1.0 );
   float deposit = aux.x * ( 1.0 - uIsRock );
   float flow = aux.y * ( 1.0 - uIsRock );
   float hardness = aux.z;
@@ -567,8 +572,8 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   // drawn features: river beds (cobbles → silt towards the banks), lake beds (silt), roads
   float cobble = cgNoise3( wp * 2.6 ).x * 0.5 + cgNoise3( wp * 9.0 + 3.0 ).x * 0.5;
   vec3 bedCol = mix( uSilt, mix( uGravel * ( 0.65 + 0.7 * cobble ), gravel, step( 0.001, uGravelAmount ) ), smoothstep( 0.45, 0.95, riverBed ) );
-  bedCol = mix( bedCol, uSilt * ( 0.9 + 0.2 * speckle ), lakeBed * ( 1.0 - riverBed ) );
-  float bedMix = smoothstep( 0.05, 0.5, max( riverBed, lakeBed ) );
+  bedCol = mix( bedCol, uSilt * ( 0.9 + 0.2 * speckle ), max( lakeBed, silt ) * ( 1.0 - riverBed ) );
+  float bedMix = smoothstep( 0.05, 0.5, max( riverBed, max( lakeBed, silt ) ) );
   rock = mix( rock, bedCol, bedMix );
   float roadSurf = smoothstep( 0.5, 0.75, road );
   float shoulder = smoothstep( 0.1, 0.4, road ) * ( 1.0 - roadSurf );
@@ -609,7 +614,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   soilCol *= 1.0 - 0.18 * max( 0.0, -cavity );
   // alluvium / silt on top of the soil (sediment the rivers dropped)
   vec3 siltCol = uSilt * ( 0.92 + 0.16 * clods ) * ( 1.0 - 0.3 * damp );
-  soilCol = mix( soilCol, siltCol, lakeBed * uSoilAlluvium );
+  soilCol = mix( soilCol, siltCol, silt * uSoilAlluvium );
   rock = mix( rock, soilCol, soil );
 
   vec3 color = mix( rock, grass, veg );
@@ -682,7 +687,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
     else if ( uDebugView < 5.5 ) dbg = mix( vec3( 0.1 ), vec3( 0.3 + 0.6 * pebbleTone ), pebbleCover ) * ( 0.3 + 0.7 * gravelHere );
     else if ( uDebugView < 6.5 ) dbg = vec3( 0.12 ) + vec3( 0.1, 0.7, 0.1 ) * veg + vec3( 0.05, 0.3, 0.15 ) * moss + vec3( 0.9 ) * snow + vec3( 0.5, 0.4, 0.3 ) * gravelMix + vec3( 0.45, 0.3, 0.15 ) * soil * ( 1.0 - veg );
     else if ( uDebugView < 7.5 ) dbg = vec3( rockMask, wet, hardness );
-    else dbg = vec3( road, riverBed, lakeBed ) + vec3( 0.0, 0.0, 0.4 ) * under;
+    else dbg = vec3( road, max( riverBed, silt ), lakeBed ) + vec3( 0.0, 0.0, 0.4 ) * under; // red road, green river bed + silt, blue lake bed
     s.albedo = dbg;
     s.normalW = n;
     s.roughness = 1.0;
@@ -697,7 +702,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
 const fragmentBody = /* glsl */`
 {
   vec3 geomN = inverseTransformDirection( normal, viewMatrix );
-  Surface s = evaluateCliffSurface( vWorldPos, geomN, vAux, vAux2 );
+  Surface s = evaluateCliffSurface( vWorldPos, geomN, vAux, vAux2, vAux3 );
   diffuseColor.rgb = s.albedo;
   #ifdef USE_COLOR
     diffuseColor.rgb *= vColor.rgb;
