@@ -220,9 +220,14 @@ export default function LayerStack({
     <aside className="stack">
       <div className="brand">Slate</div>
       <div className="project-row">
-        <button
+        <div
           className={`object-header ${selection.kind === 'project' ? 'selected-header' : ''}`}
+          role="button"
+          tabIndex={0}
           onClick={() => onSelect({ kind: 'project' })}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') onSelect({ kind: 'project' });
+          }}
         >
           <span className="object-icon" style={{ '--accent': '#b9b9b9' } as React.CSSProperties}>
             <Mountain size={16} />
@@ -237,7 +242,7 @@ export default function LayerStack({
               aria-label="Project name"
             />
           </span>
-        </button>
+        </div>
         <button className="tool-button" onClick={onOpenPresets}>
           <Grid2x2Check size={12} /> Presets
         </button>

@@ -24,6 +24,9 @@ export type ChannelId =
   | 'snow'
   | 'strata'
   | 'sea'
+  | 'noise'
+  | 'grain'
+  | 'cells'
   | 'constant';
 
 export interface ChannelDef {
@@ -51,6 +54,9 @@ export const CHANNELS: ChannelDef[] = [
   { id: 'eroded', label: 'Erosion', group: 'Simulation', blurb: 'Material removed by erosion passes' },
   { id: 'snow', label: 'Snow cover', group: 'Climate', blurb: 'Accumulation above the snow line, reduced on cliffs', unit: true },
   { id: 'sea', label: 'Submerged', group: 'Climate', blurb: 'Distance-weighted depth below the water level', unit: true },
+  { id: 'noise', label: 'Noise field', group: 'Procedural', blurb: 'Broad fractal noise — a generator you can paint with, independent of the terrain', unit: true },
+  { id: 'grain', label: 'Fine grain', group: 'Procedural', blurb: 'High frequency noise: speckle, salt weathering, shingle', unit: true },
+  { id: 'cells', label: 'Cellular patches', group: 'Procedural', blurb: 'Worley cells — patchy vegetation, lichen, frost heave', unit: true },
   { id: 'constant', label: 'Constant', group: 'Utility', blurb: 'Flat fill — use it as a base tint or a mask carrier', unit: true },
 ];
 

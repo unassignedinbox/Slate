@@ -198,6 +198,27 @@ export class ChannelStore {
         }
         return out;
       }
+      case 'noise':
+      case 'grain':
+      case 'cells': {
+        // Procedural channels: a generator feeding a colour ramp directly,
+        // so satmap layers can use noise the same way height layers do.
+        const out = Field.zeros(size);
+        const inv = 1 / size;
+        const scale = id === 'grain' ? 46 : id === 'cells' ? 13 : 4.5;
+        for (let y = 0; y < size; y++) {
+          const v = y * inv;
+          for (let x = 0; x < size; x++) {
+            const u = x * inv;
+            const i = y * size + x;
+            out.data[i] =
+              id === 'cells'
+                ? clamp(0.5 + env.noise.worley(u * scale + 11.3, v * scale - 7.1, 1, 0.9) * 0.9, 0, 1)
+                : clamp(0.5 + 0.5 * env.noise.fbm(u * scale, v * scale, id === 'grain' ? 3 : 5, 2.1, 0.5), 0, 1);
+          }
+        }
+        return out;
+      }
       default:
         return Field.zeros(size).fill(1);
     }

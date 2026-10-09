@@ -36,6 +36,9 @@ const CHANNEL_RAMP: Partial<Record<ChannelId, string>> = {
   snow: 'Snow',
   sea: 'Water',
   constant: 'Basalt',
+  noise: 'Basalt',
+  grain: 'Scree',
+  cells: 'Vegetation',
 };
 
 export function rampForChannel(channel: ChannelId): ColorStop[] {

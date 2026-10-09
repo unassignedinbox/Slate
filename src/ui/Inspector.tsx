@@ -27,7 +27,7 @@ import type {
   Project,
   SatLayer,
 } from '../engine/types';
-import { CHANNELS, EROSIONS, FILTERS, GENERATORS } from '../engine/registry';
+import { CHANNELS, EROSIONS, EROSION_GROUPS, FILTERS, GENERATORS } from '../engine/registry';
 import { defaultParams } from '../engine/params';
 import type { ComputeResponse } from '../engine/worker';
 import { Card, Dropdown, MaskCard, ParamList, RampEditor, Slider, ToggleRow } from './controls';
@@ -417,12 +417,36 @@ function LayerInspector({
 
       <div className="cards">
         <Card title={`${title} type`} icon={icon} accent={accent} note={def.blurb}>
-          <Dropdown
-            label={isErosion ? 'Erosion type' : isGenerator ? 'Noise type' : 'Filter type'}
-            value={current}
-            options={defs.map((d) => ({ value: d.id, label: d.label }))}
-            onChange={swapType}
-          />
+          {isErosion ? (
+            <div className="field">
+              <div className="field-head">
+                <span>Erosion type</span>
+              </div>
+              <select
+                className="select"
+                value={current}
+                onChange={(e) => swapType(e.target.value)}
+                aria-label="Erosion type"
+              >
+                {EROSION_GROUPS.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.items.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <Dropdown
+              label={isGenerator ? 'Noise type' : 'Filter type'}
+              value={current}
+              options={defs.map((d) => ({ value: d.id, label: d.label }))}
+              onChange={swapType}
+            />
+          )}
           <div style={{ marginTop: 12 }}>
             <ParamList defs={def.params} values={layer.params} onChange={(k, v) => onLayerParams(layer.id, k, v)} accent={accent} />
           </div>

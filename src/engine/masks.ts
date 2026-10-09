@@ -139,7 +139,7 @@ const coastalDef: MaskDef = {
 
 const peakDef: MaskDef = {
   id: 'peak',
-  label: 'Peak falloff',
+  label: 'Mountain falloff',
   blurb: 'Smooth falloff measured from the summits down, so a layer breaks into isolated mountain tops instead of covering the range continuously.',
   params: [
     { kind: 'slider', key: 'radius', label: 'Prominence radius', min: 2, max: 120, step: 1, def: 28 },
