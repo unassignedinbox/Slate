@@ -313,6 +313,25 @@ export function fitWallLines(m, Sx, Sz, pad, grad, radii) {
     break;
    }
   }
+  // the windows change size from node to node, so the fitted line can jump between neighbours:
+  // blur the line parameters (and the fit mask) so the wall plane changes smoothly across the face
+  const B = 3;
+  const blur = (arr) => {
+    const tmp = new Float32Array(Sx * Sz), res = new Float32Array(Sx * Sz);
+    for (let j = 0; j < Sz; j++) for (let i = 0; i < Sx; i++) {
+      let t = 0;
+      for (let k = -B; k <= B; k++) t += arr[j * Sx + Math.min(Sx - 1, Math.max(0, i + k))];
+      tmp[j * Sx + i] = t / (2 * B + 1);
+    }
+    for (let j = 0; j < Sz; j++) for (let i = 0; i < Sx; i++) {
+      let t = 0;
+      for (let k = -B; k <= B; k++) t += tmp[Math.min(Sz - 1, Math.max(0, j + k)) * Sx + i];
+      res[j * Sx + i] = t / (2 * B + 1);
+    }
+    return res;
+  };
+  out.nX = blur(out.nX); out.nZ = blur(out.nZ); out.cX = blur(out.cX); out.cZ = blur(out.cZ);
+  out.ok = blur(out.ok);
   return out;
 }
 
@@ -422,6 +441,22 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     };
   }
   const wallF = flatWall && m.sdfWeight ? fitWallLines(m, Sx, Sz, pad, gradS, flatRadii) : null;
+  // the blend weight of the flat wall is box-blurred (radius 4 cells): a per-cell weight changes from
+  // column to column and streaks the face vertically
+  let wallW = null;
+  if (wallF) {
+    const B = 4, tmp = new Float32Array(Sx * Sz); wallW = new Float32Array(Sx * Sz);
+    for (let j = 0; j < Sz; j++) for (let i = 0; i < Sx; i++) {
+      let t = 0;
+      for (let k = -B; k <= B; k++) t += m.sdfWeight[j * Sx + Math.min(Sx - 1, Math.max(0, i + k))];
+      tmp[j * Sx + i] = t / (2 * B + 1);
+    }
+    for (let j = 0; j < Sz; j++) for (let i = 0; i < Sx; i++) {
+      let t = 0;
+      for (let k = -B; k <= B; k++) t += tmp[Math.min(Sz - 1, Math.max(0, j + k)) * Sx + i];
+      wallW[j * Sx + i] = t / (2 * B + 1);
+    }
+  }
   const wallPushL = Math.max(vox * 6, v.sdfPushScale || 14);
   const wallKnobs = Math.max(0, v.sdfKnobs == null ? 1.2 : v.sdfKnobs);
   // everything that depends on the plan position only
@@ -442,7 +477,8 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     const grx = gx * ca - gz * sa, grz = gx * sa + gz * ca;
     const visX = gl > 1e-6 ? Math.abs(grz) / gl : 0.7, visZ = gl > 1e-6 ? Math.abs(grx) / gl : 0.7;
     let h = bil(m.height, u, wq);
-    if (wallF && w > 1e-6 && bil(wallF.ok, u, wq) > 0.5) {
+    const wsm = wallW ? bil(wallW, u, wq) : 0;
+    if (wallF && wsm > 1e-6 && bil(wallF.ok, u, wq) > 0.5) {
       // flat wall: the cliff is a straight vertical plane on the fitted line. Upper side (+ of the
       // line) stands at the upper plateau, lower side at the lower one; w blends it into the ground
       const nX = bil(wallF.nX, u, wq), nZ = bil(wallF.nZ, u, wq);
@@ -455,7 +491,7 @@ export function buildChunkGeometry(job, meta, v, ctx) {
       let acc = 0, cnt = 0;
       for (let t = -flatT; t <= flatT; t += 2) { acc += bil(m.height, u + sd * ux + t * tx, wq + sd * uz + t * tz); cnt++; }
       const hs = acc / cnt;
-      h = h * (1 - w) + hs * w;
+      h = h * (1 - wsm) + hs * wsm;
     }
     const crest = needCF ? bil(m.crest, u, wq) : 0, foot = needCF ? bil(m.foot, u, wq) : 0;
     let vW = 0, vdx = 0, vdz = 0;
