@@ -146,12 +146,13 @@ function duneProfile(fr, crest, lambda, amp) {
 }
 
 // ---- rock stacks -------------------------------------------------------------------------------
-// Tiered rock towers in the manner of Gaea's Stacks node: a mask m(x,z) — warped fbm for buttes
-// and mesas, blended towards cellular cones for isolated spires / hoodoos — is thresholded at a
-// rising level per tier, so each tier sits inside the one below (taper). Every tier has its own
-// thickness (a bed table of its own), its own edge width, and under "chaos" its own plan offset
-// and outline wobble, so the pile leans and steps irregularly like real sandstone stacks instead
-// of a wedding cake. A talus pedestal ramps up to the foot of the lowest tier.
+// A stack field is a *scatter*, not a grid: cluster cells each hold one to three features, and a
+// feature is an elongated, part-square blob with its own size, height, taper and lean. Sizes are
+// drawn from a heavy-tailed distribution, so a few anchor towers stand among many small ones and
+// neighbours touch and merge into irregular compounds — which is what keeps the lattice of the
+// scatter from reading through. The mask is the smooth union of those blobs; a tier is a contour of
+// it, so every tier sits inside the one below. The pile walks in plan from its own foot to its own
+// crest (two mask samples, blended per tier) and each tier is wobbled, so the steps are uneven.
 function makeStacks(params) {
   const size = params.worldSize;
   const amp = params.stackHeight;
@@ -163,10 +164,12 @@ function makeStacks(params) {
   const spires = params.stackSpires == null ? 0 : params.stackSpires;
   const cover = params.stackCoverage == null ? 0.5 : params.stackCoverage;
   const pedestal = params.stackPedestal == null ? 0.4 : params.stackPedestal;
+  const sizeVar = params.stackSizeVar == null ? 0.6 : params.stackSizeVar;
+  const elong = params.stackElongation == null ? 0.4 : params.stackElongation;
+  const grouping = params.stackCluster == null ? 0.5 : params.stackCluster;
   const seed = params.seed | 0;
   const n2 = new SimplexNoise(seed * 29 + 17);
-  // tier table: thickness (its own bed table), threshold, edge width and plan offset of every tier.
-  // The mask is 1 at the centre of a stack and 0 at its rim, so tier k stands where m > t_k.
+  // tier table: thickness (its own bed table), threshold, edge width and a plan step of every tier
   const tTop = 0.85 * taper;
   const tiers = [];
   let sum = 0;
@@ -178,32 +181,71 @@ function makeStacks(params) {
       thick,
       t: levels > 1 ? (tTop * k) / (levels - 1) : 0,
       w: lerp(0.16, 0.015, sharp) * (0.6 + 0.8 * hash2(k, 3, seed + 5)),
-      ox: Math.cos(ang) * chaos * 0.07, oz: Math.sin(ang) * chaos * 0.07,
+      ox: Math.cos(ang) * chaos * 0.045, oz: Math.sin(ang) * chaos * 0.045,
       ph: k * 7.3,
     });
   }
   for (const tier of tiers) tier.h = (tier.thick / sum) * amp;
   const f = size / scale; // one unit = the stack size
-  // blobs: a smooth union of discs around jittered feature points (one per cell), each with its
-  // own radius; spires make the cells smaller and the discs narrower (isolated pillars)
-  const cs = lerp(1.0, 0.45, spires), rMul = lerp(1.0, 0.7, spires);
+  const cs = lerp(1.0, 0.52, spires)                 // feature spacing, in stack units
+    , rMul = lerp(1.0, 0.78, spires)
+    , kS = 0.07;                                      // smooth-union softness
+  const out = new Float64Array(5);                   // mask, height factor, taper, lean x, lean z
   function blobs(px, pz) {
     const cx = Math.floor(px / cs), cz = Math.floor(pz / cs);
-    let acc = 0;
-    const kS = 0.07; // smooth-union softness
+    let acc = 0, wsum = 0, hs = 0, tf = 0, lx = 0, lz = 0;
     for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
       const ix = cx + dx, iz = cz + dz;
-      if (hash2(ix, iz, seed + 43) > 0.8) continue; // not every cell has a stack
-      const fx = (ix + 0.2 + 0.6 * hash2(ix, iz, seed + 31)) * cs, fz = (iz + 0.2 + 0.6 * hash2(ix, iz, seed + 37)) * cs;
-      const R = cs * (0.3 + 0.35 * hash2(ix, iz, seed + 41)) * rMul;
-      const val = 1 - Math.hypot(px - fx, pz - fz) / R;
-      acc += Math.exp(val / kS);
+      if (hash2(ix, iz, seed + 43) > 0.84 - 0.16 * grouping) continue; // some cells are bare ground
+      const h0 = hash2(ix * 3, iz * 5 + 2, seed + 61);
+      // clustering: a cell holds one tower, or a tight group of them, or nothing — never a row
+      const n = grouping > 0.02 ? (h0 < 0.3 + 0.34 * grouping ? 3 : h0 < 0.56 + 0.2 * grouping ? 2 : 1) : (h0 < 0.8 ? 1 : 0);
+      // anchor, jittered inside its cell (never on the lattice)
+      const ax0 = (ix + 0.16 + 0.68 * hash2(ix, iz, seed + 31)) * cs;
+      const az0 = (iz + 0.16 + 0.68 * hash2(ix, iz, seed + 37)) * cs;
+      for (let i = 0; i < n; i++) {
+        const hh = hash2(ix * 7 + i * 5, iz * 13 - i * 3, seed + 71);
+        // the rest of a group leans against the first one, so towers touch but stay recognisable
+        const off = i === 0 ? 0 : cs * (0.2 + 0.2 * hh);
+        const oa = hash2(ix + i * 11, iz - i * 7, seed + 83) * Math.PI * 2;
+        const fx = ax0 + Math.cos(oa) * off, fz = az0 + Math.sin(oa) * off;
+        const ddx = px - fx, ddz = pz - fz;
+        const far = cs * 1.6 + off;
+        if (ddx * ddx + ddz * ddz > far * far) continue; // cheap reject before shaping
+        const hA = hash2(ix + i, iz * 3 + 1, seed + 41), hB = hash2(ix * 5 - i, iz + i * 2, seed + 97);
+        const hC = hash2(ix - i * 4, iz * 11 + i, seed + 103), hD = hash2(ix * 3 + i, iz + i * 7, seed + 109);
+        // heavy-tailed size: most stacks are small, a few are the anchors of their district
+        const R = cs * rMul * (0.2 + 0.15 * hA) * (0.8 + 0.85 * Math.pow(hB, 1 + 2.4 * sizeVar)) * (i === 0 ? 1 : 0.7);
+        if (R < 0.03) continue;
+        const ca = Math.cos(hC * Math.PI), sa = Math.sin(hC * Math.PI); // its own orientation
+        const asp = 1 + elong * 2.2 * hD;                                // elongation / ridge-like
+        const sq = 0.12 + 0.62 * hB;                                     // round blob → squarish mesa
+        const ax = (ddx * ca + ddz * sa) / (R * asp), az = (-ddx * sa + ddz * ca) / R;
+        const ex = Math.abs(ax) < 1e-6 ? 1e-6 : Math.abs(ax), ez = Math.abs(az);
+        const e = (1 - sq) * Math.sqrt(ex * ex + ez * ez) + sq * (ex > ez ? ex : ez);
+        const val = 1 - e;
+        if (val < -3.2 * kS) continue;
+        const wgt = Math.exp(val / kS);
+        acc += wgt; wsum += wgt;
+        // what the dominant features look like: taller / shorter, pointier, leaning one way
+        hs += wgt * (0.52 + 0.82 * Math.pow(hA, 1 + 1.7 * sizeVar));
+        tf += wgt * (0.5 + 1.0 * hD);
+        lx += wgt * Math.cos(hB * Math.PI * 2) * chaos * 0.14 * (0.4 + hC);
+        lz += wgt * Math.sin(hB * Math.PI * 2) * chaos * 0.14 * (0.4 + hC);
+      }
     }
-    return acc > 0 ? kS * Math.log(acc) : -2;
+    // a compound of touching towers has a higher union than a lone one — cap it, so groups grow
+    // sideways instead of piling up into a single massif
+    out[0] = acc > 0 ? Math.min(1.12, kS * Math.log(acc)) : -2;
+    if (wsum <= 0) { out[1] = 1; out[2] = 1; out[3] = 0; out[4] = 0; return out; }
+    out[1] = hs / wsum; out[2] = tf / wsum; out[3] = lx / wsum; out[4] = lz / wsum;
+    return out;
   }
-  function mask(px, pz) {
-    // the outlines are warped so no stack is a disc
-    const wx = n2.fbm(px * 1.3 + 1.3, pz * 1.3 + 5.1, 3) * 0.22, wz = n2.fbm(px * 1.3 - 7.7, pz * 1.3 + 2.9, 3) * 0.22;
+  function sample(px, pz) {
+    // the outlines are pulled around at two scales, so no stack is a disc or a clean ellipse
+    const w1 = 0.15 + 0.2 * chaos;
+    const wx = n2.fbm(px * 1.1 + 1.3, pz * 1.1 + 5.1, 3) * w1 + n2.fbm(px * 3.6 - 2.2, pz * 3.6 + 7.7, 2) * w1 * 0.5;
+    const wz = n2.fbm(px * 1.1 - 7.7, pz * 1.1 + 2.9, 3) * w1 + n2.fbm(px * 3.6 + 4.4, pz * 3.6 - 6.1, 2) * w1 * 0.5;
     return blobs(px + wx, pz + wz);
   }
   function at(u, v) {
@@ -215,21 +257,32 @@ function makeStacks(params) {
     // outside the field the stacks shrink and lose their upper tiers (the mask sinks) rather
     // than being squashed flat
     const sink = (1 - c) * 0.7;
-    const m0 = mask(px, pz) - sink;
+    const o0 = sample(px, pz);
+    const m0 = o0[0] - sink;
     if (m0 < -0.6) return 0;
+    const hs = Math.max(0.18, Math.min(1.5, o0[1])), tf = o0[2], lx = o0[3], lz = o0[4];
+    // the mask at the top of the pile, walked in the stack's own lean direction: the tiers then
+    // climb towards it instead of stacking dead vertical
+    let m1 = m0;
+    if (chaos > 0.01) m1 = sample(px + lx * 2.2, pz + lz * 2.2)[0] - sink;
     let h = 0, below = 1;
     for (let k = 0; k < levels; k++) {
       const tier = tiers[k];
-      // this tier's own outline: offset in plan and wobbled, so the tiers do not share one shape
-      const mk = (k === 0 ? m0 : mask(px + tier.ox, pz + tier.oz) - sink) + chaos * 0.05 * n2.fbm(px * 6 + tier.ph, pz * 6 - tier.ph, 2);
-      const sk = smoothstep(tier.t - tier.w, tier.t + tier.w, mk) * below;
+      const s = levels > 1 ? k / (levels - 1) : 0;
+      // this tier's own outline: the walk plus a wobble, so the tiers do not share one shape
+      const mk = m0 + (m1 - m0) * s + chaos * 0.05 * n2.fbm(px * 6 + tier.ph, pz * 6 - tier.ph, 2) + tier.ox * (1 - s) - tier.oz * s;
+      // a short stack simply has fewer tiers; a tall one has more (the thresholds ride on its own
+      // height and taper instead of the table's)
+      const t = tier.t * tf / hs;
+      const sk = smoothstep(t - tier.w, t + tier.w, mk) * below;
       // the tier top is not dead flat: it rises a little towards the centre
-      h += tier.h * sk * (1 + 0.1 * Math.max(0, mk - tier.t));
+      h += hs * tier.h * sk * (1 + 0.05 * Math.max(0, mk - t));
       below = sk; // a tier can only stand on the one below it
       if (k === 0 && pedestal > 0) {
-        // talus pedestal: a ramp from the ground up to the foot of the lowest tier
+        // talus pedestal: a ramp from the ground up to the foot of the lowest tier, bigger under
+        // the big stacks
         const ramp = smoothstep(-0.55, -tier.w, m0);
-        h += amp * 0.22 * pedestal * Math.pow(ramp, 1.6) * (1 - sk);
+        h += amp * 0.22 * pedestal * Math.pow(ramp, 1.6) * (1 - sk) * (0.45 + 0.75 * Math.min(1.4, hs));
       }
     }
     return h;

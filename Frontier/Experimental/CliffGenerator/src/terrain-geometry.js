@@ -125,7 +125,10 @@ export function refineField(field, v) {
   fine.road = roadMask;
   for (let i = 0; i < lakeMask.length; i++) lakeMask[i] = Math.max(lakeMask[i], fine.lakeSim[i]);
   fine.lake = lakeMask;
-  fine.waterPaint = continuousWaterLevel(fine.waterLevel, fine.height, fine.resolution, fine.worldSize / (fine.resolution - 1));
+  // painted water follows the water switch: a dry landform (a desert of stacks, a quarry) must
+  // not keep lakes from an earlier wet setting, or the flats read as holes in the rock
+  fine.waterPaint = v.waterEnabled === 0 ? new Float32Array(fine.resolution * fine.resolution).fill(NO_WATER)
+    : continuousWaterLevel(fine.waterLevel, fine.height, fine.resolution, fine.worldSize / (fine.resolution - 1));
   field._refined = { key, field: fine };
   return fine;
 }

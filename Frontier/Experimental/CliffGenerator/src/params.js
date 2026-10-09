@@ -76,6 +76,9 @@ export const defaults = {
   stackSpires: 0,
   stackCoverage: 0.5,
   stackPedestal: 0.4,
+  stackSizeVar: 0.6,        // spread of stack size / height (0 = all alike, 1 = few big + many small)
+  stackElongation: 0.4,
+  stackCluster: 0.5,
   cliffProtect: 0,          // steep faces keep their pre-erosion shape (sea cliffs, quarry walls)
   cliffProtectAngle: 38,    // [°]
   rillStrength: 0.5,
@@ -361,7 +364,8 @@ export const presets = {
   'Desert stacks': {
     palette: 'sandstone', worldSize: 1024, mountainHeight: 30, baseElevation: 40, baseFrequency: 1.2, ridgeSharpness: 1.0, peakPower: 1.4, warpStrength: 0.3,
     reliefFrequency: 1.2, reliefContrast: 0.4, plateauStrength: 0, canyonDepth: 0, cliffHeight: 0,
-    stackHeight: 140, stackLevels: 7, stackScale: 190, stackTaper: 0.5, stackSharpness: 0.85, stackChaos: 0.6, stackSpires: 0.35, stackCoverage: 0.65, stackPedestal: 0.5,
+    stackHeight: 140, stackLevels: 7, stackScale: 190, stackTaper: 0.5, stackSharpness: 0.85, stackChaos: 0.7, stackSpires: 0.35, stackCoverage: 0.65, stackPedestal: 0.5,
+    stackSizeVar: 0.9, stackElongation: 0.6, stackCluster: 0.5,
     ruggedAmount: 10, ruggedScale: 40, ruggedBlockiness: 0.7, ruggedLedges: 0.5, ruggedSlope: 30, ruggedAfter: 0.4,
     strataBand: 9, strataStrength: 1, strataVariation: 0.5, strataHardShare: 0.55, strataDip: 1, hardnessContrast: 0.9, strataRecut: 0.6,
     cliffProtect: 0, fluvialStrength: 0.35, fluvialIterations: 25, droplets: 60000, erodeSpeed: 0.3, thermalIterations: 30, talusSoft: 33, talusHard: 85, rillStrength: 0.35,
@@ -376,7 +380,8 @@ export const presets = {
   'Stack cliffs': {
     palette: 'sandstone', worldSize: 1024, mountainHeight: 25, baseElevation: 40, baseFrequency: 1.2, ridgeSharpness: 1.0, peakPower: 1.4, warpStrength: 0.3,
     reliefFrequency: 1.2, reliefContrast: 0.4, plateauStrength: 0, canyonDepth: 0, cliffHeight: 0,
-    stackHeight: 150, stackLevels: 5, stackScale: 240, stackTaper: 0.3, stackSharpness: 1, stackChaos: 0.35, stackSpires: 0.25, stackCoverage: 0.6, stackPedestal: 0.25,
+    stackHeight: 150, stackLevels: 5, stackScale: 240, stackTaper: 0.3, stackSharpness: 1, stackChaos: 0.55, stackSpires: 0.25, stackCoverage: 0.6, stackPedestal: 0.25,
+    stackSizeVar: 0.8, stackElongation: 0.5, stackCluster: 0.32,
     ruggedAmount: 14, ruggedScale: 45, ruggedBlockiness: 0.9, ruggedLedges: 0.5, ruggedSlope: 30, ruggedAfter: 0.5,
     strataBand: 7, strataStrength: 0.9, strataVariation: 0.4, strataHardShare: 0.6, strataDip: 1, hardnessContrast: 0.7, strataRecut: 0.5,
     cliffProtect: 0.9, fluvialStrength: 0.4, fluvialIterations: 25, droplets: 40000, erodeSpeed: 0.25, thermalIterations: 20, talusSoft: 36, talusHard: 89, rillStrength: 0.3,
@@ -598,6 +603,9 @@ export const groups = [
         ['stackSpires', 'Spires', 0, 1, 0.05, '', 'Blends the mask from broad warped noise (buttes, mesas) towards cellular cones (isolated spires / hoodoos)'],
         ['stackCoverage', 'Coverage', 0, 1, 0.05, '', 'Share of the map with stack fields'],
         ['stackPedestal', 'Pedestal', 0, 1, 0.05, '', 'Talus ramp up to the foot of the lowest tier'],
+        ['stackSizeVar', 'Size spread', 0, 1, 0.05, '', 'How different the stacks are from each other: 0 = an even field of alike towers, 1 = a few anchor towers among many small ones (sizes and heights are drawn from a heavy-tailed distribution)'],
+        ['stackElongation', 'Elongation', 0, 1, 0.05, '', 'Stretches the plan of each stack into ridges and fins along its own direction, so outlines are not discs'],
+        ['stackCluster', 'Clustering', 0, 1, 0.05, '', 'Groups the stacks into clusters with bare ground between: neighbours touch and merge into irregular compounds instead of standing on a lattice'],
       ] },
       { title: 'Dunes', controls: [
         ['duneAmount', 'Dune height', 0, 80, 1, 'm', 'Transverse sand dunes added to the relief: long windward slope, short slip face'],

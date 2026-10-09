@@ -217,7 +217,7 @@ export function carveReach(v) {
   const detail = (v.detailRelief || 0) + (v.rockyAmount || 0) + (v.cragAmount || 0);
   const blocks = Math.max(0, v.sdfBlocks || 0);
   return undercut * (1 + 0.5 * pits + 0.9 * joints) + 1.5 + detail + Math.max(0, v.sdfPushPull || 0) + Math.max(0, v.sdfLean || 0)
-    + blocks * 1.2 + (blocks > 0 ? Math.min(v.sdfBlockSize || 8, 12) * 0.6 : 0);
+    + blocks * 1.5 + (blocks > 0 ? Math.min(v.sdfBlockSize || 8, 12) * 0.6 : 0);
 }
 
 function stair(v, steps, sharp) {
@@ -342,6 +342,10 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const blockLoss = Math.min(1, Math.max(0, v.sdfBlockLoss == null ? 0.12 : v.sdfBlockLoss));
   const blockMinL = vox * 3; // a block narrower than 3 voxels cannot be resolved
   const crackW = Math.max(vox * 1.2, blockSize * 0.07);
+  // joint-set domains: real rock is broken into panels, each with its own joint spacing and its
+  // own block grid (and the grids do not line up across a panel boundary). Without this the blocks
+  // read as one wallpaper over every face in the world.
+  const blkDom = Math.max(14, blockSize * 5);
   const bump = roughAmp + detail.amp + pushAmp + blockAmp;
   const maxCarve = carveReach(v);
   // everything that depends on the plan position only
@@ -368,14 +372,18 @@ export function buildChunkGeometry(job, meta, v, ctx) {
         vdx = dxs / dl; vdz = dzs / dl; // unit uphill direction
       }
     }
-    return { x, z, h, w, slopeF, steep, oc, crest, foot, vW, vdx, vdz, visX, visZ, bc: null, strata: w > 1e-6 && (steep > 0 || vW > 0) ? ctx.strata.column(x, z) : null };
+    // this column's joint-set domain: block size, block depth and the phase of the block grid
+    const dgx = Math.floor(x / blkDom), dgz = Math.floor(z / blkDom);
+    const d0 = hash2(dgx, dgz, ctx.seed + 337), d1 = hash2(dgx, dgz, ctx.seed + 431);
+    return { x, z, h, w, slopeF, steep, oc, crest, foot, vW, vdx, vdz, visX, visZ, bc: null,
+      bf: 0.6 + 0.95 * d0, jf: 0.62 + 0.66 * d1, bpx: (d1 - 0.5) * 1.1, bpz: (d0 - 0.5) * 1.1, strata: w > 1e-6 && (steep > 0 || vW > 0) ? ctx.strata.column(x, z) : null };
   }
   // per-column, per-bed constants: the joint lattice and the block lattice depend on the plan
   // position and the bed only (spacing, stagger and hashes), so a column of samples reuses them
   // for every voxel of that bed — the noise and hashing in them is the bulk of a carve sample
   function bedPlan(col, bi, thick) {
     const { x, z } = col;
-    const spacing = Math.max(2, Math.min(30, thick * 0.9));
+    const spacing = Math.max(2, Math.min(30, thick * 0.9 * col.bf));
     const bc = {
       bi,
       jn: 0.5 + 0.5 * ctx.joint.fbm(x / spacing + bi * 3.1, z / spacing - bi * 1.7, 2),
@@ -384,8 +392,8 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     if (blockAmp <= 0) return bc;
     // lattice of this bed: size and stagger from the bed index, so rows do not line up
     const hb0 = hash2(bi, 0, ctx.seed + 101), hb1 = hash2(bi, 1, ctx.seed + 101);
-    const L = Math.max(blockMinL, Math.min(60, blockSize * (0.7 + 0.6 * hb0) * Math.min(1.6, Math.max(0.6, thick / blockSize + 0.4))));
-    const qx = (x + hb0 * L * 2.3) / L, qz = (z + hb1 * L * 1.7) / L;
+    const L = Math.max(blockMinL, Math.min(60, blockSize * col.bf * (0.7 + 0.6 * hb0) * Math.min(1.6, Math.max(0.6, thick / blockSize + 0.4))));
+    const qx = (x + hb0 * L * 2.3) / L + col.bpx, qz = (z + hb1 * L * 1.7) / L + col.bpz;
     const sX = Math.max(0.08, 1 - col.visX), sZ = Math.max(0.08, 1 - col.visZ);
     const cx = qx - 0.5, cz = qz - 0.5;
     const ix = Math.floor(cx), iz = Math.floor(cz);
@@ -458,7 +466,7 @@ export function buildChunkGeometry(job, meta, v, ctx) {
       const crack = (1 - smoothstep(0, crackW, e)) * (0.6 * blockAmp + 0.8 * vox);
       // soft beds weather smooth; hard beds break into blocks (massive boulders: no jointing)
       const bh = (0.35 + 0.65 * smoothstep(0.35, 0.6, hard)) * (1 - col.oc);
-      block = (crack - offs * (0.25 + 0.75 * rim)) * bh;
+      block = (crack - offs * (0.25 + 0.75 * rim)) * bh * col.jf;
     }
     let lean = 0;
     if (hasLean) {

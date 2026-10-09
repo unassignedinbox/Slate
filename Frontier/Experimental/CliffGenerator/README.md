@@ -82,10 +82,16 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    its own thickness, edge width and, under *Chaos*, its own plan offset and outline wobble, so
    the pile leans and steps irregularly instead of a wedding cake. *Spires* shrinks the cells and
    discs towards isolated hoodoos, *Taper* goes from straight towers to stepped pyramids, a talus
-   *Pedestal* ramps up to the lowest tier. Two experimental presets: *Desert stacks* (red sandstone
+   *Pedestal* ramps up to the lowest tier. Three controls keep the *scatter* organic instead of a grid: *Size spread* draws
+   size and height from a heavy‑tailed distribution (a few anchor towers among many small ones), *Elongation*
+   stretches each stack's plan along its own direction into ridges and fins, *Clustering* lets a cell hold a tight
+   group of stacks and leaves others bare, so neighbours touch and fuse into compounds — and every stack gets its
+   own height, taper, outline roundness and lean direction, with the whole mask warped at two scales. Two experimental presets: *Desert stacks* (red sandstone
    buttes and spires under normal erosion — fluted walls, talus skirts) and *Stack cliffs* (the
    same towers treated like the quarry / coastal walls: cliff protection, vertical sheared walls,
-   rock blocks). **Jointing** (*Rock material → Jointing*, shader): two vertical joint sets (families
+   rock blocks). **Joint‑set domains** keep the walls from reading as one pattern: the face is split into coarse
+   panels and each panel gets its own block size, block depth and grid phase, the way a real cliff shows patches of
+   massive slabs beside closely jointed ones instead of one wallpaper over every wall in the world. **Jointing** (*Rock material → Jointing*, shader): two vertical joint sets (families
    of warped planes spaced like the bed thickness, staggered bed to bed like brickwork) and the
    bedding planes break the face into blocks — each joint with its own width, some missing, each
    block with its own slight tilt and tone, grooves with normal and occlusion — the cracked, blocky
@@ -154,7 +160,8 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    outwards from the wet cells, falling away with distance) rather than the simulation's dry
    sentinel, so the shoreline is a clean line through the triangles instead of a cell‑by‑cell
    checkerboard. Turning *Water as meshes* on brings back the sea plane and the river / lake
-   sheets. **Bank gullying** (*Rivers → Bank gullying*): after the channels are cut, runoff off
+   sheets. Painted water also follows the *Sea* switch: with it off the terrain stays dry even where a
+   basin closed or a lake was drawn, so a desert landform cannot inherit water from an earlier wet setting. **Bank gullying** (*Rivers → Bank gullying*): after the channels are cut, runoff off
    the valley sides converges on the river and erodes small gullies into the soft bank material
    (fine‑scale rills masked to the banks, never below the water line) — the soil erosion a river
    valley shows on its flanks. Lakes are where basins fill (partial fill, area cap — the
