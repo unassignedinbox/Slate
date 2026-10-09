@@ -1,0 +1,20 @@
+<!--============================================================================================================================================
+                                                              INDEX.HTML
+============================================================================================================================================-->
+<!-- 📦 Tools/LandscapeEditor/index.html — Entry document: root container and the module that mounts the landscape editor. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Landscape Editor</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import { mountLandscapeHost } from '/src/LandscapeHost.jsx';
+      mountLandscapeHost(document.getElementById('root'));
+    </script>
+  </body>
+</html>
