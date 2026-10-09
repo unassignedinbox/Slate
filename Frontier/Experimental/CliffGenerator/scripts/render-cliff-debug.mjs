@@ -1,4 +1,4 @@
-// Debug view of the true-3D cliff chunks (flat Lambert software raster, no GL). Not the app's shader.
+// Debug view of the true-3D cliff chunks (software raster with interpolated SDF normals, no GL). Not the app's shader.
 // Usage: node scripts/render-cliff-debug.mjs <path-to-CliffGenerator> [preset] [out.png] [overrides-json]
 // Software renderer for the SDF cliff chunks (flat Lambert, z-buffer). Debug tool only.
 import fs from 'node:fs'; import zlib from 'node:zlib';
@@ -28,7 +28,7 @@ for (const job of jobs.slice(0, NJ)) {
   const P = g.positions, Nn = g.normals, I = g.index;
   for (let t = 0; t < I.length; t += 3) {
     const a = I[t], b = I[t + 1], c = I[t + 2];
-    tris.push([P[a*3],P[a*3+1],P[a*3+2], P[b*3],P[b*3+1],P[b*3+2], P[c*3],P[c*3+1],P[c*3+2], (Nn[a*3+1]+Nn[b*3+1]+Nn[c*3+1])/3, (Nn[a*3]+Nn[b*3]+Nn[c*3])/3, (Nn[a*3+2]+Nn[b*3+2]+Nn[c*3+2])/3]);
+    tris.push([P[a*3],P[a*3+1],P[a*3+2], P[b*3],P[b*3+1],P[b*3+2], P[c*3],P[c*3+1],P[c*3+2], Nn[a*3],Nn[a*3+1],Nn[a*3+2], Nn[b*3],Nn[b*3+1],Nn[b*3+2], Nn[c*3],Nn[c*3+1],Nn[c*3+2]]);
   }
   for (let i = 0; i < P.length; i += 3) { minX = Math.min(minX, P[i]); maxX = Math.max(maxX, P[i]); minY = Math.min(minY, P[i+1]); maxY = Math.max(maxY, P[i+1]); minZ = Math.min(minZ, P[i+2]); maxZ = Math.max(maxZ, P[i+2]); }
 }
@@ -53,8 +53,7 @@ for (const t of tris) {
   const e1 = [t[3]-t[0], t[4]-t[1], t[5]-t[2]], e2 = [t[6]-t[0], t[7]-t[1], t[8]-t[2]];
   let nx = e1[1]*e2[2]-e1[2]*e2[1], ny = e1[2]*e2[0]-e1[0]*e2[2], nz = e1[0]*e2[1]-e1[1]*e2[0]; const nl = Math.hypot(nx, ny, nz) || 1; nx/=nl; ny/=nl; nz/=nl;
   if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }
-  const lam = Math.max(0, nx*light[0] + ny*light[1] + nz*light[2]);
-  const shade = 0.25 + 0.75 * lam;
+  const sh = [0,1,2].map((q) => 0.25 + 0.75 * Math.max(0, t[9+q*3]*light[0] + t[10+q*3]*light[1] + t[11+q*3]*light[2]));
   const minx = Math.max(0, Math.floor(Math.min(p0[0],p1[0],p2[0]))), maxx = Math.min(W-1, Math.ceil(Math.max(p0[0],p1[0],p2[0])));
   const miny = Math.max(0, Math.floor(Math.min(p0[1],p1[1],p2[1]))), maxy = Math.min(H-1, Math.ceil(Math.max(p0[1],p1[1],p2[1])));
   const den = (p1[1]-p2[1])*(p0[0]-p2[0]) + (p2[0]-p1[0])*(p0[1]-p2[1]); if (Math.abs(den) < 1e-9) continue;
@@ -63,7 +62,7 @@ for (const t of tris) {
     const b = ((p2[1]-p0[1])*(x-p2[0]) + (p0[0]-p2[0])*(y-p2[1])) / den;
     const c = 1 - a - b; if (a < -1e-4 || b < -1e-4 || c < -1e-4) continue;
     const z = a*p0[2] + b*p1[2] + c*p2[2]; const k = y*W+x;
-    if (z < zb[k]) { zb[k] = z; const s = shade; rgb[k*3] = Math.min(255, 120*s + 60); rgb[k*3+1] = Math.min(255, 112*s + 56); rgb[k*3+2] = Math.min(255, 100*s + 50); }
+    if (z < zb[k]) { zb[k] = z; const s = a*sh[0] + b*sh[1] + c*sh[2]; rgb[k*3] = Math.min(255, 120*s + 60); rgb[k*3+1] = Math.min(255, 112*s + 56); rgb[k*3+2] = Math.min(255, 100*s + 50); }
   }
 }
 const raw = Buffer.alloc((W*3+1)*H); for (let y = 0; y < H; y++) rgb.subarray(y*W*3,(y+1)*W*3).forEach((val,i)=>{raw[y*(W*3+1)+1+i]=val;});
