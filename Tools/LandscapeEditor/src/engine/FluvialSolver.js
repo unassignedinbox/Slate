@@ -24,6 +24,7 @@ export function runFluvial(elevation, n, dx, sea, p, erodibility)
     const eroding = createField(count);
     const flux = createField(count);
     const creep = createField(count);
+    const exportedField = createField(count);
     for (let k = 0; k < count; k++)
     {
         creep[k] = 0.1 * erodibility[k];
@@ -79,6 +80,8 @@ export function runFluvial(elevation, n, dx, sea, p, erodibility)
             flux[cell] += eroding[cell];
             if (outlet[cell])
             {
+                // Load that reaches a map edge or the sea leaves the map. It is recorded as export, not lost.
+                exportedField[cell] += flux[cell];
                 flux[cell] = 0;
                 continue;
             }
@@ -96,5 +99,5 @@ export function runFluvial(elevation, n, dx, sea, p, erodibility)
             flux[cell] = 0;
         }
     }
-    return { elevation: h, uplift };
+    return { elevation: h, uplift, exportedField };
 }

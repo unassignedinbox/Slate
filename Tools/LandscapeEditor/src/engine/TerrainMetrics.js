@@ -57,6 +57,7 @@ export function summarizeTerrain(elevation, attrs, context)
         p95SlopeDeg: p95,
         channelLengthM: channelCells * dx,
         erodedM3,
-        depositedM3
+        depositedM3,
+        exportedM3: context.exportedM3 || 0
     };
 }

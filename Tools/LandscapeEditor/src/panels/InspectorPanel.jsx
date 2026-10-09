@@ -296,7 +296,8 @@ function MeasurePanel({ result })
         ['Slope, 95th percentile', `${metrics.p95SlopeDeg.toFixed(1)}°`],
         ['Channel length', `${(metrics.channelLengthM / 1000).toFixed(2)} km`],
         ['Eroded', `${(metrics.erodedM3 / 1e6).toFixed(2)} Mm³`],
-        ['Deposited', `${(metrics.depositedM3 / 1e6).toFixed(2)} Mm³`]
+        ['Deposited', `${(metrics.depositedM3 / 1e6).toFixed(2)} Mm³`],
+        ['Exported off-map', `${(metrics.exportedM3 / 1e6).toFixed(2)} Mm³`]
     ];
     return (
         <CardPanel

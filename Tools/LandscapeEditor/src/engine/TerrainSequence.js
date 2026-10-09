@@ -46,7 +46,7 @@ export function buildTerrain(project, index)
     const satmapRgba = renderSatmap(context, project.satmapLayers || [], height.elevation, attrs);
     const satmapMs = performance.now() - satmapStarted;
 
-    const metrics = summarizeTerrain(height.elevation, attrs, { dx, sea });
+    const metrics = summarizeTerrain(height.elevation, attrs, { dx, sea, exportedM3: height.exportedM3 });
 
     return {
         settings,

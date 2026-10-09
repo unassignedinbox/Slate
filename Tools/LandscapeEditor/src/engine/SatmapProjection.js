@@ -81,7 +81,29 @@ function grayscale(level)
 }
 
 // Renders one view from a terrain result: { n, elevation, attrs, satmapRgba, sea, settings }.
+//------------------------------------------------------------------------------------------------------------------------
+//                                                    IMAGE ORIENTATION
+//------------------------------------------------------------------------------------------------------------------------
+// Grid row j is the north index, so row 0 is the south edge. Image rows run top to bottom, so views are flipped
+// vertically to put north at the top. The 3D terrain samples the grid directly and does not use these views.
+function northUpPixels(pixels, n)
+{
+    const stride = n * 4;
+    const out = new Uint8ClampedArray(pixels.length);
+    for (let row = 0; row < n; row++)
+    {
+        out.set(pixels.subarray((n - 1 - row) * stride, (n - row) * stride), row * stride);
+    }
+    return out;
+}
+
+// Image pixels for one view, north at the top.
 export function renderView(viewId, result)
+{
+    return northUpPixels(gridViewPixels(viewId, result), result.n);
+}
+
+function gridViewPixels(viewId, result)
 {
     const n = result.n;
     const count = n * n;

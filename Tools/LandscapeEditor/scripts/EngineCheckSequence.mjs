@@ -1,4 +1,9 @@
-// @header EngineCheckSequence.mjs | Engine self-check: validates every preset against the catalogues, checks for non-finite output, proves determinism, confirms the layer index reuses unchanged prefixes, and renders every view mode.
+//============================================================================================================================================
+//                                                          ENGINECHECKSEQUENCE.MJS                                                           
+//============================================================================================================================================
+// 📦 Tools/LandscapeEditor/scripts/EngineCheckSequence.mjs — Engine self-check: validates every preset against the catalogues, checks
+//    for non-finite output, proves determinism, confirms the layer index reuses unchanged prefixes, checks mass balance and view
+//    orientation, and renders every view mode.
 
 import { PRESETS } from '../src/engine/PresetConfiguration.js';
 import { generatorTypeById } from '../src/engine/GeneratorSpecification.js';
@@ -11,12 +16,16 @@ import { buildTerrain } from '../src/engine/TerrainSequence.js';
 import { createLayerIndex } from '../src/engine/LayerIndex.js';
 import { presetProject } from '../src/engine/LayerConfiguration.js';
 
-// @banner OPTIONS
+//------------------------------------------------------------------------------------------------------------------------
+//                                                        OPTIONS                                                         
+//------------------------------------------------------------------------------------------------------------------------
 const resolutionArgument = process.argv.find((argument) => argument.startsWith('--resolution='));
 // Must be one of the catalogue resolutions (128 to 512); other sizes are normalised back to the default.
 const CHECK_RESOLUTION = resolutionArgument ? Number(resolutionArgument.split('=')[1]) : 128;
 
-// @banner HELPERS
+//------------------------------------------------------------------------------------------------------------------------
+//                                                        HELPERS                                                         
+//------------------------------------------------------------------------------------------------------------------------
 function fingerprintBytes(array)
 {
     const bytes = new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
@@ -46,7 +55,9 @@ function unknownKeys(params, schema)
     return Object.keys(params || {}).filter((key) => !schema.some((entry) => entry.key === key));
 }
 
-// @banner CATALOGUE VALIDATION
+//------------------------------------------------------------------------------------------------------------------------
+//                                                  CATALOGUE VALIDATION                                                  
+//------------------------------------------------------------------------------------------------------------------------
 function validatePreset(preset, failures)
 {
     const problems = [];
@@ -129,7 +140,9 @@ function validateMask(layer, stackName)
     return problems;
 }
 
-// @banner EVALUATION CHECKS
+//------------------------------------------------------------------------------------------------------------------------
+//                                                   EVALUATION CHECKS                                                    
+//------------------------------------------------------------------------------------------------------------------------
 function checkPreset(preset, failures)
 {
     const project = presetProject(preset);
@@ -167,6 +180,13 @@ function checkPreset(preset, failures)
         failures.push(`${preset.id}: layer index reused nothing on an unchanged project`);
     }
 
+    // Mass balance: eroded minus deposited must equal the load exported through map edges and the sea.
+    const balanceError = Math.abs(first.metrics.erodedM3 - first.metrics.depositedM3 - first.metrics.exportedM3);
+    if (balanceError > 0.03 * Math.max(first.metrics.erodedM3, 1))
+    {
+        failures.push(`${preset.id}: eroded - deposited differs from exported load by ${balanceError.toFixed(0)} m³`);
+    }
+
     for (const view of VIEW_MODES)
     {
         const pixels = renderView(view.id, first);
@@ -184,17 +204,41 @@ function checkPreset(preset, failures)
         channelKm: Number((first.metrics.channelLengthM / 1000).toFixed(2)),
         totalMs: Math.round(first.timings.totalMs),
         reusedLayers: reusedCount,
+        balancePct: Number((100 * Math.abs(first.metrics.erodedM3 - first.metrics.depositedM3 - first.metrics.exportedM3) / Math.max(first.metrics.erodedM3, 1)).toFixed(2)),
         fingerprint: firstHash
     };
 }
 
-// @banner RUN
+//------------------------------------------------------------------------------------------------------------------------
+//                                                      ORIENTATION                                                       
+//------------------------------------------------------------------------------------------------------------------------
+// Grid row 0 is the south edge. The 2D views must place it at the bottom, so the top row shows the north edge.
+function checkOrientation(failures)
+{
+    const size = 2;
+    const grid = new Uint8ClampedArray([
+        255, 0, 0, 255,   255, 0, 0, 255,
+        0, 0, 255, 255,   0, 0, 255, 255
+    ]);
+    const synthetic = { n: size, dx: 1, settings: { seaLevelM: 0 }, attrs: {}, elevation: new Float32Array(size * size), satmapRgba: grid };
+    const pixels = renderView('satmap', synthetic);
+    const topIsNorth = pixels[0] === 0 && pixels[2] === 255;
+    if (!topIsNorth)
+    {
+        failures.push('orientation: the satmap view does not place north (grid row n-1) at the top');
+    }
+}
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                                          RUN                                                           
+//------------------------------------------------------------------------------------------------------------------------
 const failures = [];
 let catalogueProblems = 0;
 for (const preset of PRESETS)
 {
     catalogueProblems += validatePreset(preset, failures);
 }
+checkOrientation(failures);
 const rows = PRESETS.map((preset) => checkPreset(preset, failures));
 console.log(`Engine check at ${CHECK_RESOLUTION} × ${CHECK_RESOLUTION}: ${PRESETS.length} presets, ${VIEW_MODES.length} views each`);
 console.table(rows);

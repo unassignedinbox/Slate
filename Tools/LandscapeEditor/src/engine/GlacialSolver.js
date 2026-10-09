@@ -16,6 +16,7 @@ export function runGlacial(elevation, n, dx, sea, p, erodibility)
     const count = n * n;
     const h = Float32Array.from(elevation);
     const ice = createField(count);
+    const exportedField = createField(count);
     const sweeps = Math.max(1, Math.round(p.iterations));
     const lateralSigma = Math.max(0.5, p.valleyWidthM / dx / 2);
 
@@ -61,8 +62,10 @@ export function runGlacial(elevation, n, dx, sea, p, erodibility)
 
         for (let k = 0; k < count; k++)
         {
+            // Glacial removal leaves the tile, so it is recorded as export rather than redeposited.
             h[k] -= removal[k];
+            exportedField[k] += removal[k];
         }
     }
-    return { elevation: h };
+    return { elevation: h, exportedField };
 }

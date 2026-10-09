@@ -390,20 +390,42 @@ export function orderByKey(keys, bins = 8192)
 
 // Isotropic nine-point diffusion (no grid-aligned streaks): h += c · dx² · ∇²h, with coefficient c per cell (or scalar) and c ≤ 0.35 for stability.
 // Border cells are left unchanged.
+// One side of an exchange between two cells. Both cells use the mean coefficient, so the pair moves equal and opposite amounts.
+function creepExchange(field, coefficient, scalar, c, centre, q)
+{
+    return (scalar ? c : 0.5 * (c + coefficient[q])) * (field[q] - centre);
+}
+
+// Explicit creep with zero-flux edges. A neighbour outside the map is the cell itself, so no material crosses the map edge
+// and the total is conserved even when the coefficient varies between cells.
 export function diffuseField(field, n, coefficient)
 {
-    const out = Float32Array.from(field);
+    const out = new Float32Array(field.length);
     const scalar = typeof coefficient === 'number';
-    for (let j = 1; j < n - 1; j++)
+    for (let j = 0; j < n; j++)
     {
-        for (let i = 1; i < n - 1; i++)
+        for (let i = 0; i < n; i++)
         {
             const k = j * n + i;
-            const orth = field[k - 1] + field[k + 1] + field[k - n] + field[k + n];
-            const diag = field[k - n - 1] + field[k - n + 1] + field[k + n - 1] + field[k + n + 1];
-            const laplacian = (4 * orth + diag - 20 * field[k]) / 6;
+            const west = i > 0 ? k - 1 : k;
+            const east = i < n - 1 ? k + 1 : k;
+            const south = j > 0 ? k - n : k;
+            const north = j < n - 1 ? k + n : k;
+            const southWest = i > 0 && j > 0 ? k - n - 1 : k;
+            const southEast = i < n - 1 && j > 0 ? k - n + 1 : k;
+            const northWest = i > 0 && j < n - 1 ? k + n - 1 : k;
+            const northEast = i < n - 1 && j < n - 1 ? k + n + 1 : k;
+            const centre = field[k];
             const c = scalar ? coefficient : coefficient[k];
-            out[k] = field[k] + c * laplacian;
+            const orth = creepExchange(field, coefficient, scalar, c, centre, west)
+                + creepExchange(field, coefficient, scalar, c, centre, east)
+                + creepExchange(field, coefficient, scalar, c, centre, south)
+                + creepExchange(field, coefficient, scalar, c, centre, north);
+            const diag = creepExchange(field, coefficient, scalar, c, centre, southWest)
+                + creepExchange(field, coefficient, scalar, c, centre, southEast)
+                + creepExchange(field, coefficient, scalar, c, centre, northWest)
+                + creepExchange(field, coefficient, scalar, c, centre, northEast);
+            out[k] = centre + (4 * orth + diag) / 6;
         }
     }
     return out;

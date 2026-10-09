@@ -47,7 +47,7 @@ export function hillshadeField(elevation, n, dx, sun)
 //------------------------------------------------------------------------------------------------------------------------
 //                                                   STACK COMPOSITION
 //------------------------------------------------------------------------------------------------------------------------
-// Returns Uint8ClampedArray RGBA, north-up in map coordinates (row j = north index).
+// Returns Uint8ClampedArray RGBA in grid order: row j is the north index, so row 0 is the south edge.
 export function renderSatmap(context, layers, elevation, attrs)
 {
     const n = context.n;

@@ -186,6 +186,7 @@ export function ViewportPanel({ viewMode, onViewMode, viewId, onViewId, result, 
                         <span>Channels {(metrics.channelLengthM / 1000).toFixed(2)} km</span>
                         <span>Eroded {(metrics.erodedM3 / 1e6).toFixed(2)} Mm³</span>
                         <span>Deposited {(metrics.depositedM3 / 1e6).toFixed(2)} Mm³</span>
+                        <span>Exported {(metrics.exportedM3 / 1e6).toFixed(2)} Mm³</span>
                     </>
                 ) : <span>No measurements yet.</span>}
             </footer>
