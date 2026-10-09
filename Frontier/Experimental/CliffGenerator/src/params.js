@@ -299,7 +299,7 @@ export const defaults = {
   riverColor: '#1d4552',
   riverShallowColor: '#4f7f7a',
   riverOpacity: 0.85,
-  riverClearDepth: 1.5,
+  riverClearDepth: 0.5,
   riverFoam: 1,
   shoreWet: 0.7,
   bedShading: 1,

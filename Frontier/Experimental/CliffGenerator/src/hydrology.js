@@ -552,7 +552,13 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   // the valley floor outside it is untouched) turn the stair into a continuous bank.
   {
     const band = new Float32Array(total);
-    for (let c = 0; c < total; c++) band[c] = Math.min(1, riverMask[c] * 1.5 + bankMask[c] * 0.5);
+    for (let c = 0; c < total; c++) {
+      band[c] = Math.min(1, riverMask[c] * 1.5 + bankMask[c] * 0.5);
+      // the channel core keeps its carved bed: blurring a trough would lift the floor above the
+      // water level and drain the river. Only the banks are smoothed.
+      const s = src[c];
+      if (s >= 0 && dist[c] * cell <= width[s] * 0.5) band[c] = 0;
+    }
     let cur = Float32Array.from(height);
     let nxt = new Float32Array(total);
     for (let pass = 0; pass < 4; pass++) {

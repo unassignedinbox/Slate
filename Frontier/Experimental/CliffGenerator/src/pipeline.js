@@ -215,13 +215,22 @@ export function generateTerrain(params, progress = () => {}) {
     }
   }
 
-  // fluvial sediment: fans, valley fills and basin floors are alluvium — fine sediment (the
-  // silt / sand channel the surface shares with lake beds) with some gravel in it
-  for (let i = 0; i < N * N; i++) {
-    const a = alluvium[i];
-    if (a <= 0) continue;
-    lake[i] = Math.max(lake[i], a * 0.75);
-    deposit[i] = Math.max(deposit[i], a * 0.45);
+  // fluvial sediment is deposited material: its thickness is already in the heightfield, so the
+  // silt colour is only a mask on top of it. It shows where the sediment lies flat (ground under
+  // ~12–20°, the bars, floors and banks the river built) and close to water; steep ground keeps
+  // its rock colour, and the silt never paints far from a channel. Real lakes keep their own mask.
+  {
+    const slopeNow = computeSlopeMap(height, N, cell);
+    const nearWater = blurField(riverResult.riverMask, N, Math.max(2, Math.round(24 / cell)));
+    for (let i = 0; i < N * N; i++) {
+      const a = alluvium[i];
+      if (a <= 0) continue;
+      const flat = 1 - smoothstep(0.12, 0.35, slopeNow[i]);
+      const near = smoothstep(0.02, 0.2, nearWater[i]);
+      const silt = a * flat * near;
+      lake[i] = Math.max(lake[i], silt * 0.85);
+      deposit[i] = Math.max(deposit[i], a * 0.45);
+    }
   }
 
   // core-stones shed their debris: no scree skin on the boulders themselves
