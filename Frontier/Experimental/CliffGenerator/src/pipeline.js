@@ -255,6 +255,7 @@ export function generateTerrain(params, progress = () => {}) {
     height, hardness, deposit, flow: flowNorm, cavity, slope,
     river: riverResult.riverMask, waterLevel: riverResult.waterLevel, lake, outcrop,
     stats: { min, max, elapsedMs: now() - t0, rivers: hydro ? hydro.stats : null },
+    network: hydro ? hydro.network : null,
   };
 }
 

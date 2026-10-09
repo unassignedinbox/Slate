@@ -7,6 +7,7 @@ import { SimplexNoise, GradientNoise3 } from './noise.js';
 import { makeDetail } from './detail.js';
 export { makeDetail };
 import { applyRoads, applyLakes, upsampleWaterLevel, NO_WATER } from './features.js';
+import { carveFineChannels } from './channel-fine.js';
 
 // Face displacement: moves vertices horizontally along the outward face normal so that hard beds
 // stand proud of the face and soft beds are recessed. Because this is applied to the mesh (not the
@@ -113,6 +114,13 @@ export function refineField(field, v) {
     stats: field.stats,
     base: field,
   };
+  // the channel is re-evaluated on the mesh grid (continuous bed, banks and water edge) from the
+  // simulated network; the coarse upsample only supplies the surface around it
+  if (field.network && field.network.N === N) {
+    const sea = v.waterEnabled ? v.seaLevel : -1e9;
+    const { river } = carveFineChannels(fine.height, fine.waterLevel, fine.resolution, field.network, sea);
+    for (let i = 0; i < river.length; i++) if (river[i] > fine.river[i]) fine.river[i] = river[i];
+  }
   if (!v.riverWater) {
     // dry the channels; simulated lakes follow the lake toggle instead
     for (let i = 0; i < fine.waterLevel.length; i++) if (!(v.lakeWater && fine.lakeSim[i] > 0.9)) fine.waterLevel[i] = NO_WATER;

@@ -651,5 +651,10 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   let cut = 0;
   for (let c = 0; c < total; c++) cut += original[c] - height[c];
   stats.cutVolume = cut * cell * cell;
-  return { riverMask, bankMask, waterLevel, lakeMask, flow, acc, filled, down, stats, debug: { bed, wl, width, depth, isRiver, dist, src } };
+  // the channel network, kept so the mesh can evaluate the same channel law on its finer grid
+  // water level as the surface uses it (relaxed where the sheet was smoothed, raw elsewhere)
+  const wlWater = Float32Array.from(wl);
+  for (let c = 0; c < total; c++) if (isRiver[c] && waterLevel[c] > NO_WATER * 0.5) wlWater[c] = waterLevel[c];
+  const network = { N, size, px, pz, down, isRiver, width, depth, bed, wl: wlWater, dry, bankSlope, maxBank };
+  return { riverMask, bankMask, waterLevel, lakeMask, flow, acc, filled, down, stats, network, debug: { bed, wl, width, depth, isRiver, dist, src } };
 }
