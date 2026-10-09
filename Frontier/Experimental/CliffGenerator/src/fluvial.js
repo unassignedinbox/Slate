@@ -20,7 +20,7 @@
 // relief from being planed flat, and a light diffusion rounds the interfluves.
 
 import { fillDepressions, flowDirections } from './hydrology.js';
-import { SimplexNoise } from './noise.js';
+import { SimplexNoise, smoothstep } from './noise.js';
 
 // opts: { strength 0..1, iterations, concavity (m), uplift 0..1 (fraction of relief re-added
 //         over the run), diffusion 0..1, seaLevel, relief [m] }
@@ -215,9 +215,16 @@ export function rillErosion(height, hardness, N, size, opts, progress = () => {}
   const area = cell * cell;
   const acc = new Float32Array(total);
   const routing = new Float32Array(total);
+  const cutW = new Float32Array(total); // where the rills actually cut (for the smoothing below)
   const wn = new SimplexNoise((opts.seed || 1) * 37 + 19);
+  // Routing wander: the D8 receivers of a smooth slope run along the 8 grid directions, and every
+  // cell cutting toward its receiver is what drew the ruled, parallel "digital" lines. A stronger,
+  // shorter wander (≈2 m over ≈30 m) bends the routes so the lines follow a wandering path instead.
   const wander = new Float32Array(total);
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) wander[j * N + i] = 0.8 * wn.fbm(i * cell / 45, j * cell / 45, 2, 2.1, 0.5);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) wander[j * N + i] = 2.0 * wn.fbm(i * cell / 30, j * cell / 30, 3, 2.1, 0.5);
+  // A rill starts where runoff has collected (a few cells of drainage), ramps up, and dies out
+  // above that: branching, tapered lines instead of a cut on every slope cell.
+  const initCells = Math.max(2, opts.initCells || 10);
   let order = null, down = null;
   for (let it = 0; it <= iterations; it++) {
     for (let i = 0; i < total; i++) routing[i] = height[i] + wander[i];
@@ -235,10 +242,24 @@ export function rillErosion(height, hardness, N, size, opts, progress = () => {}
       const diag = (ci !== di) && (((c - ci) / N) !== ((d - di) / N));
       const dx = diag ? cell * Math.SQRT2 : cell;
       const soft = 1.25 - 0.9 * hardness[c];
-      const f = kBase * soft * Math.pow(acc[c] * area, m) / dx;
+      const w = smoothstep(initCells * 0.5, initCells * 2.5, acc[c]);
+      const f = kBase * soft * w * Math.pow(acc[c] * area, m) / dx;
+      if (f <= 0) continue;
       height[c] = (h0 + f * hr) / (1 + f);
+      cutW[c] = Math.max(cutW[c], w);
     }
     progress((it + 1) / iterations);
+  }
+  // the cut cells are one cell wide: a light blur over the rill band removes the cell-sized steps
+  // (the rill profile is a smooth V, not a stair)
+  {
+    const src = Float32Array.from(height);
+    for (let cj = 1; cj < N - 1; cj++) for (let ci = 1; ci < N - 1; ci++) {
+      const c = cj * N + ci, w = cutW[c];
+      if (w <= 0.01 || src[c] <= sea) continue;
+      const s = 4 * src[c] + 2 * (src[c - 1] + src[c + 1] + src[c - N] + src[c + N]) + src[c - N - 1] + src[c - N + 1] + src[c + N - 1] + src[c + N + 1];
+      height[c] = src[c] + (s / 16 - src[c]) * Math.min(1, w) * 0.6;
+    }
   }
   return { acc };
 }
