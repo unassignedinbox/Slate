@@ -108,7 +108,7 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   font-family: var(--display); font-weight: 700; font-size: 72px; line-height: 1;
   text-shadow: 0 0 24px rgba(225, 6, 0, 0.35);
 }
-.rpm { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; height: 16px; }
+.rpm { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px; height: 16px; width: 100%; min-width: 0; }
 .rpm .seg { background: #23262e; border-radius: 4px; }
 .rpm .seg.on { background: var(--ok); }
 .rpm .seg.amber.on { background: var(--warn); }

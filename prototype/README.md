@@ -9,7 +9,7 @@ npm run build    # static build in dist/
 ```
 
 ## What's in it
-- **3D tablet cockpit** (`src/scene/cockpit3d.js`): the HMI panels are real 3D objects on a curved layout inside a 3D tablet bezel (Three.js WebGL + CSS3D). Rails angle toward the driver, the app window moves forward when an app opens, and the view leans with pointer or touch. Designed for a landscape tablet (~16:10); portrait is scaled down, not redesigned.
+- **Flat tablet UI in a 3D device** (`src/scene/cockpit3d.js`): all panels sit on one flat screen plane, framed by a 3D tablet bezel (Three.js WebGL for the device, CSS3D for the panels). The device leans slightly with the pointer or touch; the UI stays flat and aligned. Designed for a landscape tablet (~16:10); portrait is scaled down, not redesigned.
 - **Cockpit panels**: speed/gear/rpm/pedals on the left, tyres/suspension/weather on the right, app window in the centre.
 - **Android-style shell**: status bar, app launcher, Back/Home/Recents nav bar, dock, recents cards with close.
 - **Apps**: Telemetry (circuit + inputs), Suspension (live 3D + setup sliders/presets), Aerodynamics (live 3D + wing trim), Tyres (3D tyre temperature zones, compounds, pit stop), Weather (3D scene with rain/sun/wind), Garage (livery swap), Multiplayer (lobbies, join/leave), Store and Wallet (CR economy, unlocks cross-app), Settings (HUD mode, accent, FPS).
@@ -30,5 +30,6 @@ npm run build    # static build in dist/
 - Car is procedural placeholder geometry; swap in glTF models later.
 - Each 3D view has its own WebGL context (design target is one shared renderer).
 - Portrait tablets are scaled to fit, not laid out separately.
+- The UI is flat by design; only the device bezel has 3D depth.
 - Multiplayer and store are local mocks; no server yet.
 - Gamepad and steering-wheel input not wired yet (keyboard and mouse only).
