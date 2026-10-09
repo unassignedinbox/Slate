@@ -568,7 +568,9 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
         if (w <= 0.01 || cur[c] <= sea) continue;
         const s = 4 * cur[c] + 2 * (cur[c - 1] + cur[c + 1] + cur[c - N] + cur[c + N])
           + cur[c - N - 1] + cur[c - N + 1] + cur[c + N - 1] + cur[c + N + 1];
-        nxt[c] = cur[c] + (s / 16 - cur[c]) * w;
+        // only ever lower a cell: the blur shaves the convex bank steps and never fills a toe
+        // next to the water (raising the toe is what shrank the wet area)
+        nxt[c] = cur[c] + Math.min(0, s / 16 - cur[c]) * w;
       }
       const t = cur; cur = nxt; nxt = t;
     }

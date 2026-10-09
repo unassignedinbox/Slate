@@ -3,17 +3,20 @@ import { defaults, presets, groups, stageOf, palettes, paletteKeys } from './par
 import { Editor } from './ui.js';
 import { CliffScene } from './scene.js';
 
-const STORAGE_KEY = 'frontier-cliff-generator';
-const SCHEMA = 24; // bump when parameter semantics change so stale saved values do not override new defaults
+// Only the values the user changed are saved (as a diff against the active preset), so new
+// defaults and preset edits always reach the user. The key is versioned: an old full snapshot
+// under the previous key is ignored, which is what used to freeze every default in place.
+const EDIT_KEY = 'frontier-cliff-generator-edits';
 
 function readStored() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(EDIT_KEY) || '{}'); } catch { return {}; }
 }
 
+const baseFor = (name) => ({ ...defaults, ...(presets[name] || presets['Alpine granite']) });
 const stored = readStored();
-const storedValues = stored.schema === SCHEMA ? stored.values || {} : {};
-const values = { ...defaults, ...presets['Alpine granite'], ...storedValues };
-values.features = { roads: [], rivers: [], lakes: [], ...(storedValues.features || {}) };
+let presetName = stored.preset && presets[stored.preset] ? stored.preset : 'Alpine granite';
+const values = { ...baseFor(presetName), ...(stored.edits || {}) };
+values.features = { roads: [], rivers: [], lakes: [], ...(stored.features || {}) };
 
 function applyPalette(name) {
   const p = palettes[name];
@@ -45,6 +48,7 @@ const editor = new Editor(document.getElementById('root'), {
   },
   onPreset(name) {
     const features = values.features;
+    presetName = name;
     Object.assign(values, defaults, presets[name]);
     values.features = features;
     applyPalette(values.palette);
@@ -95,7 +99,10 @@ const editor = new Editor(document.getElementById('root'), {
 });
 
 function persist() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ schema: SCHEMA, values })); } catch { /* private mode */ }
+  const base = baseFor(presetName);
+  const edits = {};
+  for (const k of Object.keys(values)) if (k !== 'features' && values[k] !== base[k]) edits[k] = values[k];
+  try { localStorage.setItem(EDIT_KEY, JSON.stringify({ version: 2, preset: presetName, edits, features: values.features })); } catch { /* private mode */ }
 }
 
 function applyLive() {
