@@ -276,7 +276,8 @@ export function makeChunkContext(v) {
 // straight cliff walls: for every grid node, a local straight line through the steep cells of a
 // (2R+1)^2 window, by PCA over integral images. The line's normal points uphill, so the upper plateau
 // is on its + side. Returns Float32 arrays over the padded grid: nX, nZ (normal), cX, cZ (centre), ok.
-export function fitWallLines(m, Sx, Sz, pad, grad, R) {
+export function fitWallLines(m, Sx, Sz, pad, grad, radii) {
+  // grad(xa, zb): slope at grid node (xa, zb) relative to the chunk origin; the caller decides the field
   const W1 = Sx + 1, n = W1 * (Sz + 1);
   const I = [0, 1, 2, 3, 4, 5, 6, 7].map(() => new Float64Array(n)); // count, x, z, xx, xz, zz, gx, gz
   for (let b = 0; b < Sz; b++) for (let a = 0; a < Sx; a++) {
@@ -294,6 +295,7 @@ export function fitWallLines(m, Sx, Sz, pad, grad, R) {
   const rect = (k, a0, a1, b0, b1) => I[k][(b1 + 1) * W1 + a1 + 1] - I[k][b0 * W1 + a1 + 1] - I[k][(b1 + 1) * W1 + a0] + I[k][b0 * W1 + a0];
   const out = { nX: new Float32Array(Sx * Sz), nZ: new Float32Array(Sx * Sz), cX: new Float32Array(Sx * Sz), cZ: new Float32Array(Sx * Sz), ok: new Float32Array(Sx * Sz) };
   for (let b = 0; b < Sz; b++) for (let a = 0; a < Sx; a++) {
+   for (const R of radii) {
     const a0 = Math.max(0, a - R), a1 = Math.min(Sx - 1, a + R), b0 = Math.max(0, b - R), b1 = Math.min(Sz - 1, b + R);
     const W = rect(0, a0, a1, b0, b1);
     if (W < 6) continue;
@@ -301,13 +303,15 @@ export function fitWallLines(m, Sx, Sz, pad, grad, R) {
     const cxx = rect(3, a0, a1, b0, b1) / W - mx * mx, cxz = rect(4, a0, a1, b0, b1) / W - mx * mz, czz = rect(5, a0, a1, b0, b1) / W - mz * mz;
     const tr = cxx + czz, dd = Math.sqrt(((cxx - czz) / 2) ** 2 + cxz * cxz);
     const l1 = tr / 2 + dd, l2 = tr / 2 - dd;
-    if (l1 < 2 || l2 > 0.2 * l1) continue; // not a single straight edge in this window
+    if (l1 < 2 || l2 > 0.2 * l1) continue; // not a single straight edge in this window: try a wider one
     const th = 0.5 * Math.atan2(2 * cxz, cxx - czz);
     let nx = -Math.sin(th), nz = Math.cos(th);
     const Gx = rect(6, a0, a1, b0, b1), Gz = rect(7, a0, a1, b0, b1);
     if (nx * Gx + nz * Gz < 0) { nx = -nx; nz = -nz; }
     const q = b * Sx + a;
     out.nX[q] = nx; out.nZ[q] = nz; out.cX[q] = mx; out.cZ[q] = mz; out.ok[q] = 1;
+    break;
+   }
   }
   return out;
 }
@@ -394,9 +398,30 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const wallLevel = v.sdfWall == null ? 2 : v.sdfWall;
   const wallMode = wallLevel > 0;
   const flatWall = wallLevel >= 2;
-  const flatR = 12; // half-window (fine cells) for the straight-line fit of a cliff edge
-  const flatK = 4;  // distance (fine cells) from the wall at which the plateau height is read
-  const wallF = flatWall && m.sdfWeight ? fitWallLines(m, Sx, Sz, pad, grad, flatR) : null;
+  const flatRadii = [5, 9, 14, 22, 32]; // half-windows (fine cells) for the straight-line fit, narrowest first
+  const flatT = 8;  // half-length (fine cells) of the plateau average along the cliff
+  const flatK = 6;  // distance (fine cells) from the wall at which the plateau height is read
+  // the line is fitted on a lightly smoothed heightfield (box 7 cells): small rugged blobs of steep
+  // rock stop breaking the fit, and the main cliff edge stays. The wall itself uses the real heights.
+  let gradS = grad;
+  if (flatWall && m.sdfWeight) {
+    const B = 3, tmp = new Float32Array(Sx * Sz), hsm = new Float32Array(Sx * Sz);
+    for (let j = 0; j < Sz; j++) for (let i = 0; i < Sx; i++) {
+      let t = 0;
+      for (let k = -B; k <= B; k++) t += m.height[j * Sx + Math.min(Sx - 1, Math.max(0, i + k))];
+      tmp[j * Sx + i] = t / (2 * B + 1);
+    }
+    for (let j = 0; j < Sz; j++) for (let i = 0; i < Sx; i++) {
+      let t = 0;
+      for (let k = -B; k <= B; k++) t += tmp[Math.min(Sz - 1, Math.max(0, j + k)) * Sx + i];
+      hsm[j * Sx + i] = t / (2 * B + 1);
+    }
+    gradS = (xa, zb) => {
+      const i = Math.min(Sx - 2, Math.max(1, Math.round(xa + pad))), j = Math.min(Sz - 2, Math.max(1, Math.round(zb + pad)));
+      return [(hsm[j * Sx + i + 1] - hsm[j * Sx + i - 1]) / (2 * cell), (hsm[(j + 1) * Sx + i] - hsm[(j - 1) * Sx + i]) / (2 * cell)];
+    };
+  }
+  const wallF = flatWall && m.sdfWeight ? fitWallLines(m, Sx, Sz, pad, gradS, flatRadii) : null;
   const wallPushL = Math.max(vox * 6, v.sdfPushScale || 14);
   const wallKnobs = Math.max(0, v.sdfKnobs == null ? 1.2 : v.sdfKnobs);
   // everything that depends on the plan position only
@@ -424,7 +449,12 @@ export function buildChunkGeometry(job, meta, v, ctx) {
       const nl = Math.hypot(nX, nZ) || 1;
       const ux = nX / nl, uz = nZ / nl;
       const F = (u - bil(wallF.cX, u, wq)) * ux + (wq - bil(wallF.cZ, u, wq)) * uz;
-      const hs = F >= 0 ? bil(m.height, u + flatK * ux, wq + flatK * uz) : bil(m.height, u - flatK * ux, wq - flatK * uz);
+      // plateau height read on the wall's side, averaged along the wall (±flatT) so the top and foot
+      // edges follow the straight line instead of the rugged heightfield
+      const sd = F >= 0 ? flatK : -flatK, tx = -uz, tz = ux;
+      let acc = 0, cnt = 0;
+      for (let t = -flatT; t <= flatT; t += 2) { acc += bil(m.height, u + sd * ux + t * tx, wq + sd * uz + t * tz); cnt++; }
+      const hs = acc / cnt;
       h = h * (1 - w) + hs * w;
     }
     const crest = needCF ? bil(m.crest, u, wq) : 0, foot = needCF ? bil(m.foot, u, wq) : 0;
