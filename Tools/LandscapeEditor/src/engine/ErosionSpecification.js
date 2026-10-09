@@ -65,9 +65,10 @@ export const EROSION_TYPES = [
             sliderParameter('streamK', 'Erodibility K', 0.01, 1.5, 0.01, 0.35, '', 'Stream-power coefficient.'),
             sliderParameter('areaExponent', 'Area exponent m', 0.2, 1, 0.01, 0.5, '', 'Dependence on drainage area.'),
             sliderParameter('slopeExponent', 'Slope exponent n', 0.6, 1.4, 0.01, 1.0, '', 'Dependence on slope.'),
-            sliderParameter('iterations', 'Steps', 5, 150, 1, 50, '', 'Uplift and incision steps.'),
-            sliderParameter('transport', 'Transport capacity', 0.01, 1, 0.01, 0.2, '', 'How readily excess load is dropped.'),
-            sliderParameter('depositFraction', 'Deposition', 0, 1, 0.01, 0.35, '', 'Share of excess load dropped each step.'),
+            sliderParameter('iterations', 'Steps', 5, 150, 1, 50, '', 'Uplift and incision steps. More steps are slower and more accurate, not stronger.'),
+            sliderParameter('creep', 'Hillslope creep', 0, 40, 0.5, 8, 'cells²', 'Total hillslope smoothing over the run. Softens valley walls and talus.'),
+            sliderParameter('depositGradient', 'Deposition gradient', 0.005, 0.2, 0.001, 0.03, '', 'Gradient below which rivers drop their load: floodplains, lakes and fans.'),
+            sliderParameter('depositFraction', 'Deposition', 0, 1, 0.01, 0.35, '', 'Share of the sediment load dropped where the gradient is gentle.'),
             sliderParameter('rainfall', 'Rainfall', 0.2, 3, 0.05, 1, '×', 'Relative runoff; scales drainage area.'),
             LITHOLOGY
         ],
@@ -149,7 +150,7 @@ export function erosionDefaults(id)
     return initialParameters(erosionTypeById(id).params);
 }
 
-// Hard beds erode at (1 - 0.85·contrast) and stand steeper by (1 + 0.6·contrast).
+// Hard beds erode at (1 - 0.85·contrast) and stand steeper by (1 + 2.5·contrast): caprock holds near-vertical canyon walls.
 export function runErosion(context, layer, elevation)
 {
     const type = erosionTypeById(layer.type);
@@ -162,7 +163,7 @@ export function runErosion(context, layer, elevation)
     for (let k = 0; k < count; k++)
     {
         erodibility[k] = 1 - 0.85 * contrast * bedding.hard[k];
-        talus[k] = 1 + 0.6 * contrast * bedding.hard[k];
+        talus[k] = 1 + 2.5 * contrast * bedding.hard[k];
     }
     return type.run(context, params, elevation, { erodibility, talus, bedding });
 }

@@ -124,6 +124,13 @@ export function routeDrainage(elevation, n, dx, sea)
     }
 
     const recv = new Int32Array(count).fill(-1);
+    // A receiver must be popped before its donor. Filled elevation is monotone along the pop order, so this only
+    // matters for equal-height ties, and it guarantees that the receiver tree stays topologically sorted.
+    const rank = new Uint32Array(count);
+    for (let q = 0; q < count; q++)
+    {
+        rank[order[q]] = q;
+    }
     const diagonalLength = dx * Math.SQRT2;
     for (let j = 0; j < n; j++)
     {
@@ -151,6 +158,10 @@ export function routeDrainage(elevation, n, dx, sea)
                         continue;
                     }
                     const neighbour = nj * n + ni;
+                    if (rank[neighbour] >= rank[k])
+                    {
+                        continue;
+                    }
                     const length = di !== 0 && dj !== 0 ? diagonalLength : dx;
                     const slope = (filled[k] - filled[neighbour]) / length;
                     if (slope > bestSlope)

@@ -21,6 +21,8 @@ function SliderPanel({ entry, current, onChange })
 {
     const numeric = Number.isFinite(current) ? current : entry.initial;
     const unitText = entry.unit ? ` ${entry.unit}` : '';
+    const span = entry.max - entry.min;
+    const progress = span > 0 ? Math.min(100, Math.max(0, ((numeric - entry.min) / span) * 100)) : 0;
     return (
         <label className="parameter-row" title={entry.hint || ''}>
             <span className="parameter-head">
@@ -33,6 +35,7 @@ function SliderPanel({ entry, current, onChange })
                 max={entry.max}
                 step={entry.step}
                 value={numeric}
+                style={{ '--progress': `${progress}%` }}
                 onChange={(event) => onChange(entry.key, Number(event.target.value))}
             />
         </label>

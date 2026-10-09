@@ -184,7 +184,7 @@ export const GENERATOR_TYPES = [
             sliderParameter('spacingM', 'Dune spacing', 60, 1500, 5, 420, 'm', 'Crest-to-crest distance.'),
             sliderParameter('windFromDeg', 'Wind from', 0, 360, 1, 225, '°', 'Bearing the wind blows from (0 = north).'),
             sliderParameter('asymmetry', 'Crest position', 0.55, 0.95, 0.01, 0.8, '', 'Fraction of the cycle spent climbing the windward side.'),
-            sliderParameter('sinuosity', 'Sinuosity', 0, 1, 0.01, 0.35, '', 'Crest bending.'),
+            sliderParameter('sinuosity', 'Sinuosity', 0, 1, 0.01, 0.2, '', 'Long-wave crest bending.'),
             sliderParameter('variation', 'Size variation', 0, 1, 0.01, 0.5, '', 'Patchy dune height.'),
             sliderParameter('scaleM', 'Patch scale', 600, 6000, 50, 2400, 'm', 'Scale of size variation.')
         ],
@@ -205,9 +205,10 @@ export const GENERATOR_TYPES = [
                 for (let i = 0; i < n; i++)
                 {
                     const xM = i * dx;
-                    const wobble = p.sinuosity * 0.8 * fractalBrownian(lattice, xM / 1800, yM / 1800, 3, 2.0, 0.5)
-                        + p.sinuosity * 0.2 * fractalBrownian(lattice, xM / 420 + 2.4, yM / 420 - 6.1, 2, 2.0, 0.5);
-                    const spacingFactor = 1 + 0.45 * fractalBrownian(lattice, xM / 2600 + 4.3, yM / 2600 + 1.1, 3, 2.0, 0.5);
+                    // Crests bend on kilometre scales, as real transverse dunes do. Short-wave bending reads as a maze.
+                    const wobble = p.sinuosity * 0.6 * fractalBrownian(lattice, xM / 3200, yM / 3200, 3, 2.0, 0.5)
+                        + p.sinuosity * 0.12 * fractalBrownian(lattice, xM / 1100 + 2.4, yM / 1100 - 6.1, 2, 2.0, 0.5);
+                    const spacingFactor = 1 + 0.25 * fractalBrownian(lattice, xM / 2600 + 4.3, yM / 2600 + 1.1, 3, 2.0, 0.5);
                     const phase = (xM * east + yM * north) / (Math.max(p.spacingM, 1) * spacingFactor) + wobble;
                     const u = phase - Math.floor(phase);
                     const profile = u < asymmetry
@@ -283,6 +284,36 @@ export const GENERATOR_TYPES = [
                     const relief = clampNumber(ridgedMultifractal(lattice, xM / (scale * 0.7), yM / (scale * 0.7), 6, 2.1, 0.42, 1.0), 0, 1);
                     // Shelf-shaped shore: the land rises gently from the waterline, so cliffs only appear where waves cut them.
                     out[j * n + i] = Math.pow(coast, 1.6) * (0.45 + 0.55 * relief);
+                }
+            }
+            return out;
+        }
+    },
+    {
+        id: 'tilt',
+        label: 'Regional tilt',
+        group: 'Simple',
+        blurb: 'Plane tilted towards a bearing, optionally domed or bowled. Gives a plateau a regional fall for drainage to follow.',
+        params: [
+            sliderParameter('bearingDeg', 'Fall direction', 0, 360, 1, 200, '°', 'Bearing the ground falls towards (0 = north).'),
+            sliderParameter('curvature', 'Dome or bowl', -1, 1, 0.01, 0.15, '', 'Positive domes the map centre; negative makes a basin.')
+        ],
+        produce(context, p)
+        {
+            const n = context.n;
+            const dx = context.dx;
+            const size = Math.max(context.sizeM, 1);
+            const radians = (p.bearingDeg * Math.PI) / 180;
+            const east = Math.sin(radians);
+            const north = Math.cos(radians);
+            const out = createField(n * n);
+            for (let j = 0; j < n; j++)
+            {
+                const y = (j * dx) / size - 0.5;
+                for (let i = 0; i < n; i++)
+                {
+                    const x = (i * dx) / size - 0.5;
+                    out[j * n + i] = -(x * east + y * north) + p.curvature * (x * x + y * y);
                 }
             }
             return out;

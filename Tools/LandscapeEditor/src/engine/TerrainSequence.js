@@ -4,6 +4,7 @@
 // 📦 Tools/LandscapeEditor/src/engine/TerrainSequence.js — Top-level evaluation of one landscape project: height stack, derived
 //    surface attributes, satmap composition and summary metrics, with per-stage timings.
 
+import { createField, diffuseField, clampNumber } from './HeightSpace.js';
 import { normalizeSettings } from './TerrainConfiguration.js';
 import { buildElevation } from './LayerSequence.js';
 import { deriveSurface } from './SurfaceSpace.js';
@@ -13,6 +14,24 @@ import { summarizeTerrain } from './TerrainMetrics.js';
 //------------------------------------------------------------------------------------------------------------------------
 //                                                       EVALUATION
 //------------------------------------------------------------------------------------------------------------------------
+// Light isotropic diffusion after the height stack. Each pass is a 0.2 creep step, so the surface loses cell-scale
+// roughness from stream-power and droplet stages while the landforms keep their shape. Mass is conserved.
+function smoothSurface(elevation, n, smoothing)
+{
+    const passes = Math.round(clampNumber(smoothing, 0, 1) * 10);
+    if (passes === 0)
+    {
+        return elevation;
+    }
+    const creep = createField(n * n, 0.2);
+    let out = elevation;
+    for (let pass = 0; pass < passes; pass++)
+    {
+        out = diffuseField(out, n, creep);
+    }
+    return out;
+}
+
 export function buildTerrain(project, index)
 {
     const settings = normalizeSettings(project.settings);
@@ -23,6 +42,7 @@ export function buildTerrain(project, index)
     const heightStarted = performance.now();
     const height = buildElevation(settings, project.heightLayers || [], index);
     const heightMs = performance.now() - heightStarted;
+    const elevation = smoothSurface(height.elevation, n, settings.smoothing);
 
     const context = {
         n,
@@ -39,21 +59,21 @@ export function buildTerrain(project, index)
     };
 
     const surfaceStarted = performance.now();
-    const attrs = deriveSurface(height.elevation, { ...context, preErosion: height.preErosion, uplift: height.uplift });
+    const attrs = deriveSurface(elevation, { ...context, preErosion: height.preErosion, uplift: height.uplift });
     const surfaceMs = performance.now() - surfaceStarted;
 
     const satmapStarted = performance.now();
-    const satmapRgba = renderSatmap(context, project.satmapLayers || [], height.elevation, attrs);
+    const satmapRgba = renderSatmap(context, project.satmapLayers || [], elevation, attrs);
     const satmapMs = performance.now() - satmapStarted;
 
-    const metrics = summarizeTerrain(height.elevation, attrs, { dx, sea, exportedM3: height.exportedM3 });
+    const metrics = summarizeTerrain(elevation, attrs, { dx, sea, exportedM3: height.exportedM3 });
 
     return {
         settings,
         n,
         dx,
         sizeM: settings.sizeM,
-        elevation: height.elevation,
+        elevation,
         attrs,
         satmapRgba,
         metrics,

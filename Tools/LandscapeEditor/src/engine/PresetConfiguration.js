@@ -101,7 +101,7 @@ function definePreset(id, name, icon, blurb, settings, build)
 {
     const builder = makeBuilder(id);
     const built = build(builder);
-    const talus = builder.erode('Talus stabilisation', 'thermal', { params: { talusDeg: 38, rate: 0.3, iterations: 120, litho: 0.3 } });
+    const talus = builder.erode('Talus stabilisation', 'thermal', { params: { talusDeg: 34, rate: 0.25, iterations: 40, litho: 0.5 } });
     const heightLayers = [...built.heightLayers, talus];
     return { id, name, icon, blurb, settings, heightLayers, satmapLayers: built.satmapLayers };
 }
@@ -111,9 +111,10 @@ export const PRESETS = [
         { sizeM: 5000, seaLevelM: -400, snowlineM: 4000, stylize: 0.4, seed: 2101, riverKm2: 0.06 },
         (b) => ({
             heightLayers: [
-                b.shape('Plateau benches', 'terraces', { amplitudeM: 600, offsetM: 500, mixMode: 'replace', params: { scaleM: 2400, steps: 4, riser: 0.12, octaves: 5, warp: 0.35 } }),
+                b.shape('Regional fall', 'tilt', { amplitudeM: 420, offsetM: 380, params: { bearingDeg: 200, curvature: 0.15 } }),
+                b.shape('Plateau benches', 'terraces', { amplitudeM: 380, offsetM: 120, params: { scaleM: 2600, steps: 4, riser: 0.24, octaves: 5, warp: 0.2 } }),
                 b.shape('Rolling uplands', 'perlin', { amplitudeM: 120, params: { scaleM: 1800, octaves: 6, warp: 0.3 } }),
-                b.erode('Canyon incision', 'fluvial', { params: { upliftM: 280, streamK: 0.55, iterations: 80, transport: 0.25, depositFraction: 0.3, rainfall: 1.4, litho: 0.55 } }),
+                b.erode('Canyon incision', 'fluvial', { params: { upliftM: 220, streamK: 0.9, iterations: 80, creep: 6, depositGradient: 0.02, depositFraction: 0.25, rainfall: 1.4, litho: 0.6 } }),
                 b.erode('Scarp talus', 'thermal', { params: { talusDeg: 33, rate: 0.25, iterations: 40, litho: 0.55 } }),
                 b.erode('Gully rain', 'hydraulic', { opacity: 0.5, mask: { type: 'slope', params: { lowDeg: 12, highDeg: 40 } }, params: { density: 1.0, lifetime: 60, radius: 2, litho: 0.55 } })
             ],
@@ -145,11 +146,12 @@ export const PRESETS = [
                 b.satmap('Sparse scrub', 'scrub', 'slope', [0, 5, 2], { opacity: 0.5, breakup: { amount: 0.6, scaleM: 300, threshold: 0.6 } })
             ]
         })),
-    definePreset('coastal-cliffs', 'Coastal cliffs', 'Anchor', 'An island coastline with wave-cut platforms, sea cliffs and talus, inland uplands and shore beaches.',
+    definePreset('coastal-cliffs', 'Coastal cliffs', 'Anchor', 'A straight coastline with bays and headlands: wave-cut platforms, sea cliffs and talus, inland uplands and shore beaches.',
         { sizeM: 5000, seaLevelM: 0, snowlineM: 2600, stylize: 0.35, seed: 4411, riverKm2: 0.048 },
         (b) => ({
             heightLayers: [
-                b.shape('Island mass', 'island', { amplitudeM: 520, offsetM: -180, mixMode: 'replace', params: { radius: 0.8, coastSoftness: 0.16, roughness: 0.9, aspect: 1.15, scaleM: 1800 } }),
+                b.shape('Coastal shelf', 'tilt', { amplitudeM: 760, offsetM: -330, mixMode: 'replace', params: { bearingDeg: 130, curvature: 0.1 } }),
+                b.shape('Bays and headlands', 'perlin', { amplitudeM: 320, offsetM: -40, params: { scaleM: 1600, octaves: 6, warp: 0.5 } }),
                 b.shape('Coastal uplands', 'billow', { amplitudeM: 220, offsetM: 80, mask: { type: 'coastal', params: { falloffM: 900, jitterM: 220, side: 'land' } }, params: { scaleM: 1700 } }),
                 b.shape('Headland ridges', 'ridge', { amplitudeM: 130, mask: { type: 'coastal', params: { falloffM: 600, jitterM: 140, side: 'land' } }, params: { scaleM: 1500 } }),
                 b.erode('Wave-cut cliffs', 'coastal', { params: { waveEnergy: 0.9, fetchM: 160, reachM: 500, bandM: 12, platformM: 2.5, platformRate: 0.18, retreat: 0.5, iterations: 12, litho: 0.7 } }),
@@ -272,7 +274,7 @@ export const PRESETS = [
         (b) => ({
             heightLayers: [
                 b.shape('Sand sheet', 'perlin', { amplitudeM: 80, offsetM: 60, mixMode: 'replace', params: { scaleM: 3200, octaves: 4 } }),
-                b.shape('Dune field', 'dunes', { amplitudeM: 90, offsetM: 40, params: { spacingM: 480, windFromDeg: 240, asymmetry: 0.78, sinuosity: 0.45, variation: 0.6, scaleM: 2600 } }),
+                b.shape('Dune field', 'dunes', { amplitudeM: 90, offsetM: 40, params: { spacingM: 520, windFromDeg: 240, asymmetry: 0.8, sinuosity: 0.2, variation: 0.6, scaleM: 2600 } }),
                 b.erode('Wind sculpting', 'aeolian', { params: { windFromDeg: 240, windSpeed: 0.9, saltation: 0.12, deflation: 0.25, supply: 0.04, topoBoost: 2.5, sweeps: 3, maxDeflation: 0.8, litho: 0.1 } })
             ],
             satmapLayers: [

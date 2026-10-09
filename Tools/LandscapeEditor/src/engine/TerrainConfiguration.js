@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS = {
     sunElevationDeg: 38,
     riverKm2: 0.25,
     stylize: 0.35,
+    smoothing: 0.5,
     bedding: DEFAULT_BEDDING
 };
 
@@ -45,7 +46,8 @@ export const WORLD_SCHEMA = [
     sliderParameter('sunAzimuthDeg', 'Sun azimuth', 0, 360, 1, 135, '°', 'Bearing of the sun, 0 = north, clockwise.'),
     sliderParameter('sunElevationDeg', 'Sun elevation', 5, 85, 1, 38, '°', 'Height of the sun above the horizon.'),
     sliderParameter('riverKm2', 'River threshold', 0.02, 5, 0.01, 0.25, 'km²', 'Catchment area that becomes a visible channel.'),
-    sliderParameter('stylize', 'Stylisation', 0, 1, 0.01, 0.35, '', 'Saturation and contrast of the satmap. 0 is literal.')
+    sliderParameter('stylize', 'Stylisation', 0, 1, 0.01, 0.35, '', 'Saturation and contrast of the satmap. 0 is literal.'),
+    sliderParameter('smoothing', 'Surface smoothing', 0, 1, 0.01, 0.5, '', 'Light diffusion after every layer. Clears cell-scale hatching left by erosion; 0 keeps raw detail.')
 ];
 
 export const BEDDING_SCHEMA = [

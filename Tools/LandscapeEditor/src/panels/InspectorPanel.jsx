@@ -41,6 +41,10 @@ function TerrainPanel({ settings, onSettings, onBedding })
     const schema = WORLD_SCHEMA.filter((entry) => entry.key !== 'resolution');
     return (
         <>
+            <header className="object-header">
+                <p className="eyebrow">World</p>
+                <h1>Terrain &amp; bedding</h1>
+            </header>
             <CardPanel icon={Globe} title="Terrain" blurb="Datum, world size, seed and satmap stylisation. Resolution is set in the top bar.">
                 <ParameterPanel schema={schema} current={settings} onChange={(key, value) => onSettings({ [key]: value })} />
             </CardPanel>
@@ -248,12 +252,30 @@ function MaskPanel({ mask, onMask })
     );
 }
 
+function PropertySwitch({ icon: Icon, name, on, onToggle })
+{
+    return (
+        <button type="button" className={`property-switch${on ? '' : ' is-off'}`} onClick={onToggle} aria-pressed={on}>
+            <span className="switch-icon">
+                <Icon size={14} />
+            </span>
+            <span className="switch-name">{name}</span>
+            <span className="switch-state">{on ? 'ON' : 'OFF'}</span>
+        </button>
+    );
+}
+
 function LayerDetailPanel({ selected, onLayer })
 {
     const { stack, layer } = selected;
     const satmap = stack === 'satmapLayers';
     const update = (patch) => onLayer(stack, layer.id, patch);
     const updateMask = (patch) => update({ mask: { ...layer.mask, ...patch } });
+    const maskOn = Boolean(layer.mask) && layer.mask.type !== 'none';
+    const breakupOn = Boolean(layer.breakup) && layer.breakup.amount > 0;
+    const generatorOn = Boolean(layer.generator);
+    const disabled = layer.enabled === false;
+    const eyebrow = satmap ? 'Satmap · paint' : layer.category === 'erosion' ? 'Height · erosion' : 'Height · generator';
     let body = null;
     if (satmap)
     {
@@ -274,6 +296,18 @@ function LayerDetailPanel({ selected, onLayer })
     }
     return (
         <>
+            <header className="object-header">
+                <p className="eyebrow">{eyebrow}</p>
+                <h1>{layer.name}</h1>
+                <button type="button" className={`enabled-pill${disabled ? ' is-off' : ''}`} onClick={() => update({ enabled: disabled })}>
+                    {disabled ? 'Disabled' : 'Enabled'}
+                </button>
+            </header>
+            <div className="property-switches">
+                <PropertySwitch icon={Scan} name="Mask" on={maskOn} onToggle={() => updateMask(buildMaskSetting(maskOn ? 'none' : 'massif'))} />
+                {satmap ? <PropertySwitch icon={Paintbrush} name="Breakup" on={breakupOn} onToggle={() => update({ breakup: { ...layer.breakup, amount: breakupOn ? 0 : 0.5 } })} /> : null}
+                {satmap ? <PropertySwitch icon={Shapes} name="Generator" on={generatorOn} onToggle={() => update({ generator: generatorOn ? null : newSatmapGenerator('perlin') })} /> : null}
+            </div>
             <LayerIdentityPanel stack={stack} layer={layer} update={update} />
             {body}
             <MaskPanel mask={layer.mask} onMask={updateMask} />
@@ -340,6 +374,10 @@ export function InspectorPanel({ selected, settings, result, onSettings, onBeddi
             <div className="card-stack">
                 {selected ? <LayerDetailPanel selected={selected} onLayer={onLayer} /> : <TerrainPanel settings={settings} onSettings={onSettings} onBedding={onBedding} />}
                 {result ? <MeasurePanel result={result} /> : null}
+                <footer className="inspector-footer">
+                    <span><span className="footer-dot" />Changes apply live</span>
+                    <span>{result ? `${result.n} × ${result.n} grid` : 'Waiting for the first result'}</span>
+                </footer>
             </div>
         </aside>
     );
