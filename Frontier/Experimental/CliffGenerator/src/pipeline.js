@@ -243,6 +243,21 @@ export function generateTerrain(params, progress = () => {}) {
 
   const slope = computeSlopeMap(height, N, cell);
 
+  // downhill direction (unit, smoothed over a few cells): the streak shader stretches its runoff
+  // marks along it, so streaks follow the flow instead of an isotropic noise
+  const dirX = new Float32Array(N * N), dirZ = new Float32Array(N * N);
+  {
+    const sm = blurField(height, N, 3);
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const i0 = Math.max(0, i - 1), i1 = Math.min(N - 1, i + 1), j0 = Math.max(0, j - 1), j1 = Math.min(N - 1, j + 1);
+      const gx = (sm[j * N + i1] - sm[j * N + i0]) / ((i1 - i0) * cell), gz = (sm[j1 * N + i] - sm[j0 * N + i]) / ((j1 - j0) * cell);
+      const m = Math.hypot(gx, gz);
+      if (m > 1e-4) { dirX[j * N + i] = -gx / m; dirZ[j * N + i] = -gz / m; }
+    }
+    const bx = blurField(dirX, N, 2), bz = blurField(dirZ, N, 2);
+    dirX.set(bx); dirZ.set(bz);
+  }
+
   let min = Infinity, max = -Infinity;
   for (let i = 0; i < N * N; i++) {
     if (height[i] < min) min = height[i];
@@ -253,7 +268,7 @@ export function generateTerrain(params, progress = () => {}) {
   return {
     resolution: N,
     worldSize: params.worldSize,
-    height, hardness, deposit, flow: flowNorm, cavity, slope,
+    height, hardness, deposit, flow: flowNorm, cavity, slope, dirX, dirZ,
     river: riverResult.riverMask, waterLevel: riverResult.waterLevel, lake, silt: siltMap, outcrop,
     stats: { min, max, elapsedMs: now() - t0, rivers: hydro ? hydro.stats : null },
     network: hydro ? hydro.network : null,

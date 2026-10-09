@@ -1,5 +1,6 @@
 // Builds the terrain surface (and the block skirt) as indexed BufferGeometry.
-// Vertex layout: position, normal, aux = (deposit, flow, hardness, cavity).
+// Vertex layout: position, normal, aux = (deposit, flow, hardness, cavity), aux2 = (road, river, lake, water),
+// aux3 = (silt, downhill x, downhill z, -).
 
 import * as THREE from 'three';
 
@@ -96,7 +97,7 @@ export function refineField(field, v) {
     resolution: N, worldSize: field.worldSize,
     height: field.height.slice(), hardness: field.hardness, deposit: field.deposit, flow: field.flow, cavity: field.cavity, slope: field.slope,
     river: field.river || empty(), waterLevel: (field.waterLevel || empty().fill(NO_WATER)).slice(), lakeSim: field.lake || empty(),
-    silt: field.silt || empty(),
+    silt: field.silt || empty(), dirX: field.dirX || empty(), dirZ: field.dirZ || empty(),
     outcrop: field.outcrop || null,
     stats: field.stats, base: field,
   } : {
@@ -112,6 +113,7 @@ export function refineField(field, v) {
     waterLevel: upsampleWaterLevel(field.waterLevel || empty().fill(NO_WATER), N, k),
     lakeSim: upsampleMap(field.lake || empty(), N, k, true),
     silt: upsampleMap(field.silt || empty(), N, k, true),
+    dirX: upsampleMap(field.dirX || empty(), N, k, true), dirZ: upsampleMap(field.dirZ || empty(), N, k, true),
     outcrop: field.outcrop ? upsampleMap(field.outcrop, N, k, true) : null,
     stats: field.stats,
     base: field,
@@ -195,7 +197,7 @@ export function buildTerrainGeometry(field, v = {}, chunks = null) {
   const aux = new Float32Array(count * 4);
   const aux2 = new Float32Array(count * 4);
   const aux3 = new Float32Array(count * 4);
-  const silt = field.silt;
+  const silt = field.silt, dirX = field.dirX, dirZ = field.dirZ;
   const disp = makeDisplacement(field, v);
   const detail = makeDetail(field, v);
   const fadeCells = 3;
@@ -238,6 +240,8 @@ export function buildTerrainGeometry(field, v = {}, chunks = null) {
       aux2[idx * 4 + 1] = river ? river[idx] : 0;
       aux2[idx * 4 + 2] = lake ? lake[idx] : 0;
       aux3[idx * 4] = silt ? silt[idx] : 0;
+      aux3[idx * 4 + 1] = dirX ? dirX[idx] : 0;
+      aux3[idx * 4 + 2] = dirZ ? dirZ[idx] : 0;
       aux2[idx * 4 + 3] = waterLevel ? waterLevel[idx] : NO_WATER;
       if (rd > 0.5) {
         // roads are flat: strip the normal-space detail off the carriageway

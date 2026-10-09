@@ -129,7 +129,7 @@ export function selectChunks(fine, v) {
 export function packChunkJobs(fine, chunks, v) {
   const { resolution: N } = fine;
   const { C, list } = chunks;
-  const names = ['height', 'hardness', 'deposit', 'flow', 'cavity', 'road', 'river', 'lake', 'silt', 'waterLevel', 'waterPaint', 'sdfWeight', 'outcrop', 'crest', 'foot', 'gmax', 'gxs', 'gzs'];
+  const names = ['height', 'hardness', 'deposit', 'flow', 'cavity', 'road', 'river', 'lake', 'silt', 'dirX', 'dirZ', 'waterLevel', 'waterPaint', 'sdfWeight', 'outcrop', 'crest', 'foot', 'gmax', 'gxs', 'gzs'];
   const jobs = [], transfer = [];
   const cell = fine.worldSize / (N - 1);
   const maxCarve = carveReach(v);
@@ -631,6 +631,8 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     aux2[n * 4 + 1] = bil(m.river, cu, cw);
     aux2[n * 4 + 2] = bil(m.lake, cu, cw);
     aux3[n * 4] = m.silt ? bil(m.silt, cu, cw) : 0;
+    aux3[n * 4 + 1] = m.dirX ? bil(m.dirX, cu, cw) : 0;
+    aux3[n * 4 + 2] = m.dirZ ? bil(m.dirZ, cu, cw) : 0;
     aux2[n * 4 + 3] = m.waterPaint ? bil(m.waterPaint, cu, cw) : m.waterLevel[Math.min(Sz - 1, Math.max(0, Math.round(cw) + pad)) * Sx + Math.min(Sx - 1, Math.max(0, Math.round(cu) + pad))];
   }
   const index = count > 65535 ? new Uint32Array(indices) : new Uint16Array(indices);

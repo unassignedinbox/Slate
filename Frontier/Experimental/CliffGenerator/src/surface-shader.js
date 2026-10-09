@@ -293,6 +293,20 @@ float cgPatch( vec3 wp, float scale, float seed ) { return clamp( cgNoise3( wp /
 
 struct Surface { vec3 albedo; vec3 normalW; float roughness; float ao; float metal; vec3 emissive; };
 
+// Runoff-streak noise. Isotropic where there is no flow; where the downhill direction is known the
+// noise is stretched along it (long along the flow, short across), so the streaks follow the flow
+// lines like water marks instead of a random blotch pattern.
+float streakNoise( vec3 wp, vec2 dir ) {
+  float iso = cgNoise3( vec3( wp.x, wp.y * 0.05, wp.z ) / uStreakScale ).x * 0.6 + cgNoise3( vec3( wp.x * 3.6, wp.y * 0.1, wp.z * 3.6 ) / uStreakScale + 5.0 ).x * 0.4;
+  float L = length( dir );
+  if ( L < 1.0e-3 ) return iso;
+  vec2 d = dir / L;
+  float across = dot( wp.xz, vec2( -d.y, d.x ) );
+  float along = dot( wp.xz, d );
+  float dirN = cgNoise3( vec3( across, wp.y * 0.05, along * 0.25 ) / uStreakScale ).x * 0.6 + cgNoise3( vec3( across * 3.6, wp.y * 0.1, along * 0.9 ) / uStreakScale + 5.0 ).x * 0.4;
+  return mix( iso, dirN, smoothstep( 0.1, 0.5, L ) );
+}
+
 Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2, vec4 aux3 ) {
   float road = aux2.x * ( 1.0 - uIsRock ) * uRoadOn;
   float riverBed = aux2.y * ( 1.0 - uIsRock ) * uBedOn;
@@ -536,7 +550,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2, vec4 aux3 ) 
   rock *= 1.0 - uGrainContrast * 0.45 + uGrainContrast * 0.9 * ( grain.x * 0.5 + 0.5 );
   rock *= 1.0 - uGrainContrast * 0.2 + uGrainContrast * 0.4 * ( grainFine.x * 0.5 + 0.5 );
 
-  float streakPre = smoothstep( 0.56, 0.78, cgNoise3( vec3( wp.x, wp.y * 0.05, wp.z ) / uStreakScale ).x * 0.6 + cgNoise3( vec3( wp.x * 3.6, wp.y * 0.1, wp.z * 3.6 ) / uStreakScale + 5.0 ).x * 0.4 ) * wall;
+  float streakPre = smoothstep( 0.56, 0.78, streakNoise( wp, aux3.yz ) ) * wall;
 
   // oxide pockets
   float ox = smoothstep( 0.52, 0.8, cgNoise3( wp / uOxideScale + 7.0 ).x * 0.6 + cgNoise3( wp / uOxideScale * 3.4 ).x * 0.4 );
@@ -558,8 +572,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2, vec4 aux3 ) 
   rock *= 1.0 + cavity * 0.35 * uCavityStrength;
 
   // runoff staining
-  float streak = cgNoise3( vec3( wp.x, wp.y * 0.05, wp.z ) / uStreakScale ).x * 0.6 + cgNoise3( vec3( wp.x * 3.6, wp.y * 0.1, wp.z * 3.6 ) / uStreakScale + 5.0 ).x * 0.4;
-  streak = smoothstep( 0.56, 0.78, streak ) * uStreakAmount;
+  float streak = smoothstep( 0.56, 0.78, streakNoise( wp, aux3.yz ) ) * uStreakAmount;
   float wet = clamp( uWetness * ( flow * 0.9 + streak * wall * 0.7 ), 0.0, 1.0 );
   rock *= 1.0 - wet * 0.5;
 
