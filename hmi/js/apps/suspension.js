@@ -1,21 +1,25 @@
-// Suspension: live 3D car with exposed wishbones, pushrods and coilovers, plus corner travel
-// readouts, a trace, and setup sliders. Slider changes go straight to the vehicle model;
-// on the real car they become setup writes to the C++ control layer.
+// Suspension: live 3D car with exposed wishbones, pushrods and coilovers, corner travel readouts,
+// roll/pitch/heave, a travel trace, and setup controls. Slider changes go straight to the vehicle
+// model; on the real car they become setup writes to the C++ control layer.
 import { el, slider, Trace } from '../ui.js';
 import { createCarView } from '../car3d.js';
 import { liveryColor } from '../backend.js';
+import { DEFAULT_SETTINGS } from '../vehicle.js';
 
-const CORNER_NAMES = { fl: 'Front left', fr: 'Front right', rl: 'Rear left', rr: 'Rear right' };
+const CORNERS = [['fl', 'Front left'], ['fr', 'Front right'], ['rl', 'Rear left'], ['rr', 'Rear right']];
 
 export default {
   id: 'suspension', name: 'Suspension', icon: 'suspension', color: '#f59e0b',
   open(body, ctx) {
-    const viewport = el('div', { class: 'viewport' });
-    const tag = el('div', { class: 'vp-tag' }, 'LIVE · visual ×2.5');
+    // ---- 3D viewport with camera presets
+    const viewport = el('div', { class: 'viewport sus-vp' });
+    let view;
     const presets = ['orbit', 'front', 'side', 'rear', 'top'].map((p) =>
-      el('button', { class: 'chip', onclick: () => view.setPreset(p) }, p[0].toUpperCase() + p.slice(1)));
-    viewport.append(el('div', { class: 'vp-bar' }, presets), tag);
+      el('button', { class: 'k-chip', onclick: () => { view.setPreset(p); presets.forEach((b) => b.classList.toggle('on', b.dataset.p === p)); }, 'data-p': p }, p[0].toUpperCase() + p.slice(1)));
+    presets[0].classList.add('on');
+    viewport.append(el('div', { class: 'vp-bar' }, presets), el('div', { class: 'vp-tag' }, 'LIVE · VISUAL ×2.5 · DRAG TO ORBIT'));
 
+    // ---- setup panel
     const S = ctx.sim.settings;
     const sliders = {
       rideHeight: slider({ label: 'Ride height', min: -25, max: 25, step: 1, value: S.rideHeight, format: (v) => `${v > 0 ? '+' : ''}${v} mm`, onInput: (v) => ctx.sim.set({ rideHeight: v }) }),
@@ -23,19 +27,41 @@ export default {
       damping: slider({ label: 'Damping', min: 0, max: 1, step: 0.01, value: S.damping, format: (v) => `${Math.round(v * 100)}%`, onInput: (v) => ctx.sim.set({ damping: v }) }),
       antiRoll: slider({ label: 'Anti-roll bar', min: 0, max: 1, step: 0.01, value: S.antiRoll, format: (v) => `${Math.round(v * 100)}%`, onInput: (v) => ctx.sim.set({ antiRoll: v }) }),
     };
+    const reset = el('button', {
+      class: 'k-btn ghost',
+      onclick: () => {
+        const d = { rideHeight: DEFAULT_SETTINGS.rideHeight, springRate: DEFAULT_SETTINGS.springRate, damping: DEFAULT_SETTINGS.damping, antiRoll: DEFAULT_SETTINGS.antiRoll };
+        ctx.sim.set(d);
+        for (const [k, s] of Object.entries(sliders)) s.set(d[k]);
+        ctx.toast('Suspension reset to baseline', 'info');
+      },
+    }, 'Reset to baseline');
+    const setupCard = el('section', { class: 'k-card sus-setup' },
+      el('div', { class: 'k-cap' }, 'SETUP'),
+      ...Object.values(sliders).map((s) => s.root),
+      reset);
 
+    // ---- corner travel
     const corners = {};
-    const cornerGrid = el('div', { class: 'corner-grid' }, ['fl', 'fr', 'rl', 'rr'].map((c) => {
+    const cornerGrid = el('div', { class: 'sus-corners' }, CORNERS.map(([c, name]) => {
       const val = el('b', {}, '0.0');
       const mark = el('i', { class: 'mark' });
-      const node = el('div', { class: 'corner' }, el('span', {}, CORNER_NAMES[c]), val, el('small', {}, 'mm travel'),
-        el('div', { class: 'travel' }, el('i', { class: 'zero' }), mark));
-      corners[c] = { val, mark };
+      const fill = el('i', { class: 'fill' });
+      const node = el('div', { class: 'sus-corner' },
+        el('div', { class: 'sus-corner-h' }, el('span', {}, name), val),
+        el('div', { class: 'travel' }, el('i', { class: 'zero' }), fill, mark),
+        el('small', {}, 'mm · compression ← → rebound'));
+      corners[c] = { val, mark, fill };
       return node;
     }));
-
     const roll = el('b', {}, '0.0°'), pitch = el('b', {}, '0.0°'), heave = el('b', {}, '0 mm');
-    const traceCanvas = el('canvas', { class: 'trace' });
+    const attitude = el('div', { class: 'sus-att' },
+      el('div', {}, el('span', { class: 'k-cap' }, 'ROLL'), roll),
+      el('div', {}, el('span', { class: 'k-cap' }, 'PITCH'), pitch),
+      el('div', {}, el('span', { class: 'k-cap' }, 'HEAVE'), heave));
+    const cornerCard = el('section', { class: 'k-card sus-travel' }, el('div', { class: 'k-cap' }, 'CORNER TRAVEL'), cornerGrid, attitude);
+
+    const traceCanvas = el('canvas', { class: 'trace sus-trace' });
     const trace = new Trace(traceCanvas, {
       min: -50, max: 70, samples: 240,
       series: [
@@ -43,19 +69,13 @@ export default {
         { label: 'RL', color: '#f59e0b' }, { label: 'RR', color: '#f472b6' },
       ],
     });
-    const panel = el('aside', { class: 'panel' },
-      el('h3', {}, 'Setup'),
-      ...Object.values(sliders).map((s) => s.root),
-      el('h3', {}, 'Corner travel'),
-      cornerGrid,
-      el('div', { class: 'attitude' }, el('span', {}, 'Roll'), roll, el('span', {}, 'Pitch'), pitch, el('span', {}, 'Heave'), heave),
-      el('h3', {}, 'Travel · last 8 s'),
+    const traceCard = el('section', { class: 'k-card sus-tracecard' },
+      el('div', { class: 'k-cap' }, 'TRAVEL · LAST 8 S'),
       traceCanvas,
-    );
+      el('div', { class: 'sus-legend' }, ['FL', 'FR', 'RL', 'RR'].map((n, i) => el('span', {}, el('i', { style: { background: ['#2ee6c5', '#38bdf8', '#f59e0b', '#f472b6'][i] } }), n))));
 
-    body.append(el('div', { class: 'split' }, viewport, panel));
+    body.append(el('div', { class: 'sus-grid' }, viewport, el('aside', { class: 'sus-side' }, setupCard, cornerCard, traceCard)));
 
-    let view;
     try {
       view = createCarView(viewport, { accent: liveryColor(ctx.backend.account.equippedLivery), autoRotate: ctx.kiosk });
     } catch (err) {
@@ -68,11 +88,16 @@ export default {
     function update(f) {
       frameNo++;
       view.update(f);
-      for (const c of ['fl', 'fr', 'rl', 'rr']) {
+      for (const [c] of CORNERS) {
         const mm = f.susp[c];
         corners[c].val.textContent = mm.toFixed(1);
         const pct = Math.max(0, Math.min(100, ((mm + 50) / 120) * 100));
         corners[c].mark.style.left = `${pct}%`;
+        // Fill from the centre zero line to the current travel.
+        const zero = 41.7;
+        corners[c].fill.style.left = `${Math.min(pct, zero)}%`;
+        corners[c].fill.style.width = `${Math.abs(pct - zero)}%`;
+        corners[c].fill.classList.toggle('reb', mm < 0);
         corners[c].mark.classList.toggle('hot', Math.abs(mm) > 45);
       }
       roll.textContent = `${f.attitude.rollDeg.toFixed(1)}°`;

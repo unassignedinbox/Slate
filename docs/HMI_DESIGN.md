@@ -200,3 +200,22 @@ A production model would:
   attitude from the IMU;
 - keep **level-of-detail** versions of the model (full detail when the app is open, simplified
   when it is in the background).
+
+## 14. Full apps (automotive UI)
+
+All seven apps are full screens, not widgets. They share one component kit (`js/kit.js`, `css/apps.css`):
+arc gauges, cards, tabs, bottom sheets, line charts and buttons with press feedback.
+
+| App | What it does | Real or simulated |
+|---|---|---|
+| Cockpit | Speed arc, gear, shift lights, pedals, G-meter with trail, lap and sector timing, speed/brake trace, track map, car status | Telemetry is the vehicle model's frame (mirrors the C++ struct) |
+| Suspension | Live 3D car (wishbones, pushrods, coilovers), corner travel, roll/pitch/heave, setup sliders, reset | 3D and model are real within the prototype; setup writes go to the model |
+| Aero | 3D airflow, front/rear flap sliders, downforce, drag, L/D, balance, downforce-vs-speed curve | Same coefficient model as the vehicle sim |
+| Tyres | Per-corner tread temperature (inner/centre/outer), pressure window, wear, compound (changes the model), temperature trace, advice | Thermal and wear model in the sim |
+| Weather | Animated sky, rain radar, wind compass, track conditions, 8-hour forecast | Deterministic simulated feed |
+| Store | Balance, setup packs and liveries, buy/equip/apply with a confirm sheet | Backend mock with async, server-validated calls |
+| Online | Rooms with join and ready state, live race standings and track map, chat, friends and presence, leaderboard | Other drivers and chat are simulated; swap for WebSocket snapshots |
+
+**Fidelity note.** The apps use DOM, SVG and canvas. That gives a polished automotive look at 60 fps. It is not
+AAA game rendering. Real game-grade visuals (physically based materials, post-processing, real-time shadows) would
+need a native GPU renderer in the C++ build. This is a design target, not something the browser prototype reaches.
