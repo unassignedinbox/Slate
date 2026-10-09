@@ -112,6 +112,16 @@ export const defaults = {
   rockSizeMax: 9,           // [m]
   rockAngularity: 0.7,
   rockEmbed: 0.45,
+  // where each rock comes from (the placer reads the simulated fields; these are the shares)
+  rockInPlace: 0.8,         // bedrock breaking off in place on bare faces
+  rockTalus: 0.85,          // the apron shed below a cliff
+  rockChannel: 0.7,         // coarse lag the stream still has power to move
+  rockBars: 0.6,            // where the flow slows: bars, canyon mouths, fans
+  rockCaps: 0.5,            // resistant caps and tors left armoring the high ground
+  rockErratics: 0.22,       // rare solitary wanderers on the flats
+  rockShore: 0.55,          // cobble cord laid along standing water
+  rockSoilHide: 0.7,
+  rockSizeSpread: 0.7,
   pebblesOn: 1,
   pebbleDensity: 0.45,
   pebbleSize: 0.45,         // [m]
@@ -806,16 +816,24 @@ export const groups = [
     ],
   },
   {
-    id: 'rocks', name: 'Rocks', type: 'Plain scatter', stage: 'rocks', color: '#a8bbeb',
+    id: 'rocks', name: 'Rocks', type: 'Where they come from', stage: 'rocks', color: '#a8bbeb',
     cards: [
       { title: 'Scatter', controls: [
         ['rocksEnabled', 'Enable rocks', 0, 1, 1, '', ''],
-        ['rockDensity', 'Density', 0, 1, 0.05, '', 'How many rocks are scattered'],
-        ['rockSlopeMin', 'Slope · min', 0, 80, 1, '°', 'No rocks on ground gentler than this'],
-        ['rockSlopeMax', 'Slope · max', 5, 89, 1, '°', 'No rocks on ground steeper than this'],
-        ['rockClustering', 'Clustering', 0, 1, 0.05, '', 'Even spread → grouped into patches'],
-        ['rockClusterScale', 'Cluster size', 10, 400, 5, 'm', ''],
+        ['rockDensity', 'Density', 0, 1, 0.05, '', 'How many candidate sites are tried (the geology decides which of them get a rock)'],
+        ['rockClustering', 'Patchiness', 0, 1, 0.05, '', 'Even spread → grouped into patches, so no category covers everything evenly'],
+        ['rockClusterScale', 'Patch size', 10, 400, 5, 'm', ''],
         ['rockTilt', 'Follow slope', 0, 1, 0.05, '', 'Upright → aligned to the ground normal'],
+      ] },
+      { title: 'Origins', controls: [
+        ['rockInPlace', 'Bedrock in place', 0, 1, 0.05, '', 'Angular blocks broken off the rock where it is steep, bare and hard — they sit flush with the face, deep into the ground'],
+        ['rockTalus', 'Talus & scree', 0, 1, 0.05, '', 'Debris the faces above shed: it piles at the foot and fines away down the apron, with the biggest blocks nearest the cliff'],
+        ['rockChannel', 'Channel lag', 0, 1, 0.05, '', 'Boulders a stream only keeps where it has the power to move them — big in the steep headwaters, smaller downstream, water-rounded'],
+        ['rockBars', 'Bars & fans', 0, 1, 0.05, '', 'Where the flow slows it drops its load: inside bars, gravel sheets at canyon mouths, braided fans'],
+        ['rockCaps', 'Caps & tors', 0, 1, 0.05, '', 'A resistant bed armours a hill top and survives as a cap or a tor on the high ground'],
+        ['rockErratics', 'Erratics', 0, 1, 0.05, '', 'Rare solitary boulders on the flats, half buried and weathered, far from any face'],
+        ['rockShore', 'Shore cord', 0, 1, 0.05, '', 'Cobbles laid along the edge of standing water, rounded by the waves'],
+        ['rockSoilHide', 'Soil hides rock', 0, 1, 0.05, '', 'How strongly fine cover (soil, silt, sand) buries rock: at 1 a rock only shows where soil cannot cling'],
       ] },
       { title: 'Gravel stones', controls: [
         ['pebblesOn', 'Enable stones', 0, 1, 1, '', 'Real small stone meshes on scree aprons and river beds, on top of the pebble shading'],
@@ -827,6 +845,7 @@ export const groups = [
         ['rockSizeMax', 'Largest rock', 2, 40, 0.5, 'm', ''],
         ['rockAngularity', 'Angularity', 0, 1, 0.05, '', 'Planar cleavage cuts vs. rounded boulders'],
         ['rockEmbed', 'Embed depth', 0, 1, 0.05, '', 'How deep rocks sit in the ground'],
+        ['rockSizeSpread', 'Size spread', 0, 1, 0.05, '', 'Heavy tail of the size distribution: 0 = all alike, 1 = many pebbles and a few monsters'],
         ['rockSeed', 'Rock seed', 1, 999, 1, '', ''],
       ] },
     ],

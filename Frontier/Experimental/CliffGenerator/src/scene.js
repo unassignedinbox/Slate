@@ -386,6 +386,7 @@ export class CliffScene {
     meshes.forEach((m) => this.rockGroup.add(m));
     this.rockCount = placements.filter((pl) => pl.kind !== 'pebble').length;
     this.pebbleCount = placements.length - this.rockCount;
+    this.rockCats = placements.stats || null;
     this.rockGroup.visible = !!v.showRocks;
   }
 

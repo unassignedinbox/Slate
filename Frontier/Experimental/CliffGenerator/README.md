@@ -217,55 +217,30 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    explicitly or chosen automatically as the finest that fits a voxel budget (the HUD shows it).
 6. **Rocks** (`src/rock-geometry.js`, `src/rock-placement.js`) — eight archetypes per seed
    (boulder / block / slab / shard): displaced icosphere, anisotropic stretch, then clipped by
-   bedding + joint‑set planes, crease‑aware normals. Placement is a plain scatter: jittered
-   grid × density × slope window × clustering mask, power‑law sizes, slope‑following tilt and
-   embed depth. A second, denser pass scatters up to 40 000 small rounded **stones** on scree
-   aprons and river beds (slope‑limited, never on roads or under water) so gravel is real
-   geometry up close. Rendered as `InstancedMesh` with per‑instance tone variation and the same
-   surface shader.
-7. **Surface** (`src/surface-shader.js`) — analytic, world‑space, texture‑free material injected
-   into `MeshStandardMaterial` so Three's PBR, shadows, sky environment and fog still apply:
-   - strata colour bands with dip, bed seams, oxide pockets, aggregate grain (3D value noise
-     with analytic gradient);
-   - **mineral flakes** — three stacked plate layers composited top‑over‑bottom, each with its
-     **own colour** (filled from the rock type, then editable), size (3 cm – 8 m), density,
-     plate height (mm; drives tilt + rim bevel in the normal), shape (angular chips → rounded
-     grains), tint variation and a **crystal share**: crystal plates are brighter, glossy,
-     slightly metallic and carry a view‑dependent sun glint. Each layer can be revealed only on
-     hard caprock or only on soft eroded beds (the *hardness* channel), and plates take the
-     oxide colour where the *flow* channel and oxide pockets say the rock is weathering;
-   - **spalling (“peeling rock”)** — modelled on exfoliating sandstone: irregular fbm‑threshold
-     patches where a thin sheet has flaked off, each a shallow step (sheet thickness in metres,
-     height + analytic normal) with a bevelled rim, paler fresh rock inside, a second generation
-     of smaller spalls and sparse weathering pits. Patches are stretched along bedding on
-     vertical faces; no cell networks or concentric contours;
-   - cover: runoff staining from the flow map + face streaks, **pebble gravel** on deposits and
-     river beds (two generations of domed stones in a sandy matrix, each with its own tone),
-     **soil** — the regolith between the outcrops: gathers on gentle, soft, concave ground and on
-     every deposit while hard convex knolls and ribs stay rock; clods and grit give it its own
-     grain and micro‑relief, it darkens where it is damp (flow lines, the ground just above the
-     water) and in hollows, and fluvial alluvium (floodplains, fans, silted basins) is painted on
-     it as paler silt / sand — vegetation on gentle ground, moss in concavities, slope‑limited
-     snow above the snow line.
-   All layers contribute height **and** an analytic gradient, combined triplanarly into one
-   perturbed normal — no finite differences, no texture reads.
-8. **Drawn features** (`src/features.js`) — splines and points drawn in the viewport:
-   - **rivers** (terrain stage): Catmull‑Rom line → meander → smoothed, monotone‑downhill bed
-     profile (flowing from the higher end) → channel carved with sloped banks up to a bank
-     height, gorge walls above that. Carved before hydraulic erosion, and a share of the droplets
-     start *in* the river carrying extra water, so the water erodes its own bed and the slopes
-     drain into it; carved again after slumping so the final bed matches. Outputs a bed mask
-     and a water level. Water can be switched off for dried beds (cobbles → silt).
-   - **roads** (mesh stage, instant): smoothed grade profile along the spline, flat carriageway,
-     cut slopes above / fill embankments below, shoulder verge; proper widths (3.5 m track …
-     30 m), computed on the refined mesh grid so a 6 m road is resolved.
-   - **lakes** (mesh stage, instant): flood fill from the clicked point up to a level (adjustable
-     per lake), flat silt bed below, water surface; off = dried lake bed.
-   Water is painted onto the surface by default (see *Rivers* above); with *Water → Water as
-   meshes* on, river / lake water is a mesh built from the water‑level map and the sea is the
-   live level plane.
-8. **Lighting** — `Sky` with PMREM environment, shadowed directional sun, exponential fog,
-   ACES tone mapping, water plane.
+   bedding + joint‑set planes, crease‑aware normals. **Placement follows origins, not a scatter**:
+   seven fields are derived from the terrain first — *face* (steep, hard, soil‑free), *crest*
+   (relief above a regional minimum, so a butte top counts but a hummock does not), *apron* (a
+   bucket‑sorted steepest‑descent sweep that carries the face's supply down the fall line, fining
+   and thinning as it goes), *power* (√flow × tan slope = what a stream can still move), *brake*
+   (flow decelerating: inside a bend, at a gorge mouth, where a valley opens up), *shore* (flatness
+   in a ±3 m band of the water surface, from rivers, lakes *and* the sea) and *soil* (fine cover
+   that buries rock). Each field is normalised against its own 95th percentile, then every
+   candidate point picks its **strongest** signal and takes that category's own law: **bedrock in
+   place** (boxy, bedding still horizontal, sunk deep, skipped on near‑vertical walls, which the
+   true‑3D chunks already own), **talus** (largest blocks nearest the cliff, fining and thining
+   downslope, tumbling more as they get smaller), **channel lag** (only what the simulated stream
+   power can still move, wet‑darkened), **bars & fans** (rounded, flat, widest in plan, wherever
+   flow decelerates), **caps, tors & pavement** (a residual cap crowns the high ground; on flat
+   bare hard ground the same origin instead lays thin wide *slabs* packed together), **erratics**
+   (their own sparse grid: apron fringes and lonely flats), **shore cords** (pebble to cobble,
+   sorted across the band). A denser second pass lays up to 40 000 small rounded **stones**
+   wherever that same story says gravel gathers — apron, bar, shore, channel, alluvium — never on
+   roads or under water, so gravel is real geometry up close. Clasts are nudged along the joint
+   lattice so the pieces of one bed line up in rows. Rendered as `InstancedMesh` with
+   per‑instance tone variation and the same ACES tone mapping, water plane. The **Origins** card
+   gives one weight per category plus *soil hides rock* and *size spread*, and the HUD line under
+   *Rocks* reports how many of each were placed — the quickest way to tell a scree slope from a
+   braid plain from a desert pavement.
 
 ## Controls
 
@@ -296,6 +271,7 @@ Every texture layer is fully exposed: each has an **enable** toggle, its own **s
 | Rock material | palette → nine editable colour swatches (beds, fresh, oxide, three flake layers, stones); strata; grain; oxide; cavity | bed contrast, band scale, laminae, bed shading, seam darkness/width, caprock tint, grain size/relief/mottle/fineness, oxide amount/scale, cavity shading, bump strength, base roughness |
 | Mineral flakes | three plate layers | global: coverage, rim highlight, sheen, crystal glitter, oxidise‑with‑runoff; per layer: enable, colour, plate size, density, plate height (mm), tint variation, shape, crystals, reveal by hardness |
 | Spalling | flaked‑off sheets | amount, coverage, patch size, sheet thickness (m), small spalls, weathering pits, follow bedding, fresh contrast, rim shadow |
+| Rocks → Origins | where each category is allowed | bedrock in place, talus & scree, channel lag, bars & fans, caps & tors, erratics, shore cords, soil hides rock, size spread |
 | Rocks → Gravel stones | instanced small stones | enable, density, largest stone |
 | Ground cover | runoff; pebble gravel; soil; vegetation; moss; snow | wetness, face streaks + scale; gravel amount, stone size/relief/variation/colour; soil cover, slope limit, clods & grit, moisture, alluvium + two colours; vegetation amount, slope limit, patch scale, patchiness, dry grass + three colours; moss amount/scale/colour; snow line, slope limit, transition, roughness, colour |
 

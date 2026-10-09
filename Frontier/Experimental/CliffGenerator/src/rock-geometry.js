@@ -155,10 +155,15 @@ function computeCreaseNormals(geometry, creaseDegrees) {
 // A small library of archetypes shared by all placements. Low detail for scree, higher for blocks.
 export function buildRockLibrary(seed, angularity) {
   const families = ['block', 'block', 'boulder', 'slab', 'shard', 'block', 'boulder', 'block', 'slab', 'boulder'];
-  return {
+  const byFamily = {};
+  families.forEach((f, i) => { (byFamily[f] = byFamily[f] || []).push(i); });
+  // the placer asks for a shape by family (a cap is a boulder, a face block is a slab, scree is a
+  // shard), so expose the index of every archetype of a family within a detail set
+  const sets = {
     large: families.map((family, i) => buildRockGeometry({ seed: seed * 10 + i, family, angularity, detail: 3 })),
     small: families.map((family, i) => buildRockGeometry({ seed: seed * 10 + i + 50, family, angularity, detail: 1 })),
     // pebbles: rounded, low-poly, for the dense gravel scatter
     pebble: families.slice(0, 6).map((family, i) => buildRockGeometry({ seed: seed * 10 + i + 90, family: 'boulder', angularity: angularity * 0.3, detail: 1 })),
   };
+  return { ...sets, byFamily: { large: byFamily, small: byFamily, pebble: { boulder: [0, 1, 2, 3, 4, 5] } } };
 }
