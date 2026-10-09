@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Slate HMI · Prototype</title>
+  <link rel="stylesheet" href="css/hmi.css" />
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/" } }
+  </script>
+</head>
+<body>
+  <div id="stage">
+    <div id="screen">
+      <!-- Status bar -->
+      <header id="statusbar">
+        <span class="sb-left"><span id="clock">--:--</span><span id="sb-alert" class="sb-alert"></span></span>
+        <span class="sb-right">
+          <span class="sb-online">● ONLINE</span>
+          <span>5G</span>
+          <span class="sb-sig" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <span>84%</span>
+        </span>
+      </header>
+
+      <!-- Home screen -->
+      <main id="home">
+        <section class="widgets">
+          <button id="widget-speed" class="widget speed-widget" aria-label="Open cockpit">
+            <span class="w-label">SPEED</span>
+            <span class="w-speed"><b id="w-speed">0</b><small>km/h</small></span>
+            <span class="w-row">
+              <span class="w-gear">GEAR <b id="w-gear">1</b></span>
+              <span id="w-lap" class="w-muted">Lap 1</span>
+            </span>
+            <span class="w-rpm"><i id="w-rpm"></i></span>
+          </button>
+          <button id="widget-weather" class="widget wx-widget" aria-label="Open weather">
+            <span class="wx-left"><span id="w-ico" class="wx-w-ico"></span></span>
+            <span class="wx-right">
+              <span class="w-label">TRACK WEATHER</span>
+              <b id="w-temp">--°</b>
+              <span id="w-cond" class="w-muted">--</span>
+            </span>
+          </button>
+        </section>
+
+        <section id="app-grid" class="app-grid"></section>
+
+        <nav id="dock" class="dock"></nav>
+      </main>
+
+      <!-- App windows are injected here by the launcher -->
+      <div id="windows"></div>
+
+      <!-- App drawer (swipe up on home, or the Apps dock icon) -->
+      <div id="drawer" class="overlay hidden">
+        <div class="drawer-head">
+          <label class="search">
+            <span class="search-ico" data-ico="search"></span>
+            <input id="drawer-search" type="search" placeholder="Search apps" autocomplete="off" />
+          </label>
+        </div>
+        <div id="drawer-grid" class="app-grid drawer-grid"></div>
+      </div>
+
+      <!-- Recents -->
+      <div id="recents" class="overlay hidden">
+        <div id="rcards" class="rcards"></div>
+      </div>
+
+      <div id="toasts"></div>
+
+      <!-- Android-style navigation bar -->
+      <nav id="navbar" aria-label="Navigation">
+        <button id="nav-back" aria-label="Back"><span class="nav-ico" data-ico="back"></span></button>
+        <button id="nav-home" aria-label="Home"><span class="nav-ico" data-ico="home"></span></button>
+        <button id="nav-recents" aria-label="Recent apps"><span class="nav-ico" data-ico="recents"></span></button>
+      </nav>
+    </div>
+  </div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
