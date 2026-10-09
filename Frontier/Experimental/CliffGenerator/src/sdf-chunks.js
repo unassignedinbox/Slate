@@ -349,6 +349,10 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const blkDom = Math.max(14, blockSize * 5);
   const bump = roughAmp + detail.amp + pushAmp + blockAmp;
   const maxCarve = carveReach(v);
+  // wall mode (default): continuous faces with a few large protrusions, see carve()
+  const wallMode = (v.sdfWall == null ? 1 : v.sdfWall) > 0;
+  const wallPushL = Math.max(vox * 6, v.sdfPushScale || 14);
+  const wallKnobs = Math.max(0, v.sdfKnobs == null ? 1.2 : v.sdfKnobs);
   // everything that depends on the plan position only
   function column(x, z) {
     const u = (x - x0) / cell, wq = (z - z0) / cell;
@@ -482,7 +486,17 @@ export function buildChunkGeometry(job, meta, v, ctx) {
       // deepest just above the foot, eased out at the very bottom so the face meets the ground
       lean = leanAmp * down * (1 - 0.5 * smoothstep(0.85, 1, down)) * (1 - col.oc);
     }
-    const d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + fallen * 0.9 + pit * 0.5 + col.oc * 0.12 * pocket) + rough - det - push + block + lean;
+    let d;
+    if (wallMode) {
+      // wall mode: one continuous face per column. No bed-by-bed undercut, joints, pits, block rows
+      // or detail texture (those stacked the face into ledges); the face is the lean and vertical
+      // shear only, with a few large protrusions standing out of it
+      const pn = ctx.push.fbm(x / wallPushL, y / (wallPushL * 0.55), z / wallPushL, 2, 2.1, 0.5) * 1.4;
+      const knob = smoothstep(0.45, 0.8, pn) * wallKnobs * (1 - col.oc * 0.7);
+      d = lean + rough * 0.3 - knob;
+    } else {
+      d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + fallen * 0.9 + pit * 0.5 + col.oc * 0.12 * pocket) + rough - det - push + block + lean;
+    }
     return d * col.steep * col.w;
   }
   function fCol(col, y) {
