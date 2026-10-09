@@ -260,6 +260,23 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    *Rocks* reports how many of each were placed — the quickest way to tell a scree slope from a
    braid plain from a desert pavement.
 
+**Sediment is its own layer, not a tint.** The fill that water and weathering lay down is *sorted*
+by the stream power that carried it — gravel where the ground is both steep and well fed (4‑14 % of
+a typical map), sand on the bars, silt and mud on the quiet flats, which is most of it — and it is
+*laid in beds*: surfaces that thicken, thin and onlap the valley sides rather than being sawn through
+them at one constant height, each bed with a dark parting on its base, its own tone and a set of
+inclined cross‑laminae inside it. Its surface keeps *current ripples* — a wave train along a
+palaeocurrent direction that wanders patch to patch, with analytic stoss/lee relief — and *mud
+cracks*, desiccation polygons on the open silt flats. Where the fill is thick the rock beneath is
+dropped entirely: no joints, no flakes, no micro‑relief, and the surface is matte and damp‑darkening
+like real sediment. The bedding still reads *through* the vegetation as alternating pale and dark
+strips, which is what an alluvial plain looks like from any height, and the coarse facies pushes the
+grass back so bars stay bare. Every part of it is faded by the pixel footprint, so the ripples and
+laminae dissolve at distance instead of crawling. Eleven sliders and three editable facies colours
+under **Ground cover → Sediment**: `deposit` decides where the fill lies, `flow` × slope decides what
+grain it is, and *Bed thickness* is the strata of the *fill*, nothing to do with *Strata → Bed
+thickness* of the rock underneath.
+
 ## Controls
 
 Outliner rows map to inspector groups: **Landform / Strata / Erosion** rebuild the heightfield
@@ -291,7 +308,7 @@ Every texture layer is fully exposed: each has an **enable** toggle, its own **s
 | Spalling | flaked‑off sheets | amount, coverage, patch size, sheet thickness (m), small spalls, weathering pits, follow bedding, fresh contrast, rim shadow |
 | Rocks → Origins | where each category is allowed | bedrock in place, talus & scree, channel lag, bars & fans, caps & tors, erratics, shore cords, soil hides rock, size spread |
 | Rocks → Gravel stones | instanced small stones | enable, density, largest stone |
-| Ground cover | runoff; pebble gravel; soil; vegetation; moss; snow | wetness, face streaks + scale; gravel amount, stone size/relief/variation/colour; soil cover, slope limit, clods & grit, moisture, alluvium + two colours; vegetation amount, slope limit, patch scale, patchiness, dry grass + three colours; moss amount/scale/colour; snow line, slope limit, transition, roughness, colour |
+| Ground cover | runoff; pebble gravel; soil; **sediment**; vegetation; moss; snow | wetness, face streaks + scale; gravel amount, stone size/relief/variation/colour; soil cover, slope limit, clods & grit, moisture, alluvium + two colours; sediment: cover, bed thickness, bed contrast, cross‑lamination, sorting, ripples + wavelength, current direction, mud cracks, grain, slope limit + three facies colours; vegetation amount, slope limit, patch scale, patchiness, dry grass + three colours; moss amount/scale/colour; snow line, slope limit, transition, roughness, colour |
 
 Picking a rock type fills the colour swatches; they can be edited freely afterwards.
 

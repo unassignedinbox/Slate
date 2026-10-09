@@ -9,7 +9,10 @@
 //                          channel and oxidised by the flow channel
 //   4. spalling         — irregular patches where a thin sheet flaked off: a shallow bevelled
 //                          step (height + normal), paler fresh rock, weathering pits
-//   5. cover            — runoff staining, pebble gravel, vegetation, moss, snow
+//   5. sediment         — the fill laid in beds: facies sorted by stream power, beds that onlap the
+//                          valley sides with a parting and cross-lamination in each, current ripples,
+//                          mud cracks, and its own grain
+//   6. cover            — runoff staining, pebble gravel, vegetation, moss, snow
 //
 // Vertex aux = (deposit, flow, hardness, cavity) from the erosion pipeline (zeros on rocks).
 
@@ -58,6 +61,8 @@ uniform float uGravelAmount, uGravelScale, uGravelRelief, uGravelVariation;
 uniform vec3 uSunDir;
 uniform float uVegetation, uVegScale, uVegSlope, uVegPatchiness, uDryness;
 uniform float uSoilAmount, uSoilSlopeCos, uSoilClods, uSoilMoisture, uSoilAlluvium;
+uniform float uSedAmount, uSedBands, uSedBedScale, uSedLaminae, uSedFacies, uSedRipple, uSedRippleScale, uSedCracks, uSedGrain, uSedSlopeCos, uSedDirRad;
+uniform vec3 uSedGravel, uSedSand, uSedSilt;
 uniform vec3 uSoilColor, uSoilLight;
 uniform float uMossiness, uMossScale;
 uniform float uSnowLine, uSnowSlopeCos, uSnowSoftness, uSnowRoughness;
@@ -612,7 +617,96 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   soilCol = mix( soilCol, siltCol, lakeBed * uSoilAlluvium );
   rock = mix( rock, soilCol, soil );
 
-  vec3 color = mix( rock, grass, veg );
+  // ---- sediment: the fill that water and weathering laid down, in beds ---------------------------
+  // A deposit is not a flat colour. It is sorted by the energy that carried it (gravel where the
+  // flow was strong, sand on the bars, silt and mud on the quiet flats), it is laid in beds that
+  // thicken, thin and climb the valley sides, each bed with its own parting, its own tone and a set
+  // of cross-laminae inside it, and it carries current ripples and mud cracks on top. Where the fill
+  // is thick the rock beneath is simply gone: no joints, no flakes, no bedding of its own.
+  float sedCover = 0.0;
+  vec3 sedCol = vec3( 0.5 );
+  vec2 sedGrad = vec2( 0.0 );
+  float sedSeam = 0.0, sedRip = 0.0, sedTone = 0.0, sedCoarse = 0.0;
+  {
+    float sedDepth = smoothstep( 0.05, 0.42, deposit );                       // how much fill is here
+    float sedGround = smoothstep( uSedSlopeCos - 0.16, uSedSlopeCos + 0.06, n.y );
+    // the fill itself where the rivers laid one, and the weathered gentle ground everywhere else:
+    // the pale flats are sediment too, they are just thinner — so the bedding shows on both
+    float sd = uSedAmount * clamp( max( sedDepth, soil * 0.8 ), 0.0, 1.0 ) * mix( 0.35, 1.0, sedGround ) * belowSnow * ( 1.0 - uIsRock );
+    // the energy that laid it: stream power, i.e. how much water times how steeply it ran. Both are
+    // needed — a steep hillslope with no catchment above it sheds mud and colluvium, a big lowland
+    // river carries sand, and only a fast concentrated flow can drag gravel.
+    float sdPower = flow * ( 0.25 + wall * 1.5 );
+    float sdEnergy = clamp( ( sdPower - 0.28 ) * 2.4 + sedDepth * 0.28, 0.0, 1.0 );
+    float sdFac = clamp( mix( 0.45, sdEnergy, uSedFacies ) + cgNoise3( wp * 0.05 + 8.0 ).x * 0.3 * ( 1.0 - uSedFacies ), 0.0, 1.0 );
+    // beds: surfaces that ripple sideways at landscape scale, so they onlap the valley sides instead
+    // of being sawn through them at one constant height
+    float sdScale = max( 0.06, uSedBedScale * mix( 0.55, 2.1, sdFac ) );       // coarse beds are thicker
+    float sdWarp = cgNoise3( vec3( wp.x * 0.0055, wp.y * 0.02, wp.z * 0.0055 ) + 2.0 ).x;
+    float sdIdx = wp.y / sdScale + sdWarp * 3.2 + deposit * 1.8;
+    float sdT = fract( sdIdx ), sdId = floor( sdIdx );
+    float sdH = cgHash3( ivec3( int( sdId ), 5, 13 ) );                        // this bed's character
+    float sdH2 = cgHash3( ivec3( int( sdId ), 29, 7 ) );
+    float sdPart = 1.0 - smoothstep( 0.0, 0.09 + 0.13 * sdH, min( sdT, 1.0 - sdT ) );
+    // cross-laminae inside the bed: a fine set of lines that wanders sideways
+    float sdLam = uSedLaminae > 0.001 ? ( cgNoise3( vec3( wp.x * 0.45, sdIdx * 6.2 + sdH2 * 4.0, wp.z * 0.45 ) + 9.0 ).x * 0.5 + 0.5 ) : 0.5;
+    // anti-aliasing by the pixel footprint: below a few pixels per feature each of these patterns
+    // fades out, so the flats do not crawl when you orbit
+    float sdBedFade = 1.0 - smoothstep( 0.3, 1.3, footprint / sdScale );
+    float sdLamFade = 1.0 - smoothstep( 0.2, 0.7, footprint / max( 0.02, sdScale * 0.16 ) );
+    float sdWL = max( 0.12, uSedRippleScale * mix( 1.0, 2.6, sdFac ) );   // coarse facies: wider trains
+    float sdRipFade = 1.0 - smoothstep( 0.15, 0.55, footprint / sdWL );
+    float sdGrainFade = 1.0 - smoothstep( 0.6, 2.0, footprint * ( 9.0 + 26.0 * sdFac ) );
+    // the grain of the fill itself, and the facies colours: gravel / sand / silt-and-mud
+    float sdGrain = uSedGrain > 0.001 ? mix( 0.5, cgNoise3( wp * ( 9.0 + 26.0 * sdFac ) + 3.0 ).x * 0.5 + 0.5, sdGrainFade ) : 0.5;
+    vec3 sdC = mix( uSedSilt, uSedSand, smoothstep( 0.16, 0.56, sdFac ) );
+    sdC = mix( sdC, uSedGravel, smoothstep( 0.6, 0.95, sdFac ) );
+    sdC *= 1.0 + ( sdH - 0.5 ) * 0.42 * uSedBands * sdBedFade + ( sdLam - 0.5 ) * 0.22 * uSedLaminae * sdLamFade;
+    sdC *= 0.9 + 0.2 * sdGrain;
+    sdPart *= sdBedFade;
+    sdC *= 1.0 - 0.55 * sdPart * uSedBands;                                     // the parting between beds
+    sdC *= 1.0 - 0.3 * damp;                                                    // wet sediment is darker
+    // current ripples: wave trains along a palaeocurrent direction that wanders patch to patch
+    float sdA = uSedDirRad + cgNoise3( wp * 0.018 + 4.0 ).x * 1.15;
+    vec2 sdDir = vec2( cos( sdA ), sin( sdA ) );
+    float sdPh = dot( wp.xz, sdDir ) / sdWL + sdWarp * 0.9;
+    sedRip = sin( sdPh * 6.2831853 );
+    float sdAmp = uSedRipple * 0.055 * ( 1.0 - 0.65 * sdFac ) * ( 0.4 + 0.6 * sedDepth ) * sdRipFade;
+    sedGrad = sdDir * ( cos( sdPh * 6.2831853 ) * 6.2831853 / sdWL ) * sdAmp;
+    sedRip = sedRip * sdRipFade;
+    // mud cracks on the open silt flats: the edges of jittered polygons
+    if ( uSedCracks > 0.001 ) {
+      float sdCs = 1.5 + 2.0 * ( 1.0 - sdFac );
+      vec2 sdq = wp.xz / sdCs;
+      ivec2 sdc = ivec2( floor( sdq ) );
+      vec2 sdf = fract( sdq );
+      float sdd1 = 1e9, sdd2 = 1e9;
+      for ( int sj = -1; sj <= 1; sj++ ) for ( int si = -1; si <= 1; si++ ) {
+        ivec2 scc = sdc + ivec2( si, sj );
+        vec2 sdctr = vec2( float( si ), float( sj ) ) + vec2( cgHash2( scc, 21.0 ), cgHash2( scc, 33.0 ) );
+        float sdd = length( sdf - sdctr );
+        if ( sdd < sdd1 ) { sdd2 = sdd1; sdd1 = sdd; } else if ( sdd < sdd2 ) { sdd2 = sdd; }
+      }
+      float sdCrk = ( 1.0 - smoothstep( 0.05, 0.16, sdd2 - sdd1 ) ) * uSedCracks * ( 1.0 - smoothstep( 0.4, 0.8, sdFac ) ) * ( 1.0 - smoothstep( 0.25, 0.8, footprint / sdCs ) );
+      sdC *= 1.0 - 0.34 * sdCrk;
+      sedSeam = max( sedSeam, sdCrk );
+    }
+    // the bedding tone, kept on its own so it can still show through grass and moss: an alluvial
+    // plain reads as alternating pale and dark strips from any height, and that is all that is left
+    // of the fill once anything grows on it
+    sedTone = ( sdH - 0.5 ) * 0.5 * uSedBands * sdBedFade + ( sdLam - 0.5 ) * 0.24 * uSedLaminae * sdLamFade - 0.45 * sdPart * uSedBands;
+    sedCoarse = smoothstep( 0.55, 0.92, sdFac );
+    sedCol = sdC * ( 1.0 - 0.09 * sedRip * uSedRipple );
+    sedCover = clamp( sd, 0.0, 1.0 ) * ( 1.0 - veg * 0.45 ) * ( 1.0 - smoothstep( 0.1, 0.6, bedCover ) );
+    rock = mix( rock, sedCol, sedCover );
+    sedSeam = max( sedSeam, sdPart * uSedBands );
+  }
+
+  // a gravel bar does not hold grass the way a floodplain does: the coarse facies wins through the
+  // vegetation, and the bedding of the fill keeps showing under it
+  float vegHere = clamp( veg * ( 1.0 - 0.75 * sedCover * sedCoarse ), 0.0, 1.0 );
+  vec3 color = mix( rock, grass, vegHere );
+  color *= 1.0 + sedTone * sedCover * ( 0.35 + 0.65 * vegHere );
   color = mix( color, uMoss * ( 0.8 + 0.4 * speckle ), moss * 0.8 );
 
   // snow
@@ -651,16 +745,20 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   vec3 facetN = normalize( nW + flakeFacet * 0.35 );
   float glint = pow( max( dot( facetN, H ), 0.0 ), 260.0 );
   vec3 emissive = vec3( glint * crystalMask * uFlakeSparkle * 2.5 ) * ( 1.0 - snow ) * ( 1.0 - veg );
-  roughness = mix( roughness, mix( 0.93, 0.7, damp ), soil * ( 1.0 - veg ) );
+  roughness = mix( roughness, mix( 0.93, 0.7, damp ), soil * ( 1.0 - vegHere ) );
+  roughness = mix( roughness, mix( 0.97, 0.68, damp ), sedCover * ( 1.0 - vegHere ) );
   roughness = mix( roughness, 0.95, veg );
   roughness = mix( roughness, uSnowRoughness, snow );
 
-  float ao = ( 1.0 - rim * 0.25 * uPeelShadow ) * ( 1.0 - pit * 0.4 ) * ( 1.0 - crackAO * 0.5 ) * ( 1.0 - max( 0.0, -cavity ) * 0.4 * uCavityStrength );
+  float ao = ( 1.0 - rim * 0.25 * uPeelShadow ) * ( 1.0 - pit * 0.4 ) * ( 1.0 - crackAO * 0.5 ) * ( 1.0 - sedSeam * 0.3 * sedCover ) * ( 1.0 - max( 0.0, -cavity ) * 0.4 * uCavityStrength );
   ao = mix( ao, 1.0, snow * 0.6 );
 
-  // soil hides the rock micro-relief under a softer, cloddy surface
+  // soil and sediment hide the rock micro-relief under a softer surface; the fill brings its own
+  // ripple relief with it, so a bar reads as a bar and not as a beige wash
   vec3 soilN = normalize( n + clodN.yzw * 0.12 * uSoilClods );
+  vec3 sedN = normalize( n - vec3( sedGrad.x, 0.0, sedGrad.y ) + clodN.yzw * 0.04 * uSedGrain );
   vec3 nFinal = normalize( mix( nW, soilN, soil * ( 1.0 - veg ) ) );
+  nFinal = normalize( mix( nFinal, sedN, sedCover * ( 1.0 - 0.75 * vegHere ) ) );
   nFinal = normalize( mix( nFinal, n, max( snow, veg * 0.8 ) ) );
   nFinal = normalize( mix( nFinal, vec3( 0.0, 1.0, 0.0 ), paint * 0.9 ) );
   roughness = mix( roughness, 0.22, paint );
@@ -710,7 +808,7 @@ const fragmentBody = /* glsl */`
 }
 `;
 
-const colorKeys = { uSoilColor: 'soilColor', uSoilLight: 'soilLight', uRoad: 'roadColor', uSilt: 'siltColor', uRockA: 'rockA', uRockB: 'rockB', uRockC: 'rockC', uFresh: 'fresh', uOxide: 'oxide', uGrassA: 'grassA', uGrassB: 'grassB', uDry: 'dryColor', uMoss: 'mossColor', uSnow: 'snowColor', uGravel: 'gravelColor' };
+const colorKeys = { uSedGravel: 'sedColorGravel', uSedSand: 'sedColorSand', uSedSilt: 'sedColorSilt', uSoilColor: 'soilColor', uSoilLight: 'soilLight', uRoad: 'roadColor', uSilt: 'siltColor', uRockA: 'rockA', uRockB: 'rockB', uRockC: 'rockC', uFresh: 'fresh', uOxide: 'oxide', uGrassA: 'grassA', uGrassB: 'grassB', uDry: 'dryColor', uMoss: 'mossColor', uSnow: 'snowColor', uGravel: 'gravelColor' };
 
 // uniform → [value key, enable key (optional), scale]
 const scalarKeys = {
@@ -724,6 +822,7 @@ const scalarKeys = {
   uWetness: ['wetness', 'runoffOn'], uStreakScale: ['streakScale'], uStreakAmount: ['streakAmount'],
   uGravelAmount: ['gravelAmount', 'gravelOn'], uGravelScale: ['gravelScale'], uGravelRelief: ['gravelRelief'], uGravelVariation: ['gravelVariation'],
   uSoilAmount: ['soilAmount', 'soilOn'], uSoilClods: ['soilClods'], uSoilMoisture: ['soilMoisture'], uSoilAlluvium: ['soilAlluvium'],
+  uSedAmount: ['sedimentAmount', 'sedimentOn'], uSedBands: ['sedBands', 'sedimentOn'], uSedBedScale: ['sedBedScale'], uSedLaminae: ['sedLaminae', 'sedimentOn'], uSedFacies: ['sedFacies'], uSedRipple: ['sedRipple', 'sedimentOn'], uSedRippleScale: ['sedRippleScale'], uSedCracks: ['sedCracks', 'sedimentOn'], uSedGrain: ['sedGrain', 'sedimentOn'],
   uVegetation: ['vegetation', 'vegOn'], uVegScale: ['vegScale'], uVegPatchiness: ['vegPatchiness'], uDryness: ['dryness'],
   uMossiness: ['mossiness', 'mossOn'], uMossScale: ['mossScale'],
   uSnowSoftness: ['snowSoftness'], uSnowRoughness: ['snowRoughness'],
@@ -743,7 +842,7 @@ export function makeSurfaceUniforms() {
   Object.assign(u, {
     uStrataBand: { value: 1 }, uDipX: { value: 0 }, uDipZ: { value: 0 },
     uBedTex: { value: makeBedTexture(new Float32Array(4), 1) }, uBedCount: { value: 1 }, uBedBase: { value: -1500 }, uWorldSize: { value: 2048 }, uBedLateral: { value: 0.18 },
-    uVegSlope: { value: 0.72 }, uSoilSlopeCos: { value: 0.75 }, uSnowLine: { value: 430 }, uSnowSlopeCos: { value: 0.67 },
+    uVegSlope: { value: 0.72 }, uSoilSlopeCos: { value: 0.75 }, uSedSlopeCos: { value: 0.66 }, uSedDirRad: { value: 0 }, uSnowLine: { value: 430 }, uSnowSlopeCos: { value: 0.67 },
     uSeaLevel: { value: 0 }, uSeed: { value: 428 }, uJointDomain: { value: 0 },
     uPaintWater: { value: 1 }, uWaterClear: { value: 1.5 }, uWaterDeep: { value: new THREE.Color(0x1d4552) }, uWaterShallow: { value: new THREE.Color(0x4f7f7a) },
   });
@@ -783,6 +882,8 @@ export function updateSurfaceUniforms(uniforms, v) {
   uniforms.uDipZ.value = Math.tan(dipRad) * Math.sin(dirRad);
   uniforms.uVegSlope.value = Math.cos((v.vegSlope * Math.PI) / 180);
   uniforms.uSoilSlopeCos.value = Math.cos(((v.soilSlope == null ? 40 : v.soilSlope) * Math.PI) / 180);
+  uniforms.uSedSlopeCos.value = Math.cos(((v.sedSlope == null ? 48 : v.sedSlope) * Math.PI) / 180);
+  uniforms.uSedDirRad.value = ((v.sedDir == null ? 35 : v.sedDir) * Math.PI) / 180;
   uniforms.uSnowLine.value = v.snowOn ? v.snowLine : 1e6;
   uniforms.uSnowSlopeCos.value = Math.cos((v.snowSlope * Math.PI) / 180);
   uniforms.uSeaLevel.value = v.waterEnabled ? v.seaLevel : -1e6;

@@ -240,6 +240,22 @@ export const defaults = {
   soilAlluvium: 1,
   soilColor: '#5d4d3c',
   soilLight: '#917b60',
+  // sediment: water- and weathering-laid fill, painted in beds (its own shader layer)
+  sedimentOn: 1,
+  sedimentAmount: 0.85,
+  sedBedScale: 0.5,         // [m] typical bed thickness
+  sedBands: 0.75,           // bed-to-bed contrast: how crisply the beds read
+  sedLaminae: 0.5,          // cross-lamination inside a bed
+  sedFacies: 0.7,           // sorting strength: gravel / sand / mud
+  sedRipple: 0.45,
+  sedRippleScale: 0.8,      // [m] ripple wavelength
+  sedCracks: 0.3,           // mud cracks on the quiet flats
+  sedGrain: 0.55,
+  sedSlope: 48,             // [deg] flatter than this the fill is not scoured off
+  sedDir: 35,               // [deg] the direction the ripples and bars align to
+  sedColorGravel: '#8f8579',
+  sedColorSand: '#c9b184',
+  sedColorSilt: '#a08a6a',
   vegPatchiness: 0.5,
   dryness: 0.5,
   grassA: '#6f8051', grassB: '#a8a26f', dryColor: '#ac9c7b',
@@ -974,7 +990,7 @@ export const groups = [
     ],
   },
   {
-    id: 'cover', name: 'Ground cover', type: 'Runoff, gravel, plants & snow', stage: 'live', color: '#9fb57a',
+    id: 'cover', name: 'Ground cover', type: 'Runoff, gravel, sediment, plants & snow', stage: 'live', color: '#9fb57a',
     cards: [
       { title: 'Runoff', controls: [
         ['runoffOn', 'Enable runoff', 0, 1, 1, '', ''],
@@ -996,9 +1012,26 @@ export const groups = [
         ['soilSlope', 'Slope limit', 15, 70, 1, '°', 'Steeper ground is bare rock'],
         ['soilClods', 'Clods & grit', 0, 1, 0.05, '', 'Tonal variation and micro-relief of the soil surface'],
         ['soilMoisture', 'Moisture', 0, 1, 0.05, '', 'Darker, less rough soil along flow lines and just above the water'],
-        ['soilAlluvium', 'Alluvium', 0, 1, 0.05, '', 'Sediment the rivers dropped (floodplains, fans, silted basins) painted as silt / sand on the soil'],
+        ['soilAlluvium', 'Alluvium', 0, 1, 0.05, '', 'Silt / sand the rivers dropped, painted on the soil - the bedded look of that fill is under Sediment below'],
         ['soilColor', 'Soil', 0, 0, 0, 'color', ''],
         ['soilLight', 'Soil · pale', 0, 0, 0, 'color', 'Dry clods and grit'],
+      ] },
+      { title: 'Sediment', controls: [
+        ['sedimentOn', 'Enable sediment', 0, 1, 1, '', 'Water- and weathering-laid fill, drawn as beds instead of a flat tint'],
+        ['sedimentAmount', 'Sediment cover', 0, 1, 0.05, '', 'How far the fill reads as layered sediment rather than soil: it covers every deposit, and every gentle soil-covered flat on top of it'],
+        ['sedBedScale', 'Bed thickness', 0.06, 4, 0.02, 'm', 'Thickness of one bed - the strata of the *fill*, not of the rock beneath it (coarse facies lay thicker beds)'],
+        ['sedBands', 'Bed contrast', 0, 1, 0.05, '', 'Tone step from bed to bed, and the dark parting on the bedding plane'],
+        ['sedLaminae', 'Cross-lamination', 0, 1, 0.05, '', 'The fine set of laminae inside each bed, inclined and wandering sideways'],
+        ['sedFacies', 'Sorting', 0, 1, 0.05, '', 'How strictly the grain follows the energy that carried it: gravel on steep fast ground, sand on the bars, silt and mud on the quiet flats'],
+        ['sedRipple', 'Ripples', 0, 1, 0.05, '', 'Current ripple relief on the surface of the fill - light on the stoss side, shadow on the lee'],
+        ['sedRippleScale', 'Ripple wavelength', 0.15, 6, 0.05, 'm', 'Set by the grain: coarse facies carry wider ripples'],
+        ['sedDir', 'Current direction', 0, 360, 5, 'deg', 'The direction the ripple trains run along, wandering patch to patch'],
+        ['sedCracks', 'Mud cracks', 0, 1, 0.05, '', 'Desiccation polygons on the open silt flats'],
+        ['sedGrain', 'Grain', 0, 1, 0.05, '', 'Grittiness of the fill itself (raise Gravel in the same group for real stones)'],
+        ['sedSlope', 'Slope limit', 15, 75, 1, 'deg', 'Steeper than this the fill is scoured off and the rock shows'],
+        ['sedColorGravel', 'Gravel colour', 0, 0, 0, 'color', 'Coarse facies: the bars and fans'],
+        ['sedColorSand', 'Sand colour', 0, 0, 0, 'color', 'Mid facies: ripples, dunes, low bars'],
+        ['sedColorSilt', 'Silt & mud colour', 0, 0, 0, 'color', 'Fine facies: floodplain, lake and lagoon quiet water'],
       ] },
       { title: 'Vegetation', controls: [
         ['vegOn', 'Enable vegetation', 0, 1, 1, '', ''],
