@@ -86,8 +86,9 @@ export function carveFineChannels(height, waterLevel, M, net, sea) {
       target = bedHere + dep * 0.35 + bankH * 0.5 * (1 - Math.cos(Math.PI * x));
       a = 1 - smooth(0.5, 1, (dm - half) / Math.max(1e-3, reachB));
     }
-    // never fill ground that is below the water: raising it would dam the river's own water out
-    if (target > base && base < wlHere) target = base;
+    // the channel only ever cuts: raising ground to a bank shape made bulges and levees on the banks
+    // (up to several metres where the land is lower than the bank height), so no cell is raised
+    if (target > base) target = base;
     if (a <= 0) continue;
     const next = base + (target - base) * a;
     height[c] = next;
@@ -104,14 +105,14 @@ export function carveFineChannels(height, waterLevel, M, net, sea) {
     }
   }
   // the medial line between two segments is a faint crease (the nearest segment switches there):
-  // two light passes over the channel band take it out without moving the shape
+  // two light lower-only passes over the channel band take it out without raising any ground
   for (let pass = 0; pass < 2; pass++) {
     const src = Float32Array.from(height);
     for (let cj = 1; cj < M - 1; cj++) for (let ci = 1; ci < M - 1; ci++) {
       const c = cj * M + ci, w = Math.min(1, river[c] * 1.5 + (bestI[c] >= 0 ? 0.25 : 0));
       if (w <= 0 || src[c] <= sea) continue;
       const sm = 4 * src[c] + 2 * (src[c - 1] + src[c + 1] + src[c - M] + src[c + M]) + src[c - M - 1] + src[c - M + 1] + src[c + M - 1] + src[c + M + 1];
-      height[c] = src[c] + (sm / 16 - src[c]) * w * 0.5;
+      height[c] = src[c] + Math.min(0, sm / 16 - src[c]) * w * 0.5;   // lower-only: no bulges
     }
   }
   return { river };
