@@ -1,5 +1,0 @@
-/* In-car tablet page: WebGL cabin underneath, CSS 3D layer (the live HMI) on top. */
-html, body { margin: 0; height: 100%; background: #05080b; overflow: hidden; }
-#scene { position: fixed; inset: 0; }
-#scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.css-layer { position: absolute; inset: 0; pointer-events: auto; }   /* the tablet screen takes input */

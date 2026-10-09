@@ -1,0 +1,24 @@
+/* 3D presentation for the main page (/). The HMI itself is the 3D object: the screen is a tilted
+   plane in perspective, with a glass sheen and a floor shadow. The DOM stays the real UI, so taps
+   and drags hit the controls directly (no iframe, no projected hit-testing). */
+body.tilt #stage {
+  perspective: 2400px;
+  background:
+    radial-gradient(1100px 620px at 50% 30%, #17242f 0%, #070b10 62%, #020305 100%);
+}
+body.tilt #screen {
+  transform: perspective(2400px) scale(var(--fit, 1)) rotateX(var(--tilt-x, 4deg)) rotateY(var(--tilt-y, -6deg));
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: 0 0 0 10px #0d1115, 0 0 0 11px #1c242d, 0 60px 120px rgba(0, 0, 0, 0.75), 0 0 140px rgba(46, 230, 197, 0.08);
+  will-change: transform;
+}
+/* Glass sheen across the screen. It never takes pointer input. */
+body.tilt #screen::after {
+  content: ''; position: absolute; inset: 0; z-index: 90; pointer-events: none; border-radius: 26px;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.03) 100%);
+}
+/* Floor shadow that sits under the tilted screen. */
+body.tilt #stage::after {
+  content: ''; position: fixed; left: 50%; bottom: 6%; width: 62%; height: 60px; transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.7), transparent); filter: blur(6px); pointer-events: none;
+}

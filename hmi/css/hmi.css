@@ -36,6 +36,7 @@ button, input { font: inherit; color: inherit; }
     var(--bg);
   box-shadow: 0 0 0 10px #0d1115, 0 0 0 11px #1c242d, 0 30px 80px rgba(0, 0, 0, 0.6);
   transform-origin: center center;
+  transform: scale(var(--fit, 1));
 }
 
 /* ---------- status bar ---------- */

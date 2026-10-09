@@ -27,7 +27,7 @@ function tread(zones) {
 }
 
 export default {
-  id: 'tyres', name: 'Tyres', icon: 'tyres', color: '#22c55e',
+  id: 'tyres', name: 'Tyres', icon: 'tyre', color: '#22c55e',
   open(body, ctx) {
     const accent = '#22c55e';
     const cards = {};

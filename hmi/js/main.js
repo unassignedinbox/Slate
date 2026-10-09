@@ -8,7 +8,6 @@ import { APPS } from './apps/index.js';
 
 const params = new URLSearchParams(location.search);
 const kiosk = params.has('kiosk');
-const embedded = window.parent !== window;
 if (kiosk) document.body.classList.add('kiosk');
 
 const sim = new VehicleSim();
@@ -18,27 +17,33 @@ const launcher = createLauncher(APPS, ctx);
 
 // Scale the fixed 1280x720 screen to fit any window, like a physical display.
 const screenEl = document.getElementById('screen');
+// The screen's scale and tilt are CSS variables (see css/hmi.css and css/stage3d.css).
+const tiltPage = document.body.classList.contains('tilt');
 function fit() {
-  const s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
-  screenEl.style.transform = `scale(${s})`;
+  const margin = tiltPage ? 0.8 : 1;   // leave room for the 3D tilt on the main page
+  const s = Math.min(window.innerWidth / 1280, window.innerHeight / 720) * margin;
+  document.documentElement.style.setProperty('--fit', s.toFixed(4));
 }
 window.addEventListener('resize', fit);
 fit();
+// On the 3D page, the pointer leans the screen a few degrees (hover devices only).
+if (tiltPage && matchMedia('(hover: hover)').matches) {
+  window.addEventListener('pointermove', (e) => {
+    const nx = e.clientX / window.innerWidth - 0.5;
+    const ny = e.clientY / window.innerHeight - 0.5;
+    document.documentElement.style.setProperty('--tilt-x', `${(4 - ny * 5).toFixed(2)}deg`);
+    document.documentElement.style.setProperty('--tilt-y', `${(-6 + nx * 7).toFixed(2)}deg`);
+  });
+}
 
 // One telemetry frame per display refresh (dt clamped for tab switches).
 let last = performance.now();
-let lastPost = 0;
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   const frame = sim.step(dt);
   bus.emit('telemetry', frame);
   launcher.tick(frame, now);
-  // When embedded (in-car tablet), share the speed so the parent's road scenery can match it.
-  if (embedded && now - lastPost > 100) {
-    lastPost = now;
-    window.parent.postMessage({ type: 'telemetry', speedKph: frame.speedKph }, '*');
-  }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

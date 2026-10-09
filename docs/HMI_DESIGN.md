@@ -152,28 +152,23 @@ Debug from the console: `hmi.sim.set({ wingRear: 0.9 })`, `hmi.launcher.launch('
 - Checked in headless Chromium: no console errors, and all seven apps open and render. Not yet
   checked on the target display or touch hardware.
 
-## 12. In-car tablet (3D) and kiosk mode
+## 12. 3D presentation and kiosk mode
 
-`hmi/index.html` (the main preview at `/`) shows the HMI as a 3D tablet in a stylised cabin. It is not a car model.
+`/` (`hmi/index.html`) shows the HMI as a 3D object: the whole screen is a tilted plane in CSS 3D
+perspective with a glass sheen and a floor shadow. It leans a few degrees with the pointer. There is no
+road, no car and no cabin scene. The HMI is the 3D element.
 
-- **Tablet:** a rounded WebGL body. The screen is the live HMI (`app.html`), placed in CSS 3D on the
-  front face, so the real DOM and the WebGL suspension view both render inside it and take touch and
-  mouse input. Apps, buttons, sliders and the back and home bar all work on the tablet.
-- **Input routing:** the CSS 3D layer sits above the WebGL canvas and takes pointer events. The
-  tablet is tilted, so taps are routed through the same camera projection the CSS renderer uses.
-  `window.carScene.toPage(x, y)` exposes that mapping for tests.
-- **Cabin:** dashboard, pillars, roof, steering wheel and a road whose speed follows the HMI's speed
-  (the HMI posts its telemetry to the parent page). Replace it with a real interior later.
-- **Kiosk mode:** `app.html?kiosk=1` (no input, auto-cycles through home and every app, and the 3D
-  views auto-orbit). Each app is closed after its turn to release its 3D context. Used for demos.
-- **Known bug fixed:** the app-window layer covered the home screen and blocked every tap. It is now
-  click-through, and only visible app windows take pointer events.
-- **Touch:** taps, sliders and the swipe-up-for-drawer gesture work with touch and mouse. The home
-  screen uses `touch-action: none` so the browser does not take a vertical swipe as a page pan. The
-  swipe is tracked on the document, so a finger or cursor that leaves the home area still counts.
+- **Why CSS 3D on the DOM:** the earlier design put the HMI in an iframe on a WebGL tablet and mapped
+  taps by projecting coordinates. That added a fragile input path. Now the DOM itself is transformed, so
+  taps and drags land on the controls directly.
+- **Flat page:** `/app.html` is the same HMI with no tilt, for development and screenshots.
+- **Kiosk mode:** `?kiosk=1` disables input and auto-cycles through home and every app. Each app is closed
+  after its turn to release its 3D context.
+- **WebGL in apps:** the Suspension and Aero apps still show their 3D car. Those views are real 3D
+  content inside the apps, which the brief requires.
 
-Production note: the iframe is a development convenience. In a vehicle, the same screen would be a
-native surface in the display compositor, with the same app model.
+Production note: in a vehicle, the same screen would be a native surface in the display compositor, with
+the same app model.
 
 ## 13. How the 3D suspension works
 
