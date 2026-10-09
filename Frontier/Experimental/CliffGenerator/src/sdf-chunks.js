@@ -350,17 +350,21 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const bump = roughAmp + detail.amp + pushAmp + blockAmp;
   const maxCarve = carveReach(v);
   // wall mode (default): continuous faces with a few large protrusions, see carve()
-  const wallMode = (v.sdfWall == null ? 1 : v.sdfWall) > 0;
+  // sdfWall: 0 = old bed-by-bed shaping, 1 = continuous wall with lean and knobs,
+  // 2 = flat wall (default): the cliff is the heightfield's own step, no carve, no knobs, no shear
+  const wallLevel = v.sdfWall == null ? 2 : v.sdfWall;
+  const wallMode = wallLevel > 0;
+  const flatWall = wallLevel >= 2;
+  const flatR = 3; // half-length (fine cells) of the averaging along the cliff line
   const wallPushL = Math.max(vox * 6, v.sdfPushScale || 14);
   const wallKnobs = Math.max(0, v.sdfKnobs == null ? 1.2 : v.sdfKnobs);
   // everything that depends on the plan position only
   function column(x, z) {
     const u = (x - x0) / cell, wq = (z - z0) / cell;
-    const h = bil(m.height, u, wq);
     const w = bil(m.sdfWeight, u, wq);
     const [gx, gz] = grad(u, wq);
-    const slopeF = Math.sqrt(1 + gx * gx + gz * gz);
     const gl = Math.hypot(gx, gz);
+    const slopeF = Math.sqrt(1 + gx * gx + gz * gz);
     const steep = smoothstep(0.7, 1.7, gl);
     const oc = hasOutcrop ? bil(m.outcrop, u, wq) : 0;
     // visibility of the joint families on this face: planes x = const show when the face normal
@@ -371,9 +375,18 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     const ca = Math.cos(dang), sa = Math.sin(dang);
     const grx = gx * ca - gz * sa, grz = gx * sa + gz * ca;
     const visX = gl > 1e-6 ? Math.abs(grz) / gl : 0.7, visZ = gl > 1e-6 ? Math.abs(grx) / gl : 0.7;
+    let h = bil(m.height, u, wq);
+    if (flatWall && gl > 1e-6) {
+      // flat wall: the step is averaged along the cliff line (perpendicular to the gradient), not
+      // across it, so the wall keeps one straight line instead of jittering column to column
+      const tx = -gz / gl, tz = gx / gl;
+      let acc = 0;
+      for (let k = -flatR; k <= flatR; k++) acc += bil(m.height, u + k * tx, wq + k * tz);
+      h = acc / (2 * flatR + 1);
+    }
     const crest = needCF ? bil(m.crest, u, wq) : 0, foot = needCF ? bil(m.foot, u, wq) : 0;
     let vW = 0, vdx = 0, vdz = 0;
-    if (hasVertical && w > 1e-6) {
+    if (hasVertical && !flatWall && w > 1e-6) {
       const gm = bil(m.gmax, u, wq);
       const dxs = bil(m.gxs, u, wq), dzs = bil(m.gzs, u, wq);
       const dl = Math.hypot(dxs, dzs);
@@ -487,7 +500,9 @@ export function buildChunkGeometry(job, meta, v, ctx) {
       lean = leanAmp * down * (1 - 0.5 * smoothstep(0.85, 1, down)) * (1 - col.oc);
     }
     let d;
-    if (wallMode) {
+    if (flatWall) {
+      d = 0;
+    } else if (wallMode) {
       // wall mode: one continuous face per column. No bed-by-bed undercut, joints, pits, block rows
       // or detail texture (those stacked the face into ledges); the face is the lean and vertical
       // shear only, with a few large protrusions standing out of it
