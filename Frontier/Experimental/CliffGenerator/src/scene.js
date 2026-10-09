@@ -9,6 +9,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { buildTerrainGeometry, buildSkirtGeometry, refineField, buildWaterGeometry, makeSampler } from './terrain-geometry.js';
 import { makeWaterBodyMaterial, makeWaterBodyUniforms } from './water-material.js';
 import { selectChunks, packChunkJobs } from './sdf-chunks.js';
+import { buildWallGeometry } from './wall-mesh.js';
 import { sampleSpline } from './features.js';
 import { buildRockLibrary } from './rock-geometry.js';
 import { placeRocks, buildRockMeshes } from './rock-placement.js';
@@ -286,7 +287,10 @@ export class CliffScene {
     this.disposeGroup(this.terrainGroup);
     const chunks = v.sdfOn ? selectChunks(field, v) : null;
     if (!chunks) { field.sdfWeight = null; field.sdfFade = null; }
-    const geometry = buildTerrainGeometry(field, v, chunks);
+    // flat cliff walls (sdfWall >= 2, default): traced straight walls replace the SDF chunks; the
+    // heightfield is drawn whole, and the walls sit on its steep faces
+    const wallMode = !!chunks && (v.sdfWall == null ? 2 : v.sdfWall) >= 2;
+    const geometry = buildTerrainGeometry(field, v, wallMode ? null : chunks);
     const floorY = field.stats.min - Math.max(40, (field.stats.max - field.stats.min) * 0.12);
     const skirt = buildSkirtGeometry(field, floorY);
     const terrain = new THREE.Mesh(geometry, this.terrainMaterial);
@@ -301,7 +305,31 @@ export class CliffScene {
     this.stats.triangles = geometry.index.count / 3;
     this.buildWaterBodies();
     this.setFeatureOverlay(v);
-    this.buildSdfChunks(field, chunks, v);
+    if (wallMode) this.buildWalls(field, v);
+    else this.buildSdfChunks(field, chunks, v);
+  }
+
+  // traced straight cliff walls, one mesh (see wall-mesh.js)
+  buildWalls(field, v) {
+    ++this.sdfGeneration;
+    this.disposeGroup(this.sdfGroup);
+    const t0 = performance.now();
+    const wg = buildWallGeometry(field, v);
+    const ms = performance.now() - t0;
+    this.sdfStats = { done: 1, total: 1, candidates: 1, triangles: wg.triangles, started: t0, ms, voxel: field.worldSize / (field.resolution - 1), k: 1, workersDone: 1, workers: 0 };
+    if (wg.triangles > 0) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(wg.positions, 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(wg.normals, 3));
+      g.setAttribute('aux', new THREE.BufferAttribute(wg.aux, 4));
+      g.setAttribute('aux2', new THREE.BufferAttribute(wg.aux2, 4));
+      g.setAttribute('aux3', new THREE.BufferAttribute(wg.aux3, 4));
+      g.computeBoundingSphere();
+      const mesh = new THREE.Mesh(g, this.terrainMaterial);
+      mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = 'cliff-walls';
+      this.sdfGroup.add(mesh);
+    }
+    if (this.onSdfProgress) this.onSdfProgress(this.sdfStats, true);
   }
 
   // SDF cliff chunks stream in from the worker in batches; a newer build cancels older results.
