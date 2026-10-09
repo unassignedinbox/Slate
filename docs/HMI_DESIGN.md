@@ -154,14 +154,20 @@ Debug from the console: `hmi.sim.set({ wingRear: 0.9 })`, `hmi.launcher.launch('
 
 ## 12. In-car tablet (3D) and kiosk mode
 
-`hmi/car.html` shows the HMI as a 3D tablet on a stylised cabin. It is not a car model.
+`hmi/index.html` (the main preview at `/`) shows the HMI as a 3D tablet in a stylised cabin. It is not a car model.
 
-- **Tablet:** a rounded WebGL body. The screen is the live HMI (`index.html?kiosk=1`), placed in
-  CSS 3D on the front face, so the real DOM and the WebGL suspension view both render inside it.
-- **Cabin:** dashboard, pillars, roof, steering wheel and a road whose speed follows the HMI's
-  speed (the HMI posts its speed to the parent page). Replace it with a real interior later.
-- **Kiosk mode:** no input (`pointer-events: none`). The HMI cycles through home and every app,
-  and the 3D views auto-orbit. Each app is closed after its turn to release its 3D context.
+- **Tablet:** a rounded WebGL body. The screen is the live HMI (`app.html`), placed in CSS 3D on the
+  front face, so the real DOM and the WebGL suspension view both render inside it and take touch and
+  mouse input. Apps, buttons, sliders and the back and home bar all work on the tablet.
+- **Input routing:** the CSS 3D layer sits above the WebGL canvas and takes pointer events. The
+  tablet is tilted, so taps are routed through the same camera projection the CSS renderer uses.
+  `window.carScene.toPage(x, y)` exposes that mapping for tests.
+- **Cabin:** dashboard, pillars, roof, steering wheel and a road whose speed follows the HMI's speed
+  (the HMI posts its telemetry to the parent page). Replace it with a real interior later.
+- **Kiosk mode:** `app.html?kiosk=1` (no input, auto-cycles through home and every app, and the 3D
+  views auto-orbit). Each app is closed after its turn to release its 3D context. Used for demos.
+- **Known bug fixed:** the app-window layer covered the home screen and blocked every tap. It is now
+  click-through, and only visible app windows take pointer events.
 
 Production note: the iframe is a development convenience. In a vehicle, the same screen would be a
 native surface in the display compositor, with the same app model.

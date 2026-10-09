@@ -1,7 +1,7 @@
 // In-car tablet scene.
 // - The cabin is a stylised set (dashboard, pillars, roof, wheel, moving road). It is not a car model.
-// - The tablet body is a WebGL mesh. Its screen is the live HMI running in an iframe placed in CSS 3D,
-//   so the real DOM and the WebGL suspension view render inside the tablet at full quality.
+// - The tablet body is a WebGL mesh. Its screen is the live HMI (app.html) running in an iframe placed in
+//   CSS 3D, so the real DOM and the WebGL suspension view render inside the tablet and take touch/mouse input.
 // - The HMI posts its speed to this page, so the road scenery matches what the tablet shows.
 import * as THREE from 'three';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
@@ -157,7 +157,7 @@ body.castShadow = true;
 tablet.add(body);
 
 const iframe = document.createElement('iframe');
-iframe.src = 'index.html?kiosk=1';
+iframe.src = 'app.html';   // the live HMI, fully interactive
 iframe.title = 'Slate HMI';
 iframe.width = String(SCREEN_PX_W);
 iframe.height = String(SCREEN_PX_H);
@@ -168,6 +168,17 @@ wrap.append(iframe);
 const screen = new CSS3DObject(wrap);
 screen.scale.setScalar(UNIT);
 cssScene.add(screen);
+
+// Debug/test hook: project a point in iframe pixels (0..1280, 0..720) to page pixels,
+// using the same camera the CSS 3D layer uses, so taps can be aimed at the tilted screen.
+window.carScene = {
+  toPage(lx, ly) {
+    screen.updateMatrixWorld(true);
+    const p = screen.localToWorld(new THREE.Vector3(lx - SCREEN_PX_W / 2, -(ly - SCREEN_PX_H / 2), 0));
+    p.project(camera);
+    return { x: (p.x + 1) / 2 * window.innerWidth, y: (1 - p.y) / 2 * window.innerHeight };
+  },
+};
 
 // ---- sizing and loop
 function resize() {
