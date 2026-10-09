@@ -151,3 +151,43 @@ Debug from the console: `hmi.sim.set({ wingRear: 0.9 })`, `hmi.launcher.launch('
 - Weather, wallet, store and lobby data are mock values. Persistence uses `localStorage`.
 - Checked in headless Chromium: no console errors, and all seven apps open and render. Not yet
   checked on the target display or touch hardware.
+
+## 12. In-car tablet (3D) and kiosk mode
+
+`hmi/car.html` shows the HMI as a 3D tablet on a stylised cabin. It is not a car model.
+
+- **Tablet:** a rounded WebGL body. The screen is the live HMI (`index.html?kiosk=1`), placed in
+  CSS 3D on the front face, so the real DOM and the WebGL suspension view both render inside it.
+- **Cabin:** dashboard, pillars, roof, steering wheel and a road whose speed follows the HMI's
+  speed (the HMI posts its speed to the parent page). Replace it with a real interior later.
+- **Kiosk mode:** no input (`pointer-events: none`). The HMI cycles through home and every app,
+  and the 3D views auto-orbit. Each app is closed after its turn to release its 3D context.
+
+Production note: the iframe is a development convenience. In a vehicle, the same screen would be a
+native surface in the display compositor, with the same app model.
+
+## 13. How the 3D suspension works
+
+The Suspension app draws each corner as a linkage between fixed points on the chassis and the wheel
+hub. Each frame, the code does this:
+
+1. **Chassis pose.** Heave, pitch and roll come from telemetry (the four corner travels). The
+   chassis group is moved and rotated to match.
+2. **Wheel position.** Each hub follows the road height under its wheel (telemetry), so the tyre
+   stays on the ground while the body moves.
+3. **Links.** Each link is a cylinder between two world points: the upper and lower wishbones
+   (chassis mounts to upright pick-ups), the upright, the pushrod (upright to rocker) and the
+   coilover (rocker to lower arm). Each link is placed from its two end points. The spring is a
+   helix whose length tracks the rocker-to-arm distance, so it compresses when the car does.
+4. **Wheel spin.** Rotation comes from distance travelled divided by tyre radius.
+
+This is a visual approximation. Hub height comes from the road profile, not from the sensed travel.
+A production model would:
+
+- use real **hardpoints** from the CAD suspension geometry (the fixed chassis and upright points);
+- drive the **upright position** from the sensed wheel travel, and solve the wishbone and pushrod
+  geometry each frame (a linkage / kinematics solve, not a fixed placement);
+- take the **damper and spring** positions directly from the rod or LVDT sensors, and chassis
+  attitude from the IMU;
+- keep **level-of-detail** versions of the model (full detail when the app is open, simplified
+  when it is in the background).

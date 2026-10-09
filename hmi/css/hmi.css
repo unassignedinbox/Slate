@@ -369,3 +369,6 @@ input[type='range'] { width: 100%; accent-color: var(--accent); }
 .nav-ico { display: grid; place-items: center; }
 .ico { display: inline-grid; place-items: center; }
 .ico svg { width: 20px; height: 20px; }
+
+/* Kiosk (in-car tablet): display only, no touch or pointer input. */
+.kiosk #screen { pointer-events: none; }

@@ -196,5 +196,5 @@ export function createLauncher(apps, ctx) {
   ctx.toast = toast;
   ctx.launch = launch;
   ctx.goHome = goHome;
-  return { tick, toast, launch, goHome, back, getForeground };
+  return { tick, toast, launch, goHome, back, getForeground, close: closeApp };
 }

@@ -42,7 +42,7 @@ function place(mesh, a, b, rad) {
   mesh.scale.set(rad, len, rad);
 }
 
-export function createCarView(container, { accent = '#2ee6c5', airflow = false, controls: interactive = true } = {}) {
+export function createCarView(container, { accent = '#2ee6c5', airflow = false, controls: interactive = true, autoRotate = false } = {}) {
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -74,6 +74,8 @@ export function createCarView(container, { accent = '#2ee6c5', airflow = false, 
   orbit.maxDistance = 13;
   orbit.maxPolarAngle = Math.PI * 0.49;
   orbit.enabled = interactive;
+  orbit.autoRotate = autoRotate;
+  orbit.autoRotateSpeed = 1.2;
 
   scene.add(new THREE.HemisphereLight(0xdfefff, 0x0b1016, 1.0));
   const sun = new THREE.DirectionalLight(0xffffff, 2.3);

@@ -48,7 +48,7 @@ export default {
 
     let view;
     try {
-      view = createCarView(viewport, { accent: liveryColor(ctx.backend.account.equippedLivery), airflow: false });
+      view = createCarView(viewport, { accent: liveryColor(ctx.backend.account.equippedLivery), airflow: false, autoRotate: ctx.kiosk });
     } catch (err) {
       viewport.append(el('div', { class: 'app-error' }, '3D view unavailable (WebGL is required).'));
       view = { update() {}, setPreset() {}, setAccent() {}, setAirflow() {}, dispose() {} };
