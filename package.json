@@ -1,0 +1,11 @@
+{
+  "name": "slate-terrain-stack",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Gaea-equivalent terrain + texturing layer stack. Heightmap primary, voxelized derived. No build step.",
+  "scripts": {
+    "smoke": "node scripts/smoke.mjs",
+    "dev": "python3 -m http.server 8080"
+  }
+}
