@@ -73,7 +73,12 @@ function upsampleMap(src, N, k, smoothOnly) {
         out[J * M + I] = at(i, j) * (1 - ti) * (1 - tj) + at(i + 1, j) * ti * (1 - tj) + at(i, j + 1) * (1 - ti) * tj + at(i + 1, j + 1) * ti * tj;
       } else {
         for (let r = -1; r <= 2; r++) col[r + 1] = cubic(at(i - 1, j + r), at(i, j + r), at(i + 1, j + r), at(i + 2, j + r), ti);
-        out[J * M + I] = cubic(col[0], col[1], col[2], col[3], tj);
+        // limited cubic: the result stays within the range of the four samples around it. A plain
+        // cubic rings across a sharp step (a cliff, a channel bank) — overshoot of up to 16 m made
+        // lips and bulges at every edge
+        const c0 = at(i, j), c1 = at(i + 1, j), c2 = at(i, j + 1), c3 = at(i + 1, j + 1);
+        const lo = Math.min(c0, c1, c2, c3), hi = Math.max(c0, c1, c2, c3);
+        out[J * M + I] = Math.min(hi, Math.max(lo, cubic(col[0], col[1], col[2], col[3], tj)));
       }
     }
   }

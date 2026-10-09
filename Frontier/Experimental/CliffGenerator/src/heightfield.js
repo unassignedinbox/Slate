@@ -22,7 +22,6 @@ export function synthesizeBase(params, progress = () => {}) {
   // Canyon centreline wanders with low-frequency noise so the gorge meanders.
   const canyonNoise = new SimplexNoise(params.seed * 11 + 7);
   const cliffH = params.cliffHeight || 0;
-  const cliffEdgeW = 0.5 * (1 - 0.97 * Math.min(1, Math.max(0, params.cliffSharpness == null ? 0.8 : params.cliffSharpness)));
   const cliffNoise = new SimplexNoise(params.seed * 13 + 29);
   const cliffStacks = params.cliffStacks || 0;
 
@@ -38,6 +37,28 @@ export function synthesizeBase(params, progress = () => {}) {
   // Rock stacks (Gaea "Stacks"): tiered towers of rock — each tier a thresholded blob of a
   // warped mask, every tier smaller than the one below, with its own thickness, edge and offset.
   const stacks = (params.stackHeight || 0) > 0 ? makeStacks(params) : null;
+
+  // Escarpment edge, precomputed: the cliff line is the 0.5 contour of a smooth mask. The old edge
+  // was a fixed-width smoothstep on that mask, which spread a 100 m drop over tens of metres (a
+  // slope, never a wall). Here the transition is one simulation cell wide everywhere: its half-width
+  // in mask units is half the mask change across one cell, so the drop happens inside one cell.
+  let cliffEdgeMap = null, cliffEdgeHW = null;
+  if (cliffH > 0) {
+    const mEdgeAt = (i, j) => {
+      const uu = i * invN, vv = j * invN;
+      const mEdge = 0.5 + 0.5 * maskNoise.fbm(uu * params.reliefFrequency + 0.3, vv * params.reliefFrequency - 0.6, 2, 2, 0.5);
+      return mEdge + 0.03 * cliffNoise.fbm(uu * 7 + 4, vv * 7 - 2, 3);
+    };
+    cliffEdgeMap = new Float32Array(N * N);
+    cliffEdgeHW = new Float32Array(N * N);
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) cliffEdgeMap[j * N + i] = mEdgeAt(i, j);
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const i0 = Math.max(0, i - 1), i1 = Math.min(N - 1, i + 1), j0 = Math.max(0, j - 1), j1 = Math.min(N - 1, j + 1);
+      const gx = (cliffEdgeMap[j * N + i1] - cliffEdgeMap[j * N + i0]) / Math.max(1, i1 - i0);
+      const gz = (cliffEdgeMap[j1 * N + i] - cliffEdgeMap[j0 * N + i]) / Math.max(1, j1 - j0);
+      cliffEdgeHW[j * N + i] = Math.max(1e-4, 0.5 * Math.hypot(gx, gz));
+    }
+  }
 
   for (let j = 0; j < N; j++) {
     const v = j * invN;
@@ -71,9 +92,8 @@ export function synthesizeBase(params, progress = () => {}) {
         // the cliff line follows a smoother version of the mask (long headlands and bays, not the
         // fractal fringe of the full mask) with a little fine wobble; the rugged stage adds the
         // blocky push–pull afterwards
-        const mEdge = 0.5 + 0.5 * maskNoise.fbm(u * params.reliefFrequency + 0.3, v * params.reliefFrequency - 0.6, 2, 2, 0.5);
-        const me = mEdge + 0.03 * cliffNoise.fbm(u * 7 + 4, v * 7 - 2, 3);
-        let edge = smoothstep(0.5 - cliffEdgeW, 0.5 + cliffEdgeW, me);
+        const me = cliffEdgeMap[j * N + i];
+        let edge = smoothstep(0.5 - cliffEdgeHW[j * N + i], 0.5 + cliffEdgeHW[j * N + i], me);
         // stacks: pillars of the former cliff left standing just off the line (the sea has cut
         // the arch behind them away) — blobs of a fine noise inside a narrow band seaward of the edge
         if (cliffStacks > 0 && me < 0.5) {
