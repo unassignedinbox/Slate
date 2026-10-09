@@ -24,9 +24,9 @@ body {
 button, input { font: inherit; color: inherit; }
 .hidden { display: none !important; }
 
-#stage { position: fixed; inset: 0; display: grid; place-items: center; }
+#stage { position: fixed; inset: 0; overflow: hidden; }
 #screen {
-  position: relative;
+  position: absolute; left: 50%; top: 50%; margin: -360px 0 0 -640px;   /* centred regardless of window size */
   width: 1280px; height: 720px; flex: none;
   overflow: hidden;
   border-radius: 26px;
