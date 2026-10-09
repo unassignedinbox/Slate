@@ -27,17 +27,22 @@ html, body {
 button { font: inherit; color: inherit; }
 [hidden] { display: none !important; }
 
-/* ---------- Stage: fixed 1920×720 cluster canvas, scaled to fit ---------- */
+/* ---------- Stage: full-screen 3D scene (WebGL) + CSS3D panel layer ---------- */
 #stage {
-  position: absolute; left: 50%; top: 50%;
-  width: 1920px; height: 720px; transform-origin: center;
-  display: grid; grid-template-rows: 44px 1fr 64px; overflow: hidden;
-  background: radial-gradient(1200px 500px at 50% -10%, #1a1d24 0%, var(--bg) 60%);
+  position: fixed; inset: 0; overflow: hidden;
+  background: radial-gradient(1400px 700px at 50% 35%, #1d2028 0%, #07080a 70%);
 }
+.gl-host, .css-host { position: absolute; inset: 0; }
+.gl-host canvas { display: block; width: 100%; height: 100%; }
+.css-host { pointer-events: none; }
+.css-host > div { position: absolute; inset: 0; }
+.css-host .cs-panel { position: absolute; left: 0; top: 0; pointer-events: auto; backface-visibility: hidden; -webkit-backface-visibility: hidden; transform-style: flat; }
+.css-host .cs-panel * { backface-visibility: hidden; }
 #stage.hud .rail,
 #stage.hud .window,
 #stage.hud .statusbar,
 #stage.hud .navbar { background: rgba(10, 11, 14, 0.42) !important; backdrop-filter: blur(6px); }
+button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 
 /* ---------- Status bar (Android-style) ---------- */
 .statusbar {
@@ -71,6 +76,17 @@ button { font: inherit; color: inherit; }
   padding: 14px; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden;
 }
 .rail-right .card-title { margin-top: 4px; }
+.rail { background: rgba(20, 22, 27, 0.94); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+.window { background: rgba(20, 22, 27, 0.96); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+.statusbar, .navbar { border-radius: 22px; border: 1px solid var(--line); }
+@media (pointer: coarse) {
+  .btn { min-height: 48px; }
+  .seg { min-height: 44px; padding: 10px 16px; }
+  .nav-btn { width: 64px; height: 52px; }
+  .switch { width: 60px; height: 34px; }
+  .switch::after { width: 26px; height: 26px; }
+  .switch.on::after { transform: translateX(26px); }
+}
 
 .speed-wrap { position: relative; width: 230px; height: 200px; margin: 0 auto; }
 .gauge svg { display: block; }

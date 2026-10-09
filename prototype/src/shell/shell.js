@@ -5,7 +5,8 @@ import { heatHex } from '../ui/heat.js';
 import { state, subscribe, set } from '../core/store.js';
 import { CORNERS } from '../render3d/car.js';
 import apps from '../apps/index.js';
-import { svgIcon, ICONS } from '../ui/icons.js';
+import { svgIcon } from '../ui/icons.js';
+import { mountCockpit3D } from '../scene/cockpit3d.js';
 
 const iconBox = (cls, markup) => { const el = h('div', { class: cls }); el.innerHTML = markup; return el; };
 
@@ -35,6 +36,7 @@ export function mountShell(stage) {
   let activeId = null;
   let recentIds = [];
   let recentsOpen = false;
+  let cockpit = null;
 
   // ---------- Status bar -------------------------------------------------
   const clockEl = h('span', { class: 'clock' }, '--:--');
@@ -103,7 +105,7 @@ export function mountShell(stage) {
     dock,
     h('div', { class: 'nav-hint', text: '1-9 OPEN · H HOME · R RECENTS · ESC BACK' }));
 
-  stage.replaceChildren(statusbar, h('main', { class: 'cockpit' }, leftRail, windowEl, rightRail), navbar);
+  cockpit = mountCockpit3D(stage, { statusbar, leftRail, windowEl, rightRail, navbar });
 
   // ---------- Navigation logic ------------------------------------------
   function openApp(id) {
@@ -187,6 +189,7 @@ export function mountShell(stage) {
   }
 
   function updateNav() {
+    cockpit?.setWindowDepth(activeId !== null);
     navbar.querySelectorAll('.app-tile').forEach((t) => t.classList.toggle('on', t.dataset.app === activeId));
   }
 
