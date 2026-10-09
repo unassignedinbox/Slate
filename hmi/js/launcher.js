@@ -151,12 +151,18 @@ export function createLauncher(apps, ctx) {
   });
 
   // Swipe up on the home screen opens the app drawer (Android gesture).
-  let swipeY = null;
-  home.addEventListener('pointerdown', (e) => { swipeY = e.clientY; });
-  home.addEventListener('pointerup', (e) => {
-    if (swipeY != null && swipeY - e.clientY > 90) openDrawer();
-    swipeY = null;
-  });
+  // Track the gesture on the document, not the home element: the finger or mouse can leave the home
+  // area before release. A touch the browser takes over for panning sends pointercancel instead of
+  // pointerup, so both end the gesture and use the furthest upward position reached.
+  let swipeY = null, lowestY = null;
+  home.addEventListener('pointerdown', (e) => { swipeY = lowestY = e.clientY; });
+  document.addEventListener('pointermove', (e) => { if (swipeY != null) lowestY = Math.min(lowestY, e.clientY); });
+  const endSwipe = () => {
+    if (swipeY != null && swipeY - lowestY > 90) openDrawer();
+    swipeY = lowestY = null;
+  };
+  document.addEventListener('pointerup', endSwipe);
+  document.addEventListener('pointercancel', endSwipe);
 
   // ---- live widgets and status
   const alertFor = {};

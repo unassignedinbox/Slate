@@ -168,6 +168,9 @@ Debug from the console: `hmi.sim.set({ wingRear: 0.9 })`, `hmi.launcher.launch('
   views auto-orbit). Each app is closed after its turn to release its 3D context. Used for demos.
 - **Known bug fixed:** the app-window layer covered the home screen and blocked every tap. It is now
   click-through, and only visible app windows take pointer events.
+- **Touch:** taps, sliders and the swipe-up-for-drawer gesture work with touch and mouse. The home
+  screen uses `touch-action: none` so the browser does not take a vertical swipe as a page pan. The
+  swipe is tracked on the document, so a finger or cursor that leaves the home area still counts.
 
 Production note: the iframe is a development convenience. In a vehicle, the same screen would be a
 native surface in the display compositor, with the same app model.
