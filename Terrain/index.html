@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Slate Terrain</title>
+    <link rel="stylesheet" href="/src/ui/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Slate <span>Terrain</span></div>
+      <label>Preset <select id="presetSel"></select></label>
+      <button id="newBtn">New blank</button>
+      <label>Resolution
+        <select id="resSel"><option>96</option><option>128</option><option>192</option><option>256</option></select>
+      </label>
+      <label>Seed <input id="seedInp" type="number" min="1" max="9999" value="428" /></label>
+      <span class="spacer"></span>
+      <button id="saveBtn">Save stack</button>
+      <label class="file-btn">Open stack<input id="openInp" type="file" accept=".json,application/json" /></label>
+      <button id="exportR16">Export .r16</button>
+      <button id="exportPng">Export PNG</button>
+    </header>
+
+    <main class="workspace">
+      <aside class="panel stack-panel">
+        <div class="panel-title">Layer stack <span class="muted">top = last applied</span></div>
+        <div class="add-row">
+          <select id="addSel"></select>
+          <button id="addBtn">Add</button>
+        </div>
+        <ul id="stack" class="stack"></ul>
+      </aside>
+
+      <section class="viewport-area">
+        <div class="view-tabs">
+          <button data-view="3d" class="on">3D</button>
+          <button data-view="2d">2D</button>
+          <label>Show
+            <select id="viewMode">
+              <option value="colour">Colour</option>
+              <option value="height">Height</option>
+              <option value="mask">Selected mask</option>
+              <option value="layer">Selected layer output</option>
+              <option value="map">Map</option>
+            </select>
+          </label>
+          <select id="mapSel" hidden></select>
+          <label class="check"><input id="voxelToggle" type="checkbox" /> Voxels (3D)</label>
+          <label>Relief <input id="exag" type="range" min="0.2" max="3" step="0.05" value="1" /></label>
+          <span id="voxelInfo" class="muted"></span>
+          <span id="paintHint" class="hint" hidden>Painting: drag on the 2D view</span>
+        </div>
+        <div class="viewport" id="viewportWrap">
+          <div id="viewport3d" class="fill"></div>
+          <div id="viewport2d" class="fill" hidden><canvas id="view2d"></canvas></div>
+        </div>
+        <div class="statsbar">
+          <div id="stats"></div>
+          <div id="errors"></div>
+          <div id="status" class="muted"></div>
+        </div>
+      </section>
+
+      <aside class="panel inspector-panel">
+        <div class="panel-title">Inspector</div>
+        <div id="inspector"></div>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
