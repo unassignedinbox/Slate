@@ -133,6 +133,23 @@ export function buildEdgeWallGeometry(sim, mesh, v = {}) {
       const onn = pp >= pm ? [-nx, -nz] : [nx, nz];
       return { x: p[0], z: p[1], tx, tz, nx: onn[0], nz: onn[1], top, bot, ok: top - bot >= minDrop };
     });
+    // Flatten the wall: the plateau heights are noisy sample to sample, which made striped slabs and
+    // gaps. Smooth top and foot heights along the line with a wide Gaussian (metres -> samples), then
+    // re-derive the drop, so a wall is one clean plane-like face that only stops where it truly ends.
+    const hs = v.sdfWallHeightSmooth ?? 12;
+    const Rh = Math.ceil(hs * 3);
+    const gsm = (key) => samp.map((_, k) => {
+      let acc = 0, w = 0;
+      for (let d = -Rh; d <= Rh; d++) {
+        const kk = k + d;
+        if (kk < 0 || kk >= n) continue;
+        const g = Math.exp(-(d * d) / (2 * hs * hs));
+        acc += samp[kk][key] * g; w += g;
+      }
+      return acc / w;
+    });
+    const topS = gsm('top'), botS = gsm('bot');
+    samp.forEach((s, k) => { s.top = topS[k]; s.bot = botS[k]; s.ok = s.top - s.bot >= minDrop; });
     for (let k = 0; k + 1 < n; k++) {
       const A = samp[k], B = samp[k + 1];
       if (!A.ok || !B.ok) continue;
