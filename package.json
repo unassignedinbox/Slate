@@ -21,8 +21,10 @@
   },
   "homepage": "https://github.com/unassignedinbox/Slate#readme",
   "devDependencies": {
+    "@webgpu/types": "^0.1.74",
     "typescript": "^7.0.2",
-    "vite": "^8.3.1"
+    "vite": "^8.3.1",
+    "wgsl_reflect": "^1.6.0"
   },
   "type": "module"
 }

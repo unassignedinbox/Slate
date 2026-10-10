@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "types": ["@webgpu/types"],
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -8,7 +9,6 @@
     "noUnusedParameters": false,
     "skipLibCheck": true,
     "lib": ["ES2022", "DOM"],
-    "types": [],
     "noEmit": true,
     "isolatedModules": true
   },
