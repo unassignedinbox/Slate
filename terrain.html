@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Project Zero · Terrain — WebGPU</title>
+<style>
+  :root{
+    --bg:#0a0c0f; --panel:#12161b; --panel2:#171c22; --line:#232b34; --line2:#2d3742;
+    --tx:#d8e0e8; --dim:#8b97a5; --dim2:#6b7683; --acc:#4fb0ff; --acc2:#2d7fc0;
+    --ok:#56c08d; --warn:#e0a44a; --row:34px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--tx);overflow:hidden;
+    font:12px/1.5 "Inter",ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  button,input,select{font:inherit;color:inherit}
+  #app{display:grid;height:100%;
+    grid-template-columns:46px 1fr 330px;
+    grid-template-rows:38px 1fr 24px;
+    grid-template-areas:"top top top" "rail view dock" "status status status"}
+
+  /* ---------- top bar ---------- */
+  #top{grid-area:top;display:flex;align-items:center;gap:10px;padding:0 10px;
+    background:linear-gradient(180deg,#151a20,#10141a);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:650;letter-spacing:.14em;font-size:11px}
+  .brand i{display:block;width:13px;height:13px;border:2px solid var(--acc);transform:rotate(45deg);border-radius:2px}
+  .brand span{color:var(--dim)}
+  .sep{width:1px;height:20px;background:var(--line2)}
+  .tbtn{height:25px;padding:0 11px;background:#1b222a;border:1px solid var(--line2);border-radius:5px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .tbtn:hover{border-color:var(--acc);color:#fff}
+  .tbtn.primary{background:linear-gradient(180deg,#2f86cc,#2069a6);border-color:#3c9ae0;color:#fff;font-weight:600}
+  .tbtn.primary:hover{filter:brightness(1.12)}
+  .tbtn.on{border-color:var(--acc);color:var(--acc);background:#16222c}
+  select,input[type=text],input[type=number]{height:25px;background:#0f1419;border:1px solid var(--line2);
+    border-radius:5px;padding:0 7px}
+  select:focus,input:focus{outline:1px solid var(--acc2)}
+  .grow{flex:1}
+  .meta{color:var(--dim);font-variant-numeric:tabular-nums;font-size:11px}
+  .meta b{color:var(--tx);font-weight:600}
+
+  /* ---------- left rail ---------- */
+  #rail{grid-area:rail;background:var(--panel);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;align-items:center;gap:4px;padding:7px 0}
+  .ric{width:32px;height:32px;border-radius:6px;border:1px solid transparent;background:transparent;cursor:pointer;
+    display:grid;place-items:center;color:var(--dim);position:relative}
+  .ric:hover{background:#1a212a;color:var(--tx)}
+  .ric.on{background:#15222e;border-color:var(--acc2);color:var(--acc)}
+  .ric svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  .ric[data-tip]:hover:after{content:attr(data-tip);position:absolute;left:38px;top:50%;transform:translateY(-50%);
+    background:#070a0d;border:1px solid var(--line2);padding:3px 8px;border-radius:4px;white-space:nowrap;z-index:50;color:var(--tx)}
+  .railgap{height:8px}
+
+  /* ---------- viewport ---------- */
+  #view{grid-area:view;position:relative;background:#05070a;overflow:hidden}
+  #gpu{width:100%;height:100%;display:block}
+  #overlay{position:absolute;inset:0;display:grid;place-items:center;background:rgba(6,9,12,.86);
+    text-align:center;padding:40px;z-index:30}
+  #overlay .box{max-width:560px}
+  #overlay h2{font-size:15px;margin-bottom:8px;letter-spacing:.08em;text-transform:uppercase}
+  #overlay p{color:var(--dim);font-size:12.5px}
+  .vbadge{position:absolute;left:12px;top:10px;background:rgba(10,13,17,.72);border:1px solid var(--line);
+    border-radius:6px;padding:5px 9px;color:var(--dim);font-size:11px;backdrop-filter:blur(8px)}
+  .vbadge b{color:var(--tx)}
+  #progress{position:absolute;left:0;right:0;bottom:0;height:2px;background:transparent}
+  #progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc2),var(--acc));transition:width .12s linear}
+
+  /* ---------- right dock ---------- */
+  #dock{grid-area:dock;background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:column;min-height:0}
+  .dhead{height:30px;display:flex;align-items:center;gap:8px;padding:0 9px;border-bottom:1px solid var(--line);
+    text-transform:uppercase;letter-spacing:.13em;font-size:10px;color:var(--dim);background:var(--panel2)}
+  .dhead .acts{margin-left:auto;display:flex;gap:4px}
+  .iconbtn{width:21px;height:21px;border-radius:4px;border:1px solid var(--line2);background:#161c23;color:var(--dim);
+    cursor:pointer;display:grid;place-items:center;font-size:13px;line-height:1}
+  .iconbtn:hover{color:#fff;border-color:var(--acc)}
+  .tabs{display:flex;border-bottom:1px solid var(--line);background:var(--panel2)}
+  .tab{flex:1;height:30px;border:0;background:transparent;color:var(--dim);cursor:pointer;
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;border-bottom:2px solid transparent}
+  .tab.on{color:var(--tx);border-bottom-color:var(--acc);background:#141a21}
+  #stackWrap{flex:0 0 42%;display:flex;flex-direction:column;min-height:0}
+  #stack{overflow:auto;flex:1}
+  .layer{display:flex;align-items:center;gap:7px;height:var(--row);padding:0 8px;border-bottom:1px solid #1a2027;
+    cursor:pointer;user-select:none}
+  .layer:hover{background:#161d25}
+  .layer.sel{background:#15222e;box-shadow:inset 2px 0 0 var(--acc)}
+  .layer.drag{opacity:.4}
+  .layer .eye{width:18px;height:18px;border-radius:4px;border:1px solid var(--line2);background:#121820;
+    display:grid;place-items:center;font-size:10px;color:var(--dim)}
+  .layer.off .nm{color:var(--dim2);text-decoration:line-through}
+  .layer .eye.on{color:var(--acc);border-color:var(--acc2)}
+  .layer .sw{width:13px;height:13px;border-radius:3px;border:1px solid #0008}
+  .layer .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .layer .kind{color:var(--dim2);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+  .layer .hnd{color:var(--dim2);cursor:grab}
+  #inspector{flex:1;overflow:auto;min-height:0}
+  .group{border-bottom:1px solid var(--line)}
+  .gh{display:flex;align-items:center;gap:7px;height:28px;padding:0 9px;cursor:pointer;background:var(--panel2);
+    text-transform:uppercase;letter-spacing:.12em;font-size:10px;color:var(--dim)}
+  .gh:hover{color:var(--tx)}
+  .gh .chev{transition:transform .15s;font-size:9px}
+  .group.closed .chev{transform:rotate(-90deg)}
+  .group.closed .gb{display:none}
+  .gb{padding:7px 9px 10px}
+  .fld{display:grid;grid-template-columns:116px 1fr 54px;align-items:center;gap:7px;margin:5px 0}
+  .fld label{color:var(--dim);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fld input[type=range]{width:100%;height:16px;accent-color:var(--acc);background:transparent}
+  .fld .val{height:21px;background:#0f1419;border:1px solid var(--line2);border-radius:4px;text-align:right;
+    padding:0 5px;font-variant-numeric:tabular-nums;font-size:11px}
+  .fld select{width:100%;height:22px}
+  .fld input[type=color]{width:100%;height:21px;padding:0;background:#0f1419;border:1px solid var(--line2);border-radius:4px}
+  .fld.wide{grid-template-columns:116px 1fr}
+  .hint{color:var(--dim2);font-size:10.5px;padding:4px 9px 9px;line-height:1.5}
+
+  /* ---------- status ---------- */
+  #status{grid-area:status;display:flex;align-items:center;gap:14px;padding:0 10px;background:var(--panel2);
+    border-top:1px solid var(--line);color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums}
+  #status b{color:var(--tx);font-weight:600}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:#273039;border-radius:5px}
+  ::-webkit-scrollbar-track{background:#0f1318}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="top">
+    <div class="brand"><i></i>PROJECT&nbsp;ZERO <span>/ TERRAIN</span></div>
+    <div class="sep"></div>
+    <select id="preset" title="Preset"></select>
+    <button class="tbtn primary" id="build">Build</button>
+    <button class="tbtn" id="erodeToggle">⏸ Erosion</button>
+    <button class="tbtn" id="reset">Reset sim</button>
+    <div class="sep"></div>
+    <label class="meta">Seed</label>
+    <input id="seed" type="number" style="width:82px" value="1337" />
+    <button class="tbtn" id="dice" title="Randomise seed">🎲</button>
+    <label class="meta">Res</label>
+    <select id="res">
+      <option value="512">512²</option>
+      <option value="1024" selected>1024²</option>
+      <option value="2048">2048²</option>
+    </select>
+    <div class="grow"></div>
+    <div class="meta" id="gpuName">—</div>
+    <div class="sep"></div>
+    <button class="tbtn" id="exportR16" title="16-bit RAW heightmap (Unreal / Gaea / World Machine)">Export .r16</button>
+    <button class="tbtn" id="exportPng">PNG</button>
+    <button class="tbtn" id="shot">Screenshot</button>
+    <a class="tbtn" href="./index.html" style="text-decoration:none">Fracture demo</a>
+  </div>
+
+  <div id="rail">
+    <button class="ric on" data-mode="0" data-tip="Shaded (final)"><svg viewBox="0 0 24 24"><path d="M3 18l6-9 4 6 3-4 5 7z"/><circle cx="17" cy="6" r="2"/></svg></button>
+    <button class="ric" data-mode="1" data-tip="Height field"><svg viewBox="0 0 24 24"><path d="M4 20V10M9 20V5M14 20v-8M19 20V7"/></svg></button>
+    <button class="ric" data-mode="2" data-tip="Slope"><svg viewBox="0 0 24 24"><path d="M4 19L20 5M4 19h16"/></svg></button>
+    <button class="ric" data-mode="3" data-tip="Flow / wetness"><svg viewBox="0 0 24 24"><path d="M5 7c3 3 5-3 8 0s3 6 6 3M5 14c3 3 5-3 8 0s3 6 6 3"/></svg></button>
+    <button class="ric" data-mode="4" data-tip="Ambient occlusion"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 5v14"/></svg></button>
+    <button class="ric" data-mode="5" data-tip="Scour (erosion)"><svg viewBox="0 0 24 24"><path d="M12 3v7M8 10l4 11 4-11z"/></svg></button>
+    <button class="ric" data-mode="6" data-tip="Sediment"><svg viewBox="0 0 24 24"><path d="M3 16h18M6 12h12M9 8h6"/></svg></button>
+    <div class="railgap"></div>
+    <button class="ric on" id="tWater" data-tip="Water surface"><svg viewBox="0 0 24 24"><path d="M12 3s6 7 6 11a6 6 0 11-12 0c0-4 6-11 6-11z"/></svg></button>
+    <button class="ric" id="tWire" data-tip="Wireframe"><svg viewBox="0 0 24 24"><path d="M4 7l8-4 8 4-8 4z"/><path d="M4 7v8l8 4 8-4V7"/><path d="M12 11v8"/></svg></button>
+    <button class="ric" id="tSun" data-tip="Drag in viewport to move the sun"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></button>
+    <div class="railgap"></div>
+    <button class="ric" id="tTop" data-tip="Top-down view"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 4v16"/></svg></button>
+  </div>
+
+  <div id="view">
+    <canvas id="gpu"></canvas>
+    <div class="vbadge" id="vbadge">—</div>
+    <div id="progress"><i></i></div>
+    <div id="overlay"><div class="box"><h2>Initialising WebGPU</h2><p>Requesting adapter…</p></div></div>
+  </div>
+
+  <div id="dock">
+    <div class="tabs">
+      <button class="tab on" data-stack="gen">Terrain stack</button>
+      <button class="tab" data-stack="mat">Texture stack</button>
+    </div>
+    <div id="stackWrap">
+      <div class="dhead"><span id="stackTitle">Layers</span>
+        <div class="acts">
+          <button class="iconbtn" id="addLayer" title="Add layer">+</button>
+          <button class="iconbtn" id="dupLayer" title="Duplicate">⧉</button>
+          <button class="iconbtn" id="delLayer" title="Delete">−</button>
+          <button class="iconbtn" id="upLayer" title="Move up">↑</button>
+          <button class="iconbtn" id="downLayer" title="Move down">↓</button>
+        </div>
+      </div>
+      <div id="stack"></div>
+    </div>
+    <div class="dhead">Inspector</div>
+    <div id="inspector"></div>
+  </div>
+
+  <div id="status">
+    <span class="dot" id="dot"></span>
+    <span id="st1">—</span><span id="st2"></span><span id="st3"></span>
+    <span class="grow" style="flex:1"></span>
+    <span id="st4"></span>
+  </div>
+</div>
+<script type="module" src="/src/terrain/main.ts"></script>
+</body>
+</html>

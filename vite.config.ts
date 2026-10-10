@@ -13,6 +13,11 @@ export default defineConfig({
     },
   },
   worker: { format: 'es' },
+  build: {
+    rollupOptions: {
+      input: { main: 'index.html', terrain: 'terrain.html' },
+    },
+  },
   optimizeDeps: { exclude: ['jolt-physics'] },
   preview: { host: '0.0.0.0', allowedHosts: true },
 });

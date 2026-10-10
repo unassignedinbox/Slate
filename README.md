@@ -123,6 +123,50 @@ own after a generation or two.
 
 ---
 
+## Project Zero · WebGPU Terrain  (`terrain.html`)
+
+A second, standalone demo: a **WebGPU** terrain generator in the shape of a real editor — layer stacks,
+not a node graph. Everything runs on the GPU; nothing round-trips to the CPU except exports.
+
+### Pipeline
+1. **Terrain layer stack → one compute dispatch.** Ten operators (fBm, ridged, billow, domain-warped,
+   cellular, terrace, curve, radial, tilt, detail) × six blend modes, each with an *altitude mask* so a
+   layer only applies to a band of the result below it. Octaves are rotated per level and the fade is
+   quintic, so there is no axis-aligned lattice corduroy.
+2. **Rock hardness field.** Tilted strata + regional variation. Erosion divides by hardness, so hard
+   bands survive as benches and cliff lips while soft bands undercut — the single biggest realism
+   difference against "noise + a smoothing filter".
+3. **Hydraulic erosion — virtual-pipe shallow water (Mei et al.).** Per iteration: outflow flux through
+   four pipes → water depth + velocity field → sediment capacity `C = Kc·sin(tilt)·|v|·depthFade` →
+   scour or deposit → **semi-Lagrangian sediment advection** → evaporation. That is a real drainage
+   solve: dendritic channel networks, meanders, alluvial fans and deltas emerge, they are not painted on.
+   Rainfall is spatially patchy (orographic), not uniform drizzle.
+4. **Thermal erosion.** Talus-angle slumping with hardness-dependent angle of repose → scree cones
+   under cliffs.
+5. **Analysis bake.** Normals, **horizon-scan ambient occlusion** (N directions × stepped marches),
+   curvature (concave vs convex), wetness, sediment and scour masks → two RGBA16F textures.
+6. **Material layer stack.** Up to 10 layers composited by *rules*, multiplied together: altitude ×
+   slope × concavity × flow/wetness × sediment × scoured-rock × openness × procedural breakup, each with
+   its own falloff and blend sharpness, two-tone macro variation per layer, and wet-darkening +
+   roughness drop where water runs.
+7. **Shading.** Raymarched heightfield sun shadows with distance-widening penumbra, sky-dome ambient
+   weighted by AO, ground bounce, GGX specular, aerial perspective, ACES tonemap, 4× MSAA.
+   Water is rendered from the simulation's own water column: Beer–Lambert absorption by depth, Fresnel
+   sky reflection, animated capillary ripples, whitewater where the sheet is thin.
+
+### Editor
+Project-Zero style dark shell: tool rail (shaded / height / slope / flow / AO / scour / sediment views,
+water, wireframe, sun-drag, top-down), **layer stack docked right** with drag-reorder, visibility,
+duplicate and reorder, **inspector docked right underneath** driven by a field schema, plus World,
+Erosion, Lighting and Analysis groups. Four presets (Alpine Massif, Desert Mesas, Coastal Fjords,
+Volcanic Badlands). Erosion runs live with an adaptive step budget and a progress bar.
+
+### Export
+**`.r16`** 16-bit raw heightmap (drops straight into Unreal landscape import, Gaea, World Machine),
+8-bit PNG, and a viewport screenshot.
+
+---
+
 ## Metal deformation (car crash test)
 
 Switch **Scene → Car crash test**. The body is **one merged BufferGeometry** (hood + cabin + fenders,
@@ -195,6 +239,11 @@ src/fracture/materials.ts  Gc, density, anisotropy, residual stress, surface par
 src/fracture/fracture.ts   stress field, crack-normal selection, Griffith energy solver
 src/scene/targets.ts     pane / plank / wall / boulder / crate setups + rebar layout
 src/scene/audio.ts       procedural modal impact audio
+src/terrain/shaders/*    WGSL: noise, generation, erosion, analysis, terrain/water/sky shading
+src/terrain/engine.ts    WebGPU device, buffers, compute + render pipelines
+src/terrain/layers.ts    layer-stack data model, encoding, presets, inspector schema
+src/terrain/ui.ts        editor shell: stacks, drag-reorder, schema-driven inspector
+src/terrain/main.ts      camera, frame loop, exports
 src/deform/panel.ts      offline elasto-plastic sheet-metal solver (the bake)
 src/deform/bake.worker.ts  runs the bake off the main thread
 src/deform/dent.ts       VAT packing, shader patch, runtime dent lattices

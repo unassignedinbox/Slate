@@ -6,8 +6,11 @@
   "devDependencies": {
     "@shaderfrog/glsl-parser": "^7.0.1",
     "@types/three": "^0.186.0",
+    "@webgpu/types": "^0.1.74",
+    "esbuild": "^0.28.2",
     "typescript": "^7.0.2",
-    "vite": "^8.3.1"
+    "vite": "^8.3.1",
+    "wgsl_reflect": "^1.6.0"
   },
   "name": "slate-fracture",
   "private": true,
@@ -17,6 +20,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "wgsl": "esbuild tools/wgslcheck.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/wgslcheck.mjs --log-level=error && node node_modules/.cache/wgslcheck.mjs"
   }
 }
