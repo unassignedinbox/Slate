@@ -153,7 +153,7 @@ export default function App() {
         <div className="viewport-stage">
           {sim.error ? (
             <div className="config-error" role="alert">
-              <b>Configuration outside the validated model range</b>
+              <b>Configuration rejected</b>
               <p>{sim.error}</p>
               <p>The simulation is stopped. Choose a valid option in the Materials card (or change the stated parameter) to run again.</p>
             </div>

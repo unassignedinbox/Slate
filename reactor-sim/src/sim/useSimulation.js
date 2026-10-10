@@ -20,6 +20,8 @@ export function useSimulation(cfg, resetKey) {
   const histRef = useRef(newHistory());
   const nextSampleRef = useRef(0);
   const accRef = useRef(0);
+  const runningRef = useRef(false);
+  runningRef.current = running;
 
   const record = (x) => {
     const h = histRef.current;
@@ -67,7 +69,7 @@ export function useSimulation(cfg, resetKey) {
     const frame = (now) => {
       const r = reactorRef.current;
       if (r) {
-        const dtReal = Math.min(0.1, (now - prev) / 1000);
+        const dtReal = Math.min(0.25, (now - prev) / 1000);
         accRef.current += dtReal * speed;
         let steps = 0;
         while (accRef.current >= DT && steps < 4000) {
@@ -95,6 +97,8 @@ export function useSimulation(cfg, resetKey) {
     const rr = reactorRef.current;
     if (!rr) return;
     rr.cfg.events.push({ ...ev, t: rr.state.t });
+    // While paused, apply the event now so the operator sees its effect immediately.
+    if (!runningRef.current) record(rr.step(DT));
     force((n) => n + 1);
   }, []);
 

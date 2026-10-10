@@ -56,7 +56,7 @@ export default function Viewport3D({ base, snapshot, showDose, exaggerate, secti
     scene.add(root);
 
     const mats = {
-      vessel: new THREE.MeshStandardMaterial({ color: '#8f98a0', metalness: 0.7, roughness: 0.35 }),
+      vessel: new THREE.MeshStandardMaterial({ color: '#8f98a0', metalness: 0.7, roughness: 0.35, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }),
       shield: new THREE.MeshStandardMaterial({ color: '#4b5160', metalness: 0.4, roughness: 0.6 }),
       refl: new THREE.MeshStandardMaterial({ color: '#6e8b74', roughness: 0.8 }),
       plenum: new THREE.MeshStandardMaterial({ color: '#2f7fd1', transparent: true, opacity: 0.35, roughness: 0.2 }),
@@ -67,7 +67,7 @@ export default function Viewport3D({ base, snapshot, showDose, exaggerate, secti
       guide: new THREE.MeshStandardMaterial({ color: '#7a828c', metalness: 0.6, roughness: 0.4, transparent: true, opacity: 0.7 }),
       core: new THREE.MeshStandardMaterial({ color: '#2f7fd1', transparent: true, opacity: 0.12, depthWrite: false }),
       poison: new THREE.MeshStandardMaterial({ color: '#6fbf8a', transparent: true, opacity: 0.0, depthWrite: false }),
-      can: new THREE.MeshStandardMaterial({ color: '#d9dde2', transparent: true, opacity: 0.18, metalness: 0.8, roughness: 0.25, side: THREE.DoubleSide, depthWrite: false }),
+      can: new THREE.MeshStandardMaterial({ color: '#d9dde2', transparent: true, opacity: 0.08, metalness: 0.8, roughness: 0.25, side: THREE.DoubleSide, depthWrite: false }),
       dose: new THREE.MeshBasicMaterial({ color: '#ffb020', transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }),
     };
 
@@ -202,8 +202,12 @@ export default function Viewport3D({ base, snapshot, showDose, exaggerate, secti
       camera.updateProjectionMatrix();
     };
     window.addEventListener('resize', onResize);
+    // The host also shrinks when the bottom graph/readout panel appears, which a window resize does not report.
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null;
+    observer?.observe(host);
     return () => {
       cancelAnimationFrame(raf);
+      observer?.disconnect();
       window.removeEventListener('resize', onResize);
       controls.dispose();
       renderer.dispose();
