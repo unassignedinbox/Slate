@@ -247,6 +247,7 @@ export const defaults = {
   sedBands: 0.75,           // bed-to-bed contrast: how crisply the beds read
   sedLaminae: 0.5,          // cross-lamination inside a bed
   sedFacies: 0.7,           // sorting strength: gravel / sand / mud
+  sedGrainBias: 0,          // -1 = all silt … +1 = all gravel, whatever the flow
   sedRipple: 0.45,
   sedRippleScale: 0.8,      // [m] ripple wavelength
   sedCracks: 0.3,           // mud cracks on the quiet flats
@@ -591,6 +592,129 @@ Object.assign(presets, {
     overhang: 4, rockDensity: 0.25, sunElevation: 45, sunAzimuth: 170, turbidity: 6, fogDensity: 0.45,
     riverLakeMax: 1,
   },
+  // ── the sediment-filled worlds: the fill is the subject, not the rock ─────────────────────────
+  'Braided river plain': {
+    palette: 'sandstone', mountainHeight: 190, baseElevation: 25, baseFrequency: 1.1, ridgeSharpness: 0.85, peakPower: 0.7,
+    warpStrength: 0.85, reliefFrequency: 1.2, reliefContrast: 0.55, strataBand: 24, strataStrength: 0.7, hardnessContrast: 0.5,
+    strataLateral: 0.45, fluvialStrength: 0.5, fluvialConcavity: 0.5, fluvialFill: 1, fluvialDeposition: 1, fluvialDiffusion: 0.4,
+    rillStrength: 0.3, talusSoft: 32, talusHard: 40, sdfOn: 0, overhang: 0, detailRelief: 0.12, rockyAmount: 0, cragAmount: 0,
+    peelOn: 0, flakeStrength: 0.2, jointStrength: 0.4, vegetation: 0.35, vegSlope: 32, dryness: 0.55, soilAmount: 0.9,
+    sedimentAmount: 1, sedBedScale: 0.35, sedBands: 0.85, sedLaminae: 0.75, sedRipple: 0.6, sedRippleScale: 0.7, sedCracks: 0.25, sedGrainBias: 0.45, sedFacies: 0.95,
+    riverSim: 1, riverCatchment: 0.03, riverWidthScale: 3.2, riverMaxWidth: 62, riverFloodplain: 1.5, riverBraiding: 0.85,
+    riverBankErosion: 0.9, riverDepthScale: 0.7, riverWater: 1, riverLakes: 1, riverLakeFill: 0.7, riverLakeMax: 1.2,
+    waterEnabled: 0, seaLevel: -60, snowOn: 0, gravelAmount: 0.9,
+    rocksEnabled: 1, pebblesOn: 1, rockDensity: 0.5, rockSizeMax: 4.5, rockInPlace: 0.2, rockTalus: 0.25, rockChannel: 1, rockBars: 1,
+    rockCaps: 0.1, rockErratics: 0.15, rockShore: 0.6, rockSizeSpread: 0.85, pebbleDensity: 0.8, pebbleSize: 0.5,
+    sunElevation: 34, sunAzimuth: 215, turbidity: 5, fogDensity: 0.35,
+  },
+  'Alluvial fan': {
+    palette: 'limestone', mountainHeight: 430, baseElevation: 30, baseFrequency: 1.5, ridgeSharpness: 1.7, peakPower: 1.2,
+    warpStrength: 0.5, plateauStrength: 0.25, plateauHeight: 380, canyonDepth: 45, canyonWidth: 0.5, strataBand: 20, strataStrength: 0.9,
+    hardnessContrast: 0.85, strataLateral: 0.35, fluvialStrength: 0.75, fluvialConcavity: 0.45, fluvialFill: 1, fluvialDeposition: 1,
+    sedimentCapacity: 0.35, depositSpeed: 0.5, rillStrength: 0.6, talusSoft: 34, talusHard: 74, sdfOn: 1, sdfAngle: 62, sdfBlocks: 1.4,
+    overhang: 2, peelStrength: 0.55, flakeStrength: 0.35, vegetation: 0.1, dryness: 0.85, soilAmount: 0.55,
+    sedimentAmount: 1, sedBedScale: 0.5, sedBands: 0.9, sedLaminae: 0.6, sedRipple: 0.45, sedRippleScale: 1.1, sedCracks: 0.45, sedGrainBias: 0.25, sedFacies: 1,
+    riverSim: 1, riverCatchment: 0.05, riverWidthScale: 2.4, riverMaxWidth: 44, riverFloodplain: 1.3, riverBraiding: 0.6,
+    riverWater: 0, riverLakes: 0, waterEnabled: 0, seaLevel: -80, snowOn: 0, gravelAmount: 1, gravelScale: 1.6,
+    rocksEnabled: 1, pebblesOn: 1, rockDensity: 0.7, rockSizeMin: 0.7, rockSizeMax: 9, rockInPlace: 0.7, rockTalus: 1, rockBars: 0.9,
+    rockChannel: 0.7, rockCaps: 0.35, rockErratics: 0.2, rockSizeSpread: 0.9, pebbleDensity: 0.85,
+    oxideAmount: 0.6, sunElevation: 41, sunAzimuth: 232, turbidity: 7, fogDensity: 0.2,
+  },
+  'Delta plain': {
+    palette: 'shale', mountainHeight: 140, baseElevation: 10, baseFrequency: 1.0, ridgeSharpness: 0.7, peakPower: 0.6,
+    warpStrength: 1.0, reliefContrast: 0.4, strataBand: 16, strataStrength: 0.55, hardnessContrast: 0.35, strataLateral: 0.6,
+    fluvialStrength: 0.4, fluvialConcavity: 0.6, fluvialFill: 1, fluvialDeposition: 1, fluvialDiffusion: 0.55, sdfOn: 0, overhang: 0,
+    detailRelief: 0.08, rockyAmount: 0, cragAmount: 0, peelOn: 0, flakeStrength: 0.2, vegetation: 0.5, vegSlope: 34, dryness: 0.3,
+    soilAmount: 0.9, mossiness: 0.7, sedimentAmount: 1, sedBedScale: 0.28, sedBands: 0.7, sedLaminae: 0.85, sedRipple: 0.55,
+    sedRippleScale: 0.55, sedCracks: 0.5, sedGrainBias: -0.15, sedFacies: 0.75, sedColorSilt: '#6f6a5e',
+    riverSim: 1, riverCatchment: 0.02, riverWidthScale: 3.6, riverMaxWidth: 76, riverFloodplain: 1.8, riverBraiding: 0.7,
+    riverWater: 1, riverLakes: 1, riverLakeFill: 0.9, riverLakeMax: 1.6, waterEnabled: 1, seaLevel: 0, shoreWet: 1,
+    rocksEnabled: 1, pebblesOn: 1, rockDensity: 0.3, rockSizeMax: 3, rockInPlace: 0.1, rockTalus: 0.1, rockChannel: 0.7, rockBars: 0.9,
+    rockShore: 1, rockCaps: 0.05, rockErratics: 0.1, pebbleDensity: 0.9, pebbleSize: 0.4,
+    sunElevation: 28, sunAzimuth: 200, turbidity: 6, fogDensity: 0.55,
+  },
+  'Playa & mudflats': {
+    palette: 'limestone', mountainHeight: 260, baseElevation: 10, baseFrequency: 1.25, ridgeSharpness: 1.1, peakPower: 0.9,
+    warpStrength: 0.7, reliefContrast: 0.6, strataBand: 14, strataStrength: 0.7, hardnessContrast: 0.55, strataLateral: 0.5,
+    fluvialStrength: 0.35, fluvialConcavity: 0.5, fluvialFill: 1, fluvialDeposition: 1, evaporation: 0.9, sedimentCapacity: 0.25,
+    rillStrength: 0.55, talusSoft: 32, talusHard: 58, sdfOn: 0, overhang: 0, detailRelief: 0.1, rockyAmount: 0, peelOn: 0,
+    vegetation: 0.04, dryness: 1, soilAmount: 0.4, sedimentAmount: 1, sedBedScale: 0.22, sedBands: 0.55, sedLaminae: 0.4,
+    sedRipple: 0.35, sedRippleScale: 0.9, sedCracks: 1, sedGrain: 0.35, sedGrainBias: -0.3, sedFacies: 0.5, sedColorSilt: '#cdbc95', sedColorSand: '#d6c8a6',
+    riverSim: 1, riverCatchment: 0.08, riverWidthScale: 2.0, riverMaxWidth: 30, riverFloodplain: 1.5, riverWater: 0, riverLakes: 1,
+    riverLakeFill: 0.2, riverLakeMax: 2.2, waterEnabled: 0, seaLevel: -100, snowOn: 0, gravelAmount: 0.35,
+    oxideAmount: 0.5, sunElevation: 46, sunAzimuth: 250, turbidity: 8, fogDensity: 0.12,
+  },
+  // ── rock worlds: the walls are the subject ────────────────────────────────────────────────────
+  'Tepui': {
+    palette: 'sandstone', mountainHeight: 820, baseElevation: 170, baseFrequency: 1.15, ridgeSharpness: 1.2, peakPower: 1.1,
+    warpStrength: 0.55, plateauStrength: 1, plateauHeight: 700, cliffHeight: 520, cliffSharpness: 1.35, cliffStacks: 0.5,
+    strataBand: 34, strataStrength: 0.8, hardnessContrast: 0.9, strataLateral: 0.25, fluvialStrength: 0.6, fluvialConcavity: 0.3,
+    rillStrength: 0.8, talusSoft: 40, talusHard: 88, sdfOn: 1, sdfAngle: 72, sdfUndercut: 7, sdfBlocks: 1.6, sdfBlockSize: 12,
+    sdfVertical: 1.1, overhang: 5, buttress: 0.7, detailRelief: 0.8, rockyAmount: 0.9, peelStrength: 0.6, peelScale: 3.4,
+    flakeStrength: 0.35, jointSpacing: 3.4, vegetation: 0.55, vegSlope: 26, soilAmount: 0.7, sedGrainBias: -0.15, sedimentAmount: 0.75, sedBedScale: 0.4,
+    riverSim: 1, riverCatchment: 0.05, riverWidthScale: 1.6, riverMaxWidth: 26, riverFloodplain: 0.6, riverWater: 1, riverLakes: 1,
+    waterEnabled: 0, seaLevel: -40, snowOn: 0, fogDensity: 1.1, turbidity: 4, sunElevation: 52, sunAzimuth: 160,
+    rocksEnabled: 1, pebblesOn: 1, rockDensity: 0.45, rockSizeMax: 7, rockTalus: 1, rockCaps: 0.5, rockInPlace: 0.6, rockSizeSpread: 0.8,
+  },
+  'Sandstone forest': {
+    palette: 'sandstone', mountainHeight: 420, baseElevation: 240, baseFrequency: 2.2, ridgeSharpness: 2.4, peakPower: 1.5,
+    warpStrength: 0.5, strataBand: 22, strataStrength: 0.8, hardnessContrast: 0.75, stackHeight: 300, stackLevels: 5, stackScale: 0.9,
+    stackTaper: 0.75, stackSharpness: 0.9, stackChaos: 0.7, stackSpires: 0.7, stackCoverage: 0.75, stackPedestal: 0.5, stackSizeVar: 0.9,
+    stackElongation: 0.4, stackCluster: 0.6, fluvialStrength: 0.7, fluvialConcavity: 0.4, rillStrength: 0.7, talusSoft: 38,
+    talusHard: 82, sdfOn: 1, sdfAngle: 68, sdfUndercut: 5, sdfBlocks: 1.2, overhang: 3, detailRelief: 0.7, rockyAmount: 0.8,
+    peelStrength: 0.5, flakeStrength: 0.4, vegetation: 0.9, vegSlope: 30, mossiness: 1, soilAmount: 0.85, sedGrainBias: -0.25, sedimentAmount: 0.6,
+    riverSim: 1, riverWater: 1, riverLakes: 1, waterEnabled: 0, seaLevel: -30, fogDensity: 1.3, turbidity: 3, sunElevation: 44,
+    rocksEnabled: 1, pebblesOn: 1, rockDensity: 0.4, rockTalus: 1, rockSizeMax: 5,
+  },
+  'Glacial valley': {
+    palette: 'granite', mountainHeight: 780, baseElevation: 40, baseFrequency: 1.45, ridgeSharpness: 2.0, peakPower: 1.3,
+    warpStrength: 0.45, fluvialStrength: 0.25, fluvialConcavity: 0.15, fluvialDiffusion: 0.5, rillStrength: 0.35,
+    talusSoft: 40, talusHard: 84, thermalRate: 0.6, thermalIterations: 12, strataBand: 30, strataStrength: 0.5, hardnessContrast: 0.8,
+    outcropDensity: 0.5, outcropSize: 12, outcropCount: 4, outcropBury: 0.5, outcropWeather: 0.6, outcropRidge: 0.4, outcropSlopeMax: 34,
+    sdfOn: 1, sdfAngle: 60, sdfUndercut: 4, overhang: 2.5, detailRelief: 0.9, rockyAmount: 1.0, cragAmount: 0.5, peelStrength: 0.5,
+    flakeStrength: 0.5, jointSpacing: 2.6, vegetation: 0.28, vegSlope: 30, dryness: 0.4, soilAmount: 0.6, sedimentAmount: 0.85,
+    sedBedScale: 0.6, sedBands: 0.6, sedGrainBias: -0.1, sedFacies: 0.9, sedCracks: 0.1, snowOn: 1, snowLine: 300, snowSlope: 62, snowSoftness: 2.4,
+    riverSim: 1, riverCatchment: 0.06, riverWidthScale: 2.2, riverMaxWidth: 34, riverFloodplain: 1.2, riverWater: 1, riverLakes: 1,
+    riverLakeFill: 0.6, riverLakeMax: 1.4, waterEnabled: 0, seaLevel: -120, gravelAmount: 0.9,
+    rocksEnabled: 1, pebblesOn: 1, rockDensity: 0.55, rockSizeMax: 10, rockTalus: 1, rockErratics: 0.8, rockCaps: 0.5, rockInPlace: 0.6,
+    pebbleDensity: 0.7, sunElevation: 24, sunAzimuth: 300, turbidity: 3, fogDensity: 0.5,
+  },
+  'Chalk cliffs': {
+    palette: 'limestone', mountainHeight: 300, baseElevation: 0, baseFrequency: 1.7, ridgeSharpness: 1.5, peakPower: 1.1,
+    warpStrength: 0.7, cliffHeight: 190, cliffSharpness: 1.3, plateauStrength: 0.55, plateauHeight: 150, strataBand: 40,
+    strataStrength: 0.5, hardnessContrast: 0.45, strataLateral: 0.4, fluvialStrength: 0.55, rillStrength: 0.7, talusSoft: 36,
+    talusHard: 78, sdfOn: 1, sdfAngle: 74, sdfUndercut: 9, sdfPockets: 0.8, sdfBlocks: 1.8, sdfBlockSize: 8, sdfVertical: 0.9,
+    overhang: 5.5, buttress: 0.6, ledgeNoise: 0.5, detailRelief: 0.55, rockyAmount: 0.7, peelStrength: 0.45, flakeStrength: 0.3,
+    jointSpacing: 2.2, vegetation: 0.7, vegSlope: 28, soilAmount: 0.7, sedimentAmount: 0.8, sedBedScale: 0.3, sedRipple: 0.7,
+    sedRippleScale: 0.6, sedGrainBias: -0.1, sedFacies: 0.8, sedColorSand: '#d8cdb4', sedColorSilt: '#c6bda6',
+    seaLevel: 0, waterEnabled: 1, shoreWet: 1, riverSim: 1, riverCatchment: 0.08, riverWater: 1, riverLakes: 0,
+    rocksEnabled: 1, pebblesOn: 1, rockDensity: 0.55, rockSizeMax: 5.5, rockTalus: 1, rockShore: 1, rockInPlace: 0.5, rockCaps: 0.3,
+    pebbleDensity: 0.9, pebbleSize: 0.45, sunElevation: 30, sunAzimuth: 255, turbidity: 4, fogDensity: 0.5,
+  },
+  'Basin & range': {
+    palette: 'sandstone', mountainHeight: 520, baseElevation: 20, baseFrequency: 1.35, ridgeSharpness: 1.6, peakPower: 1.15,
+    warpStrength: 0.6, strataBand: 26, strataStrength: 1.0, hardnessContrast: 0.9, strataDip: 22, strataDipDirection: 115,
+    strataLateral: 0.5, fluvialStrength: 0.65, fluvialConcavity: 0.5, fluvialFill: 1, fluvialDeposition: 1, rillStrength: 0.55,
+    talusSoft: 34, talusHard: 76, sdfOn: 1, sdfAngle: 62, sdfBlocks: 1.4, overhang: 2.5, peelStrength: 0.6, flakeStrength: 0.35,
+    vegetation: 0.08, dryness: 0.95, soilAmount: 0.5, sedimentAmount: 1, sedBedScale: 0.45, sedBands: 0.85, sedGrainBias: 0.2, sedFacies: 1,
+    sedRipple: 0.5, sedRippleScale: 1.4, sedCracks: 0.5, duneAmount: 0.35, duneWavelength: 90, duneCoverage: 0.5, duneAsymmetry: 0.4,
+    riverSim: 1, riverCatchment: 0.06, riverWidthScale: 2.2, riverMaxWidth: 36, riverFloodplain: 1.4, riverBraiding: 0.7,
+    riverWater: 0, riverLakes: 1, riverLakeFill: 0.3, waterEnabled: 0, seaLevel: -90, gravelAmount: 0.9, oxideAmount: 0.75,
+    rocksEnabled: 1, pebblesOn: 1, rockDensity: 0.6, rockSizeMax: 8, rockTalus: 1, rockBars: 0.8, rockInPlace: 0.5, pebbleDensity: 0.8,
+    sunElevation: 38, sunAzimuth: 245, turbidity: 7, fogDensity: 0.18,
+  },
+  'Tufa terraces': {
+    palette: 'limestone', mountainHeight: 340, baseElevation: 40, baseFrequency: 1.5, ridgeSharpness: 1.0, peakPower: 0.8,
+    warpStrength: 0.5, reliefContrast: 0.55, strataBand: 12, strataStrength: 0.5, hardnessContrast: 0.4, strataLateral: 0.55,
+    fluvialStrength: 0.45, fluvialConcavity: 0.45, fluvialFill: 1, fluvialPits: 0.2, rillStrength: 0.5, talusSoft: 30, talusHard: 46,
+    sdfOn: 1, sdfAngle: 48, sdfUndercut: 3, sdfBlocks: 0.8, overhang: 1, detailRelief: 0.3, rockyAmount: 0.25, peelStrength: 0.25,
+    flakeStrength: 0.25, vegetation: 0.22, vegSlope: 34, soilAmount: 0.5, sedimentAmount: 1, sedBedScale: 0.18, sedBands: 0.7,
+    sedLaminae: 0.9, sedRipple: 0.5, sedRippleScale: 0.5, sedCracks: 0.2, sedGrainBias: 0.15, sedFacies: 0.3, sedColorSilt: '#e2dbc6', sedColorSand: '#ded3ba',
+    riverSim: 1, riverCatchment: 0.04, riverWidthScale: 1.8, riverMaxWidth: 26, riverFloodplain: 1.2, riverWater: 1, riverLakes: 1,
+    riverLakeFill: 0.5, riverLakeMax: 0.9, riverLakeMin: 0.02, lakeDepth: 1.6, waterEnabled: 1, seaLevel: -18, shoreWet: 1,
+    waterColor: '#2f6d6a', riverColor: '#3a7d78', riverShallowColor: '#7fc3bb', riverClearDepth: 2.6,
+    sunElevation: 40, sunAzimuth: 200, turbidity: 4, fogDensity: 0.3,
+  },
 });
 
 export const palettes = {
@@ -606,13 +730,30 @@ export const paletteKeys = ['rockA', 'rockB', 'rockC', 'fresh', 'oxide', 'flakeC
 // Inspector schema. Each group = one outliner row. Each control: [key, label, min, max, step, unit, hint]
 export const groups = [
   {
-    id: 'landform', name: 'Landform', type: 'Base relief', stage: 'terrain', color: '#d6a078',
+    id: 'landform', name: 'Landform', type: 'Base relief & ridges', stage: 'terrain', color: '#d6a078',
     cards: [
       { title: 'Preset', kind: 'presets' },
       { title: 'Elevation', controls: [
         ['mountainHeight', 'Mountain height', 100, 2500, 10, 'm', 'Peak elevation above the datum'],
         ['baseElevation', 'Base elevation', -200, 400, 5, 'm', 'Elevation of the plains'],
         ['worldSize', 'World size', 1024, 4096, 128, 'm', 'Side length of the generated tile'],
+      ] },
+      { title: 'Relief', controls: [
+        ['baseFrequency', 'Ridge frequency', 0.6, 4, 0.05, '', 'Number of ridge systems across the tile'],
+        ['ridgeSharpness', 'Ridge sharpness', 1, 4, 0.05, '', 'Crest profile — rounded to knife-edge'],
+        ['peakPower', 'Peak emphasis', 0.6, 2.5, 0.05, '', 'Concentrates height into the summits'],
+        ['warpStrength', 'Domain warp', 0, 1.5, 0.05, '', 'Bends ridgelines into realistic curves'],
+        ['reliefContrast', 'Massif contrast', 0.1, 1, 0.05, '', 'How sharply mountains rise from plains'],
+        ['reliefFrequency', 'Massif frequency', 0.6, 3, 0.1, '', 'Scale of the mountain / plains pattern'],
+      ] },
+      { title: 'Mesa & canyon', controls: [
+        ['plateauStrength', 'Plateau flattening', 0, 1, 0.05, '', 'Soft-clamps summits into flat tops'],
+        ['plateauHeight', 'Plateau height', 50, 1000, 10, 'm', 'Elevation of the caprock surface'],
+        ['canyonDepth', 'Canyon depth', 0, 600, 10, 'm', 'Incision of the meandering gorge'],
+        ['canyonWidth', 'Canyon width', 60, 900, 10, 'm', 'Rim-to-rim width'],
+        ['cliffHeight', 'Escarpment', 0, 400, 5, 'm', 'A near-vertical cliff line along the edge of the massif (coastal cliffs, quarry walls): the high side is lifted onto a bench by this much within a cell or two'],
+        ['cliffSharpness', 'Escarpment edge', 0, 1, 0.05, '', 'How abrupt the drop is (1 = a wall)'],
+        ['cliffStacks', 'Stacks', 0, 1, 0.05, '', 'Pillars of the former cliff left standing just off the line (sea stacks, quarry remnants)'],
       ] },
       { title: 'Rugged outcrops', controls: [
         ['ruggedOn', 'Enable push–pull', 0, 1, 1, '', 'Lateral (XZ) push–pull of the steep faces: blocky buttresses stand out of the face, recesses are cut back into it — applied to the base shape and again, finer, after erosion'],
@@ -638,6 +779,15 @@ export const groups = [
         ['stackElongation', 'Elongation', 0, 1, 0.05, '', 'Stretches the plan of each stack into ridges and fins along its own direction, so outlines are not discs'],
         ['stackCluster', 'Clustering', 0, 1, 0.05, '', 'Groups the stacks into clusters with bare ground between: neighbours touch and merge into irregular compounds instead of standing on a lattice'],
       ] },
+      { title: 'Grid', controls: [
+        ['seed', 'Seed', 1, 9999, 1, '', 'Deterministic noise seed'],
+        ['resolution', 'Resolution', 128, 2048, 128, 'px', 'Heightfield side in samples. 512 ≈ 2 s, 1024 ≈ 15 s, 2048 ≈ 1 min and a 4 M-vertex mesh'],
+      ] },
+    ],
+  },
+  {
+    id: 'deposition', name: 'Dunes & outcrops', type: 'Loose material piled onto the landform', stage: 'terrain', color: '#d7b47c',
+    cards: [
       { title: 'Dunes', controls: [
         ['duneAmount', 'Dune height', 0, 80, 1, 'm', 'Transverse sand dunes added to the relief: long windward slope, short slip face'],
         ['duneWavelength', 'Dune spacing', 30, 600, 5, 'm', ''],
@@ -656,27 +806,6 @@ export const groups = [
         ['outcropWeather', 'Rounding', 0, 1, 0.05, '', '0 = blocky joint-bounded blocks, 1 = fully rounded woolsacks'],
         ['outcropRidge', 'Prefer high ground', 0, 1, 0.05, '', 'Bias clusters towards ridges and hill tops (tors) rather than anywhere'],
         ['outcropSlopeMax', 'Max ground slope', 5, 60, 1, '°', 'Clusters avoid ground steeper than this'],
-      ] },
-      { title: 'Relief', controls: [
-        ['baseFrequency', 'Ridge frequency', 0.6, 4, 0.05, '', 'Number of ridge systems across the tile'],
-        ['ridgeSharpness', 'Ridge sharpness', 1, 4, 0.05, '', 'Crest profile — rounded to knife-edge'],
-        ['peakPower', 'Peak emphasis', 0.6, 2.5, 0.05, '', 'Concentrates height into the summits'],
-        ['warpStrength', 'Domain warp', 0, 1.5, 0.05, '', 'Bends ridgelines into realistic curves'],
-        ['reliefContrast', 'Massif contrast', 0.1, 1, 0.05, '', 'How sharply mountains rise from plains'],
-        ['reliefFrequency', 'Massif frequency', 0.6, 3, 0.1, '', 'Scale of the mountain / plains pattern'],
-      ] },
-      { title: 'Mesa & canyon', controls: [
-        ['plateauStrength', 'Plateau flattening', 0, 1, 0.05, '', 'Soft-clamps summits into flat tops'],
-        ['plateauHeight', 'Plateau height', 50, 1000, 10, 'm', 'Elevation of the caprock surface'],
-        ['canyonDepth', 'Canyon depth', 0, 600, 10, 'm', 'Incision of the meandering gorge'],
-        ['canyonWidth', 'Canyon width', 60, 900, 10, 'm', 'Rim-to-rim width'],
-        ['cliffHeight', 'Escarpment', 0, 400, 5, 'm', 'A near-vertical cliff line along the edge of the massif (coastal cliffs, quarry walls): the high side is lifted onto a bench by this much within a cell or two'],
-        ['cliffSharpness', 'Escarpment edge', 0, 1, 0.05, '', 'How abrupt the drop is (1 = a wall)'],
-        ['cliffStacks', 'Stacks', 0, 1, 0.05, '', 'Pillars of the former cliff left standing just off the line (sea stacks, quarry remnants)'],
-      ] },
-      { title: 'Grid', controls: [
-        ['seed', 'Seed', 1, 9999, 1, '', 'Deterministic noise seed'],
-        ['resolution', 'Resolution', 128, 2048, 128, 'px', 'Heightfield side in samples. 512 ≈ 2 s, 1024 ≈ 15 s, 2048 ≈ 1 min and a 4 M-vertex mesh'],
       ] },
     ],
   },
@@ -698,51 +827,6 @@ export const groups = [
       { title: 'Geological dip', controls: [
         ['strataDip', 'Dip angle', 0, 25, 0.5, '°', 'Tilt of the bedding planes'],
         ['strataDipDirection', 'Dip direction', 0, 360, 5, '°', 'Compass direction the beds dip towards'],
-      ] },
-    ],
-  },
-  {
-    id: 'relief', name: 'Cliff depth', type: 'True-3D cliffs, overhangs & mesh detail', stage: 'mesh', color: '#b9a3d6',
-    cards: [
-      { title: 'True-3D cliffs (SDF chunks)', controls: [
-        ['sdfOn', 'Enable 3D cliffs', 0, 1, 1, '', 'Steep parts of the terrain are re-meshed from a 3D field (heightfield distance + strata carving) in chunks that are watertight with the heightfield mesh — real undercuts, overhangs, notches and shelters'],
-        ['sdfAngle', 'Cliff angle', 35, 80, 1, '°', 'Cells steeper than this get a 3D chunk'],
-        ['sdfUndercut', 'Undercut depth', 0, 20, 0.5, 'm', 'How far soft strata beds are carved back under hard beds (follows the strata model: band, dip, hardness)'],
-        ['sdfBedContrast', 'Bed contrast', 0.3, 3, 0.1, '', 'Higher = only the softest beds recede'],
-        ['sdfPockets', 'Pocket scale', 3, 40, 1, 'm', 'Scale of the 3D noise that breaks undercuts into alcoves'],
-        ['sdfJoints', 'Joints', 0, 1.5, 0.05, '', 'Near-vertical joint cuts and chimneys'],
-        ['sdfPits', 'Pits', 0, 1, 0.05, '', 'Weathering hollows'],
-        ['sdfRough', 'Roughness', 0, 1.5, 0.05, '', 'Fine 3D roughness on the carved faces'],
-        ['sdfPushPull', '3D push–pull', 0, 10, 0.25, 'm', 'Blocky buttresses stand out of the carved face and recesses go back into it, varying with height so blocks overhang the recess below (blockiness from Landform → Rugged outcrops)'],
-        ['sdfPushScale', 'Block scale', 4, 80, 1, 'm', 'Size of the 3D blocks'],
-        ['sdfBlocks', 'Rock blocks', 0, 6, 0.25, 'm', 'The face becomes a wall of discrete rock blocks — bed rows × two vertical joint families, staggered bed to bed — each block proud of or set back from the face by up to this much, with a bevelled rim and a crack groove around it (3-D geometry, not shading). Blocks smaller than ~3 voxels cannot be resolved: lower the world size or raise the voxel budget for finer blocks'],
-        ['sdfBlockSize', 'Rock block size', 2, 40, 0.5, 'm', 'Width of the rock blocks (each bed varies it; thick beds give wider blocks)'],
-        ['sdfBlockLoss', 'Missing blocks', 0, 1, 0.05, '', 'Share of blocks that have fallen out of the face, leaving a deep recess'],
-        ['sdfBlockSwing', 'Block swing', 0, 1, 0.05, '', 'How far the block lattice rotates across the cliff: joint sets curve around a dome in the real thing, and one axis-aligned grid over every wall is what reads as tiling'],
-        ['sdfVertical', 'Vertical wall', 0, 1.6, 0.05, '', 'Shears every steep face so its crest moves out and its foot moves in: 1 = the face stands truly vertical (|) whatever the heightfield slope, above 1 it overhangs (\\ /). Cliffs only — the ground before and behind the face is left alone'],
-        ['sdfLean', 'Lean (| /)', 0, 12, 0.5, 'm', 'The face is cut back progressively from crest to foot, so a cliff stands vertical to overhanging (| /) instead of leaning back (| \\)'],
-        ['sdfLeanReach', 'Lean reach', 8, 80, 2, 'm', 'Plan distance over which crest and foot of a face are found'],
-        ['sdfBlend', 'Blend margin', 1, 5, 1, 'cells', 'Cells over which the 3D field fades back to the plain heightfield'],
-        ['sdfChunk', 'Chunk size', 8, 32, 8, 'cells', ''],
-        ['sdfVoxel', 'Voxels per cell', 0, 4, 1, '', '0 = auto: the finest resolution that fits the voxel budget. 2 = voxels half the grid cell (8× the work), 4 = a quarter (64× — only the steepest walls need it)'],
-        ['sdfVoxelBudget', 'Voxel budget', 2, 160, 2, 'M', 'Total voxels (in the surface band) auto mode may spend; raise it for finer cliffs if the machine can take it'],
-        ['sdfMaxChunks', 'Chunk budget', 50, 2000, 50, '', 'Chunks with the most cliff area are built first; the rest fall back to the displaced heightfield'],
-      ] },
-      { title: 'Face displacement', controls: [
-        ['overhang', 'Caprock overhang', 0, 8, 0.25, 'm', 'Hard beds pushed out of the face, soft beds recessed — real overhangs a heightmap cannot hold (capped at ~85% of the grid cell)'],
-        ['buttress', 'Buttress bulge', 0, 1, 0.05, '', 'Large-scale swelling of the faces into ribs and alcoves'],
-        ['ledgeNoise', 'Ledge irregularity', 0, 1, 0.05, '', 'Breaks ledges into blocks and notches'],
-      ] },
-      { title: 'Mesh detail', controls: [
-        ['meshSubdivision', 'Mesh subdivision', 1, 6, 1, '×', 'Vertices per heightfield cell (bicubic). Higher = finer relief detail on the faces; the mesh side is capped at 4097 vertices'],
-        ['detailRelief', 'Detail relief', 0, 3, 0.05, 'm', 'Fine bumps and knobs pushed along the surface normal — independent of the heightfield'],
-        ['detailScale', 'Detail scale', 1, 40, 0.5, 'm', ''],
-        ['detailCliffBias', 'Cliff bias', 0, 1, 0.05, '', '0 = everywhere, 1 = steep rock only'],
-        ['rockyAmount', 'Rocky facets', 0, 3, 0.05, 'm', 'Angular joint-bounded blocks on steep hard rock (soft beds stay smooth) — the "rocky" look of fractured faces'],
-        ['rockyScale', 'Block size', 1, 20, 0.5, 'm', ''],
-        ['rockyAngular', 'Blockiness', 0, 1, 0.05, '', '0 = rounded knobs, 1 = sharp-edged blocks'],
-        ['cragAmount', 'Crags', 0, 8, 0.25, 'm', 'Larger joint-bounded blocks on steep hard rock, each set back or protruding by its own amount — breaks a cliff face into rugged masses (also in the 3-D chunks)'],
-        ['cragScale', 'Crag size', 4, 40, 1, 'm', 'Size of the crag blocks'],
       ] },
     ],
   },
@@ -783,7 +867,57 @@ export const groups = [
     ],
   },
   {
-    id: 'features', name: 'Roads, rivers & lakes', type: 'Drawn features', stage: 'mesh', color: '#7fb3d5',
+    id: 'relief', name: 'Cliff depth', type: 'True-3D cliffs, overhangs & undercuts', stage: 'mesh', color: '#b9a3d6',
+    cards: [
+      { title: 'True-3D cliffs (SDF chunks)', controls: [
+        ['sdfOn', 'Enable 3D cliffs', 0, 1, 1, '', 'Steep parts of the terrain are re-meshed from a 3D field (heightfield distance + strata carving) in chunks that are watertight with the heightfield mesh — real undercuts, overhangs, notches and shelters'],
+        ['sdfAngle', 'Cliff angle', 35, 80, 1, '°', 'Cells steeper than this get a 3D chunk'],
+        ['sdfUndercut', 'Undercut depth', 0, 20, 0.5, 'm', 'How far soft strata beds are carved back under hard beds (follows the strata model: band, dip, hardness)'],
+        ['sdfBedContrast', 'Bed contrast', 0.3, 3, 0.1, '', 'Higher = only the softest beds recede'],
+        ['sdfPockets', 'Pocket scale', 3, 40, 1, 'm', 'Scale of the 3D noise that breaks undercuts into alcoves'],
+        ['sdfJoints', 'Joints', 0, 1.5, 0.05, '', 'Near-vertical joint cuts and chimneys'],
+        ['sdfPits', 'Pits', 0, 1, 0.05, '', 'Weathering hollows'],
+        ['sdfRough', 'Roughness', 0, 1.5, 0.05, '', 'Fine 3D roughness on the carved faces'],
+        ['sdfPushPull', '3D push–pull', 0, 10, 0.25, 'm', 'Blocky buttresses stand out of the carved face and recesses go back into it, varying with height so blocks overhang the recess below (blockiness from Landform → Rugged outcrops)'],
+        ['sdfPushScale', 'Block scale', 4, 80, 1, 'm', 'Size of the 3D blocks'],
+        ['sdfBlocks', 'Rock blocks', 0, 6, 0.25, 'm', 'The face becomes a wall of discrete rock blocks — bed rows × two vertical joint families, staggered bed to bed — each block proud of or set back from the face by up to this much, with a bevelled rim and a crack groove around it (3-D geometry, not shading). Blocks smaller than ~3 voxels cannot be resolved: lower the world size or raise the voxel budget for finer blocks'],
+        ['sdfBlockSize', 'Rock block size', 2, 40, 0.5, 'm', 'Width of the rock blocks (each bed varies it; thick beds give wider blocks)'],
+        ['sdfBlockLoss', 'Missing blocks', 0, 1, 0.05, '', 'Share of blocks that have fallen out of the face, leaving a deep recess'],
+        ['sdfBlockSwing', 'Block swing', 0, 1, 0.05, '', 'How far the block lattice rotates across the cliff: joint sets curve around a dome in the real thing, and one axis-aligned grid over every wall is what reads as tiling'],
+        ['sdfVertical', 'Vertical wall', 0, 1.6, 0.05, '', 'Shears every steep face so its crest moves out and its foot moves in: 1 = the face stands truly vertical (|) whatever the heightfield slope, above 1 it overhangs (\\ /). Cliffs only — the ground before and behind the face is left alone'],
+        ['sdfLean', 'Lean (| /)', 0, 12, 0.5, 'm', 'The face is cut back progressively from crest to foot, so a cliff stands vertical to overhanging (| /) instead of leaning back (| \\)'],
+        ['sdfLeanReach', 'Lean reach', 8, 80, 2, 'm', 'Plan distance over which crest and foot of a face are found'],
+        ['sdfBlend', 'Blend margin', 1, 5, 1, 'cells', 'Cells over which the 3D field fades back to the plain heightfield'],
+        ['sdfChunk', 'Chunk size', 8, 32, 8, 'cells', ''],
+        ['sdfVoxel', 'Voxels per cell', 0, 4, 1, '', '0 = auto: the finest resolution that fits the voxel budget. 2 = voxels half the grid cell (8× the work), 4 = a quarter (64× — only the steepest walls need it)'],
+        ['sdfVoxelBudget', 'Voxel budget', 2, 160, 2, 'M', 'Total voxels (in the surface band) auto mode may spend; raise it for finer cliffs if the machine can take it'],
+        ['sdfMaxChunks', 'Chunk budget', 50, 2000, 50, '', 'Chunks with the most cliff area are built first; the rest fall back to the displaced heightfield'],
+      ] },
+      { title: 'Face displacement', controls: [
+        ['overhang', 'Caprock overhang', 0, 8, 0.25, 'm', 'Hard beds pushed out of the face, soft beds recessed — real overhangs a heightmap cannot hold (capped at ~85% of the grid cell)'],
+        ['buttress', 'Buttress bulge', 0, 1, 0.05, '', 'Large-scale swelling of the faces into ribs and alcoves'],
+        ['ledgeNoise', 'Ledge irregularity', 0, 1, 0.05, '', 'Breaks ledges into blocks and notches'],
+      ] },
+    ],
+  },
+  {
+    id: 'mesh', name: 'Mesh & detail', type: 'Subdivision & displaced micro-relief', stage: 'mesh', color: '#8fd0c0',
+    cards: [
+      { title: 'Mesh detail', controls: [
+        ['meshSubdivision', 'Mesh subdivision', 1, 6, 1, '×', 'Vertices per heightfield cell (bicubic). Higher = finer relief detail on the faces; the mesh side is capped at 4097 vertices'],
+        ['detailRelief', 'Detail relief', 0, 3, 0.05, 'm', 'Fine bumps and knobs pushed along the surface normal — independent of the heightfield'],
+        ['detailScale', 'Detail scale', 1, 40, 0.5, 'm', ''],
+        ['detailCliffBias', 'Cliff bias', 0, 1, 0.05, '', '0 = everywhere, 1 = steep rock only'],
+        ['rockyAmount', 'Rocky facets', 0, 3, 0.05, 'm', 'Angular joint-bounded blocks on steep hard rock (soft beds stay smooth) — the "rocky" look of fractured faces'],
+        ['rockyScale', 'Block size', 1, 20, 0.5, 'm', ''],
+        ['rockyAngular', 'Blockiness', 0, 1, 0.05, '', '0 = rounded knobs, 1 = sharp-edged blocks'],
+        ['cragAmount', 'Crags', 0, 8, 0.25, 'm', 'Larger joint-bounded blocks on steep hard rock, each set back or protruding by its own amount — breaks a cliff face into rugged masses (also in the 3-D chunks)'],
+        ['cragScale', 'Crag size', 4, 40, 1, 'm', 'Size of the crag blocks'],
+      ] },
+    ],
+  },
+  {
+    id: 'features', name: 'Rivers & lakes', type: 'Simulated drainage & drawn guides', stage: 'mesh', color: '#7fb3d5',
     cards: [
       { title: 'Draw', kind: 'draw' },
       { title: 'Features', kind: 'featureList' },
@@ -815,15 +949,6 @@ export const groups = [
         ['riverErosion', 'Water erosion', 0, 1, 0.05, '', 'Share of erosion droplets that start in the river and how much water they carry — carves the bed and drains the slopes into it. Rivers flow from their higher end'],
         ['riverWaterDepth', 'Water depth', 0.2, 10, 0.1, 'm', 'Depth of water standing in the channel'],
       ] },
-      { title: 'Roads', controls: [
-        ['roadWidth', 'Road width', 2, 30, 0.5, 'm', '6 m ≈ two-lane; 3.5 m ≈ track'],
-        ['roadShoulder', 'Shoulder', 0, 10, 0.5, 'm', 'Bare verge either side'],
-        ['roadSmoothing', 'Grade smoothing', 10, 300, 5, 'm', 'Length over which the road profile is averaged'],
-        ['roadCut', 'Cut slope', 30, 85, 1, '°', 'Rock cut above the road'],
-        ['roadFill', 'Fill slope', 20, 60, 1, '°', 'Embankment below the road'],
-        ['roadShading', 'Road surface', 0, 1, 1, '', 'Shade the carriageway (off = bare carved ground)'],
-        ['roadColor', 'Road colour', 0, 0, 0, 'color', ''],
-      ] },
       { title: 'Lakes', controls: [
         ['lakeLevelOffset', 'Level above click', 0, 60, 1, 'm', 'New lakes fill to the clicked ground height plus this'],
         ['lakeDepth', 'Bed depth', 1, 40, 0.5, 'm', 'Flat silt bed this far below the level'],
@@ -832,8 +957,22 @@ export const groups = [
         ['riverWater', 'Water in rivers', 0, 1, 1, '', 'Off = dried river beds (cobbles and silt)'],
         ['lakeWater', 'Water in lakes', 0, 1, 1, '', 'Off = dried lake beds'],
       ] },
-      { title: 'Display', controls: [
+      { title: 'Overlay', controls: [
         ['showFeatureLines', 'Show feature lines', 0, 1, 1, '', 'Guide lines over roads, rivers and lake markers'],
+      ] },
+    ],
+  },
+  {
+    id: 'roads', name: 'Roads', type: 'Cut, fill and shading', stage: 'mesh', color: '#b8c48f',
+    cards: [
+      { title: 'Roads', controls: [
+        ['roadWidth', 'Road width', 2, 30, 0.5, 'm', '6 m ≈ two-lane; 3.5 m ≈ track'],
+        ['roadShoulder', 'Shoulder', 0, 10, 0.5, 'm', 'Bare verge either side'],
+        ['roadSmoothing', 'Grade smoothing', 10, 300, 5, 'm', 'Length over which the road profile is averaged'],
+        ['roadCut', 'Cut slope', 30, 85, 1, '°', 'Rock cut above the road'],
+        ['roadFill', 'Fill slope', 20, 60, 1, '°', 'Embankment below the road'],
+        ['roadShading', 'Road surface', 0, 1, 1, '', 'Shade the carriageway (off = bare carved ground)'],
+        ['roadColor', 'Road colour', 0, 0, 0, 'color', ''],
       ] },
     ],
   },
@@ -857,11 +996,6 @@ export const groups = [
         ['rockShore', 'Shore cord', 0, 1, 0.05, '', 'Cobbles laid along the edge of standing water, rounded by the waves'],
         ['rockSoilHide', 'Soil hides rock', 0, 1, 0.05, '', 'How strongly fine cover (soil, silt, sand) buries rock: at 1 a rock only shows where soil cannot cling'],
       ] },
-      { title: 'Gravel stones', controls: [
-        ['pebblesOn', 'Enable stones', 0, 1, 1, '', 'Real small stone meshes on scree aprons and river beds, on top of the pebble shading'],
-        ['pebbleDensity', 'Stone density', 0, 1, 0.05, '', 'Up to 40 000 instances'],
-        ['pebbleSize', 'Largest stone', 0.1, 2, 0.05, 'm', ''],
-      ] },
       { title: 'Rock shape', controls: [
         ['rockSizeMin', 'Smallest rock', 0.3, 6, 0.1, 'm', ''],
         ['rockSizeMax', 'Largest rock', 2, 40, 0.5, 'm', ''],
@@ -870,10 +1004,15 @@ export const groups = [
         ['rockSizeSpread', 'Size spread', 0, 1, 0.05, '', 'Heavy tail of the size distribution: 0 = all alike, 1 = many pebbles and a few monsters'],
         ['rockSeed', 'Rock seed', 1, 999, 1, '', ''],
       ] },
+      { title: 'Gravel stones', controls: [
+        ['pebblesOn', 'Enable stones', 0, 1, 1, '', 'Real small stone meshes on scree aprons and river beds, on top of the pebble shading'],
+        ['pebbleDensity', 'Stone density', 0, 1, 0.05, '', 'Up to 40 000 instances'],
+        ['pebbleSize', 'Largest stone', 0.1, 2, 0.05, 'm', ''],
+      ] },
     ],
   },
   {
-    id: 'material', name: 'Rock material', type: 'Beds, grain & staining', stage: 'live', color: '#cab281',
+    id: 'material', name: 'Rock colour', type: 'Palette, oxide & material response', stage: 'live', color: '#cab281',
     cards: [
       { title: 'Rock type', kind: 'palette' },
       { title: 'Colours', controls: [
@@ -883,6 +1022,21 @@ export const groups = [
         ['fresh', 'Fresh break', 0, 0, 0, 'color', 'Unweathered rock exposed by spalling'],
         ['oxide', 'Oxide stain', 0, 0, 0, 'color', 'Iron-oxide pocket colour'],
       ] },
+      { title: 'Oxide & cavity', controls: [
+        ['oxideOn', 'Enable oxide', 0, 1, 1, '', ''],
+        ['oxideAmount', 'Oxide amount', 0, 1, 0.05, '', 'Coverage of iron-oxide pockets'],
+        ['oxideScale', 'Oxide scale', 0.5, 30, 0.5, 'm', 'Size of the staining pockets'],
+        ['cavityStrength', 'Cavity shading', 0, 1, 0.05, '', 'Darken concavities, lighten convex edges'],
+      ] },
+      { title: 'Material response', controls: [
+        ['bumpScale', 'Bump strength', 0, 2, 0.05, '', 'Global multiplier on all normal detail'],
+        ['baseRoughness', 'Base roughness', 0.3, 1, 0.05, '', ''],
+      ] },
+    ],
+  },
+  {
+    id: 'bedding', name: 'Painted beds', type: 'Strata colour in the shader', stage: 'live', color: '#c9a6dd',
+    cards: [
       { title: 'Strata', controls: [
         ['strataOn', 'Enable strata', 0, 1, 1, '', ''],
         ['strataContrast', 'Bed contrast', 0, 1, 0.05, '', 'Tonal difference between beds'],
@@ -893,6 +1047,11 @@ export const groups = [
         ['seamWidth', 'Seam width', 0.01, 0.3, 0.01, '', 'Fraction of the bed taken by the seam'],
         ['hardnessTint', 'Caprock tint', 0, 1, 0.05, '', 'Hard beds paler, soft beds warmer'],
       ] },
+    ],
+  },
+  {
+    id: 'jointing', name: 'Jointing', type: 'Block lattice on the face', stage: 'live', color: '#9db6e8',
+    cards: [
       { title: 'Jointing', controls: [
         ['jointOn', 'Enable jointing', 0, 1, 1, '', 'Cracks that break the face into blocks: two vertical joint sets (staggered bed to bed like brickwork) and the bedding planes, each joint with its own width, some missing, each block with its own tilt and tone'],
         ['jointStrength', 'Jointing', 0, 1.5, 0.05, '', ''],
@@ -907,22 +1066,17 @@ export const groups = [
         ['jointBlocks', 'Block relief', 0, 1, 0.05, '', 'Per-block tilt and tone'],
         ['jointDropout', 'Missing joints', 0, 0.8, 0.05, '', 'Share of joints that do not show, so block sizes vary'],
       ] },
+    ],
+  },
+  {
+    id: 'grain', name: 'Grain', type: 'Aggregate texture', stage: 'live', color: '#c8c3a4',
+    cards: [
       { title: 'Grain', controls: [
         ['grainOn', 'Enable grain', 0, 1, 1, '', ''],
         ['grainSize', 'Grain size', 0.1, 3, 0.05, 'm', 'Scale of the aggregate bump'],
         ['grainStrength', 'Grain relief', 0, 1, 0.05, '', 'Bump strength of the grain'],
         ['grainContrast', 'Grain mottle', 0, 1, 0.05, '', 'Colour mottling from the grain field'],
         ['grainFineness', 'Fine grain', 0, 1, 0.05, '', 'Scale of the secondary fine grain'],
-      ] },
-      { title: 'Oxide & cavity', controls: [
-        ['oxideOn', 'Enable oxide', 0, 1, 1, '', ''],
-        ['oxideAmount', 'Oxide amount', 0, 1, 0.05, '', 'Coverage of iron-oxide pockets'],
-        ['oxideScale', 'Oxide scale', 0.5, 30, 0.5, 'm', 'Size of the staining pockets'],
-        ['cavityStrength', 'Cavity shading', 0, 1, 0.05, '', 'Darken concavities, lighten convex edges'],
-      ] },
-      { title: 'Material response', controls: [
-        ['bumpScale', 'Bump strength', 0, 2, 0.05, '', 'Global multiplier on all normal detail'],
-        ['baseRoughness', 'Base roughness', 0.3, 1, 0.05, '', ''],
       ] },
     ],
   },
@@ -990,21 +1144,36 @@ export const groups = [
     ],
   },
   {
-    id: 'cover', name: 'Ground cover', type: 'Runoff, gravel, sediment, plants & snow', stage: 'live', color: '#9fb57a',
+    id: 'sediment', name: 'Sediment', type: 'Beds, facies, ripples & mud cracks', stage: 'live', color: '#e0c07a',
+    cards: [
+      { title: 'Sediment', controls: [
+        ['sedimentOn', 'Enable sediment', 0, 1, 1, '', 'Water- and weathering-laid fill, drawn as beds instead of a flat tint'],
+        ['sedimentAmount', 'Sediment cover', 0, 1, 0.05, '', 'How far the fill reads as layered sediment rather than soil: it covers every deposit, and every gentle soil-covered flat on top of it'],
+        ['sedBedScale', 'Bed thickness', 0.06, 4, 0.02, 'm', 'Thickness of one bed - the strata of the *fill*, not of the rock beneath it (coarse facies lay thicker beds)'],
+        ['sedBands', 'Bed contrast', 0, 1, 0.05, '', 'Tone step from bed to bed, and the dark parting on the bedding plane'],
+        ['sedLaminae', 'Cross-lamination', 0, 1, 0.05, '', 'The fine set of laminae inside each bed, inclined and wandering sideways'],
+        ['sedFacies', 'Sorting', 0, 1, 0.05, '', 'How strictly the grain follows the energy that carried it: gravel on steep fast ground, sand on the bars, silt and mud on the quiet flats'],
+        ['sedGrainBias', 'Grain offset', -1, 1, 0.05, '', 'The whole plain coarse or fine regardless of the flow: a braided stream in a dry range carries gravel everywhere, a lake plain is mud everywhere'],
+        ['sedRipple', 'Ripples', 0, 1, 0.05, '', 'Current ripple relief on the surface of the fill - light on the stoss side, shadow on the lee'],
+        ['sedRippleScale', 'Ripple wavelength', 0.15, 6, 0.05, 'm', 'Set by the grain: coarse facies carry wider ripples'],
+        ['sedDir', 'Current direction', 0, 360, 5, 'deg', 'The direction the ripple trains run along, wandering patch to patch'],
+        ['sedCracks', 'Mud cracks', 0, 1, 0.05, '', 'Desiccation polygons on the open silt flats'],
+        ['sedGrain', 'Grain', 0, 1, 0.05, '', 'Grittiness of the fill itself (raise Gravel in the same group for real stones)'],
+        ['sedSlope', 'Slope limit', 15, 75, 1, 'deg', 'Steeper than this the fill is scoured off and the rock shows'],
+        ['sedColorGravel', 'Gravel colour', 0, 0, 0, 'color', 'Coarse facies: the bars and fans'],
+        ['sedColorSand', 'Sand colour', 0, 0, 0, 'color', 'Mid facies: ripples, dunes, low bars'],
+        ['sedColorSilt', 'Silt & mud colour', 0, 0, 0, 'color', 'Fine facies: floodplain, lake and lagoon quiet water'],
+      ] },
+    ],
+  },
+  {
+    id: 'cover', name: 'Soil & gravel', type: 'Regolith, scree and runoff staining', stage: 'live', color: '#9fb57a',
     cards: [
       { title: 'Runoff', controls: [
         ['runoffOn', 'Enable runoff', 0, 1, 1, '', ''],
         ['wetness', 'Wetness', 0, 1, 0.05, '', 'Dark wet staining along drainage'],
         ['streakAmount', 'Face streaks', 0, 1, 0.05, '', 'Vertical water streaks down the faces'],
         ['streakScale', 'Streak scale', 1, 30, 0.5, 'm', 'Spacing of the streaks'],
-      ] },
-      { title: 'Gravel', controls: [
-        ['gravelOn', 'Enable gravel', 0, 1, 1, '', ''],
-        ['gravelAmount', 'Gravel on scree', 0, 1, 0.05, '', 'Fine debris texture where sediment collected'],
-        ['gravelScale', 'Stone size', 0.03, 1.5, 0.01, 'm', 'Largest pebbles; a second generation at 0.45× fills the gaps'],
-        ['gravelRelief', 'Stone relief', 0, 1, 0.05, '', 'Dome normal on each stone'],
-        ['gravelVariation', 'Stone variation', 0, 1, 0.05, '', 'Tone and warmth jitter per stone'],
-        ['gravelColor', 'Stone colour', 0, 0, 0, 'color', 'Matrix between the stones is a mix of this and the silt colour'],
       ] },
       { title: 'Soil', controls: [
         ['soilOn', 'Enable soil', 0, 1, 1, '', ''],
@@ -1016,23 +1185,19 @@ export const groups = [
         ['soilColor', 'Soil', 0, 0, 0, 'color', ''],
         ['soilLight', 'Soil · pale', 0, 0, 0, 'color', 'Dry clods and grit'],
       ] },
-      { title: 'Sediment', controls: [
-        ['sedimentOn', 'Enable sediment', 0, 1, 1, '', 'Water- and weathering-laid fill, drawn as beds instead of a flat tint'],
-        ['sedimentAmount', 'Sediment cover', 0, 1, 0.05, '', 'How far the fill reads as layered sediment rather than soil: it covers every deposit, and every gentle soil-covered flat on top of it'],
-        ['sedBedScale', 'Bed thickness', 0.06, 4, 0.02, 'm', 'Thickness of one bed - the strata of the *fill*, not of the rock beneath it (coarse facies lay thicker beds)'],
-        ['sedBands', 'Bed contrast', 0, 1, 0.05, '', 'Tone step from bed to bed, and the dark parting on the bedding plane'],
-        ['sedLaminae', 'Cross-lamination', 0, 1, 0.05, '', 'The fine set of laminae inside each bed, inclined and wandering sideways'],
-        ['sedFacies', 'Sorting', 0, 1, 0.05, '', 'How strictly the grain follows the energy that carried it: gravel on steep fast ground, sand on the bars, silt and mud on the quiet flats'],
-        ['sedRipple', 'Ripples', 0, 1, 0.05, '', 'Current ripple relief on the surface of the fill - light on the stoss side, shadow on the lee'],
-        ['sedRippleScale', 'Ripple wavelength', 0.15, 6, 0.05, 'm', 'Set by the grain: coarse facies carry wider ripples'],
-        ['sedDir', 'Current direction', 0, 360, 5, 'deg', 'The direction the ripple trains run along, wandering patch to patch'],
-        ['sedCracks', 'Mud cracks', 0, 1, 0.05, '', 'Desiccation polygons on the open silt flats'],
-        ['sedGrain', 'Grain', 0, 1, 0.05, '', 'Grittiness of the fill itself (raise Gravel in the same group for real stones)'],
-        ['sedSlope', 'Slope limit', 15, 75, 1, 'deg', 'Steeper than this the fill is scoured off and the rock shows'],
-        ['sedColorGravel', 'Gravel colour', 0, 0, 0, 'color', 'Coarse facies: the bars and fans'],
-        ['sedColorSand', 'Sand colour', 0, 0, 0, 'color', 'Mid facies: ripples, dunes, low bars'],
-        ['sedColorSilt', 'Silt & mud colour', 0, 0, 0, 'color', 'Fine facies: floodplain, lake and lagoon quiet water'],
+      { title: 'Gravel', controls: [
+        ['gravelOn', 'Enable gravel', 0, 1, 1, '', ''],
+        ['gravelAmount', 'Gravel on scree', 0, 1, 0.05, '', 'Fine debris texture where sediment collected'],
+        ['gravelScale', 'Stone size', 0.03, 1.5, 0.01, 'm', 'Largest pebbles; a second generation at 0.45× fills the gaps'],
+        ['gravelRelief', 'Stone relief', 0, 1, 0.05, '', 'Dome normal on each stone'],
+        ['gravelVariation', 'Stone variation', 0, 1, 0.05, '', 'Tone and warmth jitter per stone'],
+        ['gravelColor', 'Stone colour', 0, 0, 0, 'color', 'Matrix between the stones is a mix of this and the silt colour'],
       ] },
+    ],
+  },
+  {
+    id: 'plants', name: 'Plants & snow', type: 'Vegetation, moss and snow', stage: 'live', color: '#9fb57a',
+    cards: [
       { title: 'Vegetation', controls: [
         ['vegOn', 'Enable vegetation', 0, 1, 1, '', ''],
         ['vegetation', 'Vegetation', 0, 1, 0.05, '', 'Grass and scrub on gentle ground'],
@@ -1061,20 +1226,6 @@ export const groups = [
     ],
   },
   {
-    id: 'sun', name: 'Sun & atmosphere', type: 'Lighting', stage: 'live', color: '#e8b65f',
-    cards: [
-      { title: 'Sun direction', controls: [
-        ['sunAzimuth', 'Azimuth', 0, 360, 1, '°', ''],
-        ['sunElevation', 'Elevation', 2, 80, 1, '°', 'Low sun rakes the cliff faces'],
-      ] },
-      { title: 'Atmosphere', controls: [
-        ['turbidity', 'Turbidity', 1, 12, 0.5, '', 'Haze and aerosol density'],
-        ['fogDensity', 'Valley fog', 0, 1, 0.05, '', 'Distance haze strength'],
-        ['exposure', 'Exposure', 0.1, 1.5, 0.05, '', ''],
-      ] },
-    ],
-  },
-  {
     id: 'water', name: 'Water', type: 'Sea level & water bodies', stage: 'live', color: '#5aa7c9',
     cards: [
       { title: 'Sea level', controls: [
@@ -1097,6 +1248,20 @@ export const groups = [
     ],
   },
   {
+    id: 'sun', name: 'Sun & atmosphere', type: 'Lighting', stage: 'live', color: '#e8b65f',
+    cards: [
+      { title: 'Sun direction', controls: [
+        ['sunAzimuth', 'Azimuth', 0, 360, 1, '°', ''],
+        ['sunElevation', 'Elevation', 2, 80, 1, '°', 'Low sun rakes the cliff faces'],
+      ] },
+      { title: 'Atmosphere', controls: [
+        ['turbidity', 'Turbidity', 1, 12, 0.5, '', 'Haze and aerosol density'],
+        ['fogDensity', 'Valley fog', 0, 1, 0.05, '', 'Distance haze strength'],
+        ['exposure', 'Exposure', 0.1, 1.5, 0.05, '', ''],
+      ] },
+    ],
+  },
+  {
     id: 'viewport', name: 'Viewport', type: 'Display & export', stage: 'live', color: '#99aafa',
     cards: [
       { title: 'Display', controls: [
@@ -1113,8 +1278,11 @@ export const groups = [
 ];
 
 export const outlinerSections = [
-  { label: 'TERRAIN', ids: ['landform', 'strata', 'relief', 'erosion', 'features'] },
-  { label: 'DRESSING', ids: ['rocks', 'material', 'flakes', 'exfoliation', 'cover'] },
+  { label: 'TERRAIN', ids: ['landform', 'deposition', 'strata', 'erosion'] },
+  { label: 'CLIFFS & MESH', ids: ['relief', 'mesh'] },
+  { label: 'WATER & ACCESS', ids: ['features', 'roads'] },
+  { label: 'PROPS', ids: ['rocks'] },
+  { label: 'SURFACE', ids: ['material', 'bedding', 'jointing', 'grain', 'flakes', 'exfoliation', 'sediment', 'cover', 'plants'] },
   { label: 'ENVIRONMENT', ids: ['sun', 'water', 'viewport'] },
 ];
 

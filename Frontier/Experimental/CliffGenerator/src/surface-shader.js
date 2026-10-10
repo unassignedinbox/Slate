@@ -61,7 +61,7 @@ uniform float uGravelAmount, uGravelScale, uGravelRelief, uGravelVariation;
 uniform vec3 uSunDir;
 uniform float uVegetation, uVegScale, uVegSlope, uVegPatchiness, uDryness;
 uniform float uSoilAmount, uSoilSlopeCos, uSoilClods, uSoilMoisture, uSoilAlluvium;
-uniform float uSedAmount, uSedBands, uSedBedScale, uSedLaminae, uSedFacies, uSedRipple, uSedRippleScale, uSedCracks, uSedGrain, uSedSlopeCos, uSedDirRad;
+uniform float uSedAmount, uSedBands, uSedBedScale, uSedLaminae, uSedFacies, uSedGrainBias, uSedRipple, uSedRippleScale, uSedCracks, uSedGrain, uSedSlopeCos, uSedDirRad;
 uniform vec3 uSedGravel, uSedSand, uSedSilt;
 uniform vec3 uSoilColor, uSoilLight;
 uniform float uMossiness, uMossScale;
@@ -637,7 +637,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
     // needed — a steep hillslope with no catchment above it sheds mud and colluvium, a big lowland
     // river carries sand, and only a fast concentrated flow can drag gravel.
     float sdPower = flow * ( 0.25 + wall * 1.5 );
-    float sdEnergy = clamp( ( sdPower - 0.28 ) * 2.4 + sedDepth * 0.28, 0.0, 1.0 );
+    float sdEnergy = clamp( ( sdPower - 0.28 + uSedGrainBias * 0.35 ) * 2.4 + sedDepth * 0.28, 0.0, 1.0 );
     float sdFac = clamp( mix( 0.45, sdEnergy, uSedFacies ) + cgNoise3( wp * 0.05 + 8.0 ).x * 0.3 * ( 1.0 - uSedFacies ), 0.0, 1.0 );
     // beds: surfaces that ripple sideways at landscape scale, so they onlap the valley sides instead
     // of being sawn through them at one constant height
@@ -822,7 +822,7 @@ const scalarKeys = {
   uWetness: ['wetness', 'runoffOn'], uStreakScale: ['streakScale'], uStreakAmount: ['streakAmount'],
   uGravelAmount: ['gravelAmount', 'gravelOn'], uGravelScale: ['gravelScale'], uGravelRelief: ['gravelRelief'], uGravelVariation: ['gravelVariation'],
   uSoilAmount: ['soilAmount', 'soilOn'], uSoilClods: ['soilClods'], uSoilMoisture: ['soilMoisture'], uSoilAlluvium: ['soilAlluvium'],
-  uSedAmount: ['sedimentAmount', 'sedimentOn'], uSedBands: ['sedBands', 'sedimentOn'], uSedBedScale: ['sedBedScale'], uSedLaminae: ['sedLaminae', 'sedimentOn'], uSedFacies: ['sedFacies'], uSedRipple: ['sedRipple', 'sedimentOn'], uSedRippleScale: ['sedRippleScale'], uSedCracks: ['sedCracks', 'sedimentOn'], uSedGrain: ['sedGrain', 'sedimentOn'],
+  uSedAmount: ['sedimentAmount', 'sedimentOn'], uSedBands: ['sedBands', 'sedimentOn'], uSedBedScale: ['sedBedScale'], uSedLaminae: ['sedLaminae', 'sedimentOn'], uSedFacies: ['sedFacies'], uSedGrainBias: ['sedGrainBias'], uSedRipple: ['sedRipple', 'sedimentOn'], uSedRippleScale: ['sedRippleScale'], uSedCracks: ['sedCracks', 'sedimentOn'], uSedGrain: ['sedGrain', 'sedimentOn'],
   uVegetation: ['vegetation', 'vegOn'], uVegScale: ['vegScale'], uVegPatchiness: ['vegPatchiness'], uDryness: ['dryness'],
   uMossiness: ['mossiness', 'mossOn'], uMossScale: ['mossScale'],
   uSnowSoftness: ['snowSoftness'], uSnowRoughness: ['snowRoughness'],

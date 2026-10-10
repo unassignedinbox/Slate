@@ -91,7 +91,7 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    same towers treated like the quarry / coastal walls: cliff protection, vertical sheared walls,
    rock blocks). **Joint‑set domains** keep the walls from reading as one pattern: the face is split into coarse
    panels and each panel gets its own block size, block depth and grid phase, the way a real cliff shows patches of
-   massive slabs beside closely jointed ones instead of one wallpaper over every wall in the world. **Jointing** (*Rock material → Jointing*, shader): two vertical joint sets (families
+   massive slabs beside closely jointed ones instead of one wallpaper over every wall in the world. **Jointing** (*Jointing*, shader): two vertical joint sets (families
    of warped planes spaced like the bed thickness, staggered bed to bed like brickwork) and the
    bedding planes break the face into blocks — each joint with its own width, some missing, each
    block with its own slight tilt and tone, grooves with normal and occlusion — the cracked, blocky
@@ -177,7 +177,7 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    sentinel, so the shoreline is a clean line through the triangles instead of a cell‑by‑cell
    checkerboard. Turning *Water as meshes* on brings back the sea plane and the river / lake
    sheets. Painted water also follows the *Sea* switch: with it off the terrain stays dry even where a
-   basin closed or a lake was drawn, so a desert landform cannot inherit water from an earlier wet setting. **Bank gullying** (*Rivers → Bank gullying*): after the channels are cut, runoff off
+   basin closed or a lake was drawn, so a desert landform cannot inherit water from an earlier wet setting. **Bank gullying** (*Rivers & lakes → Simulated rivers → Bank gullying*): after the channels are cut, runoff off
    the valley sides converges on the river and erodes small gullies into the soft bank material
    (fine‑scale rills masked to the banks, never below the water line) — the soil erosion a river
    valley shows on its flanks. Lakes are where basins fill (partial fill, area cap — the
@@ -273,42 +273,78 @@ like real sediment. The bedding still reads *through* the vegetation as alternat
 strips, which is what an alluvial plain looks like from any height, and the coarse facies pushes the
 grass back so bars stay bare. Every part of it is faded by the pixel footprint, so the ripples and
 laminae dissolve at distance instead of crawling. Eleven sliders and three editable facies colours
-under **Ground cover → Sediment**: `deposit` decides where the fill lies, `flow` × slope decides what
+under **Sediment → Sediment**: `deposit` decides where the fill lies, `flow` × slope decides what
 grain it is, and *Bed thickness* is the strata of the *fill*, nothing to do with *Strata → Bed
 thickness* of the rock underneath.
 
 ## Controls
 
-Outliner rows map to inspector groups: **Landform / Strata / Erosion** rebuild the heightfield
-(press *Generate* or Ctrl+Enter; the worker reports progress), **Rocks** re‑scatter automatically,
-**Cliff depth** (true‑3D cliffs, displacement, mesh detail) rebuilds the mesh live, and everything
-under **Rock material / Mineral flakes / Spalling / Ground cover / Sun & atmosphere / Viewport** is
-live. Presets: Alpine granite, Sandstone mesa, Canyon, Sea cliffs, Coastal cliffs, Quarry walls, Desert stacks, Stack cliffs, Limestone escarpment, Fjord,
-Badlands, Dolomite towers, Desert buttes, Volcanic island, Highland glens, Boulder field, Scree
-slopes, Granite domes, Granite tors, Rocky coast, Talus canyon, Rocky mountains, Sand dunes,
-Icelandic highlands, Icelandic river plains, Himalayan peaks, Alpine peaks, Karst pinnacles. **Landform → Dunes** adds transverse
-dune fields (height, spacing, wind direction, asymmetry, coverage) to any preset. **Landform →
-Boulder outcrops** adds embedded core‑stone clusters (density, boulder size, boulders per cluster,
-spread, spacing, height/width, burial, rounding, prefer‑high‑ground, max ground slope) — on by
-default in Granite tors, Granite domes, Boulder field and Icelandic highlands.
+The inspector is cut by *what a thing is*, not by when it runs — one outliner row per category, in
+six sections:
 
-**Rivers** (*Roads, rivers & lakes → Simulated rivers*): simulate drainage on/off, minimum
-catchment, width per √km², max width, floodplain, bank gullying (+ steps), depth scale, water
-fill, braiding, lakes in depressions, lake fill, lake area cap, minimum lake area, guide flow for
-drawn rivers. The drawn‑river card still shapes the
-guide channels (width, depth, bank angle, bank height, meander, water erosion).
+| Section | Outliner rows |
+| --- | --- |
+| **Terrain** | Landform · Dunes & outcrops · Strata · Erosion |
+| **Cliffs & mesh** | Cliff depth · Mesh & detail |
+| **Water & access** | Rivers & lakes · Roads |
+| **Props** | Rocks |
+| **Surface** | Rock colour · Painted beds · Jointing · Grain · Mineral flakes · Spalling · Sediment · Soil & gravel · Plants & snow |
+| **Environment** | Sun & atmosphere · Water · Viewport |
 
-Every texture layer is fully exposed: each has an **enable** toggle, its own **scale**,
-**strength** and **colour** controls —
+21 rows, 56 cards, 334 controls. Terrain rows rebuild the heightfield (press *Generate* or
+Ctrl+Enter; the worker reports progress), *Cliffs & mesh* and *Roads* rebuild the mesh, *Rocks*
+re‑scatters, everything under **Surface / Environment** is live. Cards that change stage inside a row
+carry their own stage (the simulated‑river card is a terrain card inside a mesh row, for instance),
+so splitting the categories did not change when anything recomputes.
 
-| Group | Layers | Controls |
-| --- | --- | --- |
-| Rock material | palette → nine editable colour swatches (beds, fresh, oxide, three flake layers, stones); strata; grain; oxide; cavity | bed contrast, band scale, laminae, bed shading, seam darkness/width, caprock tint, grain size/relief/mottle/fineness, oxide amount/scale, cavity shading, bump strength, base roughness |
-| Mineral flakes | three plate layers | global: coverage, rim highlight, sheen, crystal glitter, oxidise‑with‑runoff; per layer: enable, colour, plate size, density, plate height (mm), tint variation, shape, crystals, reveal by hardness |
-| Spalling | flaked‑off sheets | amount, coverage, patch size, sheet thickness (m), small spalls, weathering pits, follow bedding, fresh contrast, rim shadow |
-| Rocks → Origins | where each category is allowed | bedrock in place, talus & scree, channel lag, bars & fans, caps & tors, erratics, shore cords, soil hides rock, size spread |
-| Rocks → Gravel stones | instanced small stones | enable, density, largest stone |
-| Ground cover | runoff; pebble gravel; soil; **sediment**; vegetation; moss; snow | wetness, face streaks + scale; gravel amount, stone size/relief/variation/colour; soil cover, slope limit, clods & grit, moisture, alluvium + two colours; sediment: cover, bed thickness, bed contrast, cross‑lamination, sorting, ripples + wavelength, current direction, mud cracks, grain, slope limit + three facies colours; vegetation amount, slope limit, patch scale, patchiness, dry grass + three colours; moss amount/scale/colour; snow line, slope limit, transition, roughness, colour |
+* **Landform** — preset, elevation, relief, mesa & canyon, rugged outcrops (the push‑pull), rock
+  stacks, grid (seed / resolution).
+* **Dunes & outcrops** — transverse dune fields (height, wavelength, wind direction, asymmetry,
+  coverage) and embedded core‑stone boulder clusters (density, size, count, spread, spacing, aspect,
+  burial, weathering, prefer‑high‑ground, max slope). Outcrops are on in Granite tors, Granite domes,
+  Boulder field, Icelandic highlands and Glacial valley.
+* **Strata** — bed thickness and strength, the stratigraphic column (variation, packaging, hard
+  share, lateral change, re‑cut) and geological dip.
+* **Erosion** — fluvial incision (strength, iterations, concavity, uplift, deposition, fill, pits,
+  cliff protection, rills, diffusion), hydraulic rain (droplets, speed, capacity, evaporation,
+  inertia, radius, hardness influence) and thermal weathering (iterations, rate, talus angles).
+* **Cliff depth** — the true‑3D SDF chunks (angle, undercut, bed contrast, pockets, joints, pits,
+  roughness, push‑pull, blocks + block size/loss/swing, vertical wall, lean, blend, chunk size,
+  voxels per cell and the voxel budget, max chunks) and face displacement (overhang, buttress,
+  ledge noise).
+* **Mesh & detail** — mesh subdivision (up to ×6, side capped at 4097), relief detail (amplitude,
+  scale, cliff bias), rocky facets and crag.
+* **Rivers & lakes** — the draw tools, the feature list, simulated drainage (catchment, width per
+  √km², max width, floodplain, bank gullying and steps, depth scale, water fill, dry slope and dry
+  big‑river cutoffs, braiding, lakes in depressions with fill / area cap / minimum area, guide flow)
+  and the drawn guides (width, depth, bank angle, bank height, meander, water erosion). Drawn
+  features persist with the settings and survive preset changes.
+* **Roads** — width, shoulder, smoothing, cut and fill, shading, colour.
+* **Rocks** — scatter (density, patchiness, patch size, follow slope), **Origins** (bedrock in place,
+  talus, channel lag, bars & fans, caps & tors, erratics, shore cord, soil hides rock), rock shape
+  (smallest / largest, angularity, embedment, size spread, seed) and the instanced gravel stones.
+* **Surface** rows — **Rock colour** (palette → swatches, oxide, cavity, bump and base roughness),
+  **Painted beds**, **Jointing** (strength, spacing, joint swing, block size varies, pattern warp,
+  detail patchiness, groove width/depth, stagger, block tilt/tone, missing joints), **Grain**,
+  **Mineral flakes** (three plate layers), **Spalling**, **Sediment** (cover, bed thickness, bed
+  contrast, cross‑lamination, sorting, grain offset, ripples + wavelength, current direction, mud
+  cracks, grain, slope limit, three facies colours), **Soil & gravel** (runoff staining, pebble
+  gravel, soil) and **Plants & snow**.
+* **Environment** — sun direction and atmosphere (turbidity, fog, exposure), water (meshes, sea
+  level, colours, opacity, clarity, foam, shoreline wetness, dried‑bed shading) and viewport
+  (wireframe, show rocks, auto‑rotate, isolate a single layer, exports).
+
+38 presets: Alpine granite, Sandstone mesa, Canyon, Sea cliffs, Coastal cliffs, Quarry walls, Desert
+stacks, Stack cliffs, Limestone escarpment, Fjord, Badlands, Dolomite towers, Desert buttes, Volcanic
+island, Highland glens, Boulder field, Scree slopes, Granite domes, Granite tors, Rocky coast, Talus
+canyon, Rocky mountains, Sand dunes, Icelandic highlands, Icelandic river plains, Himalayan peaks,
+Alpine peaks, Karst pinnacles, **Braided river plain, Alluvial fan, Delta plain, Playa & mudflats,
+Tepui, Sandstone forest, Glacial valley, Chalk cliffs, Basin & range, Tufa terraces**. The last ten
+are the ones that exercise the newer layers: the four fill‑dominated worlds (braided plain, fan,
+delta, playa) are mostly *Sediment* with channel lag and bars in the *Rocks* placer, Tepui and
+Sandstone forest are wall worlds (true‑3D blocks, jointed faces, talus aprons), Glacial valley is the
+erratic and moraine test, Chalk cliffs the shore‑cord test, Basin & range the tilted‑bed fault‑block
+test and Tufa terraces the pale stepped‑pool test.
 
 Picking a rock type fills the colour swatches; they can be edited freely afterwards.
 

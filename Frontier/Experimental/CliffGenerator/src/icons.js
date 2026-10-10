@@ -33,7 +33,9 @@ const extra = {
 Object.assign(paths, extra);
 
 export const groupIcons = {
-  landform: 'mountain', strata: 'strata', relief: 'layers', erosion: 'droplets', features: 'route', water: 'waves', rocks: 'box', material: 'palette', flakes: 'sparkles', exfoliation: 'layers', cover: 'droplets', sun: 'sun', viewport: 'monitor',
+
+landform: 'mountain', deposition: 'wind', strata: 'strata', erosion: 'droplets', relief: 'layers', mesh: 'grid', features: 'route', roads: 'route', rocks: 'box', material: 'palette', bedding: 'strata', jointing: 'grid', grain: 'layers', flakes: 'sparkles', exfoliation: 'layers', sediment: 'waves', cover: 'droplets', plants: 'sparkles', water: 'waves', sun: 'sun', viewport: 'monitor',
+
 };
 export const cardIcons = {
   'Preset': 'sparkles', 'Elevation': 'mountain', 'Relief': 'wind', 'Mesa & canyon': 'strata', 'Grid': 'grid',
