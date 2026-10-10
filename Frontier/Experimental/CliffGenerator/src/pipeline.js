@@ -20,6 +20,7 @@ export function generateTerrain(params, progress = () => {}) {
 
   progress({ phase: 'Synthesising base relief', fraction: 0 });
   const height = synthesizeBase(params, (f) => progress({ phase: 'Synthesising base relief', fraction: f }));
+  const cliffEdge = height.cliffEdge || null;
 
   // rugged outcrops: the steep faces of the base shape are pushed and pulled sideways (blocky
   // buttresses and recesses) before anything else is layered on them
@@ -268,7 +269,7 @@ export function generateTerrain(params, progress = () => {}) {
   return {
     resolution: N,
     worldSize: params.worldSize,
-    height, hardness, deposit, flow: flowNorm, cavity, slope, dirX, dirZ,
+    height, cliffEdge, hardness, deposit, flow: flowNorm, cavity, slope, dirX, dirZ,
     river: riverResult.riverMask, waterLevel: riverResult.waterLevel, lake, silt: siltMap, outcrop,
     stats: { min, max, elapsedMs: now() - t0, rivers: hydro ? hydro.stats : null },
     network: hydro ? hydro.network : null,

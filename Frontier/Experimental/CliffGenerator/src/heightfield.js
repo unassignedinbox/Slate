@@ -149,6 +149,7 @@ export function synthesizeBase(params, progress = () => {}) {
     }
     if ((j & 31) === 0) progress(j / N);
   }
+  height.cliffEdge = cliffEdgeMap; // the cliff line: its 0.5 contour is the escarpment edge
   return height;
 }
 
