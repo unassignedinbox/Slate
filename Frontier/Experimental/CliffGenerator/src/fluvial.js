@@ -22,6 +22,10 @@
 import { fillDepressions, flowDirections } from './hydrology.js';
 import { SimplexNoise, smoothstep } from './noise.js';
 
+// Routing wander for the stream-power pass: the D8 receivers of a smooth slope run along the 8 grid
+// directions, and cutting along them draws ruled, grid-aligned grooves. Routing on height + a small
+// low-frequency wander bends the drainage lines into smooth, branching paths (same idea as the rill pass).
+
 // opts: { strength 0..1, iterations, concavity (m), uplift 0..1 (fraction of relief re-added
 //         over the run), diffusion 0..1, seaLevel, relief [m] }
 export function fluvialErosion(height, hardness, N, size, opts, progress = () => {}) {
@@ -67,13 +71,25 @@ export function fluvialErosion(height, hardness, N, size, opts, progress = () =>
   const acc = new Float32Array(total);
   const tmp = new Float32Array(total);
   const seaMask = new Uint8Array(total);
+  const routing = new Float32Array(total);
+  const wander = new Float32Array(total);
+  {
+    const wn = new SimplexNoise((opts.seed || 1) * 53 + 7);
+    const wAmp = opts.routingWander == null ? 3.0 : opts.routingWander; // m
+    const wLen = (opts.routingWavelength || 60);                       // m
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) wander[j * N + i] = wAmp * wn.fbm(i * cell / wLen, j * cell / wLen, 3, 2.1, 0.5);
+  }
   const incision = new Float32Array(total); // total metres cut (for the flow/sediment maps)
   const area = cell * cell;
 
   for (let it = 0; it < iterations; it++) {
-    // 1. routing on the filled surface
-    const { filled, order } = fillDepressions(height, N, sea, floorGrade);
-    const down = flowDirections(filled, N);
+    // 1. routing on the wandering filled surface (the wander is only for routing; depressions and
+    //    the cut itself still use the true height)
+    for (let i = 0; i < total; i++) routing[i] = height[i] + wander[i];
+    const { filled: filledR, order } = fillDepressions(routing, N, sea, floorGrade);
+    const down = flowDirections(filledR, N);
+    const filled = new Float32Array(total);
+    for (let i = 0; i < total; i++) filled[i] = filledR[i] - wander[i];
 
     // 2. drainage area: donors are processed after receivers in `order`, so sum in reverse
     acc.fill(1);
@@ -99,12 +115,13 @@ export function fluvialErosion(height, hardness, N, size, opts, progress = () =>
       const f = kBase * soft * Math.pow(a, m) / dx;
       const h0 = height[c];
       const hr = height[d];
-      if (h0 <= hr || filled[c] > h0 + 0.01) {
+      if (filled[c] > h0 + 0.01) {
         // inside a filled depression: sediment settles, the floor rises towards the spill level
         if (fillRate > 0) height[c] = h0 + (filled[c] - h0) * fillRate;
         continue;
       }
       const h1 = (h0 + f * hr) / (1 + f);
+      if (h0 <= hr) continue; // routed downhill on the wander surface only: no cut here
       height[c] = h1;
       incision[c] += h0 - h1;
       eroded[c] = h0 - h1;

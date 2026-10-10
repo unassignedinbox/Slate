@@ -405,18 +405,52 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   }
   const px = new Float32Array(total), pz = new Float32Array(total);
   const SW = [0.08, 0.16, 0.26, 0.26, 0.16, 0.08]; // weights for −3..+3 (centre weight added below)
+  // Centreline: a Gaussian average of the cell centres along the stream itself, upstream along the
+  // main donors and downstream along the receivers, over a window of several cells each way. The
+  // walk stops where a tributary joins a much bigger river (the trunk keeps its own line). Averaging
+  // along the path, not in a 3x3 patch, is what turns the D8 staircase into a smooth curve with real
+  // curvature at the bends. The residual bend is a slow meander offset (perpendicular to the flow),
+  // so long reaches wander instead of running straight between the 8 grid directions.
+  const reachCells = Math.max(3, Math.round(opts.centreSmoothCells || 8));
+  const sigmaC = reachCells / 2;
+  const meanderNoise = new SimplexNoise(seed * 31 + 5);
+  const meanderAmp = Math.max(0, opts.meander == null ? 1 : opts.meander);
+  const meanderLen = Math.max(4, (opts.meanderWavelength || 40) / cell); // cells
+  const chainBuf = [];
   for (let c = 0; c < total; c++) {
     if (!isRiver[c]) continue;
-    let sx = (c % N) * 0.3, sz = ((c - (c % N)) / N) * 0.3, sw = 0.3;
-    let u = c, dn = c;
-    for (let k = 0; k < 3; k++) {
-      const w = SW[k];
-      if (u >= 0) { u = mainDonor[u]; if (u >= 0) { sx += (u % N) * w; sz += ((u - (u % N)) / N) * w; sw += w; } }
-      // the walk stops where the stream joins a much bigger one, so a tributary's centreline
-      // bends into the trunk instead of being dragged along it
-      if (dn >= 0) { dn = down[dn]; if (dn >= 0 && isRiver[dn] && acc[dn] < acc[c] * 2.5) { sx += (dn % N) * w; sz += ((dn - (dn % N)) / N) * w; sw += w; } else dn = -1; }
+    chainBuf.length = 0;
+    // upstream: walk main donors
+    const up = [];
+    for (let u = mainDonor[c], k = 0; u >= 0 && k < reachCells * 3; u = mainDonor[u], k++) up.push(u);
+    for (let k = up.length - 1; k >= 0; k--) chainBuf.push(up[k]);
+    chainBuf.push(c);
+    // downstream: follow receivers while they stay river and do not swallow a much bigger stream
+    let dn = c;
+    for (let k = 0; k < reachCells * 3; k++) {
+      dn = down[dn];
+      if (dn < 0 || !isRiver[dn] || acc[dn] > acc[c] * 2.5) break;
+      chainBuf.push(dn);
     }
-    px[c] = sx / sw; pz[c] = sz / sw;
+    const ci = c, idx = chainBuf.indexOf(c);
+    let sx = 0, sz = 0, sw = 0;
+    for (let k = 0; k < chainBuf.length; k++) {
+      const d = k - idx;
+      const w = Math.exp(-(d * d) / (2 * sigmaC * sigmaC));
+      sx += (chainBuf[k] % N) * w; sz += ((chainBuf[k] - (chainBuf[k] % N)) / N) * w; sw += w;
+    }
+    let x = sx / sw, z = sz / sw;
+    // meander: displacement along the local perpendicular of the smoothed path, slow along the reach
+    const a = chainBuf[Math.max(0, idx - 1)], b = chainBuf[Math.min(chainBuf.length - 1, idx + 1)];
+    let tx = (b % N) - (a % N), tz = ((b - (b % N)) / N) - ((a - (a % N)) / N);
+    const tl = Math.hypot(tx, tz);
+    if (tl > 1e-6 && meanderAmp > 0) {
+      tx /= tl; tz /= tl;
+      const amp = meanderAmp * Math.min(2.5, Math.max(0.3, width[c] / cell * 0.25)); // cells
+      const off = amp * meanderNoise.fbm(x / meanderLen, z / meanderLen, 2, 2.0, 0.5);
+      x += -tz * off; z += tx * off;
+    }
+    px[c] = x; pz[c] = z;
   }
   // the nearest *wet* segment is tracked separately, so a dry gully joining a river can never
   // punch a hole in the water next to the junction
