@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Causeway — procedural road network editor</title>
+<link rel="stylesheet" href="./src/ui/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div class="brand"><span class="mark"></span>Causeway<em>road network editor</em></div>
+      <nav class="modes">
+        <button data-tool="select" class="on" title="Select and move junctions (Q)">Select</button>
+        <button data-tool="draw" title="Draw new road (W)">Draw</button>
+        <button data-tool="feature" title="Place crossings, humps, potholes (E)">Feature</button>
+      </nav>
+      <div class="spacer"></div>
+      <div class="viewmode">
+        <button data-view="lit" class="on">Lit</button>
+        <button data-view="wire">Wire</button>
+        <button data-view="mat">Material</button>
+        <button data-view="topo">Topology</button>
+      </div>
+      <div id="gpu" class="chip">WebGPU</div>
+    </header>
+
+    <main id="viewportWrap">
+      <canvas id="view"></canvas>
+      <div id="overlay"></div>
+      <div id="hud"></div>
+      <div id="fail" hidden></div>
+    </main>
+
+    <aside id="dock">
+      <section class="panel" id="stackPanel">
+        <h2>Outliner <span class="hint">network</span></h2>
+        <div id="outliner" class="tree"></div>
+      </section>
+
+      <section class="panel" id="layerPanel">
+        <h2>Surface stack <span class="hint">top layer wins</span></h2>
+        <div id="layers" class="stack"></div>
+        <div class="stackfoot">
+          <button id="layerUp" title="Raise">&#9650;</button>
+          <button id="layerDown" title="Lower">&#9660;</button>
+          <span id="layerCount"></span>
+        </div>
+      </section>
+
+      <section class="panel grow" id="inspectorPanel">
+        <h2>Inspector <span class="hint" id="inspectorFor">nothing selected</span></h2>
+        <div id="inspector"></div>
+      </section>
+    </aside>
+
+    <footer id="statusbar">
+      <span id="stats">building…</span>
+      <span class="spacer"></span>
+      <span id="hintbar">LMB orbit · RMB pan · wheel zoom · click a junction to select · drag to move</span>
+    </footer>
+  </div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
