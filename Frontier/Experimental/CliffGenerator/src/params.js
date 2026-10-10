@@ -207,7 +207,7 @@ export const defaults = {
   flakeOn2: 1, flakeColor2: '#bdb4a7', flakeSize2: 0.55, flakeDensity2: 0.75, flakeHeight2: 4, flakeCrystal2: 0.08, flakeVar2: 0.5, flakeShape2: 0.1, flakeReveal2: 0.3,
   flakeOn3: 1, flakeColor3: '#d9d6cf', flakeSize3: 0.18, flakeDensity3: 0.6, flakeHeight3: 2, flakeCrystal3: 0.3, flakeVar3: 0.6, flakeShape3: 0.0, flakeReveal3: 0.0,
   // Spalling (peel)
-  peelOn: 1,
+  peelOn: 0,                 // off by default: its cell lattice shows as a grid on every face (shading only, no shape change)
   peelStrength: 0.6,
   peelScale: 1.6,           // [m]
   peelCoverage: 0.3,
