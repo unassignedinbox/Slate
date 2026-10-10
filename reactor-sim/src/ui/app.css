@@ -1,0 +1,47 @@
+/* App-specific additions on top of editor-base.css (Frontier editor stylesheet). */
+@font-face { font-family: "DM Sans"; src: url("/fonts/DMSans-Light.ttf") format("truetype"); font-weight: 300; font-display: swap; }
+@font-face { font-family: "DM Sans"; src: url("/fonts/DMSans-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+#Editor, #Editor * { font-family: "DM Sans", sans-serif; }
+.centre { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #1a1a1a; }
+.viewport-stage { position: relative; flex: 1 1 auto; min-height: 320px; }
+.viewport-canvas { position: absolute; inset: 0; }
+.viewport-canvas canvas { display: block; width: 100%; height: 100%; }
+.viewport-overlay { position: absolute; left: 10px; top: 10px; display: flex; flex-direction: column; gap: 4px; background: rgba(18,18,18,0.7); padding: 8px; border-radius: 6px; font-size: 12px; }
+.config-error { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 3; background: #3a1714; border: 1px solid #c75a4a; color: #ffd8d2; padding: 10px 14px; border-radius: 8px; max-width: 70%; font-size: 12px; }
+.config-error p { margin: 4px 0; }
+.bottom-tabs { display: flex; gap: 4px; padding: 4px 8px; background: #121212; }
+.bottom-tabs button { background: #222; color: #ddd; border: 1px solid #333; border-radius: 4px; padding: 3px 10px; cursor: pointer; }
+.bottom-tabs button.on { background: #3a3a3a; color: #fff; }
+.graph-grid { display: grid; grid-template-columns: repeat(4, minmax(200px, 1fr)); gap: 6px; padding: 6px 8px; background: #121212; height: 200px; overflow: auto; }
+.graph-card { background: #181818; border: 1px solid #262626; border-radius: 6px; padding: 4px 6px; min-width: 0; }
+.graph-card svg { width: 100%; height: 80px; display: block; }
+.graph-head { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; color: #bbb; }
+.graph-head small { font-size: 10px; color: #999; text-align: right; }
+.graph-axis { display: flex; justify-content: space-between; font-size: 10px; color: #777; }
+.readout-grid { display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: 6px; padding: 8px; background: #121212; height: 200px; overflow: auto; }
+.readout-grid .readout { background: #181818; border-radius: 6px; padding: 6px 8px; }
+.console { background: #0f0f0f; color: #ccc; font-family: monospace; font-size: 12px; padding: 8px; height: 200px; overflow: auto; }
+.console p { margin: 2px 0; }
+.log-trip { color: #ffcf6b; }
+.log-acc { color: #ff8a7a; }
+.generic-card.focused { outline: 1px solid #6aa7ff; }
+.generic-card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: #9a9a9a; margin: 6px 0 8px; }
+.generic-card h4 { font-size: 11px; color: #9a9a9a; margin: 10px 0 4px; }
+.note { font-size: 11px; color: #8d8d8d; margin: 6px 0; }
+.btn-row, .btn-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.btn-grid button, .btn-row button, .viewport-modes button { background: #262626; color: #e6e6e6; border: 1px solid #3a3a3a; border-radius: 5px; padding: 5px 9px; font-size: 12px; cursor: pointer; }
+.btn-grid button:disabled, .btn-row button:disabled, .viewport-modes button:disabled { opacity: 0.4; cursor: default; }
+.viewport-modes button.on { background: #3b5b8a; }
+.status-disc { padding: 2px 8px; border-radius: 10px; font-size: 11px; background: #333; }
+.status-disc.running { background: #1f5c36; color: #c9f5d6; }
+.status-disc.scrammed { background: #6b4b10; color: #ffe2a6; }
+.status-disc.destroyed { background: #6b1d17; color: #ffd0c8; }
+.status-disc.invalid { background: #444; color: #ddd; }
+.viewport-footer { display: flex; flex-wrap: wrap; gap: 14px; padding: 6px 10px; font-size: 12px; color: #bdbdbd; background: #141414; }
+.viewport-footer b { color: #fff; }
+.outliner-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.outliner-row small { color: #8d8d8d; font-size: 11px; text-align: right; }
+.outliner-rows { overflow: auto; }
+.inspector-footer { padding: 8px; font-size: 11px; color: #8d8d8d; border-top: 1px solid #262626; }
+.viewport-setting-toggle input[type="range"] { width: 120px; vertical-align: middle; }
+.viewport-action-row select, .viewport-modes select { background: #222; color: #ddd; border: 1px solid #3a3a3a; border-radius: 4px; padding: 3px 6px; font-size: 12px; max-width: 320px; }
