@@ -1,0 +1,1294 @@
+{
+ "generatedBy": "scripts/monte-carlo.mjs",
+ "generatedAt": "2026-10-10T15:18:16.229Z",
+ "N": 50,
+ "compareN": 20,
+ "seeds": {
+  "scenarios": "seed0 = 1000",
+  "comparison": "seed0 = 5000"
+ },
+ "scenarios": {
+  "nominal": {
+   "scenario": "Nominal operation",
+   "n": 50,
+   "seed0": 1000,
+   "outcomes": {
+    "OPERATING": 50
+   },
+   "pDestroyed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pBreach": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pConverterFailed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pFuelDamaged": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "destroyCauses": {},
+   "meanElectricW": 0.020422120642121077,
+   "sdElectricW": 0.0000038305620353605445,
+   "meanPeakTfK": 310.68195199167616,
+   "maxPeakTfK": 310.68496429249103,
+   "meanPeakGrms": 21.559637423598843
+  },
+  "pumpTrip": {
+   "scenario": "Pump trip",
+   "n": 50,
+   "seed0": 1000,
+   "outcomes": {
+    "SHUTDOWN": 50
+   },
+   "pDestroyed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pBreach": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pConverterFailed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pFuelDamaged": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "destroyCauses": {},
+   "meanElectricW": 0.00974195453551157,
+   "sdElectricW": 0.0002632560387910189,
+   "meanPeakTfK": 310.4787293630524,
+   "maxPeakTfK": 310.4855835607368,
+   "meanPeakGrms": 21.559637423598843
+  },
+  "vibration": {
+   "scenario": "Sustained vibration",
+   "n": 50,
+   "seed0": 1000,
+   "outcomes": {
+    "SHUTDOWN": 50
+   },
+   "pDestroyed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pBreach": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pConverterFailed": {
+    "p": 0.94,
+    "lo": 0.8378265662912299,
+    "hi": 0.9793854036353695
+   },
+   "pFuelDamaged": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "destroyCauses": {},
+   "meanElectricW": 0.0023457678219471717,
+   "sdElectricW": 0.0013539892843580045,
+   "meanPeakTfK": 310.4771902107453,
+   "maxPeakTfK": 310.48392243772264,
+   "meanPeakGrms": 53.6401997294996
+  },
+  "severeVibration": {
+   "scenario": "Severe vibration (shock)",
+   "n": 50,
+   "seed0": 1000,
+   "outcomes": {
+    "DESTROYED": 50
+   },
+   "pDestroyed": {
+    "p": 1,
+    "lo": 0.9286499658256813,
+    "hi": 1
+   },
+   "pBreach": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pConverterFailed": {
+    "p": 1,
+    "lo": 0.9286499658256813,
+    "hi": 1
+   },
+   "pFuelDamaged": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "destroyCauses": {
+    "fatigue failure of fuel supports": 50
+   },
+   "meanElectricW": 0.00033759210820284794,
+   "sdElectricW": 0.00003415013524069318,
+   "meanPeakTfK": 310.47697082861197,
+   "maxPeakTfK": 310.483915191063,
+   "meanPeakGrms": 169.6252052915666
+  },
+  "sinkLoss": {
+   "scenario": "Heat-sink loss",
+   "n": 50,
+   "seed0": 1000,
+   "outcomes": {
+    "OPERATING": 50
+   },
+   "pDestroyed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pBreach": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pConverterFailed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pFuelDamaged": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "destroyCauses": {},
+   "meanElectricW": 0.01771044294228883,
+   "sdElectricW": 0.00011151796074845372,
+   "meanPeakTfK": 314.89844610670707,
+   "maxPeakTfK": 315.12524854453414,
+   "meanPeakGrms": 21.559637423598843
+  },
+  "hotAmbient": {
+   "scenario": "Hot ambient (+40 K)",
+   "n": 50,
+   "seed0": 1000,
+   "outcomes": {
+    "OPERATING": 50
+   },
+   "pDestroyed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pBreach": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pConverterFailed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pFuelDamaged": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "destroyCauses": {},
+   "meanElectricW": 0.0032742081430867757,
+   "sdElectricW": 0.00047883608628966563,
+   "meanPeakTfK": 337.0233355360014,
+   "maxPeakTfK": 340.48025314507214,
+   "meanPeakGrms": 21.559637423598843
+  },
+  "unprotectedWithdraw": {
+   "scenario": "Rod withdrawal, no protection",
+   "n": 50,
+   "seed0": 1000,
+   "outcomes": {
+    "OPERATING": 50
+   },
+   "pDestroyed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pBreach": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pConverterFailed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pFuelDamaged": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "destroyCauses": {},
+   "meanElectricW": 0.2702604084178806,
+   "sdElectricW": 0.17046739449758092,
+   "meanPeakTfK": 356.22228169795073,
+   "maxPeakTfK": 383.28062339812647,
+   "meanPeakGrms": 21.559637423598843
+  },
+  "stuckRodsPumpTrip": {
+   "scenario": "Stuck rods and pump trip",
+   "n": 50,
+   "seed0": 1000,
+   "outcomes": {
+    "SHUTDOWN": 50
+   },
+   "pDestroyed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pBreach": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pConverterFailed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pFuelDamaged": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "destroyCauses": {},
+   "meanElectricW": 0.01999238959374463,
+   "sdElectricW": 0.0003022352376317569,
+   "meanPeakTfK": 311.24708897371073,
+   "maxPeakTfK": 311.7393681695556,
+   "meanPeakGrms": 21.559637423598843
+  },
+  "kill": {
+   "scenario": "Core kill",
+   "n": 50,
+   "seed0": 1000,
+   "outcomes": {
+    "SHUTDOWN": 50
+   },
+   "pDestroyed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pBreach": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pConverterFailed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pFuelDamaged": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "destroyCauses": {},
+   "meanElectricW": 0.007319301547314616,
+   "sdElectricW": 0.00018808872462854645,
+   "meanPeakTfK": 310.4767866974498,
+   "maxPeakTfK": 310.48363229291596,
+   "meanPeakGrms": 21.559637423598843
+  },
+  "destroy": {
+   "scenario": "Core destruction",
+   "n": 50,
+   "seed0": 1000,
+   "outcomes": {
+    "DESTROYED": 50
+   },
+   "pDestroyed": {
+    "p": 1,
+    "lo": 0.9286499658256813,
+    "hi": 1
+   },
+   "pBreach": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pConverterFailed": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "pFuelDamaged": {
+    "p": 0,
+    "lo": 0,
+    "hi": 0.07135003417431873
+   },
+   "destroyCauses": {
+    "scripted destruct": 50
+   },
+   "meanElectricW": 0.007301239892394979,
+   "sdElectricW": 0.00018811959992438067,
+   "meanPeakTfK": 310.4767866974498,
+   "maxPeakTfK": 310.48363229291596,
+   "meanPeakGrms": 21.559637423598843
+  }
+ },
+ "compare": [
+  {
+   "label": "UO₂ ceramic pellets",
+   "overrides": {
+    "fuel": "uo2"
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.002102176492760832,
+     "meanPeakTfK": 310.4776188955317
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.00035036858816925466,
+     "meanPeakTfK": 310.47731515453455
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.009838402468749891,
+     "meanPeakTfK": 310.47914121528356
+    }
+   }
+  },
+  {
+   "label": "UN nitride pellets",
+   "overrides": {
+    "fuel": "un"
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "DESTROYED": 9,
+      "SHUTDOWN": 11
+     },
+     "pDestroyed": {
+      "p": 0.45,
+      "lo": 0.25819502085709295,
+      "hi": 0.6579179916924003
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.002114975944373757,
+     "meanPeakTfK": 310.3560094449383
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.00035250186565875417,
+     "meanPeakTfK": 310.35558936812936
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.009385195251085544,
+     "meanPeakTfK": 310.3584219472483
+    }
+   }
+  },
+  {
+   "label": "U-10Zr metal alloy",
+   "overrides": {
+    "fuel": "uzr"
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "DESTROYED": 13,
+      "SHUTDOWN": 7
+     },
+     "pDestroyed": {
+      "p": 0.65,
+      "lo": 0.43285051021946463,
+      "hi": 0.8188104521320554
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.002125690629411917,
+     "meanPeakTfK": 310.4029041058444
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.0003542876762614442,
+     "meanPeakTfK": 310.40242677217077
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.008978573134580881,
+     "meanPeakTfK": 310.4057398543829
+    }
+   }
+  },
+  {
+   "label": "UZrH hydride",
+   "overrides": {
+    "fuel": "uzrh"
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.002137224773257512,
+     "meanPeakTfK": 310.50991827039763
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.0003562100656083134,
+     "meanPeakTfK": 310.5100231572645
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.008414326339437289,
+     "meanPeakTfK": 310.5129429926649
+    }
+   }
+  },
+  {
+   "label": "TRISO particles in graphite",
+   "overrides": {
+    "fuel": "triso"
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.0016275719412638327,
+     "meanPeakTfK": 310.3221422375304
+    },
+    "severeVibration": {
+     "outcomes": {
+      "SHUTDOWN": 17,
+      "DESTROYED": 3
+     },
+     "pDestroyed": {
+      "p": 0.15,
+      "lo": 0.05236779195949584,
+      "hi": 0.36042329588695743
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.00027126651124120463,
+     "meanPeakTfK": 310.3221422375304
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.0063642034116372665,
+     "meanPeakTfK": 310.3221422375304
+    }
+   }
+  },
+  {
+   "label": "Liquid sodium",
+   "overrides": {
+    "coolant": "sodium",
+    "coolantPressureMPa": 0.1
+   },
+   "valid": true,
+   "warnings": [
+    "Ambient is below the coolant freezing point; start-up requires heating."
+   ],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.0021330489349472752,
+     "meanPeakTfK": 310.8580478388137
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.00035551408095706313,
+     "meanPeakTfK": 310.857747186496
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.007678375810230878,
+     "meanPeakTfK": 310.8620144288618
+    }
+   }
+  },
+  {
+   "label": "Pressurised water (moderator)",
+   "overrides": {
+    "coolant": "water",
+    "coolantPressureMPa": 0.2
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.002102176492760832,
+     "meanPeakTfK": 310.4776188955317
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.00035036858816925466,
+     "meanPeakTfK": 310.47731515453455
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.009838402468749891,
+     "meanPeakTfK": 310.47914121528356
+    }
+   }
+  },
+  {
+   "label": "Lead-bismuth eutectic",
+   "overrides": {
+    "coolant": "lbe",
+    "coolantPressureMPa": 0.1
+   },
+   "valid": true,
+   "warnings": [
+    "Ambient is below the coolant freezing point; start-up requires heating."
+   ],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.0021312573163088113,
+     "meanPeakTfK": 310.9063562613546
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.0003552154728739368,
+     "meanPeakTfK": 310.90605256259425
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.00758326545698011,
+     "meanPeakTfK": 310.910922225845
+    }
+   }
+  },
+  {
+   "label": "Helium gas",
+   "overrides": {
+    "coolant": "helium",
+    "coolantPressureMPa": 4
+   },
+   "valid": false,
+   "violations": [
+    "Coolant pressure 4 MPa gives a can hoop stress of 1320 MPa, above the 97 MPa allowable for a 0.10 mm wall."
+   ]
+  },
+  {
+   "label": "Bi₂Te₃ thermoelectric (ZT ≈ 1.0)",
+   "overrides": {
+    "converter": "bi2te3"
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.002102176492760832,
+     "meanPeakTfK": 310.4776188955317
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.00035036858816925466,
+     "meanPeakTfK": 310.47731515453455
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.009838402468749891,
+     "meanPeakTfK": 310.47914121528356
+    }
+   }
+  },
+  {
+   "label": "Skutterudite thermoelectric (ZT ≈ 1.2)",
+   "overrides": {
+    "converter": "skutterudite"
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.002273640581810468,
+     "meanPeakTfK": 310.15854071621203
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.000378946412633056,
+     "meanPeakTfK": 310.1582427797037
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.010442576772614334,
+     "meanPeakTfK": 310.16005187519534
+    }
+   }
+  },
+  {
+   "label": "SiGe thermoelectric (ZT ≈ 1.0 at high T)",
+   "overrides": {
+    "converter": "sige"
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.0019148954266345881,
+     "meanPeakTfK": 309.8715506541584
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.0003191545569233301,
+     "meanPeakTfK": 309.87125522192775
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.008636673014942513,
+     "meanPeakTfK": 309.873057420934
+    }
+   }
+  },
+  {
+   "label": "Free-piston Stirling (25% of Carnot)",
+   "overrides": {
+    "converter": "stirling"
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0,
+     "meanPeakTfK": 308.9143935553349
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0,
+     "meanPeakTfK": 308.914084704861
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0,
+     "meanPeakTfK": 308.915994139434
+    }
+   }
+  },
+  {
+   "label": "Support structure: ss316",
+   "overrides": {
+    "structure": "ss316"
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.002102176492760832,
+     "meanPeakTfK": 310.4776188955317
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.00035036858816925466,
+     "meanPeakTfK": 310.47731515453455
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.009838402468749891,
+     "meanPeakTfK": 310.47914121528356
+    }
+   }
+  },
+  {
+   "label": "Support structure: inconel718",
+   "overrides": {
+    "structure": "inconel718"
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.00210217596111031,
+     "meanPeakTfK": 310.47761632682443
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.0003503684995593575,
+     "meanPeakTfK": 310.4776468706947
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.009838402767515237,
+     "meanPeakTfK": 310.4791424431446
+    }
+   }
+  },
+  {
+   "label": "Support structure: ti64",
+   "overrides": {
+    "structure": "ti64"
+   },
+   "valid": true,
+   "warnings": [],
+   "byScenario": {
+    "vibration": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0.85,
+      "lo": 0.6395767041130426,
+      "hi": 0.9476322080405041
+     },
+     "meanElectricW": 0.002903401628622768,
+     "meanPeakTfK": 310.47761187641953
+    },
+    "severeVibration": {
+     "outcomes": {
+      "DESTROYED": 20
+     },
+     "pDestroyed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "pConverterFailed": {
+      "p": 1,
+      "lo": 0.8388698745050667,
+      "hi": 1
+     },
+     "meanElectricW": 0.00035036846788415204,
+     "meanPeakTfK": 310.4776419499078
+    },
+    "pumpTrip": {
+     "outcomes": {
+      "SHUTDOWN": 20
+     },
+     "pDestroyed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "pConverterFailed": {
+      "p": 0,
+      "lo": 0,
+      "hi": 0.16113012549493322
+     },
+     "meanElectricW": 0.009838328789676403,
+     "meanPeakTfK": 310.4791464384997
+    }
+   }
+  }
+ ]
+}
