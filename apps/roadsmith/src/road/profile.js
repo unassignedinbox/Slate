@@ -79,14 +79,14 @@ export function defaultProfile(cls = ROAD_CLASS.LOCAL, over = {}) {
       Object.assign(base, {
         lanesF: 3, lanesB: 3, laneWidth: 3.65, median: 3.0,
         footwayL: 0, footwayR: 0, vergeL: 2.5, vergeR: 2.5,
-        shoulderL: 2.8, shoulderR: 2.8, camber: 0.02,
+        shoulderL: 3.0, shoulderR: 3.0, camber: 0.02,
         barrier: 'wbeam', speedLimit: 110,
       });
       break;
     case ROAD_CLASS.RAMP:
       Object.assign(base, {
-        lanesF: 1, lanesB: 0, laneWidth: 4.2, footwayL: 0, footwayR: 0,
-        shoulderL: 1.0, shoulderR: 2.0, vergeL: 1.4, vergeR: 1.4,
+        lanesF: 1, lanesB: 0, laneWidth: 3.7, footwayL: 0, footwayR: 0,
+        shoulderL: 1.5, shoulderR: 2.5, vergeL: 1.4, vergeR: 1.4,
         barrier: 'wbeam', speedLimit: 60,
       });
       break;

@@ -34,16 +34,41 @@ export class Camera {
     this.pitch = clamp(this.pitch + dy * 0.0062, this.minPitch, this.maxPitch);
   }
 
+  /**
+   * Drag the ground with the cursor.  dx/dy are pixels; the step is sized from the vertical
+   * field of view and the viewport height so a point under the pointer keeps up with it, and
+   * the vertical term is divided by sin(pitch) because a shallow view covers more ground per
+   * pixel.  The basis is the real screen-right / screen-forward pair for this yaw.
+   */
   pan(dx, dy) {
-    const s = this.distance * 0.0016;
+    const h = this.viewportH || 900;
+    const s = (2 * Math.tan(this.fov * 0.5) * Math.max(this._d, 1)) / h;
     const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
-    // screen-right and screen-forward projected on the ground plane
-    this.target.x += (-dx * cy - dy * sy) * s;
-    this.target.z += (-dx * -sy - dy * cy) * s;
+    const right = { x: sy, z: -cy };
+    const fwd = { x: -cy, z: -sy };
+    const sp = Math.max(Math.sin(this._pitch), 0.22);
+    this.target.x += (-right.x * dx + (fwd.x * dy) / sp) * s;
+    this.target.z += (-right.z * dx + (fwd.z * dy) / sp) * s;
+  }
+
+  setViewport(w, h) {
+    this.viewportW = w;
+    this.viewportH = h;
   }
 
   dolly(amount) {
     this.distance = clamp(this.distance * Math.pow(1.0016, amount), this.minDistance, this.maxDistance);
+  }
+
+  /** Wheel zoom that keeps the point under the cursor roughly where it is. */
+  dollyTowards(amount, groundPoint) {
+    const d0 = this.distance;
+    this.dolly(amount);
+    if (!groundPoint) return;
+    const f = clamp(1 - this.distance / d0, -0.6, 0.6);
+    this.target.x += (groundPoint.x - this.target.x) * f;
+    this.target.y += (groundPoint.y - this.target.y) * f;
+    this.target.z += (groundPoint.z - this.target.z) * f;
   }
 
   /** Move the orbit pivot (used by "frame selection"). */
@@ -61,7 +86,7 @@ export class Camera {
 
   update(dt, aspect) {
     this.aspect = aspect || this.aspect;
-    const k = 1 - Math.pow(0.0015, Math.min(dt, 0.1));
+    const k = 1 - Math.pow(0.000015, Math.min(dt, 0.1));
     this._t.x += (this.target.x - this._t.x) * k;
     this._t.y += (this.target.y - this._t.y) * k;
     this._t.z += (this.target.z - this._t.z) * k;

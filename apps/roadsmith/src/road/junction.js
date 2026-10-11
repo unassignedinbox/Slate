@@ -384,12 +384,19 @@ export function buildEndCap(mb, net, node, branch, options = {}) {
   // Bull-nose: a true half ellipse swept from the left ring point, around behind the dead end,
   // back to the right ring point. (A fillet is useless here — the two tangents are anti-parallel,
   // which collapses the arc onto the mouth line.)
+  // A gore nose (`node.cap === 'nose'`) tapers to a long point instead of a turning head: that is
+  // the physical nose where a motorway ramp peels away from the mainline.
+  const nose = node.cap === 'nose';
+  const widest = Math.hypot(ringL[6].p.x - ringR[6].p.x, ringL[6].p.z - ringR[6].p.z) / 2 || 1;
+  const noseLen = clamp(widest * 2.6, 8, 18);
   const levels = [];
   for (let r = 0; r < 7; r++) {
     const A = ringL[r].p, B = ringR[r].p;
     const mx = (A.x + B.x) / 2, mz = (A.z + B.z) / 2;
     const hx = (A.x - B.x) / 2, hz = (A.z - B.z) / 2;
-    const bulge = Math.hypot(hx, hz) * 0.92;
+    const half = Math.hypot(hx, hz);
+    // stagger the apexes slightly per ring so the tip stays a real (if slim) quad fan
+    const bulge = nose ? noseLen * (0.66 + 0.34 * (half / widest)) : half * 0.92;
     const pts = [];
     for (let q = 0; q <= steps; q++) {
       const th = (q / steps) * Math.PI;

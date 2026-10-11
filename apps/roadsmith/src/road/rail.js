@@ -2,12 +2,14 @@
 // carriageway with flangeways and crossing panels, plus the rolling stock mesh used for trains.
 
 import { MeshBuilder, SURF } from '../core/mesh.js';
-import { box, cylinder, sweep, loft, lathe, quadPatch } from '../core/geokit.js';
+import { box, cylinder, sweep, loft, lathe, quadPatch, platePoly } from '../core/geokit.js';
 import { Curve, resamplePolyline } from '../core/spline.js';
 import { v3, v3sub, v3add, v3scale, normXZ, clamp, lerp, TAU, pointSegDist2D } from '../core/math.js';
+import { totalWidth, laneBand, GUTTER_WIDTH, KERB } from './profile.js';
 
 export const GAUGE = 1.435;
 const RAIL_OFFSET = GAUGE / 2;
+const PANEL_HALF = RAIL_OFFSET + 1.5;   // paved panel reaches 1.5 m outside each rail
 
 export function makeRailLine(points, opts = {}) {
   return {
@@ -40,9 +42,15 @@ export function findRailCrossings(net, line) {
         const sEdge = lerp(sa, sb, hit.t);
         const sRail = lerp(railPts[j].s, railPts[j + 1].s, hit.u);
         if (sEdge < edge.mouthSA + 3 || sEdge > edge.mouthSB - 3) continue;
-        const half = Math.max(6, edge.profile.laneWidth * (edge.profile.lanesF + edge.profile.lanesB) * 0.6);
-        edge.features.railCrossing = { s0: sEdge - half, s1: sEdge + half, sRail };
-        out.push({ edgeId: edge.id, sEdge, sRail, p: hit.p, half });
+        // skew matters: a track crossing at 40 degrees needs a much longer panel than a
+        // square one, and the paved length along each alignment is a different number.
+        const rt = normXZ({ x: d.x - c.x, y: 0, z: d.z - c.z });
+        const et = normXZ({ x: b.x - a.x, y: 0, z: b.z - a.z });
+        const sinSkew = Math.max(0.34, Math.abs(rt.x * et.z - rt.z * et.x));
+        const halfRoad = clamp((PANEL_HALF + 0.7) / sinSkew, 2.6, 11);
+        const halfRail = clamp((totalWidth(edge.profile) / 2 + 1.1) / sinSkew, 4, 26);
+        edge.features.railCrossing = { s0: sEdge - halfRoad, s1: sEdge + halfRoad, sRail };
+        out.push({ edgeId: edge.id, sEdge, sRail, p: hit.p, half: halfRoad, halfRail, sinSkew });
       }
     }
   }
@@ -123,7 +131,7 @@ export function buildRail(lines, net, settings = {}) {
     for (const c of line.crossings) {
       const edge = net.edges.get(c.edgeId);
       if (!edge) continue;
-      const s0 = c.sRail - c.half - 0.6, s1 = c.sRail + c.half + 0.6;
+      const s0 = c.sRail - (c.halfRail ?? c.half) - 0.6, s1 = c.sRail + (c.halfRail ?? c.half) + 0.6;
       const panelPath = [];
       const ps = Math.max(2, Math.ceil((s1 - s0) / 1.0));
       for (let i = 0; i <= ps; i++) {
@@ -158,37 +166,48 @@ export function buildCrossingFurniture(crossings, net) {
     const edge = net.edges.get(c.edgeId);
     if (!edge) continue;
     const f = edge.curve.frameAt(c.sEdge);
-    const half = c.half;
+    const band = laneBand(edge.profile);
+    // the post stands just behind the kerb on the driver's right of each approach
+    const kerbOut = GUTTER_WIDTH + KERB.FACE_BATTER + KERB.TOP_WIDTH + 0.5;
     for (const sgn of [-1, 1]) {
-      const along = sgn * (half + 2.2);
+      // sgn = -1 is the approach from behind the crossing (travelling +t): keep right.
+      const side = -sgn;
+      const lat = (side > 0 ? band.tR : band.tL) + side * kerbOut;
+      const along = sgn * (c.half + 3.0);
       const base = {
-        x: c.p.x + f.t.x * along + f.right.x * (sgn * -1) * (edge.profile.laneWidth * 1.2),
+        x: c.p.x + f.t.x * along + f.right.x * lat,
         y: c.p.y + 0.14,
-        z: c.p.z + f.t.z * along + f.right.z * (sgn * -1) * (edge.profile.laneWidth * 1.2),
+        z: c.p.z + f.t.z * along + f.right.z * lat,
       };
+      const faceYaw = Math.atan2(-f.t.z * sgn, -f.t.x * sgn);   // towards the driver
       mb.attr({ surface: SURF.METAL });
       box(mb, { x: base.x, y: base.y + 0.55, z: base.z }, { x: 0.46, y: 1.1, z: 0.46 },
-        { attrs: { surface: SURF.METAL } });
-      cylinder(mb, { x: base.x, y: base.y + 1.1, z: base.z }, { x: base.x, y: base.y + 2.6, z: base.z },
+        { yaw: faceYaw, attrs: { surface: SURF.METAL } });
+      cylinder(mb, { x: base.x, y: base.y + 1.1, z: base.z }, { x: base.x, y: base.y + 2.95, z: base.z },
         0.07, 0.06, 10, { attrs: { surface: SURF.METAL } });
-      // warning lights
+      // twin red warning lights, looking at the driver
+      const rightOfFace = { x: Math.sin(faceYaw), z: -Math.cos(faceYaw) };
+      const fwd = { x: Math.cos(faceYaw), z: Math.sin(faceYaw) };
       for (const o of [-0.42, 0.42]) {
         mb.attr({ surface: SURF.SIGNAL_LENS });
         cylinder(mb,
-          { x: base.x + f.right.x * o, y: base.y + 2.25, z: base.z + f.right.z * o },
-          { x: base.x + f.right.x * o - f.t.x * sgn * 0.06, y: base.y + 2.25, z: base.z + f.right.z * o - f.t.z * sgn * 0.06 },
+          { x: base.x + rightOfFace.x * o, y: base.y + 2.25, z: base.z + rightOfFace.z * o },
+          { x: base.x + rightOfFace.x * o + fwd.x * 0.08, y: base.y + 2.25, z: base.z + rightOfFace.z * o + fwd.z * 0.08 },
           0.13, 0.12, 10, { attrs: { surface: SURF.SIGNAL_LENS, laneA: 63, laneB: 0 } });
       }
-      // St Andrew's cross
-      mb.attr({ surface: SURF.SIGN_GIVEWAY });
-      for (const rot of [0.6, -0.6]) {
-        box(mb, { x: base.x, y: base.y + 3.0, z: base.z }, { x: 1.3, y: 0.18, z: 0.05 },
-          { yaw: Math.atan2(f.right.z, f.right.x), attrs: { surface: SURF.SIGN_GIVEWAY } });
+      // St Andrew's cross: two arms at 45 degrees, not two copies of one bar
+      const saltire = { x: base.x, y: base.y + 3.05, z: base.z };
+      for (const rot of [Math.PI / 4, -Math.PI / 4]) {
+        const ca = Math.cos(rot), sa = Math.sin(rot);
+        const L = 0.62, W = 0.11;
+        const pts = [[-L, -W], [L, -W], [L, W], [-L, W]].map(([x, y]) => ({ x: x * ca - y * sa, y: x * sa + y * ca }));
+        platePoly(mb, saltire, faceYaw, pts, SURF.SIGN_INFO, 7, 0.03);
       }
       barriers.push({
         pivot: { x: base.x, y: base.y + 1.15, z: base.z },
-        axis: Math.atan2(f.right.z * -sgn, f.right.x * -sgn),
-        length: Math.max(4.5, edge.profile.laneWidth * 2.2),
+        // the boom sweeps from the post back across its own half of the carriageway
+        axis: Math.atan2(-f.right.z * side, -f.right.x * side),
+        length: clamp(Math.abs(lat) + 0.6, 3.2, 9.0),
         side: sgn,
       });
     }

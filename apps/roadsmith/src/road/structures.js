@@ -43,7 +43,7 @@ function buildBridge(mb, edge, ribbon, piers) {
   const s0 = ribbon.s0, s1 = ribbon.s1;
   const span = s1 - s0;
   const step = clamp(span / Math.max(4, Math.round(span / 4)), 1.5, 5);
-  const deckThickness = 0.95;
+  const deckThickness = 0.65;   // slab; girders add the rest of the 1.6 m structure depth
   const rowsSoffit = [];
   const rowsFasciaL = [];
   const rowsFasciaR = [];
@@ -83,24 +83,29 @@ function buildBridge(mb, edge, ribbon, piers) {
       }
     }
   }
-  // longitudinal girders under the deck
-  const girderCount = 3;
+  // longitudinal girders under the deck, spaced like real precast beams (~2.3 m)
+  const deckWidth = (() => {
+    const { row } = sectionExtent(edge, (s0 + s1) / 2);
+    const L = row.pts[0].p, R = row.pts[row.pts.length - 1].p;
+    return Math.hypot(R.x - L.x, R.z - L.z);
+  })();
+  const girderCount = clamp(Math.round((deckWidth - 2.4) / 2.325), 3, 11);
   for (let g = 0; g < girderCount; g++) {
-    const f = (g + 0.5) / girderCount;
+    const f = 0.08 + (0.84 * (g + 0.5)) / girderCount;
     const path = stations.map((s) => {
       const { row } = sectionExtent(edge, s);
       const L = row.pts[0].p, R = row.pts[row.pts.length - 1].p;
-      return { x: lerp(L.x, R.x, f), y: Math.min(L.y, R.y) - 0.95, z: lerp(L.z, R.z, f) };
+      return { x: lerp(L.x, R.x, f), y: Math.min(L.y, R.y) - 0.65, z: lerp(L.z, R.z, f) };
     });
     sweep(mb, path, [
-      { x: -0.45, y: 0 }, { x: 0.45, y: 0 }, { x: 0.45, y: -0.1 }, { x: 0.16, y: -0.22 },
-      { x: 0.16, y: -0.95 }, { x: 0.42, y: -1.08 }, { x: 0.42, y: -1.2 }, { x: -0.42, y: -1.2 },
-      { x: -0.42, y: -1.08 }, { x: -0.16, y: -0.95 }, { x: -0.16, y: -0.22 }, { x: -0.45, y: -0.1 },
+      { x: -0.34, y: 0 }, { x: 0.34, y: 0 }, { x: 0.34, y: -0.08 }, { x: 0.11, y: -0.18 },
+      { x: 0.11, y: -0.76 }, { x: 0.30, y: -0.86 }, { x: 0.30, y: -0.95 }, { x: -0.30, y: -0.95 },
+      { x: -0.30, y: -0.86 }, { x: -0.11, y: -0.76 }, { x: -0.11, y: -0.18 }, { x: -0.34, y: -0.08 },
     ], { surface: SURF.CONCRETE, closedProfile: true, capEnds: true });
   }
 
   // piers every ~24 m plus abutments at each end
-  const pierSpacing = 24;
+  const pierSpacing = 48;   // one span between supports, per the reference basis
   const pierCount = Math.max(0, Math.round(span / pierSpacing) - 1);
   for (let i = 1; i <= pierCount; i++) {
     const s = s0 + (span * i) / (pierCount + 1);

@@ -31,6 +31,7 @@ export class RoadNetwork {
       elevationLocked: !!opts.elevationLocked,
       kind: 'end',
       tag: opts.tag || null,
+      cap: opts.cap || null,              // null = bull-nose turning head, 'nose' = gore wedge
     };
     this.nodes.set(node.id, node);
     this.version++;

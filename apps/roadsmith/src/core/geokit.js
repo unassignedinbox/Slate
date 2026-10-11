@@ -218,3 +218,55 @@ export function superEllipse(cx, cy, rx, ry, n, power = 2.6, yScaleTop = 1) {
   }
   return pts;
 }
+
+/**
+ * Flat signboard / plate.  `pts` are convex, anticlockwise, in plate space (x across, y up,
+ * metres); the artwork face looks along +yaw and carries uv normalised to [-1,1], which is the
+ * space the sign shader paints in.  Back and rim are plain metal.  Quads throughout, except a
+ * triangular plate, which is one triangle by definition.
+ */
+export function platePoly(mb, centre, yaw, pts, surf, variant = 0, thick = 0.035, backSurf = SURF.METAL) {
+  const f = { x: Math.cos(yaw), z: Math.sin(yaw) };
+  const u = { x: Math.sin(yaw), z: -Math.cos(yaw) };      // u x up = f
+  let hw = 1e-3, hh = 1e-3;
+  for (const q of pts) { hw = Math.max(hw, Math.abs(q.x)); hh = Math.max(hh, Math.abs(q.y)); }
+  const mk = (q, sgn, sid, scaled) => mb.vertex({
+    x: centre.x + u.x * q.x + f.x * thick * 0.5 * sgn,
+    y: centre.y + q.y,
+    z: centre.z + u.z * q.x + f.z * thick * 0.5 * sgn,
+  }, {
+    u: scaled ? q.x / hw : q.x, v: scaled ? q.y / hh : q.y,
+    surface: sid, laneA: variant, laneB: 0, wear: 0.1, ao: 1, flags: 0, mark: 0, laneWidth: 1, param: 0,
+  });
+  mb.attr({ surface: surf });
+  const F = pts.map((q) => mk(q, 1, surf, true));
+  mb.attr({ surface: backSurf });
+  const B = pts.map((q) => mk(q, -1, backSurf, false));
+  const n = pts.length;
+  if (n === 3) {
+    mb.attr({ surface: surf }); mb.tri(F[0], F[1], F[2]);
+    mb.attr({ surface: backSurf }); mb.tri(B[2], B[1], B[0]);
+  } else {
+    mb.attr({ surface: surf });
+    for (let i = 1; i + 2 <= n - 1; i += 2) mb.quad(F[0], F[i], F[i + 1], F[i + 2]);
+    mb.attr({ surface: backSurf });
+    for (let i = 1; i + 2 <= n - 1; i += 2) mb.quad(B[i + 2], B[i + 1], B[i], B[0]);
+  }
+  mb.attr({ surface: backSurf });
+  for (let i = 0; i < n; i++) mb.quad(B[i], B[(i + 1) % n], F[(i + 1) % n], F[i]);
+  return { hw, hh };
+}
+
+/** Regular n-gon in plate space. */
+export function regularPoly(sides, r, rot = 0) {
+  return Array.from({ length: sides }, (_, i) => {
+    const a = rot + (i / sides) * TAU;
+    return { x: Math.cos(a) * r, y: Math.sin(a) * r };
+  });
+}
+
+/** Axis-aligned rectangle in plate space. */
+export function rectPoly(w, h) {
+  const x = w / 2, y = h / 2;
+  return [{ x: -x, y: -y }, { x, y: -y }, { x, y }, { x: -x, y }];
+}

@@ -3,7 +3,7 @@
 // surface-condition pass (patches, potholes, calming, works zones).
 
 import { RoadNetwork, resetIds, classRank } from './network.js';
-import { defaultProfile, ROAD_CLASS } from './profile.js';
+import { defaultProfile, ROAD_CLASS, totalWidth } from './profile.js';
 import { makeRailLine, findRailCrossings } from './rail.js';
 import { makeRng, fbm2D } from '../core/rng.js';
 import { clamp, lerp, v3dist2D, normXZ, v3sub } from '../core/math.js';
@@ -146,7 +146,15 @@ export function generateCity(settings) {
   const meta = { highway: null, rail: [], subway: null };
 
   // ---------------------------------------------------------------- motorway + diamond interchange
+  // Dimensions follow a standard diamond: 2 x 48 m spans over the cross road, deck soffit
+  // 5.2 m clear, 4% mainline grade off the structure, ramp terminals 260 m apart, 6% max on
+  // the ramps.  (FHWA / Caltrans HDM ch.500 / MassDOT interchange guide basis.)
   if (settings.highway) {
+    const DECK = 7.2;            // top of deck above the cross road
+    const SPAN = 48;             // one structural span
+    const GRADE_MAIN = 0.04;
+    const GRADE_RAMP = 0.06;
+    const TERMINAL_SPACING = 260;
     const xH = bounds.max.x + 190;
     const spineJ = Math.floor(nz / 2);
     const arterialRow = grid.map((col) => col[spineJ]).filter(Boolean);
@@ -155,12 +163,16 @@ export function generateCity(settings) {
     const hw = makeProfile(ROAD_CLASS.HIGHWAY);
     const ramp = makeProfile(ROAD_CLASS.RAMP);
 
+    const zTop = SPAN;                                   // end of the flat deck
+    const zToe = zTop + DECK / GRADE_MAIN;               // bottom of the 4% approach grade
+    const zGore = zToe + 95;                             // second ramp nose, 95 m further out
+    const zEnd = zGore + 180;                            // approach tails
+    // every ramp gets its own nose on the mainline: a motorway never has a four-way junction
+    const zs = [-zEnd, -zGore, -zToe, -zTop, zTop, zToe, zGore, zEnd];
+    const ys = [0, 0, 0, DECK, DECK, 0, 0, 0];           // tails sit on the terrain, 4% up to the deck
     const h = [];
-    const zs = [-1, -0.56, -0.26, 0.26, 0.56, 1];
-    const len = cell * (nz + 1.4);
-    const ys = [0.2, 0.9, 7.6, 7.6, 0.9, 0.2];
     for (let k = 0; k < zs.length; k++) {
-      h.push(net.addNode({ x: xH, y: ys[k], z: zC + zs[k] * len * 0.5 }, { tag: `hw${k}`, control: 'none' }));
+      h.push(net.addNode({ x: xH, y: ys[k], z: zC + zs[k] }, { tag: `hw${k}`, control: 'none' }));
     }
     for (let k = 0; k < h.length - 1; k++) {
       const elevated = ys[k] > 5 && ys[k + 1] > 5;
@@ -170,32 +182,52 @@ export function generateCity(settings) {
         name: `Motorway ${k}`,
       });
     }
-    meta.highway = { nodes: h.map((n) => n.id), x: xH };
+    meta.highway = { nodes: h.map((n) => n.id), x: xH, deck: DECK, span: SPAN };
 
-    // extend the arterial east, passing beneath the viaduct
-    const underA = net.addNode({ x: xH - 95, y: 0, z: zC }, { control: 'signal' });
-    const underB = net.addNode({ x: xH + 95, y: 0, z: zC }, { control: 'signal' });
+    // the cross road runs under the structure, with a ramp terminal either side
+    const half = TERMINAL_SPACING / 2;
+    const underA = net.addNode({ x: xH - half, y: 0, z: zC }, { control: 'signal' });
+    const underB = net.addNode({ x: xH + half, y: 0, z: zC }, { control: 'signal' });
     const arterial = makeProfile(ROAD_CLASS.ARTERIAL);
     net.addEdge(east.id, underA.id, { profile: { ...arterial } });
     net.addEdge(underA.id, underB.id, { profile: { ...arterial }, structure: 'ground', name: 'Underpass' });
-    const far = net.addNode({ x: xH + 240, y: 0, z: zC }, {});
+    const far = net.addNode({ x: xH + half + 150, y: 0, z: zC }, {});
     net.addEdge(underB.id, far.id, { profile: { ...arterial } });
 
-    // four diamond ramps
+    // Four diamond ramps.  A ramp does NOT share a node with the mainline: at 5 degrees of
+    // divergence a shared node would make the junction solver fillet two near-parallel kerbs
+    // and pave a 250 m asphalt blob.  Real gores work the other way round - the ramp starts
+    // beside the motorway with its shoulder touching, tapered to a physical nose, and the gap
+    // opens as it peels away.  So the nose node is offset laterally by the two outer half
+    // widths and capped with a wedge; nothing overlaps and the gore between them is grass.
+    const mainHalf = totalWidth(hw) / 2 + 4.2;    // + verge/batter rings
+    const rampHalf = totalWidth(ramp) / 2 + 3.4;
+    const gore = mainHalf + rampHalf;
     const rampSpec = [
-      { from: h[1], to: underA, bow: -1, dirSign: -1 },
-      { from: h[4], to: underA, bow: 1, dirSign: 1 },
-      { from: h[1], to: underB, bow: 1, dirSign: -1 },
-      { from: h[4], to: underB, bow: -1, dirSign: 1 },
+      { at: 2, to: underA, outX: -1 },   // south-west quadrant: exit
+      { at: 1, to: underB, outX: 1 },    // south-east quadrant: entry
+      { at: 5, to: underA, outX: -1 },   // north-west quadrant
+      { at: 6, to: underB, outX: 1 },    // north-east quadrant
     ];
     for (const r of rampSpec) {
-      const a = r.from.p, b = r.to.p;
-      const mid1 = { x: a.x + (r.to === underA ? -26 : 26), y: lerp(a.y, b.y, 0.45), z: lerp(a.z, b.z, 0.35) };
-      const mid2 = { x: lerp(a.x, b.x, 0.72), y: lerp(a.y, b.y, 0.85), z: lerp(a.z, b.z, 0.82) };
-      net.addEdge(r.from.id, r.to.id, {
+      const anchor = h[r.at].p;
+      const zSide = Math.sign(anchor.z - zC) || 1;
+      const nose = net.addNode(
+        { x: xH + r.outX * gore, y: anchor.y, z: anchor.z },
+        { control: 'none', cap: 'nose', tag: `gore${r.at}` },
+      );
+      const b = r.to.p;
+      const a = nose.p;
+      const rise = Math.abs(a.y - b.y);
+      const run = Math.hypot(a.x - b.x, a.z - b.z);
+      const grade = run > 1 ? rise / run : 0;
+      // leave the gore almost parallel to the motorway, then one sweeping curve to the terminal
+      const mid1 = { x: a.x + r.outX * 26, y: lerp(a.y, b.y, 0.26), z: lerp(a.z, b.z, 0.38) };
+      const mid2 = { x: lerp(a.x, b.x, 0.76), y: lerp(a.y, b.y, 0.8), z: b.z + zSide * 46 };
+      net.addEdge(nose.id, r.to.id, {
         profile: { ...ramp },
         via: [mid1, mid2],
-        name: 'Ramp',
+        name: grade > GRADE_RAMP ? 'Ramp (steep)' : 'Ramp',
       });
     }
   }

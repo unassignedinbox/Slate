@@ -10,6 +10,7 @@ import { buildSurface } from '../src/road/build.js';
 import { FLOATS_PER_VERTEX } from '../src/core/mesh.js';
 import { buildScene, assembleScene, defaultSettings } from '../src/road/scene.js';
 import { solveNetwork } from '../src/road/junction.js';
+import { pointInPolygonXZ } from '../src/core/math.js';
 
 const args = process.argv.slice(2);
 const arg = (k, d) => {
@@ -274,8 +275,13 @@ if (!sceneMode) {
     };
     let gBuried = 0, gWorst = 0, gTotal = 0;
     for (const rib of scene.surface.ribbons.values()) {
+      const prof = rib.edge?.profile || {};
+      // Classes with no footway reuse the walk/kerb group names for a drainage ditch, which is
+      // meant to sit below the surrounding ground: only the carriageway must stay clear.
+      const ditch = !(prof.footwayL > 0) && !(prof.footwayR > 0);
       for (const st of rib.stations) {
         for (const q of st.row.pts) {
+          if (ditch && (q.group === 'walk' || q.group === 'kerb' || q.group === 'verge')) continue;
           const p = q.world || q.p;
           gTotal++;
           const gy = groundAt(p.x, p.z);
@@ -287,11 +293,16 @@ if (!sceneMode) {
     }
     let plateUnder = 0, plateTotal = 0;
     for (const info of scene.surface.junctions.values()) {
+      // Sample the disc but only score points that actually land on the plate: a 2-branch joint
+      // on a 41 m motorway has a radius of 16 m and a plate only a few metres deep, so most of
+      // the disc is verge, where the apron is *supposed* to sit at terrain level.
+      const ring = info.boundary;
       for (let a = 0; a < 12; a++) {
         for (const f of [0.3, 0.6, 0.9]) {
           const r = info.radius * f;
           const x = info.centre.x + Math.cos((a / 12) * Math.PI * 2) * r;
           const z = info.centre.z + Math.sin((a / 12) * Math.PI * 2) * r;
+          if (ring && ring.length > 2 && !pointInPolygonXZ({ x, y: 0, z }, ring)) continue;
           plateTotal++;
           const gy = groundAt(x, z);
           if (gy !== null && gy > (info.centre.y ?? 0) + 0.05) plateUnder++;

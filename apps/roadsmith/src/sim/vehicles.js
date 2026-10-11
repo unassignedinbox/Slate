@@ -70,7 +70,8 @@ export function buildVehicleMesh(name) {
   const mb = new MeshBuilder(`vehicle-${name}`);
   const L = spec.len;
   const sil = silhouette(spec);
-  const sections = sil.map((q) => ring(-L / 2 + q.f * L, q.w, q.y0, q.y1, q.r).map((p) => ({ ...p, surface: SURF.CAR_PAINT })));
+  // +X is the nose: the instance transform turns local +X into the direction of travel.
+  const sections = sil.map((q) => ring(L / 2 - q.f * L, q.w, q.y0, q.y1, q.r).map((p) => ({ ...p, surface: SURF.CAR_PAINT }))).reverse();
   mb.attr({ surface: SURF.CAR_PAINT });
   loft(mb, sections, { closed: true, surface: SURF.CAR_PAINT, uStep: 0.4, vStep: 0.2 });
 
@@ -83,22 +84,22 @@ export function buildVehicleMesh(name) {
   if (spec.type === 'car') {
     const roofY = spec.roof, beltY = spec.hood + 0.14;
     for (const sgn of [-1, 1]) {
-      glass(-L * 0.02, L * 0.3, beltY, roofY - 0.1, sgn * (spec.width / 2 - 0.02), 0.03);
-      glass(L * 0.16, L * 0.2, beltY, roofY - 0.16, sgn * (spec.width / 2 - 0.03), 0.03);
+      glass(L * 0.02, L * 0.3, beltY, roofY - 0.1, sgn * (spec.width / 2 - 0.02), 0.03);
+      glass(-L * 0.16, L * 0.2, beltY, roofY - 0.16, sgn * (spec.width / 2 - 0.03), 0.03);
     }
-    box(mb, { x: -L * 0.16, y: (beltY + roofY) / 2 + 0.06, z: 0 },
+    box(mb, { x: L * 0.16, y: (beltY + roofY) / 2 + 0.06, z: 0 },
       { x: 0.1, y: roofY - beltY, z: spec.width - 0.18 }, { attrs: { surface: SURF.CAR_GLASS } });
-    box(mb, { x: L * 0.3, y: (beltY + roofY) / 2 + 0.02, z: 0 },
+    box(mb, { x: -L * 0.3, y: (beltY + roofY) / 2 + 0.02, z: 0 },
       { x: 0.1, y: roofY - beltY - 0.18, z: spec.width - 0.3 }, { attrs: { surface: SURF.CAR_GLASS } });
   } else {
     const beltY = spec.hood + 0.25, roofY = spec.roof - 0.12;
-    box(mb, { x: -L / 2 + 0.22, y: (beltY + roofY) / 2, z: 0 },
+    box(mb, { x: L / 2 - 0.22, y: (beltY + roofY) / 2, z: 0 },
       { x: 0.08, y: roofY - beltY, z: spec.width - 0.2 }, { attrs: { surface: SURF.CAR_GLASS } });
     for (const sgn of [-1, 1]) {
-      glass(-L * 0.28, L * 0.18, beltY, roofY, sgn * (spec.width / 2 - 0.02), 0.03);
+      glass(L * 0.28, L * 0.18, beltY, roofY, sgn * (spec.width / 2 - 0.02), 0.03);
       if (spec.type === 'bus') {
         for (let i = 0; i < 4; i++) {
-          glass(-L * 0.1 + i * L * 0.2, L * 0.15, beltY - 0.1, roofY, sgn * (spec.width / 2 - 0.02), 0.03);
+          glass(L * 0.1 - i * L * 0.2, L * 0.15, beltY - 0.1, roofY, sgn * (spec.width / 2 - 0.02), 0.03);
         }
       }
     }
@@ -107,22 +108,22 @@ export function buildVehicleMesh(name) {
   // lamps + trim
   mb.attr({ surface: SURF.LIGHT_WHITE });
   for (const sgn of [-1, 1]) {
-    box(mb, { x: -L / 2 + 0.06, y: spec.hood - 0.18, z: sgn * spec.width * 0.33 },
+    box(mb, { x: L / 2 - 0.06, y: spec.hood - 0.18, z: sgn * spec.width * 0.33 },
       { x: 0.12, y: 0.17, z: 0.42 }, { attrs: { surface: SURF.LIGHT_WHITE } });
   }
   mb.attr({ surface: SURF.LIGHT_RED });
   for (const sgn of [-1, 1]) {
-    box(mb, { x: L / 2 - 0.06, y: spec.hood - 0.1, z: sgn * spec.width * 0.34 },
+    box(mb, { x: -L / 2 + 0.06, y: spec.hood - 0.1, z: sgn * spec.width * 0.34 },
       { x: 0.1, y: 0.2, z: 0.4 }, { attrs: { surface: SURF.LIGHT_RED } });
   }
   mb.attr({ surface: SURF.CHROME });
-  box(mb, { x: -L / 2 + 0.02, y: spec.hood - 0.42, z: 0 }, { x: 0.1, y: 0.22, z: spec.width * 0.78 },
+  box(mb, { x: L / 2 - 0.02, y: spec.hood - 0.42, z: 0 }, { x: 0.1, y: 0.22, z: spec.width * 0.78 },
     { attrs: { surface: SURF.CHROME } });
-  box(mb, { x: L / 2 - 0.02, y: spec.hood - 0.38, z: 0 }, { x: 0.1, y: 0.2, z: spec.width * 0.74 },
+  box(mb, { x: -L / 2 + 0.02, y: spec.hood - 0.38, z: 0 }, { x: 0.1, y: 0.2, z: spec.width * 0.74 },
     { attrs: { surface: SURF.CHROME } });
   // mirrors
   for (const sgn of [-1, 1]) {
-    box(mb, { x: -L * 0.1, y: spec.hood + 0.22, z: sgn * (spec.width / 2 + 0.1) },
+    box(mb, { x: L * 0.1, y: spec.hood + 0.22, z: sgn * (spec.width / 2 + 0.1) },
       { x: 0.22, y: 0.11, z: 0.2 }, { attrs: { surface: SURF.CAR_PAINT } });
   }
 
@@ -130,11 +131,11 @@ export function buildVehicleMesh(name) {
   const wx = spec.wheelbase / 2;
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
-      wheels.push({ x: sx * wx, y: spec.wheelR, z: sz * (spec.width / 2 - spec.wheelR * 0.38), steer: sx < 0 });
+      wheels.push({ x: sx * wx, y: spec.wheelR, z: sz * (spec.width / 2 - spec.wheelR * 0.38), steer: sx > 0 });
     }
   }
   if (spec.type === 'bus' || spec.type === 'truck') {
-    for (const sz of [-1, 1]) wheels.push({ x: wx - 1.3, y: spec.wheelR, z: sz * (spec.width / 2 - spec.wheelR * 0.38), steer: false });
+    for (const sz of [-1, 1]) wheels.push({ x: -(wx - 1.3), y: spec.wheelR, z: sz * (spec.width / 2 - spec.wheelR * 0.38), steer: false });
   }
 
   return { mesh: mb.finish(), spec: { ...spec, name }, wheels };

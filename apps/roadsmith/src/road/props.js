@@ -3,11 +3,12 @@
 // no low-poly stand-ins.
 
 import { MeshBuilder, SURF } from '../core/mesh.js';
-import { box, cylinder, lathe, sweep, loft, quadPatch, frameFor } from '../core/geokit.js';
+import { box, cylinder, lathe, sweep, loft, quadPatch, frameFor, platePoly, regularPoly, rectPoly } from '../core/geokit.js';
 import {
   v3, v3add, v3sub, v3scale, v3madd, v3norm, normXZ, clamp, lerp, TAU,
 } from '../core/math.js';
 import { laneBand, ROAD_CLASS, GUTTER_WIDTH, KERB } from './profile.js';
+import { classRank } from './network.js';
 import { worldSection } from './section.js';
 
 export const PROP_LAYERS = [
@@ -61,16 +62,23 @@ export function lampPost(mb, pos, yaw, opts = {}) {
   return { lightPos: { x: hp.x, y: hp.y - 0.1, z: hp.z }, head: hp };
 }
 
-/** Mast-arm signal assembly: pole, outreach, primary head(s), pedestrian head, controller box. */
-export function trafficSignal(mb, pos, yaw, reach, groupId, opts = {}) {
-  const dir = { x: Math.cos(yaw), y: 0, z: Math.sin(yaw) };
+/**
+ * Mast-arm signal assembly.  The arm reaches *across* the carriageway while the heads look
+ * back along the approach, so drivers see the lenses and not the back of the housing.
+ * @param armYaw  direction the outreach arm extends (pole -> over the road)
+ * @param opts.faceYaw direction the lenses point (towards oncoming traffic)
+ */
+export function trafficSignal(mb, pos, armYaw, reach, groupId, opts = {}) {
+  const faceYaw = opts.faceYaw ?? armYaw;
+  const arm = { x: Math.cos(armYaw), y: 0, z: Math.sin(armYaw) };
+  const face = { x: Math.cos(faceYaw), y: 0, z: Math.sin(faceYaw) };
   const h = 6.2;
   mb.attr({ surface: SURF.METAL });
   lathe(mb, pos, [{ x: 0.26, y: 0 }, { x: 0.26, y: 0.1 }, { x: 0.2, y: 0.14 }], 12, { surface: SURF.CONCRETE });
   cylinder(mb, { ...pos, y: pos.y + 0.12 }, { ...pos, y: pos.y + h }, 0.115, 0.095, 14, { attrs: STEEL });
-  const arm = Math.max(1.2, reach);
+  const armLen = Math.max(1.2, reach);
   const elbow = { x: pos.x, y: pos.y + h, z: pos.z };
-  const tip = { x: pos.x + dir.x * arm, y: pos.y + h - 0.12, z: pos.z + dir.z * arm };
+  const tip = { x: pos.x + arm.x * armLen, y: pos.y + h - 0.12, z: pos.z + arm.z * armLen };
   const path = [];
   for (let i = 0; i <= 6; i++) {
     const t = i / 6;
@@ -84,36 +92,39 @@ export function trafficSignal(mb, pos, yaw, reach, groupId, opts = {}) {
     { x: -0.05, y: -0.05 }, { x: 0.05, y: -0.05 }, { x: 0.05, y: 0.05 }, { x: -0.05, y: 0.05 },
   ], { surface: SURF.METAL, closedProfile: true, capEnds: true });
 
+  // three-aspect head: housing squared to the face, lenses + visors on the driver's side
   const headAt = (p, gid) => {
-    box(mb, { x: p.x, y: p.y - 0.52, z: p.z }, { x: 0.34, y: 0.98, z: 0.3 }, { yaw, attrs: { surface: SURF.PLASTIC } });
+    mb.attr({ surface: SURF.PLASTIC });
+    box(mb, { x: p.x, y: p.y - 0.52, z: p.z }, { x: 0.34, y: 0.98, z: 0.3 }, { yaw: faceYaw, attrs: PLASTIC });
     for (let l = 0; l < 3; l++) {
       const ly = p.y - 0.16 - l * 0.32;
-      const cx = p.x + Math.cos(yaw + Math.PI / 2) * 0;
       mb.attr({ surface: SURF.SIGNAL_LENS });
       cylinder(mb,
-        { x: cx - dir.x * 0.15, y: ly, z: p.z - dir.z * 0.15 },
-        { x: cx - dir.x * 0.19, y: ly, z: p.z - dir.z * 0.19 },
+        { x: p.x + face.x * 0.15, y: ly, z: p.z + face.z * 0.15 },
+        { x: p.x + face.x * 0.19, y: ly, z: p.z + face.z * 0.19 },
         0.115, 0.1, 12,
         { attrs: { surface: SURF.SIGNAL_LENS, laneA: gid, laneB: l } });
       mb.attr({ surface: SURF.PLASTIC });
-      // visor
       cylinder(mb,
-        { x: cx - dir.x * 0.19, y: ly, z: p.z - dir.z * 0.19 },
-        { x: cx - dir.x * 0.32, y: ly + 0.03, z: p.z - dir.z * 0.32 },
+        { x: p.x + face.x * 0.19, y: ly, z: p.z + face.z * 0.19 },
+        { x: p.x + face.x * 0.32, y: ly + 0.03, z: p.z + face.z * 0.32 },
         0.125, 0.13, 12, { attrs: PLASTIC, capStart: false, capEnd: false });
     }
   };
   headAt({ x: tip.x, y: tip.y, z: tip.z }, groupId);
-  if (opts.secondary !== false) headAt({ x: pos.x + dir.x * 0.3, y: pos.y + 3.3, z: pos.z + dir.z * 0.3 }, groupId);
+  // secondary head low on the post, for the driver stopped at the line
+  if (opts.secondary !== false) headAt({ x: pos.x + face.x * 0.3, y: pos.y + 3.3, z: pos.z + face.z * 0.3 }, groupId);
 
-  // pedestrian head facing across the footway
-  const px = pos.x - dir.x * 0.26, pz = pos.z - dir.z * 0.26;
-  box(mb, { x: px, y: pos.y + 2.4, z: pz }, { x: 0.3, y: 0.44, z: 0.26 }, { yaw: yaw + Math.PI, attrs: PLASTIC });
+  // pedestrian head: looks back across the crossing at the waiting side opposite
+  const px = pos.x + arm.x * 0.26, pz = pos.z + arm.z * 0.26;
+  mb.attr({ surface: SURF.PLASTIC });
+  box(mb, { x: px, y: pos.y + 2.4, z: pz }, { x: 0.3, y: 0.44, z: 0.26 }, { yaw: armYaw, attrs: PLASTIC });
   mb.attr({ surface: SURF.SIGNAL_LENS });
-  box(mb, { x: px - dir.x * 0.14, y: pos.y + 2.4, z: pz - dir.z * 0.14 }, { x: 0.22, y: 0.34, z: 0.04 },
-    { yaw: yaw + Math.PI, attrs: { surface: SURF.SIGNAL_LENS, laneA: groupId, laneB: 3 } });
+  box(mb, { x: px + arm.x * 0.14, y: pos.y + 2.4, z: pz + arm.z * 0.14 }, { x: 0.22, y: 0.34, z: 0.04 },
+    { yaw: armYaw, attrs: { surface: SURF.SIGNAL_LENS, laneA: groupId, laneB: 3 } });
+  // controller cabinet tucked behind the pole, clear of the carriageway
   mb.attr({ surface: SURF.METAL });
-  box(mb, { x: pos.x - dir.x * 0.55, y: pos.y + 0.62, z: pos.z - dir.z * 0.55 }, { x: 0.52, y: 1.15, z: 0.38 }, { yaw, attrs: STEEL });
+  box(mb, { x: pos.x - arm.x * 0.55, y: pos.y + 0.62, z: pos.z - arm.z * 0.55 }, { x: 0.52, y: 1.15, z: 0.38 }, { yaw: armYaw, attrs: STEEL });
   return { tip };
 }
 
@@ -235,29 +246,44 @@ export function billboard(mb, pos, yaw, opts = {}) {
 }
 
 /** Pole-mounted sign plate: disc, triangle or rectangle. */
+/** Real-world sign catalogue: plate shape, size and the legend the shader paints on it. */
+export const SIGN_KINDS = {
+  speed:     { surf: SURF.SIGN_SPEED,   pts: () => regularPoly(16, 0.36), variant: 50,  h: 2.15 },
+  stop:      { surf: SURF.SIGN_STOP,    pts: () => regularPoly(8, 0.40, Math.PI / 8), variant: 0, h: 2.1 },
+  giveway:   { surf: SURF.SIGN_GIVEWAY, pts: () => regularPoly(3, 0.52, Math.PI / 2), variant: 0, h: 2.1 },
+  priority:  { surf: SURF.SIGN_INFO,    pts: () => regularPoly(4, 0.34), variant: 1, h: 2.2 },
+  noentry:   { surf: SURF.SIGN_INFO,    pts: () => regularPoly(16, 0.36), variant: 2, h: 2.15 },
+  crossing:  { surf: SURF.SIGN_INFO,    pts: () => regularPoly(4, 0.42, Math.PI / 2), variant: 3, h: 2.15 },
+  direction: { surf: SURF.SIGN_INFO,    pts: () => rectPoly(1.30, 0.42), variant: 4, h: 2.4 },
+  name:      { surf: SURF.SIGN_INFO,    pts: () => rectPoly(0.92, 0.22), variant: 5, h: 2.5 },
+  parking:   { surf: SURF.SIGN_INFO,    pts: () => rectPoly(0.56, 0.56), variant: 0, h: 2.2 },
+  works:     { surf: SURF.SIGN_INFO,    pts: () => rectPoly(0.95, 0.72), variant: 6, h: 1.15 },
+  info:      { surf: SURF.SIGN_INFO,    pts: () => rectPoly(0.56, 0.56), variant: 0, h: 2.2 },
+};
+
+/**
+ * Post-mounted sign.  `yaw` is the direction the face looks, i.e. back along the approach
+ * towards the driver who has to read it.
+ */
 export function signPost(mb, pos, yaw, kind = 'speed', opts = {}) {
-  const h = opts.height ?? 2.35;
-  cylinder(mb, pos, { x: pos.x, y: pos.y + h, z: pos.z }, 0.042, 0.04, 10, { attrs: STEEL });
-  const dir = { x: Math.cos(yaw), y: 0, z: Math.sin(yaw) };
-  const face = { x: pos.x + dir.x * 0.04, y: pos.y + h - 0.05, z: pos.z + dir.z * 0.04 };
-  const surf = kind === 'stop' ? SURF.SIGN_STOP : kind === 'giveway' ? SURF.SIGN_GIVEWAY : kind === 'parking' ? SURF.SIGN_INFO : SURF.SIGN_SPEED;
-  mb.attr({ surface: surf });
-  if (kind === 'giveway') {
-    const r = 0.42;
-    const idx = [];
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * TAU + Math.PI / 2;
-      idx.push(mb.vertex({
-        x: face.x + Math.cos(a) * r * -dir.z, y: face.y + Math.sin(a) * r, z: face.z + Math.cos(a) * r * dir.x,
-      }, { u: Math.cos(a), v: Math.sin(a), surface: surf }));
-    }
-    mb.tri(idx[0], idx[1], idx[2]);
-    mb.tri(idx[2], idx[1], idx[0]);
-  } else if (kind === 'info' || kind === 'parking') {
-    box(mb, face, { x: 0.62, y: 0.82, z: 0.035 }, { yaw: yaw + Math.PI / 2, attrs: { surface: surf } });
-  } else {
-    lathe(mb, { x: face.x, y: face.y, z: face.z }, [{ x: 0, y: 0 }, { x: 0.36, y: 0 }, { x: 0.36, y: 0.03 }, { x: 0, y: 0.03 }], 18, { surface: surf });
+  const spec = SIGN_KINDS[kind] || SIGN_KINDS.info;
+  const pts = spec.pts();
+  let top = 0;
+  for (const q of pts) top = Math.max(top, q.y);
+  const bottom = opts.mount ?? spec.h;
+  const centreY = pos.y + bottom + top;
+  mb.attr({ surface: SURF.METAL });
+  cylinder(mb, pos, { x: pos.x, y: centreY + top + 0.06, z: pos.z }, 0.042, 0.038, 10, { attrs: STEEL });
+  platePoly(mb, { x: pos.x, y: centreY, z: pos.z }, yaw, pts, spec.surf, opts.variant ?? spec.variant, 0.035);
+  // second plate on the same post (speed repeater under a warning, name plate, etc.)
+  if (opts.plus) {
+    const sp2 = SIGN_KINDS[opts.plus] || SIGN_KINDS.info;
+    const pts2 = sp2.pts();
+    let t2 = 0;
+    for (const q of pts2) t2 = Math.max(t2, q.y);
+    platePoly(mb, { x: pos.x, y: pos.y + bottom - 0.14 - t2, z: pos.z }, yaw, pts2, sp2.surf, opts.plusVariant ?? sp2.variant, 0.035);
   }
+  return { top: centreY + top };
 }
 
 export function trafficCone(mb, pos, scale = 1) {
@@ -413,8 +439,11 @@ export function buildProps(net, surface, settings, rng) {
       const f = edge.curve.frameAt(s);
       const off = footwayOffset(p, sd);
       const t = off.edge + sd * Math.min(0.55, off.walk * 0.3);
+      // the face looks back at the traffic using that side of the road
+      const look = Math.atan2(-f.t.z * sd, -f.t.x * sd);
+      const limit = p.class === ROAD_CLASS.ARTERIAL ? 60 : p.class === ROAD_CLASS.COLLECTOR ? 50 : 30;
       signPost(mbs.signage, { x: f.p.x + f.right.x * t, y: f.p.y + 0.16, z: f.p.z + f.right.z * t },
-        Math.atan2(-f.t.z, -f.t.x) + (sd > 0 ? 0 : 0), rng.chance(0.5) ? 'speed' : 'parking');
+        look, rng.chance(0.62) ? 'speed' : 'parking', { variant: limit });
     }
 
     // bus stop + shelter on bigger streets
@@ -461,7 +490,7 @@ export function buildProps(net, surface, settings, rng) {
       const fs = edge.curve.frameAt(clamp(c.s0 - 11, 0, edge.curve.length));
       signPost(mbs.construction, {
         x: fs.p.x + fs.right.x * ((c.t0 + c.t1) / 2), y: fs.p.y, z: fs.p.z + fs.right.z * ((c.t0 + c.t1) / 2),
-      }, Math.atan2(-fs.t.z, -fs.t.x), 'info', { height: 1.6 });
+      }, Math.atan2(-fs.t.z, -fs.t.x), 'works', { mount: 1.15 });
     }
   }
 
@@ -474,22 +503,29 @@ export function buildProps(net, surface, settings, rng) {
       const mouth = j.mouths[m];
       const edge = net.edges.get(mouth.edgeId);
       const urban = edge.profile.footwayL > 0.05;
-      const inward = v3scale(mouth.dir, -1);
-      // the right-hand kerb point of this approach, pulled back onto the footway
-      const corner = mouth.kerbR;
-      const away = normXZ(v3sub(corner, j.centre));
+      // mouth.dir points out of the junction, so traffic arrives travelling along -mouth.dir.
+      // Faces look along +mouth.dir (at the driver); the mast arm runs across the carriageway.
+      const faceYaw = Math.atan2(mouth.dir.z, mouth.dir.x);
+      const across = normXZ(v3sub(mouth.kerbL, mouth.kerbR));
+      const armYaw = Math.atan2(across.z, across.x);
+      // stand the post behind the right-hand kerb, back at the stop line
       const base = {
-        x: corner.x + away.x * 0.9, y: corner.y + 0.02, z: corner.z + away.z * 0.9,
+        x: mouth.kerbR.x + mouth.dir.x * 1.5 - across.x * 0.8,
+        y: mouth.kerbR.y + 0.02,
+        z: mouth.kerbR.z + mouth.dir.z * 1.5 - across.z * 0.8,
       };
       if (signalised && urban) {
-        const yaw = Math.atan2(-mouth.dir.z, -mouth.dir.x);
-        const reach = clamp(mouth.halfWidth * 0.85, 1.6, 7.5);
-        trafficSignal(mbs.signals, base, yaw + Math.PI, reach, signalGroup + (m % 2));
+        const reach = clamp(mouth.halfWidth * 1.15, 2.2, 8.5);
+        trafficSignal(mbs.signals, base, armYaw, reach, signalGroup + (m % 2), { faceYaw });
         signals.push({ group: signalGroup + (m % 2), junction: j.id, mouth: m, heading: mouth.heading });
       } else if (urban && edge.profile.class !== ROAD_CLASS.HIGHWAY) {
-        const yaw = Math.atan2(-mouth.dir.z, -mouth.dir.x);
-        const kind = j.control === 'stop' && m > 0 ? 'stop' : j.control === 'yield' ? 'giveway' : 'speed';
-        if (j.branchCount >= 3) signPost(mbs.signage, base, yaw, kind);
+        const major = (classRank[edge.profile.class] ?? 1) >= 3;
+        const kind = j.control === 'stop' && m > 0 ? 'stop'
+          : j.control === 'yield' && m > 0 ? 'giveway'
+            : major ? 'priority' : 'giveway';
+        if (j.branchCount >= 3) {
+          signPost(mbs.signage, base, faceYaw, kind, { plus: rng.chance(0.4) ? 'name' : undefined });
+        }
       }
       // pedestrian guardrail on the kerb return either side of the crossing
       if (urban && j.branchCount >= 3 && rng.chance(0.55)) {

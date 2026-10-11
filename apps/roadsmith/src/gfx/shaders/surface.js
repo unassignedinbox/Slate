@@ -337,6 +337,163 @@ fn waterSurf(uv: vec2f, t: f32) -> Surf {
 // ---------------------------------------------------------------- road markings
 struct Paint { mask: f32, colour: vec3f, raised: f32 };
 
+// ---------------------------------------------------------------- traffic sign faces
+// 4x6 stencil font, row 0 at the top, packed 4 bits per row.  0-9 then S T O P.
+fn glyphRows(g: u32) -> u32 {
+  switch (g) {
+    case 0u:  { return 0x699996u; }
+    case 1u:  { return 0x262227u; }
+    case 2u:  { return 0x69124Fu; }
+    case 3u:  { return 0xE16196u; }
+    case 4u:  { return 0x26AF22u; }
+    case 5u:  { return 0xF8E196u; }
+    case 6u:  { return 0x68E996u; }
+    case 7u:  { return 0xF12444u; }
+    case 8u:  { return 0x696996u; }
+    case 9u:  { return 0x699716u; }
+    case 10u: { return 0x786116u; }   // S
+    case 11u: { return 0xF44444u; }   // T
+    case 12u: { return 0x699996u; }   // O
+    case 13u: { return 0xE99E88u; }   // P
+    default:  { return 0u; }
+  }
+}
+/** 1 inside the glyph ink.  p is in [0,1]^2 with y measured downward. */
+fn glyphInk(g: u32, p: vec2f) -> f32 {
+  if (p.x < 0.0 || p.x >= 1.0 || p.y < 0.0 || p.y >= 1.0) { return 0.0; }
+  let cx = u32(clamp(p.x, 0.0, 0.999) * 4.0);
+  let cy = u32(clamp(p.y, 0.0, 0.999) * 6.0);
+  let row = (glyphRows(g) >> ((5u - cy) * 4u)) & 15u;
+  return f32((row >> (3u - cx)) & 1u);
+}
+/** Centred string of digits for value v (1-3 digits), em box half-size h, 4x supersampled. */
+fn digitsInk(v: u32, uv: vec2f, h: vec2f, e: vec2f) -> f32 {
+  var n = 1u;
+  if (v >= 10u) { n = 2u; }
+  if (v >= 100u) { n = 3u; }
+  let adv = h.x * 2.0 / f32(n);
+  var ink = 0.0;
+  for (var k = 0u; k < 4u; k = k + 1u) {
+    let o = vec2f(select(-e.x, e.x, (k & 1u) == 0u), select(-e.y, e.y, (k & 2u) == 0u)) * 0.3;
+    let q = uv + o;
+    let col = floor((q.x + h.x) / adv);
+    if (col < 0.0 || col >= f32(n) || abs(q.y) > h.y) { continue; }
+    var d = v;
+    let place = n - 1u - u32(col);
+    for (var j = 0u; j < place; j = j + 1u) { d = d / 10u; }
+    let lp = vec2f(((q.x + h.x) - col * adv) / (adv * 0.86) - 0.08, (h.y - q.y) / (h.y * 2.0));
+    ink = ink + glyphInk(d % 10u, lp) * 0.25;
+  }
+  return ink;
+}
+fn lettersInk(uv: vec2f, h: vec2f, e: vec2f) -> f32 {
+  // the four glyphs of STOP, codes 10..13
+  let adv = h.x * 2.0 / 4.0;
+  var ink = 0.0;
+  for (var k = 0u; k < 4u; k = k + 1u) {
+    let o = vec2f(select(-e.x, e.x, (k & 1u) == 0u), select(-e.y, e.y, (k & 2u) == 0u)) * 0.3;
+    let q = uv + o;
+    let col = floor((q.x + h.x) / adv);
+    if (col < 0.0 || col >= 4.0 || abs(q.y) > h.y) { continue; }
+    let lp = vec2f(((q.x + h.x) - col * adv) / (adv * 0.88) - 0.06, (h.y - q.y) / (h.y * 2.0));
+    ink = ink + glyphInk(10u + u32(col), lp) * 0.25;
+  }
+  return ink;
+}
+fn ringAA(d: f32, r: f32, w: f32) -> f32 { return 1.0 - smoothstep(r - w, r + w, d); }
+
+/** Vector artwork for one sign face.  uv is [-1,1] over the plate, variant selects the legend. */
+fn signSurf(sid: u32, uv: vec2f, variant: f32, duv: vec2f) -> Surf {
+  var s: Surf;
+  s.rough = 0.38;
+  s.metal = 0.0;
+  s.height = 0.0;
+  s.emissive = vec3f(0.0);
+  let white = vec3f(0.84, 0.845, 0.83);
+  let red   = vec3f(0.44, 0.035, 0.045);
+  let blue  = vec3f(0.022, 0.09, 0.30);
+  let black = vec3f(0.035, 0.035, 0.038);
+  let green = vec3f(0.015, 0.16, 0.10);
+  let yellow= vec3f(0.62, 0.44, 0.02);
+  let e = duv * 0.5;
+  let w = max(length(duv), 2.0e-4) * 1.1;
+  let r = length(uv);
+  var col = white;
+  if (sid == 27u) {                                  // speed limit roundel
+    col = mix(white, red, ringAA(r, 0.995, w) * (1.0 - ringAA(r, 0.76, w)));
+    let v = u32(max(variant, 10.0));
+    col = mix(col, black, digitsInk(v, uv, vec2f(0.44, 0.40), e));
+  } else if (sid == 28u) {                           // STOP octagon
+    col = red;
+    let oct = max(max(abs(uv.x), abs(uv.y)), (abs(uv.x) + abs(uv.y)) * 0.7071);
+    col = mix(col, white, (1.0 - ringAA(oct, 0.86, w)) * ringAA(oct, 0.97, w));
+    col = mix(col, white, lettersInk(uv, vec2f(0.66, 0.26), e));
+  } else if (sid == 29u) {                           // give way triangle
+    // inverted triangle: distance to the three edges, border band in red
+    let a = uv.y * 0.5 + 0.5;
+    let e0 = -uv.y;
+    let e1 = (uv.y * 0.5 + uv.x * 0.866) ;
+    let e2 = (uv.y * 0.5 - uv.x * 0.866) ;
+    let d = min(min(0.86 - e0, 0.5 - e1), 0.5 - e2);
+    col = mix(red, white, smoothstep(0.0, 0.1, d - 0.18));
+  } else {                                           // information plates
+    let k = u32(variant + 0.5);
+    if (k == 1u) {                                   // priority road diamond
+      let dm = abs(uv.x) + abs(uv.y);
+      col = mix(yellow, white, 1.0 - smoothstep(0.62, 0.72, dm));
+      col = mix(col, black, (1.0 - smoothstep(0.86, 0.96, dm)) * smoothstep(0.76, 0.86, dm));
+    } else if (k == 2u) {                            // no entry
+      col = mix(red, white, (1.0 - smoothstep(0.17, 0.21, abs(uv.y))) * (1.0 - smoothstep(0.56, 0.62, abs(uv.x))));
+    } else if (k == 3u) {                            // pedestrian crossing warning
+      col = blue;
+      let inTri = step(abs(uv.x) * 1.25, 0.86 - uv.y * 0.9) * step(-0.82, uv.y);
+      col = mix(col, white, inTri);
+      // zebra under the walking figure
+      let bars = step(0.5, fract(uv.x * 4.0)) * step(abs(uv.y + 0.42), 0.12) * inTri;
+      col = mix(col, black, bars);
+      let body = step(length((uv - vec2f(0.02, 0.18)) * vec2f(2.6, 1.5)), 0.42) * inTri;
+      col = mix(col, black, body);
+    } else if (k == 4u) {                            // direction plate
+      col = green;
+      col = mix(col, white, (1.0 - smoothstep(0.90, 0.96, max(abs(uv.x), abs(uv.y)))) * smoothstep(0.84, 0.90, max(abs(uv.x), abs(uv.y))));
+      let bar = step(abs(uv.y + 0.0), 0.12) * step(abs(uv.x), 0.62);
+      col = mix(col, white, bar * 0.9);
+    } else if (k == 7u) {                            // St Andrew's cross arm
+      col = white;
+      col = mix(col, red, smoothstep(0.56, 0.68, abs(uv.x)));
+    } else if (k == 6u) {                            // roadworks lane-closure board
+      let amber = vec3f(0.60, 0.33, 0.01);
+      col = amber;
+      let edge = max(abs(uv.x) - 0.06, abs(uv.y));
+      col = mix(col, white, smoothstep(0.84, 0.92, edge));
+      // black chevrons pointing the way past the works
+      let ch = fract((uv.x * 1.6 - abs(uv.y) * 1.1) * 2.0);
+      col = mix(col, black, step(0.5, ch) * step(abs(uv.y), 0.66) * step(abs(uv.x), 0.84));
+    } else if (k == 5u) {                            // street name plate
+      col = white;
+      let edge = max(abs(uv.x), abs(uv.y));
+      col = mix(col, blue, 1.0 - smoothstep(0.86, 0.94, edge));
+      let text = step(0.35, fract(uv.x * 7.0)) * step(abs(uv.y), 0.34) * step(abs(uv.x), 0.72);
+      col = mix(col, white, text);
+    } else {                                         // parking P
+      col = blue;
+      let edge = max(abs(uv.x), abs(uv.y));
+      col = mix(col, white, smoothstep(0.80, 0.88, edge));
+      var ink = 0.0;
+      for (var q = 0u; q < 4u; q = q + 1u) {
+        let o = vec2f(select(-e.x, e.x, (q & 1u) == 0u), select(-e.y, e.y, (q & 2u) == 0u)) * 0.3;
+        let pp = uv + o;
+        ink = ink + glyphInk(13u, vec2f(pp.x / 0.9 + 0.5, 0.5 - pp.y / 1.2)) * 0.25;
+      }
+      col = mix(col, white, ink);
+    }
+  }
+  s.albedo = col;
+  // retroreflective sheeting picks up headlights at night
+  s.emissive = col * 0.12 * G.flags.z;
+  return s;
+}
+
 fn signalColour(group: f32, lens: f32) -> vec3f {
   let gi = clamp(i32(group + 0.5), 0, 23);
   let st = SIGNALS[gi];
@@ -459,6 +616,7 @@ fn roadPaint(uv: vec2f, laneAB: vec2f, laneWidth: f32, flags: u32, mark: u32, pa
 // ---------------------------------------------------------------- fragment
 @fragment
 fn fs_main(i: VSOut) -> @location(0) vec4f {
+  let duv = fwidth(i.uv);          // taken in uniform control flow, threaded to the AA helpers
   let sid = min(i.ids.x, 49u);
   let packed = i.ids.y;
   let flags = packed & 0xffffu;
@@ -473,7 +631,10 @@ fn fs_main(i: VSOut) -> @location(0) vec4f {
   let t = G.camPos.w;
 
   var S: Surf;
-  if (!enabled) {
+  if (sid >= 27u && sid <= 30u) {
+    // traffic sign faces: vector artwork in plate space (uv is [-1,1] across the plate)
+    S = signSurf(sid, i.uv, i.laneAB.x, duv);
+  } else if (!enabled) {
     S.albedo = mat.albedo.rgb;
     S.rough = mat.p0.x;
     S.metal = mat.p0.y;

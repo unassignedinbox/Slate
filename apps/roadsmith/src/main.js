@@ -204,7 +204,12 @@ function setupInput(canvas) {
 
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    camera.dolly(e.deltaY * (e.ctrlKey ? 3 : 1));
+    // deltaMode 1 is lines and 2 is pages; normalise both to pixels, and treat a
+    // trackpad pinch (which arrives as ctrl+wheel) as a faster zoom
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 380 : 1;
+    const p = ndc(e);
+    const hit = rayPlaneY(camera.ray(p.x, p.y), camera.target.y);
+    camera.dollyTowards(e.deltaY * unit * (e.ctrlKey ? 2.4 : 1), hit ? hit.point : null);
   }, { passive: false });
 
   window.addEventListener('keydown', (e) => {
@@ -261,6 +266,7 @@ function tick(now) {
 
   const rect = shell.canvas.getBoundingClientRect();
   renderer.resize(rect.width, rect.height);
+  camera.setViewport(rect.width, rect.height);
   camera.update(dtRaw, Math.max(rect.width / Math.max(rect.height, 1), 0.1));
 
   updateInstances(renderer, scene, editor.hidden);

@@ -9,6 +9,7 @@ import {
   polygonAreaXZ, polygonCentroidXZ, pointInPolygonXZ, v3dist2D,
 } from '../core/math.js';
 import { fbm2D } from '../core/rng.js';
+import { ROAD_CLASS } from './profile.js';
 
 export const PAVING = ['slab', 'brick', 'herringbone', 'sett', 'asphalt', 'grass', 'parking'];
 
@@ -81,21 +82,38 @@ export function buildBlocks(net, surface, settings, rng) {
     if (Math.abs(a2) < 90) { skipped++; continue; }
     const ring = a2 > 0 ? loop.slice().reverse() : loop;
     const centroid = polygonCentroidXZ(ring);
-    const pattern = choosePattern(rng, Math.abs(a2));
+    // a face bounded by a motorway or a ramp is an interchange gore, not a city block:
+    // it gets grass up to the kerb, never paving or parking bays
+    const gore = face.some((h) => {
+      const cls = net.edges.get(h.edgeId)?.profile?.class;
+      return cls === ROAD_CLASS.HIGHWAY || cls === ROAD_CLASS.RAMP;
+    });
+    const pattern = gore ? 'grass' : choosePattern(rng, Math.abs(a2));
     const rot = dominantAngle(ring);
-    const info = fillBlock(mb, ring, centroid, pattern, rot, settings, rng);
+    const info = fillBlock(mb, ring, centroid, pattern, rot, settings, rng, gore);
     blocks.push({ ring, centroid, area: Math.abs(a2), pattern, rot, ...info });
   }
 
   return { mesh: mb.vertexCount ? mb.finish() : null, blocks, faces: faces.length, skipped };
 }
 
+/**
+ * What fills a block.  European blocks are mostly green courtyards and paved squares with the
+ * occasional parking court or service yard, not the wall-to-wall asphalt an American lot plan
+ * would give you.
+ */
 function choosePattern(rng, area) {
   const r = rng();
-  if (area > 7000) return r < 0.45 ? 'asphalt' : r < 0.75 ? 'grass' : 'parking';
-  if (area > 2500) return r < 0.3 ? 'parking' : r < 0.55 ? 'slab' : r < 0.8 ? 'grass' : 'asphalt';
-  return r < 0.3 ? 'brick' : r < 0.55 ? 'herringbone' : r < 0.75 ? 'slab' : 'sett';
+  if (area > 7000) return r < 0.54 ? 'grass' : r < 0.79 ? 'slab' : r < 0.92 ? 'parking' : 'asphalt';
+  if (area > 2500) return r < 0.46 ? 'grass' : r < 0.68 ? 'slab' : r < 0.82 ? 'parking' : r < 0.93 ? 'brick' : 'asphalt';
+  return r < 0.30 ? 'grass' : r < 0.52 ? 'brick' : r < 0.72 ? 'herringbone' : r < 0.88 ? 'sett' : 'slab';
 }
+
+/** The paved apron every block carries between the kerb and whatever fills the middle. */
+const EDGE_SURFACE = {
+  grass: SURF.PAVER, parking: SURF.CONCRETE, asphalt: SURF.CONCRETE,
+  slab: SURF.PAVER, brick: SURF.PAVER, herringbone: SURF.PAVER, sett: SURF.PAVER,
+};
 
 function dominantAngle(ring) {
   let best = 0, bestLen = 0;
@@ -190,7 +208,7 @@ const PATTERN_SURFACE = {
   asphalt: SURF.ASPHALT, grass: SURF.GRASS, parking: SURF.ASPHALT,
 };
 
-function fillBlock(mb, ring, centroid, pattern, rot, settings, rng) {
+function fillBlock(mb, ring, centroid, pattern, rot, settings, rng, gore = false) {
   const surf = PATTERN_SURFACE[pattern] ?? SURF.FOOTWAY;
   const patternId = PAVING.indexOf(pattern);
   const cs = Math.cos(-rot), sn = Math.sin(-rot);
@@ -212,6 +230,8 @@ function fillBlock(mb, ring, centroid, pattern, rot, settings, rng) {
     param: patternId,
   });
 
+  const edgeSurf = gore ? surf : (EDGE_SURFACE[pattern] ?? SURF.PAVER);
+  const attrsEdge = (p) => ({ ...attrsFor(p), surface: edgeSurf, mark: MARK.NONE, param: 0, wear: 0.22 });
   mb.attr({ surface: surf });
   if (!starShaped(ring, centroid)) {
     // concave block: fan from the boundary to a smoothed medial point set via ear clipping
@@ -220,23 +240,30 @@ function fillBlock(mb, ring, centroid, pattern, rot, settings, rng) {
     for (const t of tris) mb.tri(idx[t[0]], idx[t[1]], idx[t[2]]);
     return { quadFilled: false, patternId };
   }
-  const rings = 3;
-  let prevIdx = ring.map((p) => mb.vertex(p, attrsFor(p)));
+  // band 0 is the paved apron along the kerb; the rest is the courtyard material
+  const steps = [0.055, 0.28, 0.58, 0.82];
+  let prevIdx = ring.map((p) => mb.vertex(p, attrsEdge(p)));
   let prevPts = ring;
-  for (let r = 1; r <= rings; r++) {
-    const a = Math.pow(r / (rings + 0.6), 1.15);
+  for (let r = 0; r < steps.length; r++) {
+    const a = steps[r];
     const pts = ring.map((p) => ({
       x: lerp(p.x, centre.x, a),
       y: lerp(p.y, centre.y, Math.min(1, a * 1.2)),
       z: lerp(p.z, centre.z, a),
     }));
-    const idx = pts.map((p) => mb.vertex(p, attrsFor(p)));
+    const apron = r === 0;
+    const attrs = apron ? attrsEdge : attrsFor;
+    mb.attr({ surface: apron ? edgeSurf : surf });
+    const idx = pts.map((p) => mb.vertex(p, apron ? attrsEdge(p) : attrsFor(p)));
+    const outer = apron ? prevIdx : prevPts.map((p) => mb.vertex(p, attrsFor(p)));
+    void attrs;
     for (let i = 0; i < pts.length; i++) {
       const n = (i + 1) % pts.length;
-      mb.quad(prevIdx[i], prevIdx[n], idx[n], idx[i]);
+      mb.quad(outer[i], outer[n], idx[n], idx[i]);
     }
     prevIdx = idx; prevPts = pts;
   }
+  mb.attr({ surface: surf });
   const mids = [];
   for (let i = 0; i < prevPts.length; i++) {
     const n = (i + 1) % prevPts.length;
@@ -417,8 +444,17 @@ export function buildGround(bounds, settings = {}, world = {}) {
     for (let i = 1; i <= padSteps; i++) out.push(hi + pad * Math.pow(i / padSteps, 2.3));
     return out;
   };
-  const xs = axis(bounds.min.x, bounds.max.x);
-  const zs = axis(bounds.min.z, bounds.max.z);
+  // The fine lattice has to cover every road, not just the city rectangle: out in the pad the
+  // cells are hundreds of metres across, and dropping one because a motorway clips its corner
+  // punches a hole the size of a district.
+  const ext = { minx: bounds.min.x, maxx: bounds.max.x, minz: bounds.min.z, maxz: bounds.max.z };
+  for (const sm of samples) {
+    const r = sm.hw + REACH;
+    ext.minx = Math.min(ext.minx, sm.x - r); ext.maxx = Math.max(ext.maxx, sm.x + r);
+    ext.minz = Math.min(ext.minz, sm.z - r); ext.maxz = Math.max(ext.maxz, sm.z + r);
+  }
+  const xs = axis(ext.minx, ext.maxx);
+  const zs = axis(ext.minz, ext.maxz);
 
   const H = [], D = [];
   for (let i = 0; i < xs.length; i++) {
