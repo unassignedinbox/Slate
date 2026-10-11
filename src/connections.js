@@ -1,4 +1,10 @@
-import { nearestRoad, nearestOnSegment, distance } from "./network.js";
+import {
+  approachProfile,
+  requiredApproachRun,
+  DEFAULT_BRIDGE_BLEND,
+  DEFAULT_BRIDGE_GRADE,
+} from "./bridge-profile.js";
+import { nearestRoad, nearestOnSegment } from "./network.js";
 import { preparePath, atStation } from "./alignment.js";
 import { containsPoint } from "./streetscape.js";
 export function snapConnection(point, model, kind) {
@@ -87,11 +93,32 @@ export function bridgeGeometry(c, data) {
   }
   if (start >= end || start < 4 || length - end < 4)
     return { valid: false, warnings: ["Insufficient approach length."] };
-  const grade = Math.max(height / (start - 2), height / (length - end - 2));
-  if (grade > 1 / 12 + 0.001)
+  const targetGrade = c.gradeTarget ?? DEFAULT_BRIDGE_GRADE,
+    requestedBlend = c.transition ?? DEFAULT_BRIDGE_BLEND,
+    clearanceTarget = c.clearanceTarget ?? 5;
+  const incoming = approachProfile(height, start - 2, requestedBlend),
+    outgoing = approachProfile(height, length - end - 2, requestedBlend);
+  const required = requiredApproachRun(height, targetGrade, requestedBlend);
+  const approaches = [incoming, outgoing].map((p) => ({
+    run: p.run,
+    blend: p.blend,
+    grade: p.grade,
+    additionalRun: Math.max(0, required - p.run),
+  }));
+  const grade = Math.max(incoming.grade, outgoing.grade);
+  if (grade > targetGrade + 1e-6) {
+    const needed = approaches
+      .map((p, i) =>
+        p.additionalRun > 0.01
+          ? `${i === 0 ? "Start" : "End"} +${p.additionalRun.toFixed(1)} m`
+          : null,
+      )
+      .filter(Boolean)
+      .join("; ");
     warnings.push(
-      `Steep bridge approaches: ${(grade * 100).toFixed(1)}%. Lengthen the approaches for an 8.3% design target.`,
+      `Steep bridge approaches: ${(grade * 100).toFixed(1)}% versus ${(targetGrade * 100).toFixed(1)}% target. Additional approach length at the current crossing: ${needed}.`,
     );
+  }
   if (Number.isFinite(first) && height - 0.35 + 0.27 - 0.12 < 2)
     return {
       valid: false,
@@ -99,11 +126,32 @@ export function bridgeGeometry(c, data) {
         "Bridge is too low for the preview vehicles. Raise its deck and review road clearance.",
       ],
     };
-  if (Number.isFinite(first) && height - 0.35 + 0.27 - 0.12 < 5)
+  if (Number.isFinite(first) && height - 0.35 + 0.27 - 0.12 < clearanceTarget)
     warnings.push(
-      "Road clearance below 5 m: verify the clearance required for this project.",
+      `Nominal road clearance ${(height - 0.35 + 0.27 - 0.12).toFixed(2)} m is below the ${clearanceTarget.toFixed(2)} m target. Raise the deck or review your project target.`,
     );
-  const stations = [0, 2, start, end, length - 2, length];
+  const stations = [
+    0,
+    2,
+    2 + incoming.blend,
+    start - incoming.blend,
+    start,
+    end,
+    end + outgoing.blend,
+    length - 2 - outgoing.blend,
+    length - 2,
+    length,
+  ];
+  // Resolve the vertical blends more finely than the straight runs.
+  for (const [a, b] of [
+    [2, 2 + incoming.blend],
+    [start - incoming.blend, start],
+    [end, end + outgoing.blend],
+    [length - 2 - outgoing.blend, length - 2],
+  ]) {
+    const n = Math.ceil((b - a) / 0.2);
+    for (let i = 1; i < n; i++) stations.push(a + ((b - a) * i) / n);
+  }
   for (let i = 1; i < count; i++) stations.push((length * i) / count);
   stations.sort((a, b) => a - b);
   const frames = stations
@@ -112,11 +160,11 @@ export function bridgeGeometry(c, data) {
       const p = atStation(path, s),
         rise =
           s < start
-            ? Math.max(0, (s - 2) / (start - 2))
+            ? incoming.heightAt(s - 2)
             : s > end
-              ? Math.max(0, (length - s - 2) / (length - end - 2))
-              : 1;
-      return { ...p, s, y: 0.27 + height * Math.min(1, rise) };
+              ? outgoing.heightAt(length - s - 2)
+              : height;
+      return { ...p, s, y: 0.27 + rise };
     });
   for (let i = 1; i < frames.length; i++)
     if (frames[i].dx * frames[i - 1].dx + frames[i].dz * frames[i - 1].dz < 0.2)
@@ -175,6 +223,11 @@ export function bridgeGeometry(c, data) {
     frames,
     length,
     grade,
+    targetGrade,
+    clearanceTarget,
+    approaches,
+    protectedRange: Number.isFinite(first) ? [first, last] : null,
+    clearance: Number.isFinite(first) ? height - 0.35 + 0.27 - 0.12 : null,
     start,
     end,
     warnings,

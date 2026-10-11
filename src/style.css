@@ -2255,3 +2255,68 @@ dialog {
     font-size: 9px;
   }
 }
+.bridge-profile {
+  padding: 12px;
+  border: 1px solid #414141;
+  background: #202020;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+.bridge-profile .section-heading {
+  font-size: 7px;
+  letter-spacing: 0.6px;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.bridge-profile svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.bridge-profile svg text {
+  font-family: inherit;
+  font-size: 9px;
+  fill: #aaa;
+}
+.bridge-readouts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 8px 0 12px;
+}
+.bridge-readouts strong {
+  display: block;
+  font-size: 17px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+.bridge-readouts small {
+  display: block;
+  font-size: 8px;
+  line-height: 1.5;
+  color: #aaa;
+}
+.bridge-approach {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 9px;
+  border-top: 1px solid #393939;
+  padding: 8px 0;
+  color: #b5b5b5;
+}
+.bridge-approach strong {
+  font-weight: 500;
+}
+.bridge-approach small {
+  display: block;
+  color: #dec290;
+  line-height: 1.8;
+}
+.bridge-profile p {
+  margin: 8px 0 0;
+  font-size: 8px;
+  line-height: 1.6;
+  color: #939393;
+}

@@ -30,6 +30,19 @@ Open the development server. It listens on `0.0.0.0`; Arena's HTTPS preview host
 - Four network presets, empty projects, undo/redo, browser-local save, validated JSON import/export and asphalt-only OBJ export.
 - Perspective / top / street inspection camera, orbit/pan/zoom and free flight, grid and actual surface-wireframe inspection.
 
+## 0.6 — smooth bridge approaches and project-defined targets
+
+Select a park bridge → **Approach design** in the inspector.
+
+- The old abrupt ramp/landing breaks are replaced with parabolic toe and crest blends. The underlying longitudinal profile has continuous height and gradient; the rendered deck samples blend zones at no more than 200 mm spacing. The two 2 m end landings stay level and grounded. The elevated span stays level across the protected road/pavement corridor.
+- **Toe / crest blend:** request 1–12 m transitions (default 3 m). On short approaches the actual blend is capped at half the available run. The inspector reports the actual length used on each side. Longer blends reduce abrupt changes in slope but increase the peak grade if rise/run are unchanged.
+- **Target grade:** 2–15%, default 8.3%. This is an editable project target, not a national standard. Start and end approaches are checked independently, with additional run required at the current crossing reported in metres. Changing the target changes the checks, not the geometry or endpoint positions.
+- **Road clearance target:** 2–10 m, default 5 m. The inspector shows nominal deck-underside clearance above the flat road datum. This does not account for road humps, crossfall, loaded deflection or a swept vehicle envelope. The existing hard rejection below 2 m nominal road clearance remains to prevent obvious intersections with the preview cars.
+- A **longitudinal profile** plots the generated centreline, with vertical exaggeration and shading for the protected corridor. It displays peak centreline grade, actual approach runs/blends and nominal clearance; this is measured geometry rather than a decorative graph.
+- All three settings support undo/redo and project save/import. Older projects receive the same defaults without losing their existing bridge widths, rises or endpoints.
+
+These improvements do not establish structural capacity, accessibility compliance, vehicle breakover clearance or ride comfort. Curved deck-edge gradients can differ from the centreline grade. Bridges are still not part of the AI traffic graph.
+
 ## 0.5 — local pavement topology and park connections
 
 **Pavement topology:** rendered flat surfaces are clipped into shared 6 m integer-grid patches before triangulation. This removes the old block-spanning skinny triangles around curved pavement rings. The legacy road-only OBJ retains its separate triangulation. UVs remain in world space, so the paving pattern does not reset at patch edges. Corner-level browser checks now cover the district's curved corners, not only the simpler four-way fixture. Geometry tests check area coverage and a maximum 8.49 m triangle edge. Millimetre clipping tolerances remain; this is still a triangle mesh, not a welded all-quad export.
@@ -44,7 +57,7 @@ Open the development server. It listens on `0.0.0.0`; Arena's HTTPS preview host
 
 Choose **Network library → Park connections** for a prepared example with two connected park walks, a concrete access branch and a wide bridge. This replaces the scene only after confirmation and remains undoable. `?demo=parks` opens that example for a fresh browser without overwriting a saved project.
 
-**Bridge limitations:** these are geometric pedestrian/service-width bridge previews, not engineered vehicle bridges. Width does not establish a load rating. Structural sizing, vehicle swept paths, vertical-curve comfort, local clearance, accessibility and collision validation remain to be engineered. Bridge decks do **not** join the AI traffic graph. Complete bridges/park paving are **not** included in the existing road-surface-only OBJ export; use project JSON to retain editable geometry.
+**Bridge limitations:** these are geometric pedestrian/service-width bridge previews, not engineered vehicle bridges. Width does not establish a load rating. Structural sizing, vehicle swept paths, breakover and ride-comfort validation, local clearance, accessibility and collision validation remain to be engineered. Bridge decks do **not** join the AI traffic graph. Complete bridges/park paving are **not** included in the existing road-surface-only OBJ export; use project JSON to retain editable geometry.
 
 ### Publishing through raw.githack
 
@@ -156,7 +169,7 @@ npm run test:gpu-recovery # forced software WebGPU device-loss recovery
 npm run test:continuity-browser # speed-hump editing, persistence, layer toggles and neutral UI
 npm run test:streetscape-browser # paving, embedded ramps, drainage, covers and save/reload
 npm run test:curbs-camera-browser # flight controls, ramp modes, vehicle aprons and street-level screenshots
-npm run test:parks-browser # walkway/concrete/bridge authoring, editing, selection and persistence
+npm run test:parks-browser # connection authoring, bridge profiles/targets, undo/redo and persistence
 npm run test:corners-browser # street-level district corner screenshots
 npm run test:static-browser # compiled published build under a nested URL path
 ```

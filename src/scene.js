@@ -1241,6 +1241,18 @@ export async function createScene(host, onSelect, onMove, onDraw) {
           valid: b.valid,
           length: b.length,
           grade: b.grade,
+          targetGrade: b.targetGrade,
+          clearanceTarget: b.clearanceTarget,
+          approaches: b.approaches,
+          clearance: b.clearance,
+          protectedRange: b.protectedRange,
+          profile: (b.frames || [])
+            .filter(
+              (p, i, a) =>
+                i % Math.max(1, Math.ceil(a.length / 120)) === 0 ||
+                i === a.length - 1,
+            )
+            .map((p) => [p.s, p.y]),
         })),
       };
     },

@@ -120,6 +120,48 @@ try {
     5,
   );
   await page.locator("#link-height").fill("6");
+  await page.locator("#link-grade-target").fill("6.5");
+  assert.equal(
+    await page.evaluate(() => window.__slate.model.connections[1].gradeTarget),
+    0.065,
+  );
+  assert.ok(
+    await page
+      .locator("#bridge-profile")
+      .textContent()
+      .then((t) => t.includes("Needs +")),
+  );
+  await page.locator("#link-transition").fill("5");
+  await page.locator("#link-clearance-target").fill("6.5");
+  assert.ok(
+    await page.evaluate(() =>
+      window.__slate.connections.warnings.some((w) =>
+        w.message.includes("Nominal road clearance"),
+      ),
+    ),
+  );
+  await page.click("#undo-tool");
+  assert.equal(
+    await page.evaluate(
+      () => window.__slate.model.connections[1].clearanceTarget,
+    ),
+    undefined,
+  );
+  await page.click("#redo-tool");
+  assert.equal(
+    await page.evaluate(
+      () => window.__slate.model.connections[1].clearanceTarget,
+    ),
+    6.5,
+  );
+  await page.locator("#bridge-profile").scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: ".artifacts/bridge-profile-inspector.png",
+    timeout: 90000,
+  });
+  console.log(
+    "PASS: smooth-approach controls, live profile, length shortfalls, clearance target and undo/redo",
+  );
   await page.click("#focus-link");
   await page.waitForTimeout(700);
   await mkdir(".artifacts", { recursive: true });
@@ -139,6 +181,20 @@ try {
   assert.equal(
     await page.evaluate(() => window.__slate.model.connections[1].height),
     6,
+  );
+  assert.equal(
+    await page.evaluate(() => window.__slate.model.connections[1].gradeTarget),
+    0.065,
+  );
+  assert.equal(
+    await page.evaluate(() => window.__slate.model.connections[1].transition),
+    5,
+  );
+  assert.equal(
+    await page.evaluate(
+      () => window.__slate.model.connections[1].clearanceTarget,
+    ),
+    6.5,
   );
   await page.locator("[data-connection]").last().click();
   assert.equal(

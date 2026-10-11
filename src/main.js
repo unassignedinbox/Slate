@@ -1,3 +1,7 @@
+import {
+  DEFAULT_BRIDGE_BLEND,
+  DEFAULT_BRIDGE_GRADE,
+} from "./bridge-profile.js";
 import { createIcons, icons } from "lucide";
 import "@fontsource-variable/dm-sans/wght.css";
 import "./style.css";
@@ -61,7 +65,7 @@ const layerDefs = [
   ["manholes", "circle-dot", "Manhole covers"],
 ];
 $("#app").innerHTML = `
-<header class="app-header"><a class="brand" href="./" aria-label="Slate Road Studio"><span class="brand-mark">${icon("layers-2")}</span>slate<span class="brand-divider"></span><span class="brand-caption">ROAD STUDIO</span></a><nav class="main-menu"><button id="file-menu">File</button><button id="undo">Edit</button><button id="view-menu">View</button><button id="help">Help</button></nav><div class="project-title"><span class="save-dot"></span><span id="project-name"></span>${icon("chevron-down")}</div><div class="header-actions"><span class="version">EXPERIMENTAL <b>0.5</b></span><button id="save" class="header-save" title="Save project to this browser">${icon("save")} Save</button><button id="export" class="export-button">${icon("upload")} Export ${icon("chevron-down")}</button></div></header>
+<header class="app-header"><a class="brand" href="./" aria-label="Slate Road Studio"><span class="brand-mark">${icon("layers-2")}</span>slate<span class="brand-divider"></span><span class="brand-caption">ROAD STUDIO</span></a><nav class="main-menu"><button id="file-menu">File</button><button id="undo">Edit</button><button id="view-menu">View</button><button id="help">Help</button></nav><div class="project-title"><span class="save-dot"></span><span id="project-name"></span>${icon("chevron-down")}</div><div class="header-actions"><span class="version">EXPERIMENTAL <b>0.6</b></span><button id="save" class="header-save" title="Save project to this browser">${icon("save")} Save</button><button id="export" class="export-button">${icon("upload")} Export ${icon("chevron-down")}</button></div></header>
 <div class="workspace-bar"><div class="workspace-title">${icon("route")} Road workspace <span class="divider"></span><span class="muted">Scene 01</span></div><div class="workspace-tabs"><button class="active" data-workspace="layout">${icon("spline")} Layout</button><button data-workspace="materials">${icon("layers")} Materials</button><button data-workspace="simulate">${icon("play")} Simulate</button></div><button class="icon-button" id="settings" title="Workspace settings">${icon("sliders-horizontal")}</button></div>
 <main class="editor"><section class="center"><div class="viewport" id="viewport"><div class="viewport-top"><div class="view-pills"><button id="perspective">${icon("box")} Perspective ${icon("chevron-down")}</button><span class="pill-line"></span><button id="shading">Lit ${icon("chevron-down")}</button><button id="fly-status" title="Hold right mouse to look. WASD fly, Q/E down/up, Shift faster, wheel changes speed.">RMB + WASD · Fly</button></div><div class="render-badge"><span class="live-dot"></span><span id="backend">INITIALIZING</span></div></div>
 <div class="tools"><button class="active" data-tool="select" title="Select (V)">${icon("mouse-pointer-2")}<kbd>V</kbd></button><button data-tool="move" title="Move junction (G)">${icon("move")}<kbd>G</kbd></button><div></div><button data-tool="draw" title="Draw a quadratic road (B)">${icon("spline")}<kbd>B</kbd></button><button id="frame" title="Frame network (F)">${icon("scan")}</button><button id="street-view" title="Street-level curb and ramp inspection">${icon("person-standing")}</button><div></div><button id="grid" title="Toggle metre grid">${icon("grid-3x3")}</button><button id="wire" title="Show triangulated surface topology">${icon("boxes")}</button><div></div><button id="undo-tool" title="Undo (Ctrl Z)">${icon("undo-2")}</button><button id="redo-tool" title="Redo (Ctrl Shift Z)">${icon("redo-2")}</button></div>
@@ -257,13 +261,27 @@ function bindVehicle(road) {
         model.layers.driveways = true;
       });
 }
+function bridgeProfilePanel(result) {
+  if (!result?.valid) return "";
+  const points = result.profile,
+    span = result.length,
+    rise = Math.max(1, ...points.map((p) => p[1] - 0.27)),
+    x = (s) => 16 + (232 * s) / span,
+    y = (h) => 88 - (68 * (h - 0.27)) / rise;
+  const line = points
+      .map((p) => `${x(p[0]).toFixed(2)},${y(p[1]).toFixed(2)}`)
+      .join(" "),
+    corridor = result.protectedRange;
+  const label = `Longitudinal bridge profile. ${span.toFixed(1)} metres long, ${(result.grade * 100).toFixed(1)} percent peak centreline grade.`;
+  return `<div class="bridge-profile" id="bridge-profile"><div class="section-heading"><span>LONGITUDINAL PROFILE</span><span>VERTICAL EXAGGERATION</span></div><svg viewBox="0 0 264 116" role="img" aria-label="${label}"><title>${label}</title>${corridor ? `<rect x="${x(corridor[0])}" y="16" width="${x(corridor[1]) - x(corridor[0])}" height="72" fill="#626b75" opacity=".24"/>` : ""}<path d="M16 88 H248" stroke="#646464" stroke-dasharray="3 3"/><polygon points="16,88 ${line} 248,88" fill="#b7c1cd" opacity=".12"/><polyline points="${line}" fill="none" stroke="#d6dde4" stroke-width="1.8"/><text x="16" y="108">0 m</text><text x="248" y="108" text-anchor="end">${span.toFixed(1)} m</text><text x="16" y="12">${rise.toFixed(2)} m rise</text></svg><div class="bridge-readouts"><div><strong>${(result.grade * 100).toFixed(1)}%</strong><small>Peak centreline grade</small></div><div><strong>${result.clearance === null ? "—" : result.clearance.toFixed(2) + " m"}</strong><small>Nominal road clearance</small></div></div>${result.approaches.map((p, i) => `<div class="bridge-approach"><strong>${i ? "End" : "Start"}</strong><span>${p.run.toFixed(1)} m run · ${p.blend.toFixed(1)} m blend${p.additionalRun > 0.01 ? `<small>Needs +${p.additionalRun.toFixed(1)} m to meet grade target</small>` : ""}</span></div>`).join("")}<p>Targets flag problems; they do not move endpoints. Shading marks the protected road/pavement corridor. Clearance assumes the flat road level, not a swept-vehicle or load check.</p></div>`;
+}
 function connectionInspector(c) {
   const result = scene?.connections.bridges.find((b) => b.id === c.id),
     warnings = scene?.connections.warnings.filter((w) => w.id === c.id) || [];
   $("#inspector-context").textContent =
     c.kind === "bridge" ? "PARK BRIDGE" : "WALKWAY";
   $("#inspector").innerHTML =
-    `<div class="object-heading"><span class="object-icon">${icon(c.kind === "bridge" ? "waypoints" : "footprints")}</span><div><h2>${c.kind === "bridge" ? "Park bridge" : "Park walkway"}</h2><p>${c.kind === "bridge" ? "Vehicle-width pedestrian deck" : "Connected paving surface"}</p></div></div><div class="section-heading"><span>PROFILE</span><span>METRES</span></div>${range("link-width", c.kind === "bridge" ? "Clear deck width" : "Path width", c.width, c.kind === "bridge" ? 4 : 1.5, 10, 0.25, "m")}${c.kind === "bridge" ? range("link-height", "Deck rise", c.height, 1, 12, 0.25, "m") : ""}<div class="section-heading top-border"><span>ENDPOINTS</span></div>${[
+    `<div class="object-heading"><span class="object-icon">${icon(c.kind === "bridge" ? "waypoints" : "footprints")}</span><div><h2>${c.kind === "bridge" ? "Park bridge" : "Park walkway"}</h2><p>${c.kind === "bridge" ? "Vehicle-width pedestrian deck" : "Connected paving surface"}</p></div></div><div class="section-heading"><span>PROFILE</span><span>METRES</span></div>${range("link-width", c.kind === "bridge" ? "Clear deck width" : "Path width", c.width, c.kind === "bridge" ? 4 : 1.5, 10, 0.25, "m")}${c.kind === "bridge" ? range("link-height", "Deck rise", c.height, 1, 12, 0.25, "m") + `<div class="section-heading top-border"><span>APPROACH DESIGN</span></div>` + range("link-grade-target", "Target grade", Math.round((c.gradeTarget ?? DEFAULT_BRIDGE_GRADE) * 1000) / 10, 2, 15, 0.1, "%") + range("link-transition", "Toe / crest blend", c.transition ?? DEFAULT_BRIDGE_BLEND, 1, 12, 0.5, "m") + range("link-clearance-target", "Road clearance target", c.clearanceTarget ?? 5, 2, 10, 0.25, "m") + bridgeProfilePanel(result) : ""}<div class="section-heading top-border"><span>ENDPOINTS</span></div>${[
       0, 1,
     ]
       .map((end) => {
@@ -272,9 +290,14 @@ function connectionInspector(c) {
       })
       .join(
         "",
-      )}${result?.valid ? `<div class="info-note">${result.length.toFixed(1)} m route · ${(result.grade * 100).toFixed(1)}% maximum approach grade</div>` : ""}${warnings.map((w) => `<div class="info-note design-warning">${icon("triangle-alert")}${w.message}</div>`).join("")}<div class="info-note">${c.kind === "bridge" ? "Closed concrete deck, 1.3 m rails and park-side supports. Width does not imply a vehicle load rating. Approaches, road clearance and accessibility require project-specific review. No AI traffic is routed onto this bridge." : "Paving merges into level sidewalks. Draw to the back of a level footway, away from dropped crossing landings. A path crossing a carriageway is rejected; use a bridge instead."}</div><button id="focus-link" class="wide-button">${icon("scan")} Frame connection</button><button id="delete-link" class="wide-button">${icon("trash-2")} Delete connection</button>`;
+      )}${result?.valid ? `<div class="info-note">${result.length.toFixed(1)} m route · ${(result.grade * 100).toFixed(1)}% peak centreline grade</div>` : ""}${warnings.map((w) => `<div class="info-note design-warning">${icon("triangle-alert")}${w.message}</div>`).join("")}<div class="info-note">${c.kind === "bridge" ? "Closed concrete deck, 1.3 m rails and park-side supports. Width does not imply a vehicle load rating. Approaches, road clearance and accessibility require project-specific review. No AI traffic is routed onto this bridge." : "Paving merges into level sidewalks. Draw to the back of a level footway, away from dropped crossing landings. A path crossing a carriageway is rejected; use a bridge instead."}</div><button id="focus-link" class="wide-button">${icon("scan")} Frame connection</button><button id="delete-link" class="wide-button">${icon("trash-2")} Delete connection</button>`;
   bindRange("link-width", (v) => (c.width = v));
-  if (c.kind === "bridge") bindRange("link-height", (v) => (c.height = v));
+  if (c.kind === "bridge") {
+    bindRange("link-height", (v) => (c.height = v));
+    bindRange("link-grade-target", (v) => (c.gradeTarget = v / 100));
+    bindRange("link-transition", (v) => (c.transition = v));
+    bindRange("link-clearance-target", (v) => (c.clearanceTarget = v));
+  }
   for (const end of [0, 1])
     for (const axis of ["x", "z"])
       $(`#link-${end}-${axis}`).onchange = (e) => {

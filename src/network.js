@@ -582,6 +582,26 @@ export function validateModel(m) {
         (!Number.isFinite(c.height) || c.height < 1 || c.height > 12))
     )
       throw Error("Invalid park connection");
+    if (
+      c.kind === "bridge" &&
+      ((c.gradeTarget !== undefined &&
+        (!Number.isFinite(c.gradeTarget) ||
+          c.gradeTarget < 0.02 ||
+          c.gradeTarget > 0.15)) ||
+        (c.transition !== undefined &&
+          (!Number.isFinite(c.transition) ||
+            c.transition < 1 ||
+            c.transition > 12)))
+    )
+      throw Error("Invalid bridge approach settings");
+    if (
+      c.kind === "bridge" &&
+      c.clearanceTarget !== undefined &&
+      (!Number.isFinite(c.clearanceTarget) ||
+        c.clearanceTarget < 2 ||
+        c.clearanceTarget > 10)
+    )
+      throw Error("Invalid bridge clearance target");
     connectionIds.add(c.id);
   }
   const ids = new Set();
