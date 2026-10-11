@@ -20,6 +20,7 @@ export function getMaterials() {
     paving: std({ map: T.paving, roughness: 0.88 }),
     concrete: std({ map: T.concrete, color: 0xb9b9b9, roughness: 0.85 }),
     concreteDark: std({ map: T.concrete, color: 0x8f8f8f, roughness: 0.85 }),
+    curbStone: std({ map: T.concrete, color: 0x8d8478, roughness: 0.8 }),
     grass: std({ map: T.grass, roughness: 1 }),
     ballast: std({ map: T.ballast, roughness: 1 }),
     paintWhite: std({ color: 0xe9e9e9, roughness: 0.65, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),

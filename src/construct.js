@@ -24,6 +24,23 @@ const RAIL_TILES = {
   'platform-sign': { name: 'Platform sign', icon: 'Signpost', desc: 'Transit wayfinding blade', action: 'prop', kind: 'platform-sign' },
 };
 
+const PARKING_TILES = {
+  'parking-lot': {
+    name: 'Car park',
+    icon: 'SquareParking',
+    desc: 'Painted bays · aisles · islands · kiosks',
+    action: 'prop',
+    kind: 'parking-lot',
+  },
+  'parking-deck': {
+    name: 'Parking deck',
+    icon: 'Warehouse',
+    desc: 'Multi-storey · ramps · parapets',
+    action: 'prop',
+    kind: 'parking-deck',
+  },
+};
+
 export function openConstruct(controller) {
   closeConstruct();
   const state = {
@@ -147,6 +164,27 @@ export function openConstruct(controller) {
     content.append(renderSearch());
     content.append(
       el('div', { class: 'construct-section-title' },
+        el('span', { text: 'Parking' }),
+        el('span', { text: 'click to place' })
+      )
+    );
+    const parkGrid = el('div', { class: 'construct-grid' });
+    for (const [key, meta] of Object.entries(PARKING_TILES)) {
+      if (!matches([key, meta.name, meta.desc])) continue;
+      parkGrid.append(tile({
+        icon: meta.icon,
+        name: meta.name,
+        desc: meta.desc,
+        tag: 'PARKING',
+        onClick: () => {
+          controller.startPlaceProp(meta.kind);
+          close();
+        },
+      }));
+    }
+    content.append(parkGrid);
+    content.append(
+      el('div', { class: 'construct-section-title' },
         el('span', { text: 'Street furniture' }),
         el('span', { text: 'click to place' })
       )
@@ -209,6 +247,8 @@ export function openConstruct(controller) {
       el('div', { class: 'gen-rows' },
         genNum('Seed', 'Any integer', 'seed', g.seed),
         genNum('Blocks per axis', '4 – 8 works well', 'blocks', g.blocks),
+        genToggle('Elevated expressway', 'Viaduct over the boulevard + curved ramps', 'expressway', g.expressway ?? true),
+        genToggle('Roundabout', 'Central plaza junction with loop', 'roundabout', g.roundabout ?? true),
         genToggle('Railway + level crossing', 'Mainline, sleepers, gates', 'rail', g.rail),
         genToggle('Subway line', 'Twin tunnels, stations, entrances', 'subway', g.subway),
         genToggle('River + bridges', 'Quayside promenades', 'river', g.river),

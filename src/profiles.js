@@ -32,6 +32,8 @@ export const PROFILES = {
     speedLimit: 110,
     bands: [S('verge', 2.5), S('shoulder', 2.6), S('drive', 3.65), S('drive', 3.65), S('median', 2.6), S('drive', 3.65), S('drive', 3.65), S('shoulder', 2.6), S('verge', 2.5)],
     markings: { center: 'barrier', edge: true, crosswalk: false },
+    barrier: true,
+    curbStyle: 'barrier',
   },
   highwayRamp: {
     name: 'Highway ramp',
@@ -42,6 +44,7 @@ export const PROFILES = {
     bands: [S('verge', 1.6), S('shoulder', 1.6), S('drive', 4.4), S('shoulder', 1.6), S('verge', 1.6)],
     markings: { center: 'none', edge: true, crosswalk: false },
     oneWay: true,
+    curbStyle: 'mountable',
   },
   boulevard: {
     name: 'Boulevard',
@@ -50,11 +53,12 @@ export const PROFILES = {
     desc: 'Bus lanes · cycle tracks · parking · wide paving',
     speedLimit: 50,
     bands: [
-      S('sidewalk', 3.2), S('curb', 0.18), S('parking', 2.3), S('cycle', 1.9), S('bus', 3.35),
+      S('sidewalk', 3.2), S('curb', 0.24), S('parking', 2.3), S('cycle', 1.9), S('bus', 3.35),
       S('drive', 3.3), S('median', 2.2), S('drive', 3.3), S('bus', 3.35), S('cycle', 1.9),
-      S('parking', 2.3), S('curb', 0.18), S('sidewalk', 3.2),
+      S('parking', 2.3), S('curb', 0.24), S('sidewalk', 3.2),
     ],
     markings: { center: 'double-yellow', edge: true, crosswalk: true },
+    curbStyle: 'stone',
   },
   avenue: {
     name: 'Avenue',
@@ -63,11 +67,12 @@ export const PROFILES = {
     desc: 'Four lanes · parking · cycle lanes both ways',
     speedLimit: 50,
     bands: [
-      S('sidewalk', 2.6), S('curb', 0.18), S('parking', 2.25), S('cycle', 1.9),
+      S('sidewalk', 2.6), S('curb', 0.24), S('parking', 2.25), S('cycle', 1.9),
       S('drive', 3.3), S('drive', 3.3), S('drive', 3.3), S('drive', 3.3),
-      S('cycle', 1.9), S('parking', 2.25), S('curb', 0.18), S('sidewalk', 2.6),
+      S('cycle', 1.9), S('parking', 2.25), S('curb', 0.24), S('sidewalk', 2.6),
     ],
     markings: { center: 'double-yellow', edge: true, crosswalk: true },
+    curbStyle: 'rounded',
   },
   street: {
     name: 'City street',
@@ -76,10 +81,11 @@ export const PROFILES = {
     desc: 'Two lanes · parking · sidewalks',
     speedLimit: 40,
     bands: [
-      S('sidewalk', 2.1), S('curb', 0.18), S('parking', 2.2), S('drive', 3.2), S('drive', 3.2),
-      S('parking', 2.2), S('curb', 0.18), S('sidewalk', 2.1),
+      S('sidewalk', 2.1), S('curb', 0.24), S('parking', 2.2), S('drive', 3.2), S('drive', 3.2),
+      S('parking', 2.2), S('curb', 0.24), S('sidewalk', 2.1),
     ],
     markings: { center: 'double-yellow', edge: true, crosswalk: true },
+    curbStyle: 'rounded',
   },
   local: {
     name: 'Local street',
@@ -88,10 +94,11 @@ export const PROFILES = {
     desc: 'Quiet two-lane street with paving',
     speedLimit: 30,
     bands: [
-      S('sidewalk', 1.9), S('curb', 0.16), S('drive', 3.0), S('drive', 3.0), S('curb', 0.16),
+      S('sidewalk', 1.9), S('curb', 0.22), S('drive', 3.0), S('drive', 3.0), S('curb', 0.22),
       S('sidewalk', 1.9),
     ],
     markings: { center: 'dashed-white', edge: true, crosswalk: true },
+    curbStyle: 'barrier',
   },
   alley: {
     name: 'Alley / Service lane',
@@ -101,6 +108,7 @@ export const PROFILES = {
     speedLimit: 20,
     bands: [S('mountable', 0.5), S('drive', 3.1), S('drive', 3.1), S('mountable', 0.5)],
     markings: { center: 'none', edge: false, crosswalk: false },
+    curbStyle: 'mountable',
   },
   pedestrian: {
     name: 'Pedestrian street',
@@ -111,6 +119,7 @@ export const PROFILES = {
     bands: [S('sidewalk', 5), S('sidewalk', 5)],
     markings: { center: 'none', edge: false, crosswalk: false },
     pedestrian: true,
+    curbStyle: 'mountable',
   },
   pathway: {
     name: 'Pathway / Walkway',
@@ -121,6 +130,7 @@ export const PROFILES = {
     bands: [S('sidewalk', 2.4)],
     markings: { center: 'none', edge: false, crosswalk: false },
     pedestrian: true,
+    curbStyle: 'barrier',
   },
   cycleway: {
     name: 'Cycleway',
@@ -130,6 +140,7 @@ export const PROFILES = {
     speedLimit: 25,
     bands: [S('cycle', 1.6), S('cycle', 1.6)],
     markings: { center: 'dashed-white', edge: true, crosswalk: false },
+    curbStyle: 'barrier',
   },
   busway: {
     name: 'Busway',
@@ -137,9 +148,10 @@ export const PROFILES = {
     icon: 'Bus',
     desc: 'Bus-only running way with platforms',
     speedLimit: 50,
-    bands: [S('sidewalk', 2.2), S('curb', 0.18), S('bus', 3.5), S('bus', 3.5), S('curb', 0.18), S('sidewalk', 2.2)],
+    bands: [S('sidewalk', 2.2), S('curb', 0.24), S('bus', 3.5), S('bus', 3.5), S('curb', 0.24), S('sidewalk', 2.2)],
     markings: { center: 'dashed-white', edge: true, crosswalk: true },
     oneWay: false,
+    curbStyle: 'barrier',
   },
   tramStreet: {
     name: 'Tram street',
@@ -148,11 +160,12 @@ export const PROFILES = {
     desc: 'Tram tracks set in the carriageway',
     speedLimit: 40,
     bands: [
-      S('sidewalk', 2.3), S('curb', 0.16), S('tram', 3.4), S('drive', 3.1), S('drive', 3.1),
-      S('tram', 3.4), S('curb', 0.16), S('sidewalk', 2.3),
+      S('sidewalk', 2.3), S('curb', 0.22), S('tram', 3.4), S('drive', 3.1), S('drive', 3.1),
+      S('tram', 3.4), S('curb', 0.22), S('sidewalk', 2.3),
     ],
     markings: { center: 'dashed-white', edge: true, crosswalk: true },
     tram: true,
+    curbStyle: 'stone',
   },
   service: {
     name: 'Service road',
@@ -160,8 +173,9 @@ export const PROFILES = {
     icon: 'Warehouse',
     desc: 'Access lane · verge edges · single carriageway',
     speedLimit: 30,
-    bands: [S('verge', 1.4), S('curb', 0.15), S('drive', 3.5), S('drive', 3.5), S('curb', 0.15), S('verge', 1.4)],
+    bands: [S('verge', 1.4), S('curb', 0.22), S('drive', 3.5), S('drive', 3.5), S('curb', 0.22), S('verge', 1.4)],
     markings: { center: 'dashed-white', edge: true, crosswalk: false },
+    curbStyle: 'barrier',
   },
   waterfront: {
     name: 'Waterfront promenade',
@@ -169,9 +183,20 @@ export const PROFILES = {
     icon: 'Waves',
     desc: 'Paved promenade with cycle strip',
     speedLimit: 20,
-    bands: [S('sidewalk', 3.4), S('curb', 0.15), S('cycle', 2.1), S('curb', 0.15), S('sidewalk', 3.4)],
+    bands: [S('sidewalk', 3.4), S('curb', 0.22), S('cycle', 2.1), S('curb', 0.22), S('sidewalk', 3.4)],
     markings: { center: 'dashed-white', edge: true, crosswalk: false },
     pedestrian: true,
+    curbStyle: 'barrier',
+  },
+  circuit: {
+    name: 'Race circuit',
+    category: 'High speed',
+    icon: 'Flag',
+    desc: 'Wide racing asphalt · runoff verges · no curbs',
+    speedLimit: 200,
+    bands: [S('verge', 4), S('shoulder', 2.2), S('drive', 6.2), S('drive', 6.2), S('shoulder', 2.2), S('verge', 4)],
+    markings: { center: 'dashed-white', edge: true, crosswalk: false },
+    curbStyle: 'none',
   },
 };
 

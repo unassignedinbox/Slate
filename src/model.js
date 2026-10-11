@@ -18,6 +18,7 @@ export class RoadDocument {
     this.props = [];    // street furniture
     this.rails = [];    // rail lines (with optional level crossings)
     this.subways = [];  // subway lines (tunnels, stations, entrances)
+    this.parkingLots = []; // surface lots + parking decks
     this.env = { river: null, parks: [] };
     this._listeners = new Set();
   }
@@ -62,13 +63,14 @@ export class RoadDocument {
 
   remove(id) {
     const before =
-      this.segments.length + this.props.length + this.rails.length + this.subways.length;
+      this.segments.length + this.props.length + this.rails.length + this.subways.length + this.parkingLots.length;
     this.segments = this.segments.filter((s) => s.id !== id);
     this.props = this.props.filter((p) => p.id !== id);
     this.rails = this.rails.filter((r) => r.id !== id);
     this.subways = this.subways.filter((s) => s.id !== id);
+    this.parkingLots = this.parkingLots.filter((l) => l.id !== id);
     const after =
-      this.segments.length + this.props.length + this.rails.length + this.subways.length;
+      this.segments.length + this.props.length + this.rails.length + this.subways.length + this.parkingLots.length;
     if (after !== before) this.emit('structure');
     return after !== before;
   }
@@ -79,6 +81,8 @@ export class RoadDocument {
       this.props.find((p) => p.id === id) ||
       this.rails.find((r) => r.id === id) ||
       this.subways.find((s) => s.id === id) ||
+      this.parkingLots.find((l) => l.id === id) ||
+      this.junctions?.find((j) => j.id === id) ||
       null
     );
   }
@@ -88,6 +92,7 @@ export class RoadDocument {
     this.props = [];
     this.rails = [];
     this.subways = [];
+    this.parkingLots = [];
     this.junctions = [];
     this.env = { river: null, parks: [] };
     this.emit('structure');
@@ -103,6 +108,7 @@ export class RoadDocument {
       props: this.props.length,
       rails: this.rails.length,
       subways: this.subways.length,
+      parking: this.parkingLots.length,
       laneKm,
     };
   }
@@ -116,6 +122,7 @@ export class RoadDocument {
       props: this.props,
       rails: this.rails,
       subways: this.subways,
+      parkingLots: this.parkingLots,
       junctions: this.junctions || [],
       env: this.env,
     });
@@ -131,6 +138,7 @@ export class RoadDocument {
     doc.props = data.props || [];
     doc.rails = data.rails || [];
     doc.subways = data.subways || [];
+    doc.parkingLots = data.parkingLots || [];
     doc.junctions = data.junctions || [];
     doc.env = data.env || { river: null, parks: [] };
     return doc;

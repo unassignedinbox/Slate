@@ -247,7 +247,7 @@ export function finishPropBuckets(buckets) {
       }
     }
     if (!geos.length) continue;
-    const merged = mergeGeometries(geos.map((g) => (g.index ? g.toNonIndexed() : g)), false);
+    const merged = mergeGeometries(geos, false);
     if (!merged) continue;
     const mesh = new THREE.Mesh(merged, material || M.metalDark);
     mesh.castShadow = true;

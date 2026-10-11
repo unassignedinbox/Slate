@@ -22,7 +22,11 @@ npm run build      # production bundle in dist/
 **Roads — every class you find in the world**
 Motorway / highway · highway ramp · boulevard · avenue · city street · local
 street · alley / service lane · pedestrian street · pathway · cycleway ·
-busway · tram street · service road · waterfront promenade.
+busway · tram street · service road · waterfront promenade · race circuit.
+
+**Proper curbs** — real kerb assemblies: gutter pans cross-falling to the
+kerb, vertical reveal faces, kerb tops (barrier lip / rounded chamfer /
+granite stone / mountable ramp) and 2% back-sloped paving.
 
 **Lanes** — driving, **bus** (red asphalt + BUS legend), **cycling** (green
 asphalt + bike pictograms), **parking** (bay ticks), tram track beds, hard
@@ -33,20 +37,38 @@ centrelines, dashed lane lines, edge lines, turn arrows, zebra crosswalks,
 parking bays), **bollards**, **speed bumps**, speed-limit signs, street
 lights, benches, litter bins, hydrants, trees.
 
-**Bridges** — elevated segments with concrete decks, edge beams, railings
-and pillars (generated automatically where the city river runs).
+**Proper bridges** — four real structures, selectable per segment:
+* **Girder / beam** — deck slab, steel I-girders, hammerhead piers, abutments
+* **Arch** — parabolic ribs, spandrel columns, cross braces
+* **Cable-stayed** — twin pylons, fan stays, pier bases
+* **Through-truss** — Warren side trusses, top lateral bracing
+plus concrete parapets or steel handrail railings and deck lamps.
 
-**Rail & subways** — ballast, sleepers, twin rails, **level crossings** with
-rubber panels, RR pavement paint, crossbuck signals, twin red lamps and
-raised striped gate booms. Metro lines run underground with twin tunnels,
-station boxes, yellow platform edges and glazed street entrances
-(“Subway X-ray” view mode reveals them).
+**Proper railway crossings** — flangeway panels with rail slots, concrete
+approach slabs, rumble strips, stop lines, hatched islands, RR pavement
+paint, advance warning boards, wig-wag signals with bells, crossbucks and
+counterweighted gate booms with tip lights and rubber skirts.
 
-**City generation** (`G` or the Construct → Generate tab) — hierarchical
-street grid with bus / cycle / parking networks, a river with bridges and
-quayside promenades, a mainline with a level crossing, an underground metro
-line with stations, parks with pathways, and full street furniture seeding.
-Buildings are intentionally out of scope.
+**Proper city parking** — surface car parks with painted bays (90°/60°),
+aisle arrows, blue accessible bays, landscaped islands with trees, light
+masts and entry kiosks — plus multi-storey **parking decks** with column
+grids, parapets and zigzag ramps. Both are first-class editable objects.
+
+**Rail & subways** — ballast, sleepers, twin rails, level crossings (above).
+Metro lines run underground with twin tunnels, station boxes, yellow
+platform edges and glazed street entrances (“Subway X-ray” reveals them).
+
+**NFS-scale city generation** (`G` or Construct → Generate) — ~216 road
+segments / 19 km of carriageway: hierarchical grid + service alleys, an
+**elevated expressway** with girder viaduct over Central Boulevard and
+curved flyover ramps, a **roundabout**, a river crossed by cable-stayed,
+arch, truss and girder bridges, quayside promenades, a mainline with **two
+gated level crossings**, an underground metro with stations, parks with
+pathway loops, six parking facilities and full street furniture seeding.
+Every generated piece stays editable — re-profile roads, switch bridge
+structures, reshape parking, draw new roads, delete anything.
+Buildings are intentionally out of scope; draw sweeping circuits with the
+**race circuit** profile for NFS-style driving runs.
 
 ## Unreal-style viewport camera
 
@@ -66,7 +88,7 @@ Buildings are intentionally out of scope.
 | --- | --- |
 | **V** | Select tool |
 | **R** | Draw road (polyline, Enter or double-click to finish) |
-| **P** | Place prop (X rotates 15°) |
+| **P** | Place prop / parking (X rotates 15°) |
 | **K** | Construct menu |
 | **G** | Generate city |
 | **1 – 4** | Lit / Classes / Wire / Subway X view modes |
@@ -90,8 +112,10 @@ src/
   camera.js       Unreal-style fly camera
   model.js        pure-data RoadDocument (JSON serializable)
   profiles.js     cross-section profiles, band layout, marking rules
-  roadbuilder.js  ribbons, curbs, markings, bridges, junction pads
-  rail.js         railway + level crossings + subway tunnels/stations
+  roadbuilder.js  ribbons, proper curbs, markings, junction pads
+  bridges.js      girder / arch / cable-stayed / truss structures
+  parking.js      surface car parks + multi-storey parking decks
+  rail.js         railway + proper level crossings + subway tunnels/stations
   props.js        street furniture factories (batched + pick proxies)
   citygen.js      procedural city generation
   textures.js     procedural canvas textures (asphalt, paving, paint…)

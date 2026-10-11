@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { getMaterials } from './materials.js';
 import { buildSegment, buildJunction, ribbonGeometry, samplePolyline, polylineSampleLength } from './roadbuilder.js';
 import { buildRail, buildSubway } from './rail.js';
+import { buildParkingLot, buildParkingDeck } from './parking.js';
 import { collectProp, finishPropBuckets, propPieces, PROP_KINDS } from './props.js';
 import { PROFILES, profileWidth } from './profiles.js';
 
@@ -219,16 +220,44 @@ export class Viewport {
       }
     }
 
-    // parks
+    // parks + roundabout islands
     for (const park of doc.env?.parks || []) {
       if (park.hidden) continue;
       const M = getMaterials();
-      const pad = new THREE.Mesh(new THREE.BoxGeometry(park.w, 0.06, park.h), M.grass);
-      pad.position.set(park.x, 0.0, park.z);
+      const isCircle = park.shape === 'circle';
+      const geo = isCircle
+        ? new THREE.CylinderGeometry(park.w / 2, park.w / 2, 0.12, 36)
+        : new THREE.BoxGeometry(park.w, 0.06, park.h);
+      const pad = new THREE.Mesh(geo, park.kind === 'roundabout' ? M.concrete : M.grass);
+      pad.position.set(park.x, isCircle ? 0.06 : 0.0, park.z);
       pad.receiveShadow = true;
       pad.name = park.name;
       pad.userData.objectId = park.id;
+      pad.userData.kind = 'park';
       this.contentGroup.add(pad);
+      if (isCircle) {
+        const island = new THREE.Mesh(new THREE.CylinderGeometry(park.w / 2 - 4.5, park.w / 2 - 4.5, 0.34, 36), M.grass);
+        island.position.set(park.x, 0.17, park.z);
+        island.receiveShadow = true;
+        this.contentGroup.add(island);
+      }
+    }
+
+    // parking lots + decks
+    for (const lot of doc.parkingLots || []) {
+      if (lot.hidden) continue;
+      const g = (lot.kind === 'deck' ? buildParkingDeck : buildParkingLot)(lot);
+      this.contentGroup.add(g);
+      // pick proxy slab
+      const proxy = new THREE.Mesh(
+        new THREE.BoxGeometry((lot.w ?? 72) + 4, 2 + (lot.kind === 'deck' ? (lot.levels ?? 3) * 3.4 : 0), (lot.h ?? 46) + 4),
+        new THREE.MeshBasicMaterial({ visible: false })
+      );
+      proxy.position.set(lot.x, 1, lot.z);
+      proxy.rotation.y = lot.rotY ?? 0;
+      proxy.userData.objectId = lot.id;
+      proxy.userData.kind = 'parking';
+      this.pickGroup.add(proxy);
     }
 
     // props: batched meshes + per-prop pick proxies
@@ -419,6 +448,17 @@ export class Viewport {
   setPropGhost(kind, point, rotY = 0) {
     this.clearGhost();
     if (!point || !kind) return;
+    if (kind === 'parking-lot' || kind === 'parking-deck') {
+      const isDeck = kind === 'parking-deck';
+      const pad = new THREE.Mesh(
+        new THREE.BoxGeometry(isDeck ? 58 : 66, isDeck ? 10.5 : 0.25, isDeck ? 40 : 42),
+        new THREE.MeshBasicMaterial({ color: 0xb8c6ec, transparent: true, opacity: 0.16, depthWrite: false })
+      );
+      pad.position.set(point.x, (isDeck ? 10.5 : 0.25) / 2 + (point.y ?? 0) - 0.1, point.z);
+      pad.rotation.y = rotY;
+      this.ghostGroup.add(pad);
+      return;
+    }
     const M = getMaterials();
     const group = new THREE.Group();
     group.position.set(point.x, point.y ?? 0, point.z);

@@ -66,7 +66,7 @@ const ctrl = {
   toggleGrid: track('toggleGrid'),
   clearScene: track('clearScene'),
   generateCity: track('generateCity'),
-  getGenParams: () => ({ seed: 3, blocks: 4, rail: true, subway: true, river: true, busNetwork: true, bikeNetwork: true, parking: true, furniture: true, speedBumps: true }),
+  getGenParams: () => ({ seed: 3, blocks: 4, rail: true, subway: true, river: true, expressway: true, roundabout: true, busNetwork: true, bikeNetwork: true, parking: true, furniture: true, speedBumps: true }),
   setGenParams: track('setGenParams'),
   exportJSON: track('exportJSON'),
   importJSON: track('importJSON'),
@@ -112,6 +112,16 @@ ctrl.selection = prop.id;
 ui.updateAll();
 assert(document.querySelector('.object-header p')?.textContent.includes('Street furniture'), 'prop inspector');
 
+// parking lot
+if (doc.parkingLots.length) {
+  ctrl.selection = doc.parkingLots[0].id;
+  ui.updateAll();
+  assert(document.body.textContent.includes('Car park') || document.body.textContent.includes('parking'), 'parking inspector');
+  ctrl.selection = doc.parkingLots[doc.parkingLots.length - 1].id;
+  ui.updateAll();
+  assert(document.body.textContent.includes('deck') || document.body.textContent.includes('Deck'), 'parking deck inspector');
+}
+
 // select a rail
 ctrl.selection = doc.rails[0].id;
 ui.updateAll();
@@ -139,7 +149,7 @@ assert(document.querySelectorAll('.construct-tile').length >= 10, `construct roa
 // switch to generate tab
 const genBtn = [...document.querySelectorAll('.construct-layout nav button')].find((b) => b.textContent.includes('Generate'));
 genBtn.click();
-assert(document.querySelectorAll('.gen-row').length === 10, `generate form rows (${document.querySelectorAll('.gen-row').length})`);
+assert(document.querySelectorAll('.gen-row').length === 12, `generate form rows (${document.querySelectorAll('.gen-row').length})`);
 assert(document.querySelector('.construct-submit')?.textContent.includes('Generate City'), 'generate submit');
 
 // furniture tab

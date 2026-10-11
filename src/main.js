@@ -28,10 +28,12 @@ class Controller {
     this.propRot = 0;
     this.genParams = {
       seed: 42,
-      blocks: 6,
+      blocks: 8,
       rail: true,
       subway: true,
       river: true,
+      expressway: true,
+      roundabout: true,
       busNetwork: true,
       bikeNetwork: true,
       parking: true,
@@ -142,7 +144,9 @@ class Controller {
       target.x = mid.x;
       target.z = mid.z;
     }
-    const radius = obj.points ? Math.min(90, Math.max(18, profileWidth(PROFILES[obj.profile] || PROFILES.street) * 1.4)) : 14;
+    const radius = obj.points
+      ? Math.min(90, Math.max(18, profileWidth(PROFILES[obj.profile] || PROFILES.street) * 1.4))
+      : obj.w ? Math.max(obj.w, obj.h ?? 0) * 0.85 : 14;
     this.camera.focus(new (await_three()).Vector3(target.x, 2, target.z), radius);
     this.ui?.setHint(`Focused ${obj.name || obj.kind}`);
   }
@@ -207,6 +211,27 @@ class Controller {
   }
 
   placePropAt(x, z) {
+    if (this.propKind === 'parking-lot' || this.propKind === 'parking-deck') {
+      const isDeck = this.propKind === 'parking-deck';
+      const lot = {
+        id: uid('pk'),
+        kind: isDeck ? 'deck' : 'lot',
+        name: isDeck ? `Parking deck ${this.doc.parkingLots.length + 1}` : `Car park ${this.doc.parkingLots.length + 1}`,
+        x,
+        z,
+        w: isDeck ? 58 : 66,
+        h: isDeck ? 40 : 42,
+        rotY: this.propRot,
+        angle: 90,
+        levels: 3,
+      };
+      this.doc.parkingLots.push(lot);
+      this._snapshot();
+      this.doc.emit('structure');
+      this.select(lot.id);
+      this.ui?.setHint(`Placed ${lot.name} — click to place another`);
+      return;
+    }
     const prop = {
       id: uid('pr'),
       kind: this.propKind,
@@ -239,7 +264,7 @@ class Controller {
   }
 
   updateProp(id, patch, light = false) {
-    const prop = this.doc.props.find((p) => p.id === id);
+    const prop = this.doc.props.find((p) => p.id === id) || this.doc.parkingLots.find((l) => l.id === id);
     if (!prop) return;
     Object.assign(prop, patch);
     if (!light) this._snapshot();
@@ -287,6 +312,7 @@ class Controller {
     }
     if (this.doc.segments.includes(obj)) this.doc.segments.push(copy);
     else if (this.doc.props.includes(obj)) this.doc.props.push(copy);
+    else if (this.doc.parkingLots.includes(obj)) this.doc.parkingLots.push(copy);
     else return;
     this._snapshot();
     this.doc.emit('structure');
@@ -538,7 +564,8 @@ async function boot() {
         profileKey
       );
     } else if (ctrl.tool === 'prop') {
-      viewport.setPropGhost(ctrl.propKind, p ? { x: snapValue(p.x, ctrl.getSnap()), y: 0.15, z: snapValue(p.z, ctrl.getSnap()) } : null, ctrl.propRot);
+      const ghostY = ctrl.propKind === 'parking-lot' || ctrl.propKind === 'parking-deck' ? 0.2 : 0.15;
+      viewport.setPropGhost(ctrl.propKind, p ? { x: snapValue(p.x, ctrl.getSnap()), y: ghostY, z: snapValue(p.z, ctrl.getSnap()) } : null, ctrl.propRot);
     }
   });
 

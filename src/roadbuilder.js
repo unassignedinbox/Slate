@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { getMaterials } from './materials.js';
 import { getTextures } from './textures.js';
 import { BAND, TRAVEL, layoutBands, markingBoundaries, profileWidth, PROFILES } from './profiles.js';
+import { buildBridgePieces } from './bridges.js';
 
 const EPS = 0.004;
 
@@ -152,7 +153,7 @@ function mergeInto(buckets, matName, geos) {
 function finishGroup(buckets, materials, group, name) {
   for (const [matName, geos] of buckets) {
     if (!geos.length) continue;
-    const merged = mergeGeometries(geos.map((g) => g.toNonIndexed()), false);
+    const merged = mergeGeometries(geos, false);
     if (!merged) continue;
     const mesh = new THREE.Mesh(merged, materials[matName] || materials.concrete);
     mesh.name = `${name}:${matName}`;
@@ -160,6 +161,70 @@ function finishGroup(buckets, materials, group, name) {
     mesh.receiveShadow = true;
     group.add(mesh);
     geos.forEach((g) => g.dispose());
+  }
+}
+
+
+const CURB_REVEAL = { barrier: 0.16, rounded: 0.16, stone: 0.22, mountable: 0.09 };
+
+/**
+ * Proper curb assembly for one curb band:
+ * gutter pan -> curb face -> curb top (rounded/stone variants) -> back.
+ */
+function addCurbGeometry(buckets, samples, b, style) {
+  const reveal = CURB_REVEAL[style] ?? 0.16;
+  const inner = b.center < 0 ? b.x1 : b.x0; // edge facing the roadway
+  const outer = b.center < 0 ? b.x0 : b.x1;
+  const inward = b.center < 0 ? 1 : -1; // direction toward road centre
+
+  if (style === 'mountable') {
+    // low sloped mountable kerb: ramp up from the roadway to the walk
+    const yAcross = b.center < 0 ? [reveal, 0] : [0, reveal];
+    mergeInto(buckets, 'concrete', [
+      ribbonGeometry(samples, b.x0, b.x1, 0, { vScale: 0.25, yAcross }),
+      wallGeometry(samples, outer, 0, reveal),
+    ]);
+    return;
+  }
+
+  // gutter pan (asphalt, cross-falls toward the kerb face)
+  const gutterW = 0.42;
+  mergeInto(buckets, 'asphalt', [
+    ribbonGeometry(samples, inner, inner + inward * gutterW, 0, {
+      vScale: 0.12,
+      yAcross: b.center < 0 ? [0, 0.02] : [0.02, 0],
+    }),
+  ]);
+
+  // curb face (the reveal)
+  mergeInto(buckets, style === 'stone' ? 'curbStone' : 'concrete', [
+    wallGeometry(samples, inner, 0, reveal),
+    ribbonGeometry(samples, b.x0, b.x1, reveal, { vScale: 0.3 }),
+  ]);
+
+  if (style === 'rounded') {
+    // chamfered top edge on the roadway side
+    const topW = b.w;
+    mergeInto(buckets, 'concrete', [
+      ribbonGeometry(samples, inner, inner + inward * 0.06, reveal - 0.055, {
+        vScale: 0.3,
+        yAcross: b.center < 0 ? [reveal - 0.055, reveal] : [reveal, reveal - 0.055],
+      }),
+    ]);
+    void topW;
+  } else if (style === 'stone') {
+    // granite kerb: darker face strip + proud top stone
+    mergeInto(buckets, 'curbStone', [
+      ribbonGeometry(samples, inner - inward * 0.02, inner + inward * 0.06, reveal + 0.035, {
+        vScale: 0.3,
+        yAcross: b.center < 0 ? [reveal + 0.035, reveal] : [reveal, reveal + 0.035],
+      }),
+    ]);
+  } else {
+    // barrier kerb: slight overhanging lip on the roadway side
+    mergeInto(buckets, 'concrete', [
+      ribbonGeometry(samples, inner, inner + inward * 0.05, reveal + 0.012, { vScale: 0.3 }),
+    ]);
   }
 }
 
@@ -185,45 +250,19 @@ export function buildSegment(segment) {
   const showMarkings = ov.markings !== false;
   const showCurbs = ov.curbs !== false;
   const isBridge = !!segment.bridge;
-  const sidewalkY = 0.15;
+  const sidewalkY = CURB_REVEAL[ov.curbStyle || profile.curbStyle || 'barrier'] ?? 0.16;
 
-  // ---- bridge deck first (under everything) ----
+  // ---- proper bridge structures (girder / arch / cable / truss) ----
   if (isBridge) {
-    mergeInto(buckets, 'concreteDark', [
-      ribbonGeometry(samples, -half + 0.15, half - 0.15, -0.42, { vScale: 0.06 }),
-      wallGeometry(samples, -half + 0.15, -1.05, -0.42),
-      wallGeometry(samples, half - 0.15, -1.05, -0.42),
-      ribbonGeometry(samples, -half + 0.15, half - 0.15, -1.05, { vScale: 0.06 }),
-    ]);
-    // railings along both outer edges
-    const railGeos = [];
-    const postGeos = [];
-    for (const side of [-1, 1]) {
-      const x = side * (half - 0.28);
-      railGeos.push(wallGeometry(samples, x, 0.25, 1.05));
-      railGeos.push(ribbonGeometry(samples, x - 0.05, x + 0.05, 1.05, { vScale: 0.2 }));
-      for (let s = 1; s < total; s += 2.6) {
-        const sm = sampleAt(samples, s);
-        const post = new THREE.BoxGeometry(0.09, 1.05, 0.09);
-        post.translate(sm.x + sm.nx * x, sm.y + 0.52, sm.z + sm.nz * x);
-        postGeos.push(post);
-      }
+    const spec = typeof segment.bridge === 'object' ? segment.bridge : {};
+    const btype = segment.bridgeType || spec.type || 'girder';
+    const pieces = buildBridgePieces(samples, half, {
+      type: btype,
+      railing: spec.railing || (segment.overrides || {}).bridgeRailing || 'steel',
+    });
+    for (const [key, geos] of Object.entries(pieces)) {
+      mergeInto(buckets, key, geos);
     }
-    mergeInto(buckets, 'metalDark', railGeos);
-    mergeInto(buckets, 'metalDark', postGeos);
-    // pillars
-    const pillars = [];
-    for (let s = 10; s < total - 6; s += 22) {
-      const sm = sampleAt(samples, s);
-      const h = Math.max(1.2, sm.y + 1.05);
-      const p = new THREE.BoxGeometry(1.5, h, 1.1);
-      p.translate(sm.x, sm.y + 1.05 - h / 2 - 0.4, sm.z + 0);
-      pillars.push(p);
-      const cap = new THREE.BoxGeometry(2.6, 0.55, 1.3);
-      cap.translate(sm.x, sm.y - 0.25, sm.z);
-      pillars.push(cap);
-    }
-    mergeInto(buckets, 'pillar', pillars);
   }
 
   // ---- surface bands ----
@@ -232,26 +271,20 @@ export function buildSegment(segment) {
     const y = (def.y ?? 0) + EPS * 2;
     if (b.t === 'curb' || b.t === 'mountable') {
       if (!showCurbs) continue;
-      if (b.t === 'curb') {
-        mergeInto(buckets, 'concrete', [
-          ribbonGeometry(samples, b.x0, b.x1, sidewalkY, { vScale: 0.25 }),
-          wallGeometry(samples, b.x0, 0, sidewalkY),
-          wallGeometry(samples, b.x1, 0, sidewalkY),
-        ]);
-      } else {
-        // mountable: gentle slope from the lane up to the verge
-        const outerHigh = b.center < 0 ? [0.08, 0] : [0, 0.08];
-        mergeInto(buckets, 'concrete', [
-          ribbonGeometry(samples, b.x0, b.x1, 0, {
-            vScale: 0.25,
-            yAcross: outerHigh,
-          }),
-          wallGeometry(samples, b.center < 0 ? b.x0 : b.x1, 0, 0.08),
-        ]);
-      }
+      const style = b.t === 'mountable' ? 'mountable' : (ov.curbStyle || profile.curbStyle || 'barrier');
+      if (style === 'none') continue;
+      addCurbGeometry(buckets, samples, b, style);
     } else if (b.t === 'sidewalk') {
       if (ov.sidewalks === false) continue;
-      mergeInto(buckets, 'paving', [ribbonGeometry(samples, b.x0, b.x1, sidewalkY, { vScale: 0.18 })]);
+      const reveal = CURB_REVEAL[ov.curbStyle || profile.curbStyle || 'barrier'] ?? 0.16;
+      // sidewalk runs from the kerb back, rising 2% away from the road
+      const away = b.center < 0 ? -1 : 1;
+      mergeInto(buckets, 'paving', [
+        ribbonGeometry(samples, b.x0, b.x1, reveal, {
+          vScale: 0.18,
+          yAcross: away < 0 ? [0.025, 0] : [0, 0.025],
+        }),
+      ]);
     } else if (b.t === 'grass' || b.t === 'verge' || b.t === 'median') {
       mergeInto(buckets, 'grass', [ribbonGeometry(samples, b.x0, b.x1, 0.1 + EPS, { vScale: 0.09 })]);
     } else if (b.t === 'tram') {

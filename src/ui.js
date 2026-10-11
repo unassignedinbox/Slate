@@ -313,6 +313,23 @@ export function buildShell(c) {
       ? furnitureRows
       : el('div', { class: 'outliner-empty', text: 'No furniture placed.' })));
 
+    // Parking
+    const parkingRows = (doc.parkingLots || [])
+      .filter((l) => matches(l.name, l.kind))
+      .map((l) =>
+        treeRow({
+          id: l.id,
+          name: l.name,
+          kind: l.kind === 'deck' ? 'DECK' : 'LOT',
+          icon: l.kind === 'deck' ? 'Warehouse' : 'SquareParking',
+          iconColor: 'var(--c-parking)',
+          isHidden: !!l.hidden,
+        })
+      );
+    treeScroll.append(groupBlock('Parking', (doc.parkingLots || []).length, 'parking', parkingRows.length
+      ? parkingRows
+      : el('div', { class: 'outliner-empty', text: 'No parking yet — generate a city or place a lot.' })));
+
     // Environment
     const envRows = [];
     if (doc.env?.river && matches(doc.env.river.name, 'river')) {
@@ -447,6 +464,7 @@ export function buildShell(c) {
     }
 
     if (doc.segments.includes(obj)) return renderSegmentInspector(obj);
+    if ((doc.parkingLots || []).includes(obj)) return renderParkingInspector(obj);
     if (doc.props.includes(obj)) return renderPropInspector(obj);
     if (doc.rails.includes(obj)) return renderRailInspector(obj);
     if (doc.subways.includes(obj)) return renderSubwayInspector(obj);
@@ -512,7 +530,7 @@ export function buildShell(c) {
         c.updateSegment(seg.id, { overrides: { ...ov } });
       }),
       switchRow('Bridge deck', !!seg.bridge, () => {
-        c.updateSegment(seg.id, { bridge: !seg.bridge });
+        c.updateSegment(seg.id, { bridge: !seg.bridge, bridgeType: seg.bridgeType || 'girder' });
       })
     );
     inspectorContent.append(switches);
@@ -567,6 +585,44 @@ export function buildShell(c) {
         c.updateSegment(seg.id, { points: pts });
       });
     });
+
+    // curb + bridge structure
+    inspectorContent.append(
+      card('Curb & structure', 'Fence',
+        `<p class="muted">Kerb profile and bridge structure for this segment.</p>
+         <div class="control-line"><span>Curb style</span><span class="value" style="flex:1;max-width:150px"></span></div>
+         <div class="control-line"><span>Bridge structure</span><span class="value" style="flex:1;max-width:150px"></span></div>`,
+        seg.bridge ? 'BRIDGED' : 'AT GRADE')
+    );
+    const structCard = inspectorContent.lastChild;
+    const curbSel = el('select', {
+      onchange: (e) => c.updateSegment(seg.id, { overrides: { ...ov, curbStyle: e.target.value === 'default' ? undefined : e.target.value } }),
+      style: { width: '100%', background: '#191d24', border: '1px solid #3b4351', color: '#ccd2df', borderRadius: '5px', padding: '6px' },
+    });
+    const currentCurb = ov.curbStyle || profile.curbStyle || 'barrier';
+    for (const s of ['default', 'barrier', 'rounded', 'stone', 'mountable', 'none']) {
+      curbSel.append(el('option', {
+        value: s,
+        text: s === 'default' ? `Profile default (${currentCurb})` : s,
+        selected: (ov.curbStyle || 'default') === s ? 'selected' : null,
+      }));
+    }
+    structCard.querySelectorAll('.control-line .value')[0].append(curbSel);
+    const brSel = el('select', {
+      onchange: (e) => {
+        if (!seg.bridge) c.updateSegment(seg.id, { bridge: true, bridgeType: e.target.value });
+        else c.updateSegment(seg.id, { bridgeType: e.target.value });
+      },
+      style: { width: '100%', background: '#191d24', border: '1px solid #3b4351', color: '#ccd2df', borderRadius: '5px', padding: '6px' },
+    });
+    for (const [v, label] of [['girder', 'Girder / beam'], ['arch', 'Arch'], ['cable', 'Cable-stayed'], ['truss', 'Through truss']]) {
+      brSel.append(el('option', {
+        value: v,
+        text: label,
+        selected: (seg.bridgeType || 'girder') === v ? 'selected' : null,
+      }));
+    }
+    structCard.querySelectorAll('.control-line .value')[1].append(brSel);
 
     // profile switcher
     inspectorContent.append(
@@ -645,6 +701,74 @@ export function buildShell(c) {
           class: 'action-btn wide',
           onclick: () => c.select(`coll:${prop.kind}`),
         }, el('span', { html: svgIcon('Layers', 13) }), `All ${meta.name.toLowerCase()}s`),
+        el('button', {
+          class: 'action-btn',
+          onclick: () => c.duplicateSelected(),
+        }, el('span', { html: svgIcon('Copy', 13) }), 'Duplicate'),
+        el('button', {
+          class: 'action-btn danger',
+          onclick: () => c.deleteSelected(),
+        }, el('span', { html: svgIcon('Trash2', 13) }), 'Delete')
+      )
+    );
+  }
+
+  function renderParkingInspector(lot) {
+    const isDeck = lot.kind === 'deck';
+    renderObjectHeader(
+      lot.name,
+      isDeck ? 'Multi-storey parking deck' : 'Surface car park',
+      isDeck ? 'Warehouse' : 'SquareParking',
+      'var(--c-parking)'
+    );
+    inspectorContent.append(el('p', {
+      class: 'description-line',
+      text: isDeck
+        ? 'Column grid · deck slabs · parapets · zigzag ramps · entry kiosks'
+        : 'Painted bays · aisles & arrows · accessible bays · landscaped islands · lights · kiosks',
+    }));
+    inspectorContent.append(
+      card('Footprint', 'Ruler',
+        `<div class="metric">${fmt(lot.w ?? 72, 0)}<small>×</small>${fmt(lot.h ?? 46, 0)}<small>m</small></div>
+         <p class="muted">${isDeck ? `${lot.levels ?? 3} levels` : `Bays at ${(lot.angle ?? 90)}°`} · ${fmt(((lot.w ?? 72) * (lot.h ?? 46)) / 12, 0)} car spaces approx.</p>`,
+        isDeck ? 'DECK' : 'SURFACE LOT')
+    );
+    const geoCard = inspectorContent.lastChild.querySelector('div');
+    const numRow = (label, key, min, max, unit = ' m') => {
+      const input = el('input', {
+        type: 'number',
+        value: String(lot[key] ?? 0),
+        style: { width: '78px', background: '#191d24', border: '1px solid #3b4351', color: '#ccd2df', borderRadius: '5px', padding: '6px 8px' },
+        onchange: (e) => c.updateProp(lot.id, { [key]: Number(e.target.value) || 0 }),
+      });
+      return el('div', { class: 'control-line' },
+        el('span', { text: label }),
+        el('span', { class: 'value' }, input, el('small', { text: unit }))
+      );
+    };
+    geoCard.append(
+      numRow('Width', 'w', 20, 200),
+      numRow('Depth', 'h', 16, 160),
+      numRow('Heading', 'rotY', 0, 360, ' rad'),
+    );
+    if (isDeck) geoCard.append(numRow('Levels', 'levels', 1, 6, ' floors'));
+    else {
+      const angRow = el('div', { class: 'control-line' },
+        el('span', { text: 'Bay angle' }),
+        el('span', { class: 'value' },
+          el('button', {
+            class: 'property-switch',
+            style: { padding: '4px 8px' },
+            onclick: () => {
+              c.updateProp(lot.id, { angle: (lot.angle ?? 90) === 90 ? 60 : 90 });
+            },
+          }, el('span', { class: 'switch-state', text: `${lot.angle ?? 90}°` }))
+        )
+      );
+      geoCard.append(angRow);
+    }
+    inspectorContent.append(
+      el('div', { class: 'action-grid' },
         el('button', {
           class: 'action-btn',
           onclick: () => c.duplicateSelected(),
@@ -758,7 +882,7 @@ export function buildShell(c) {
       el('div', { class: 'stat-strip' },
         statCell('Rail', st.rails, 'RailSymbol'),
         statCell('Metro', st.subways, 'TrainFront'),
-        statCell('FPS', viewportFps, 'Gauge')
+        statCell('Parking', st.parking ?? 0, 'SquareParking')
       )
     );
 

@@ -63,7 +63,9 @@ const { collectProp, finishPropBuckets, propPieces, PROP_KINDS } = await import(
 const { PROFILES, layoutBands, profileWidth } = await import('../src/profiles.js');
 
 const doc = new RoadDocument();
-generateCity(doc, { seed: 7, blocks: 6 });
+const t0 = Date.now();
+generateCity(doc, { seed: 7, blocks: 8 });
+console.log('generate:', Date.now() - t0, 'ms');
 
 let meshes = 0;
 let triangles = 0;
@@ -119,6 +121,39 @@ for (const jn of doc.junctions.slice(0, 8)) {
 countGroup(buildRail(doc.rails[0]), 'rail');
 countGroup(buildSubway(doc.subways[0]), 'subway');
 
+// parking lots + decks
+const { buildParkingLot, buildParkingDeck } = await import('../src/parking.js');
+for (const angle of [90, 60]) {
+  countGroup(
+    buildParkingLot({ id: 'lot-' + angle, name: 'Lot', x: 0, z: 0, w: 72, h: 46, angle, rotY: 0.3 }),
+    `parking lot ${angle}°`
+  );
+}
+countGroup(buildParkingDeck({ id: 'deck', name: 'Deck', x: 20, z: 20, w: 58, h: 40, levels: 3 }), 'parking deck');
+
+// all bridge types through buildSegment
+const { buildBridgePieces } = await import('../src/bridges.js');
+for (const type of ['girder', 'arch', 'cable', 'truss']) {
+  const seg = {
+    id: 'br-' + type,
+    name: type,
+    profile: 'street',
+    points: [
+      { x: 0, y: 0, z: 0 },
+      { x: 0, y: 3.5, z: 40 },
+      { x: 0, y: 3.5, z: 80 },
+      { x: 0, y: 0, z: 120 },
+    ],
+    junctions: { start: true, end: true },
+    bridge: true,
+    bridgeType: type,
+    overrides: {},
+  };
+  const g = buildSegment(seg);
+  countGroup(g, 'bridge segment ' + type);
+  void buildBridgePieces;
+}
+
 // every prop kind, batched
 const buckets = new Map();
 for (const kind of Object.keys(PROP_KINDS)) {
@@ -142,5 +177,5 @@ if (samples.length < 2) throw new Error('samplePolyline failed');
 const len = polylineSampleLength(samples);
 if (!(len > 0)) throw new Error('bad sample length');
 
-console.log(`\nTOTAL meshes=${meshes} triangles=${Math.round(triangles)}`);
+console.log(`\nTOTAL meshes=${meshes} triangles=${Math.round(triangles)} build=${Date.now() - t0}ms`);
 console.log('GEOMETRY SMOKE TEST PASSED');
