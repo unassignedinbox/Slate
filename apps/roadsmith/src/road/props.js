@@ -322,6 +322,29 @@ export function gullyGrate(mb, pos, yaw) {
   }
 }
 
+/**
+ * Side-entry kerb inlet: the slot type you find on a continuous-kerb street where a flat grate
+ * would collect bicycle wheels.  A dark throat recessed into the kerb face under a cast lintel,
+ * with a shallow concrete channel apron pulling the gutter flow into it.
+ * `side` is +1 when the footway is to the left of the road heading `yaw`.
+ */
+export function kerbInlet(mb, pos, yaw, side) {
+  const nx = -Math.sin(yaw) * side, nz = Math.cos(yaw) * side;   // across, into the footway
+  const L = 0.92;
+  // channel apron in the gutter, dished towards the slot
+  mb.attr({ surface: SURF.CONCRETE });
+  box(mb, { x: pos.x - nx * 0.22, y: pos.y - 0.012, z: pos.z - nz * 0.22 },
+    { x: L + 0.24, y: 0.03, z: 0.46 }, { yaw, attrs: { wear: 0.72 } });
+  // the throat itself: recessed, so it reads as a hole rather than a bump
+  mb.attr({ surface: SURF.ASPHALT });
+  box(mb, { x: pos.x + nx * 0.085, y: pos.y + 0.055, z: pos.z + nz * 0.085 },
+    { x: L, y: 0.085, z: 0.16 }, { yaw, attrs: { wear: 1 } });
+  // cast lintel over the opening, flush with the kerb top
+  mb.attr({ surface: SURF.STEEL_RUST });
+  box(mb, { x: pos.x + nx * 0.055, y: pos.y + 0.126, z: pos.z + nz * 0.055 },
+    { x: L + 0.08, y: 0.055, z: 0.19 }, { yaw, attrs: RUST });
+}
+
 export function manhole(mb, pos) {
   mb.attr({ surface: SURF.STEEL_RUST });
   lathe(mb, { x: pos.x, y: pos.y - 0.005, z: pos.z }, [
@@ -415,14 +438,26 @@ export function buildProps(net, surface, settings, rng) {
     // drainage gullies in the channel
     if (urban) {
       const gstep = 22;
+      // one drainage style per kerb line, so a street reads as having been built in one go
+      const inletA = rng.chance(0.42), inletB = rng.chance(0.42);
       for (let s = s0 + 11; s < s1 - 6; s += gstep) {
         for (const sd of [-1, 1]) {
           const f = edge.curve.frameAt(s);
           const band = laneBand(p);
           const t = (sd < 0 ? band.tL : band.tR) + sd * (GUTTER_WIDTH * 0.55);
-          gullyGrate(mbs.drainage, {
-            x: f.p.x + f.right.x * t, y: f.p.y - 0.022 - 0.022, z: f.p.z + f.right.z * t,
-          }, Math.atan2(f.t.z, f.t.x));
+          const heading = Math.atan2(f.t.z, f.t.x);
+          const gy = f.p.y - 0.022 - 0.022;
+          if (sd > 0 ? inletA : inletB) {
+            const off = footwayOffset(p, sd);
+            const tk = off.edge + sd * 0.06;
+            kerbInlet(mbs.drainage, {
+              x: f.p.x + f.right.x * tk, y: gy, z: f.p.z + f.right.z * tk,
+            }, heading, -sd);
+          } else {
+            gullyGrate(mbs.drainage, {
+              x: f.p.x + f.right.x * t, y: gy, z: f.p.z + f.right.z * t,
+            }, heading);
+          }
         }
       }
       for (let s = s0 + 17; s < s1 - 8; s += 37) {

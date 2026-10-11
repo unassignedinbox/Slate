@@ -28,7 +28,8 @@ The generator itself is headless and runs in Node — see **Verification** below
 | Terrain | A carved apron, not a flat plane: the ground lattice is cut away wherever a road corridor or block sits, and a graded shoulder is extruded from the exact outer verge vertex so grass meets kerb with no seam, no gap and nothing buried. Viaducts and tunnels are skipped so the land passes under them |
 | Structures | Bridge decks, parapets, piers, retaining walls, tunnel portals/linings and a cut-and-cover subway bore |
 | Rail | Ballast, sleepers and UIC rail; the permanent way breaks and re-lays through each level crossing, with road plates, flangeways, booms and warning lights |
-| Props | Streetlights, traffic signals, signs, 4 bollard designs, guardrails and pedestrian railings, billboards, shelters, benches, cones, barriers, gullies and covers |
+| Props | Streetlights, traffic signals, signs, 4 bollard designs, guardrails and pedestrian railings, billboards, shelters, benches, cones, barriers |
+| Drainage | Gully grates and side-entry kerb inlets (one style per kerb line), plus manhole covers sampled on the road crown rather than dropped on a flat world plane |
 | Traffic | IDM car-following, signal phases, conflict-point yielding, turn choice, suspension that reads the road surface, trains, and level-crossing interlocking. Hard cap **25 vehicles** |
 
 ---
@@ -40,28 +41,35 @@ Roads are **quads first**. The audit is part of the repo, not a claim:
 ```
 $ node tools/validate.mjs --scene
 
-network        downtown · 45 nodes · 66 roads · 31 junctions · 8.50 km
-road surface   116,435 verts · 110,566 quads · 221,140 tris
-welds          4,774 vertices fused during build
-quad warp      p50 0.000 · p99 0.079 · max 0.637
-whole scene    354,833 verts · 301,647 quads · 613,024 tris · 98.4% quad
-city           20 blocks · 5 level crossings · 90 parked · 18 AI vehicles
+network        downtown · 51 nodes · 68 roads · 29 junctions · 9.04 km
+road surface   135,296 verts · 128,742 quads · 257,492 tris
+welds          5,139 vertices fused during build
+quad warp      p50 0.000 · p99 0.075 · max 0.637
+whole scene    407,445 verts · 349,282 quads · 705,506 tris · 99.0% quad
+city           19 blocks · 5 level crossings · 90 parked · 18 AI vehicles
 
   ✓ finite geometry — 0 NaN components
   ✓ quad-dominant topology — 100.00% of triangles come from quads
   ✓ no degenerate quads — 0
   ✓ no duplicated faces (no stacked geometry) — 0
   ✓ manifold edges (<=2 faces per edge) — 0 over-used edges
-  ✓ quads near-planar (p99) — p99 0.079 · max 0.637
-  ✓ junction seams welded — 458 coincident vertices (surface-id splits only)
+  ✓ quads near-planar (p99) — p99 0.075 · max 0.637
+  ✓ junction seams welded — 545 coincident vertices (surface-id splits only)
   ✓ vertex normals valid — 0 problems
-  ✓ props + city quad-dominant — 97.5%
-  ✓ fleet never exceeds 25 vehicles · no permanently stuck vehicles
-  ✓ city blocks closed — 20 blocks
-  ✓ terrain never covers the road surface — 91,455 road points checked
-  ✓ terrain never covers a junction plate — 0/1,620 plate samples buried
+  ✓ props + city quad-dominant — 98.5%
+  ✓ fleet never exceeds 25 vehicles · no permanently stuck vehicles · traffic flows
+  ✓ city blocks closed — 19 blocks
+  ✓ sign plates stand vertical — 0/512 faces lying flat
+  ✓ junction signs face oncoming traffic — 196 aimed at traffic · 0 aimed away
+  ✓ vehicles drive nose first — 0/18 reversed
+  ✓ lane graph connected — 186 lanes · 371 turns
+  ✓ terrain never covers the road surface — 69,795 road points checked
+  ✓ terrain never covers a junction plate — 0/1,064 plate samples buried
   ✓ moved junction stays finite / manifold / welded / quad-dominant
 ```
+
+All four presets (`downtown`, `riverside`, `interchange`, `industrial`) pass the same audit:
+`npm run validate:all`.
 
 * **One mesh at the centre.** Where roads meet, the ribbons stop at a solved mouth station and the
   junction plate takes over. Plate, kerb returns and both ribbons share vertices — the weld key is
@@ -74,6 +82,32 @@ city           20 blocks · 5 level crossings · 90 parked · 18 AI vehicles
   (a "spider"). The single centre vertex is the only high-valence pole in the whole road shell.
 * **Triangles only where unavoidable** — a quad whose two ends collapse (a fillet that closes to a
   point) degrades to one triangle instead of a zero-area quad. That is the 1.7 % in prop meshes.
+
+---
+
+## The interchange
+
+The grade-separated junction is built to published geometric standards rather than by eye — FHWA's
+interchange prompt list, Caltrans HDM ch. 500, MoDOT 234.2 and the MassDOT interchange guide:
+
+| | |
+| --- | --- |
+| Deck | 7.2 m clearance over the cross road, 1.6 m structure depth (0.65 m slab + 0.95 m girders), 48 m spans |
+| Girders | spaced 2.325 m across the deck — 5 under an 11.3 m carriageway, scaled with deck width |
+| Grades | 4 % on the mainline approach, 6 % maximum on a ramp, 0.25 m grade-join tolerance |
+| Spacing | 260 m between the two ramp terminals, 95 m between the two gores on one side |
+| Widths | 3.65 m motorway lanes, 3.0 m shoulders, 3.7 m ramp lane, 1.5 / 2.5 m ramp shoulders |
+
+The ramps deliberately **do not share a node with the motorway**. A ramp leaves at about five
+degrees, and a junction solver asked to fillet two near-parallel kerbs will happily pave a 250 m
+asphalt blob where the gore should be. Real gores work the other way round: the ramp starts
+*beside* the mainline with its shoulder touching, tapered to a physical nose, and the gap opens as
+it peels away. So each ramp gets its own gore node, offset laterally by the two outer half widths
+and capped with a wedge (`node.cap = 'nose'`). Nothing overlaps, nothing is filleted, and the land
+between them stays grass to the kerb.
+
+The same rule drives the city blocks: a block face that fronts a motorway or ramp is flagged as a
+gore and gets grass up to the kerb — no footway apron, no parking bays.
 
 ---
 
@@ -175,7 +209,19 @@ node tools/dev/app-boot.mjs        # boots src/main.js headlessly (DOM stub + GP
 node tools/validate.mjs            # 7-node reference network, junction topology
 node tools/validate.mjs --scene    # full city: geometry, traffic soak, gizmo-drag rebuild
 node tools/validate.mjs --scene --preset interchange --seed 42 --verbose
+npm run validate:all               # the same scene audit over all four presets
 ```
+
+There is no headless WebGPU in CI, so layout is reviewed from a renderer-free orthographic plan:
+
+```
+node tools/dev/plan.mjs downtown 1100            # → /tmp/plan.raw  (y-buffered, surface-coloured)
+python3 tools/dev/plan.py 1100 /tmp/plan.png     # → PNG
+node tools/dev/plan.mjs interchange 900 --zoom=530,0,110
+```
+
+Anything the plan draws in black is geometry that does not exist — which is how the apron holes
+beside the motorway were found.
 
 `--scene` also runs 30 s of traffic (checks for NaN poses, the 25-vehicle cap, stuck vehicles),
 then drags a live intersection 16 m and re-audits the rebuilt mesh. In the browser the live

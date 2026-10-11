@@ -7,7 +7,7 @@
 import { RoadNetwork, resetIds } from '../src/road/network.js';
 import { defaultProfile, ROAD_CLASS } from '../src/road/profile.js';
 import { buildSurface } from '../src/road/build.js';
-import { FLOATS_PER_VERTEX } from '../src/core/mesh.js';
+import { FLOATS_PER_VERTEX, SURF } from '../src/core/mesh.js';
 import { buildScene, assembleScene, defaultSettings } from '../src/road/scene.js';
 import { solveNetwork } from '../src/road/junction.js';
 import { pointInPolygonXZ } from '../src/core/math.js';
@@ -233,6 +233,47 @@ if (!sceneMode) {
   check(stuck === 0, 'no permanently stuck vehicles', `${stuck} stuck > 45 s`);
   check(moving >= Math.min(4, sim.vehicles.length), 'traffic actually flows', `${moving} moving`);
   check(scene.blocks.blocks.length >= 4, 'city blocks closed', `${scene.blocks.blocks.length} blocks`);
+
+  // ---- directional props: a sign that faces the wrong way is worse than no sign ----------
+  {
+    const faceSurf = new Set([SURF.SIGN_SPEED, SURF.SIGN_STOP, SURF.SIGN_GIVEWAY, SURF.SIGN_INFO]);
+    const sg = scene.props.meshes.signage;
+    let flat = 0, plates = 0;
+    const faces = [];
+    if (sg) {
+      for (let t = 0; t < sg.indices.length; t += 3) {
+        const o = sg.indices[t] * FLOATS_PER_VERTEX;
+        if (!faceSurf.has(Math.round(sg.vertices[o + 11]))) continue;
+        const N = { x: sg.vertices[o + 3], y: sg.vertices[o + 4], z: sg.vertices[o + 5] };
+        plates++;
+        if (Math.abs(N.y) > 0.5) flat++;
+        faces.push({ p: { x: sg.vertices[o], y: sg.vertices[o + 1], z: sg.vertices[o + 2] }, N });
+      }
+    }
+    let wrongWay = 0, rightWay = 0;
+    for (const [, j] of scene.surface.junctions) {
+      for (const mo of j.mouths) {
+        if (!mo.kerbR) continue;
+        for (const f of faces) {
+          if (Math.hypot(f.p.x - mo.kerbR.x, f.p.z - mo.kerbR.z) > 6) continue;
+          const d = f.N.x * mo.dir.x + f.N.z * mo.dir.z;
+          if (d > 0.3) rightWay++; else if (d < -0.3) wrongWay++;
+        }
+      }
+    }
+    check(flat === 0, 'sign plates stand vertical', `${flat}/${plates} faces lying flat`);
+    check(wrongWay === 0, 'junction signs face oncoming traffic', `${rightWay} aimed at traffic · ${wrongWay} aimed away`);
+
+    let backwards = 0;
+    for (const v of scene.traffic.vehicles) {
+      const path = v.conn ? v.conn.path : v.lane.pts;
+      if (!path || path.length < 2) continue;
+      const i = Math.max(0, Math.min(path.length - 2, Math.floor(v.s / 3)));
+      const d = { x: path[i + 1].x - path[i].x, z: path[i + 1].z - path[i].z };
+      if (Math.cos(v.yaw) * d.x + Math.sin(v.yaw) * d.z < 0) backwards++;
+    }
+    check(backwards === 0, 'vehicles drive nose first', `${backwards}/${scene.traffic.vehicles.length} reversed`);
+  }
   check(scene.laneGraph.lanes.size > 20 && scene.laneGraph.connections.length > 20,
     'lane graph connected', `${scene.laneGraph.lanes.size} lanes · ${scene.laneGraph.connections.length} turns`);
 
