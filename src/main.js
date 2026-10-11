@@ -14,7 +14,7 @@ import { openConstruct, closeConstruct } from './construct.js';
 import { clamp, uid, fmt } from './util.js';
 import * as THREE from 'three';
 
-const STORAGE_KEY = 'slate-road-editor-doc-v1';
+const STORAGE_KEY = 'slate-road-editor-doc-v2';
 
 class Controller {
   constructor() {
