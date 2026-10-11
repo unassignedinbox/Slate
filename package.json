@@ -1,0 +1,33 @@
+{
+  "name": "slate-road-studio",
+  "version": "0.5.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "test": "node --test tests/*.test.js",
+    "test:browser": "node scripts/browser-test.mjs",
+    "test:gpu-recovery": "node scripts/gpu-recovery-test.mjs",
+    "test:continuity-browser": "node scripts/continuity-browser-test.mjs",
+    "test:streetscape-browser": "node scripts/streetscape-browser-test.mjs",
+    "test:curbs-camera-browser": "node scripts/curbs-camera-browser-test.mjs",
+    "test:parks-browser": "node scripts/park-connections-browser-test.mjs",
+    "publish:static": "vite build --outDir published && node scripts/prepare-static.mjs",
+    "test:corners-browser": "node scripts/pavement-corners-browser-test.mjs",
+    "test:static-browser": "node scripts/static-browser-test.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/dm-sans": "^5.3.0",
+    "clipper-lib": "^6.4.2",
+    "earcut": "^3.0.2",
+    "lucide": "^0.468.0",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.0",
+    "@sparticuz/chromium": "^153.0.0",
+    "prettier": "^3.9.10",
+    "vite": "^6.1.0"
+  }
+}
