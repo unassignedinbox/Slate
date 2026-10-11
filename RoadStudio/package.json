@@ -1,0 +1,22 @@
+{
+  "name": "road-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone WebGPU road network generator and texturing studio",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5180",
+    "build": "vite build",
+    "test": "node --test tests/engine.test.mjs tests/check-wgsl.mjs",
+    "check:wgsl": "node --test tests/check-wgsl.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0",
+    "wgsl_reflect": "^1.6.0"
+  }
+}
