@@ -1,0 +1,12 @@
+import { generateCity, defaultSettings } from '../../src/road/generator.js';
+import { buildSurface } from '../../src/road/build.js';
+import { extractFaces } from '../../src/road/blocks.js';
+import { polygonAreaXZ } from '../../src/core/math.js';
+const { net } = generateCity(defaultSettings('downtown'));
+const surface = buildSurface(net, {});
+const faces = extractFaces(net);
+console.log('faces', faces.length);
+const areas = faces.map(f => polygonAreaXZ(f.map(h => net.nodes.get(h.from).p)));
+console.log('areas', areas.map(a=>Math.round(a)).sort((a,b)=>a-b).join(' '));
+console.log('neg', areas.filter(a=>a<0).length, 'pos', areas.filter(a=>a>0).length);
+console.log('lens', faces.map(f=>f.length).join(','));

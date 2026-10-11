@@ -1,0 +1,21 @@
+{
+  "name": "roadsmith",
+  "version": "1.0.0",
+  "description": "WebGPU procedural road network generator with quad-dominant topology",
+  "scripts": {
+    "dev": "python3 -m http.server 8080 --bind 0.0.0.0",
+    "validate": "node tools/validate.mjs",
+    "validate:scene": "node tools/validate.mjs --scene",
+    "validate:all": "for p in downtown riverside interchange industrial; do node tools/validate.mjs --scene --preset $p || exit 1; done",
+    "shaders": "node tools/wgsl-check.mjs",
+    "check": "node tools/wgsl-check.mjs && node tools/dev/import-check.mjs && node tools/dev/gpu-smoke.mjs && node tools/validate.mjs && node tools/validate.mjs --scene"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "wgsl_reflect": "^1.6.0"
+  }
+}
