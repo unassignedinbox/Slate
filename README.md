@@ -16,8 +16,8 @@ Open the development server. It listens on `0.0.0.0`; Arena's HTTPS preview host
 ## Implemented
 
 - Metric curve drawing; start → control → end. Degree-two road bends use a shared cubic-tangent solve for smooth continuation.
-- A shared road/junction graph. New drawn crossings split both incident roads and share a vertex.
-- Clickable junctions, numeric X/Z editing and ground-plane drag gizmo. Connected curves deform with the junction.
+- A shared road/junction graph. Same-height crossings split incident roads and share a vertex; different-height crossings remain overpasses.
+- Clickable junctions, numeric X/Y/Z editing, plan drag and Shift-drag elevation gizmo. Connected curves deform with the junction.
 - Integer polygon union, morphological corner closing, indexed surface triangulation preserving block holes. At-grade road decks do not stack over each other.
 - Continuous offset sidewalks, five metric paving patterns with relief-mapped mortar joints, and curbs standing 150 mm above asphalt.
 - Crosswalk-aligned inset curb ramps, flared transitions, tactile warning tiles and instanced truncated domes.
@@ -27,8 +27,33 @@ Open the development server. It listens on `0.0.0.0`; Arena's HTTPS preview host
 - Procedural street lights, cylindrical bollards, planting, and empty city blocks without buildings.
 - Up to 25 preview vehicles on arc-length lane paths, with continuous corner traversal, cubic junction connectors, acceleration/braking, headway and simple junction reservations. Vehicles stop at terminal ends instead of snapping into a U-turn.
 - Configurable raised speed humps: 50–120 mm high, 2.5–5 m long, with cosine-profile geometry, conforming approach chevrons, endpoint clearances, traffic slowdown and front/rear axle-based body pitch.
-- Four network presets, empty projects, undo/redo, browser-local save, validated JSON import/export and asphalt-only OBJ export.
+- Five network presets, empty projects, undo/redo, browser-local save, validated JSON import/export and ground-surface / network-bridge slab OBJ export.
 - Perspective / top / street inspection camera, orbit/pan/zoom and free flight, grid and actual surface-wireframe inspection.
+
+## 0.7 — one editable road / bridge graph
+
+Open `?demo=bridges` with no saved project, or choose **Network library → Unified road & bridges**. The example is one connected graph: **36 road segments**, eight elevated spans/approaches, four curved approaches, a shared elevated four-way junction and ground streets below. It has 18 preview vehicles distributed across ground and elevated routes. There are no separate decorative bridge connections in this preset.
+
+### Draw and edit
+
+1. Choose **Asphalt road**, **Concrete access road**, or **Network bridge road**. Set the authoring **Y** elevation (0–40 m; network bridges start at 6 m). Click **start → control → end**. Endpoints snap to the actual sampled road alignment at compatible elevations, including nearby sloping approaches.
+2. Select a road. **Raise road / shared ends** lifts both endpoint vertices and generates bridge structure automatically; adjoining roads remain attached and become approaches. **Start elevation** / **End elevation** allow independent heights. This does not detach a road from existing shared junctions.
+3. Edit the **Spline control X/Z** coordinates or switch to **Move (G)** and drag the selected curve's control handle. Editing a previously split polyline deliberately replaces that segment with a quadratic curve. **Frame road / bridge** inspects a span closely.
+4. Select a junction. Edit its X/Y/Z fields, drag in plan, or **Shift-drag vertically** in Move mode. Every incident road end follows the same vertex. Geometry changes reconcile compatible centreline intersections on completion.
+5. Save locally, undo/redo or export project JSON to retain the entire editable network. JSON is the transfer format between Arena and raw.githack; browser saves are origin-scoped. Demo URLs never overwrite an existing save.
+
+### Geometry and traffic
+
+- Elevation is stored on graph vertices (`node.y`, default zero for old projects), in metres above the flat datum. Asphalt is at datum + 0.12 m. Endpoint elevations are joined with a cubic smoothstep between level junction landings; analytic height and grade are continuous.
+- Compatible centreline intersections use a 20 mm height tolerance. Crossings on different driving levels do **not** acquire a traffic connection. Lowering an overpass to the other road's level rebuilds the at-grade junction. Splitting a sloping road re-solves its vertical approaches around the new shared landing.
+- Raised junction footprints union only incident road mouths. Deck bodies subtract those footprints, giving disjoint top patches instead of crossing two ribbons on top of each other. Ground junctions retain the same centreline alignment used by traffic. Deck top tessellation uses local 2 m patches; sides and matching undersides close the 400 mm concept slab components.
+- Guardrails follow exposed deck edges, not junction mouths. Candidate supports are omitted from lower-road/pavement corridors; ground light poles under bridge footprints are suppressed. This is **not structural sizing** or proof that the remaining spans are supportable.
+- Vehicles use this same graph, follow deck elevation with front/rear axle pitch, and pass through the raised junction. The 25-car cap remains in effect. Ground-road humps and prior park assets remain supported.
+- The inspector reports peak centreline grade against an illustrative 8.3% target and sampled proximity/clearance against 5 m. Checks sample centreline/envelope proximity every 2 m, subtract the 400 mm slab and exclude roads sharing an endpoint. They are **not** exhaustive full-width clearance, swept-vehicle, terrain, load or accessibility checks; low bridges warn rather than silently connecting levels.
+
+**Remaining limits:** no bank/superelevation, terrain-conforming elevations, bridge sidewalks, detailed bridge drainage, engineering-rated girders/bearings/abutments or load analysis. Connected closed slab pieces retain internal component caps; the scene is not one welded manufacturing solid. Extreme/self-crossing splines still require design review. OBJ now includes ground carriageway faces and the unified network's deck tops/shells, but not bridge rails/supports, park connections, pavement detail meshes or props. Use JSON for the complete scene. Legacy **park footbridges** remain separate pedestrian/service-width assets for compatibility; they are not traffic routes.
+
+References guiding this implementation: Epic's control-point, join and split spline workflow [1](https://docs.unrealengine.com/4.27/en-US/BuildingWorlds/Landscape/Editing/Splines); ASAM's distinction between shared same-level junctions and different driving levels [2](https://publications.pages.asam.net/standards/ASAM_OpenDRIVE/ASAM_OpenDRIVE_Specification/v1.8.1/specification/10_roads/10_01_introduction.html). Slate does not claim OpenDRIVE-format compliance.
 
 ## 0.6 — smooth bridge approaches and project-defined targets
 
@@ -41,11 +66,11 @@ Select a park bridge → **Approach design** in the inspector.
 - A **longitudinal profile** plots the generated centreline, with vertical exaggeration and shading for the protected corridor. It displays peak centreline grade, actual approach runs/blends and nominal clearance; this is measured geometry rather than a decorative graph.
 - All three settings support undo/redo and project save/import. Older projects receive the same defaults without losing their existing bridge widths, rises or endpoints.
 
-These improvements do not establish structural capacity, accessibility compliance, vehicle breakover clearance or ride comfort. Curved deck-edge gradients can differ from the centreline grade. Bridges are still not part of the AI traffic graph.
+These improvements do not establish structural capacity, accessibility compliance, vehicle breakover clearance or ride comfort. Curved deck-edge gradients can differ from the centreline grade. The legacy park bridges in this section are not AI traffic routes; 0.7 network bridges are.
 
 ## 0.5 — local pavement topology and park connections
 
-**Pavement topology:** rendered flat surfaces are clipped into shared 6 m integer-grid patches before triangulation. This removes the old block-spanning skinny triangles around curved pavement rings. The legacy road-only OBJ retains its separate triangulation. UVs remain in world space, so the paving pattern does not reset at patch edges. Corner-level browser checks now cover the district's curved corners, not only the simpler four-way fixture. Geometry tests check area coverage and a maximum 8.49 m triangle edge. Millimetre clipping tolerances remain; this is still a triangle mesh, not a welded all-quad export.
+**Pavement topology:** rendered flat surfaces are clipped into shared 6 m integer-grid patches before triangulation. This removes the old block-spanning skinny triangles around curved pavement rings. The ground-road OBJ component retains its separate triangulation. UVs remain in world space, so the paving pattern does not reset at patch edges. Corner-level browser checks now cover the district's curved corners, not only the simpler four-way fixture. Geometry tests check area coverage and a maximum 8.49 m triangle edge. Millimetre clipping tolerances remain; this is still a triangle mesh, not a welded all-quad export.
 
 **Create connections:** use the dropdown and **Draw** button at the bottom-left of the viewport. Click **start → control → end**. Escape cancels. Existing road authoring remains available as **Asphalt road**.
 
@@ -57,7 +82,7 @@ These improvements do not establish structural capacity, accessibility complianc
 
 Choose **Network library → Park connections** for a prepared example with two connected park walks, a concrete access branch and a wide bridge. This replaces the scene only after confirmation and remains undoable. `?demo=parks` opens that example for a fresh browser without overwriting a saved project.
 
-**Bridge limitations:** these are geometric pedestrian/service-width bridge previews, not engineered vehicle bridges. Width does not establish a load rating. Structural sizing, vehicle swept paths, breakover and ride-comfort validation, local clearance, accessibility and collision validation remain to be engineered. Bridge decks do **not** join the AI traffic graph. Complete bridges/park paving are **not** included in the existing road-surface-only OBJ export; use project JSON to retain editable geometry.
+**Legacy park-bridge limitations:** these are geometric pedestrian/service-width bridge previews, not engineered vehicle bridges. Width does not establish a load rating. Structural sizing, vehicle swept paths, breakover and ride-comfort validation, local clearance, accessibility and collision validation remain to be engineered. These park-connection decks do **not** join the AI traffic graph. Park bridges/park paving are **not** included in OBJ export; use project JSON to retain editable geometry.
 
 ### Publishing through raw.githack
 
@@ -108,9 +133,9 @@ The reference editor's neutral near-black palette, DM Sans typography (self-host
 
 Vehicles retain residual travel distance when crossing a join. Genuine multiway junctions use explicit tangent-matched lane connectors instead of repositioning a car between offset centerlines. Two-way bends no longer impose an arbitrary junction dwell.
 
-**Next feature, delivered:** select a road → **Inspector → Details → Traffic calming → Raised speed hump**. Alternatively select a road, then choose **Street details → Raised speed hump**. Adjust height, length and position; toggle the entire feature layer in the outliner. Placement is clamped away from junction mouths; too-short segments suppress the hump. Settings survive save/import and undo/redo. Humps are detail geometry and are **not included in asphalt-only OBJ exports**. Chevrons and the 12 km/h slowdown are preview design choices, not road-authority certification.
+**Next feature, delivered:** select a road → **Inspector → Details → Traffic calming → Raised speed hump**. Alternatively select a road, then choose **Street details → Raised speed hump**. Adjust height, length and position; toggle the entire feature layer in the outliner. Placement is clamped away from junction mouths; too-short segments suppress the hump. Settings survive save/import and undo/redo. Humps are detail geometry and are **not included in road-surface OBJ exports**. Chevrons and the 12 km/h slowdown are preview design choices, not road-authority certification.
 
-The next infrastructure features (guardrails, damage/construction, bridges/rail/tunnels) remain intentionally separate steps, not placeholder toggles.
+Further infrastructure features (engineered guardrails/bridges, damage/construction, rail/tunnels) remain separate steps, not placeholder toggles.
 
 ## Controls
 
@@ -141,8 +166,8 @@ Crossings are auto-split when drawing; moving an existing road across another ex
 
 ## Not implemented
 
-- Engineered highways / interchanges, superelevation, longitudinal grades and hydraulic drainage design.
-- Engineered highway bridges, structural/load verification, underpasses and tunnels. (Geometric park footbridges with vehicle-width decks, approach ramps, supports and clearance warnings are implemented.)
+- Engineered highways / interchanges, superelevation, engineered vertical alignment and hydraulic drainage design. Cubic grade transitions for network bridges are implemented.
+- Engineered highway bridges, structural/load verification, underpasses and tunnels. (Unified spline-road bridge geometry and legacy park footbridges are implemented, without structural certification.)
 - Railway / subway geometry, trains and station infrastructure.
 - Potholes, damaged surface layers, short modular speed bumps / speed cushions, and construction phases. (Full-width raised speed humps are implemented.)
 - Guardrail design families, parking layouts, billboards, traffic signals and road furniture asset catalogs.
@@ -169,6 +194,7 @@ npm run test:gpu-recovery # forced software WebGPU device-loss recovery
 npm run test:continuity-browser # speed-hump editing, persistence, layer toggles and neutral UI
 npm run test:streetscape-browser # paving, embedded ramps, drainage, covers and save/reload
 npm run test:curbs-camera-browser # flight controls, ramp modes, vehicle aprons and street-level screenshots
+npm run test:elevated-browser # spline bridges, elevation topology, gizmos, persistence and undo
 npm run test:parks-browser # connection authoring, bridge profiles/targets, undo/redo and persistence
 npm run test:corners-browser # street-level district corner screenshots
 npm run test:static-browser # compiled published build under a nested URL path

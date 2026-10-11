@@ -1,3 +1,9 @@
+import {
+  roadElevation,
+  heightOf,
+  isElevated,
+  landingRun,
+} from "./road-elevation.js";
 import { atStation, preparePath, cubicPath, distance } from "./alignment.js";
 import { humpSpec, humpHeight } from "./traffic-calming.js";
 const degree = (model, id) =>
@@ -21,6 +27,9 @@ function setback(model, node, road) {
   if (degree(model, node) < 3) return 0;
   return Math.min(
     road.samples.lengthMeters * 0.35,
+    isElevated(road, model)
+      ? Math.max(0, landingRun(road, model, road.b === node ? 1 : 0) - 2)
+      : Infinity,
     Math.max(
       ...model.roads
         .filter((r) => r.a === node || r.b === node)
@@ -101,7 +110,11 @@ export class TrafficSimulation {
     this.cars = [];
     this.reservations.clear();
     for (let i = 0; i < Math.min(25, count); i++) {
-      const r = this.data.sampled[i % this.data.sampled.length];
+      const r =
+        this.data.sampled[
+          Math.floor((i * this.data.sampled.length) / Math.min(25, count)) %
+            this.data.sampled.length
+        ];
       if (!r) break;
       const dir = i % 2 ? 1 : -1,
         leg = this.legs.get(r.id + ":" + dir);
@@ -214,15 +227,30 @@ export class TrafficSimulation {
   }
   pose(car) {
     const p = atStation(car.leg.path, car.s);
-    let height = 0,
+    let height = car.leg.connector
+        ? heightOf(this.model.nodes.find((n) => n.id === car.leg.to))
+        : 0,
       pitch = 0;
     if (car.leg.road) {
+      const r = car.leg.road;
+      const frontLevel = roadElevation(
+          r,
+          this.model,
+          this.centerStation(car, 1.28),
+        ),
+        rearLevel = roadElevation(
+          r,
+          this.model,
+          this.centerStation(car, -1.28),
+        );
+      height = (frontLevel + rearLevel) / 2;
+      pitch = -Math.atan2(frontLevel - rearLevel, 2.56);
       const h = humpSpec(car.leg.road, this.model);
       if (h) {
         const front = humpHeight(this.centerStation(car, 1.28), h),
           rear = humpHeight(this.centerStation(car, -1.28), h);
-        height = (front + rear) / 2;
-        pitch = -Math.atan2(front - rear, 2.56);
+        height += (front + rear) / 2;
+        pitch = -Math.atan2(frontLevel + front - rearLevel - rear, 2.56);
       }
     }
     return { ...p, height, pitch, speed: car.speed };

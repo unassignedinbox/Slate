@@ -2320,3 +2320,23 @@ dialog {
   line-height: 1.6;
   color: #939393;
 }
+
+.connection-author label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #bbb;
+  white-space: nowrap;
+}
+.connection-author #draw-elevation {
+  width: 48px;
+  background: #232323;
+  border: 1px solid #494949;
+  border-radius: 3px;
+  color: #eee;
+  padding: 5px 3px;
+}
+.connection-author {
+  max-width: calc(100% - 30px);
+}

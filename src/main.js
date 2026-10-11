@@ -1,4 +1,12 @@
 import {
+  heightOf,
+  roadLevels,
+  liftRoad,
+  roadElevation,
+  isElevated,
+  landingRun,
+} from "./road-elevation.js";
+import {
   DEFAULT_BRIDGE_BLEND,
   DEFAULT_BRIDGE_GRADE,
 } from "./bridge-profile.js";
@@ -16,6 +24,8 @@ import {
   preset,
   sampleRoad,
   addCurve,
+  reconcileIntersections,
+  snapRoadDrawingPoint,
   validateModel,
   moveJunction,
 } from "./network.js";
@@ -25,7 +35,8 @@ const $ = (s) => document.querySelector(s),
   icon = (n, c = "") => `<i data-lucide="${n}" class="${c}"></i>`;
 const iconize = () => createIcons({ icons, attrs: { "stroke-width": 1.5 } });
 let inspectorSection = "geometry",
-  drawKind = "asphalt";
+  drawKind = "asphalt",
+  drawElevation = 0;
 let model = preset(),
   selected = null,
   tool = "select",
@@ -42,8 +53,12 @@ try {
     sessionStorage.getItem("slate-recovery") ||
     localStorage.getItem("slate-project");
   if (stored) model = validateModel(JSON.parse(stored));
-  else if (new URLSearchParams(location.search).get("demo") === "parks")
-    model = preset("parks");
+  else if (
+    ["parks", "bridges"].includes(
+      new URLSearchParams(location.search).get("demo"),
+    )
+  )
+    model = preset(new URLSearchParams(location.search).get("demo"));
   sessionStorage.removeItem("slate-recovery");
 } catch {}
 const layerDefs = [
@@ -60,19 +75,19 @@ const layerDefs = [
   ["ramps", "accessibility", "Pedestrian ramps"],
   ["driveways", "car-front", "Vehicle crossovers"],
   ["walkways", "footprints", "Park walkways"],
-  ["bridges", "waypoints", "Park bridges"],
+  ["bridges", "waypoints", "Bridges & elevated roads"],
   ["drainage", "list-filter", "Drainage channels"],
   ["manholes", "circle-dot", "Manhole covers"],
 ];
 $("#app").innerHTML = `
-<header class="app-header"><a class="brand" href="./" aria-label="Slate Road Studio"><span class="brand-mark">${icon("layers-2")}</span>slate<span class="brand-divider"></span><span class="brand-caption">ROAD STUDIO</span></a><nav class="main-menu"><button id="file-menu">File</button><button id="undo">Edit</button><button id="view-menu">View</button><button id="help">Help</button></nav><div class="project-title"><span class="save-dot"></span><span id="project-name"></span>${icon("chevron-down")}</div><div class="header-actions"><span class="version">EXPERIMENTAL <b>0.6</b></span><button id="save" class="header-save" title="Save project to this browser">${icon("save")} Save</button><button id="export" class="export-button">${icon("upload")} Export ${icon("chevron-down")}</button></div></header>
+<header class="app-header"><a class="brand" href="./" aria-label="Slate Road Studio"><span class="brand-mark">${icon("layers-2")}</span>slate<span class="brand-divider"></span><span class="brand-caption">ROAD STUDIO</span></a><nav class="main-menu"><button id="file-menu">File</button><button id="undo">Edit</button><button id="view-menu">View</button><button id="help">Help</button></nav><div class="project-title"><span class="save-dot"></span><span id="project-name"></span>${icon("chevron-down")}</div><div class="header-actions"><span class="version">EXPERIMENTAL <b>0.7</b></span><button id="save" class="header-save" title="Save project to this browser">${icon("save")} Save</button><button id="export" class="export-button">${icon("upload")} Export ${icon("chevron-down")}</button></div></header>
 <div class="workspace-bar"><div class="workspace-title">${icon("route")} Road workspace <span class="divider"></span><span class="muted">Scene 01</span></div><div class="workspace-tabs"><button class="active" data-workspace="layout">${icon("spline")} Layout</button><button data-workspace="materials">${icon("layers")} Materials</button><button data-workspace="simulate">${icon("play")} Simulate</button></div><button class="icon-button" id="settings" title="Workspace settings">${icon("sliders-horizontal")}</button></div>
 <main class="editor"><section class="center"><div class="viewport" id="viewport"><div class="viewport-top"><div class="view-pills"><button id="perspective">${icon("box")} Perspective ${icon("chevron-down")}</button><span class="pill-line"></span><button id="shading">Lit ${icon("chevron-down")}</button><button id="fly-status" title="Hold right mouse to look. WASD fly, Q/E down/up, Shift faster, wheel changes speed.">RMB + WASD · Fly</button></div><div class="render-badge"><span class="live-dot"></span><span id="backend">INITIALIZING</span></div></div>
 <div class="tools"><button class="active" data-tool="select" title="Select (V)">${icon("mouse-pointer-2")}<kbd>V</kbd></button><button data-tool="move" title="Move junction (G)">${icon("move")}<kbd>G</kbd></button><div></div><button data-tool="draw" title="Draw a quadratic road (B)">${icon("spline")}<kbd>B</kbd></button><button id="frame" title="Frame network (F)">${icon("scan")}</button><button id="street-view" title="Street-level curb and ramp inspection">${icon("person-standing")}</button><div></div><button id="grid" title="Toggle metre grid">${icon("grid-3x3")}</button><button id="wire" title="Show triangulated surface topology">${icon("boxes")}</button><div></div><button id="undo-tool" title="Undo (Ctrl Z)">${icon("undo-2")}</button><button id="redo-tool" title="Redo (Ctrl Shift Z)">${icon("redo-2")}</button></div>
 <div class="scene-heading"><div class="eyebrow">PROCEDURAL ROAD NETWORK</div><h1 id="scene-name"></h1><p>Real dimensions. Connected by design.</p></div>
 <div class="axis-widget"><span class="axis-y">Y</span><span class="axis-z">Z</span><span class="axis-x">X</span><b></b><small>WORLD</small></div>
 <div class="viewport-bottom"><div class="navigation-help">${icon("mouse")} <span>LMB orbit · MMB pan</span><b>·</b><span>RMB + WASD fly · Q/E down/up</span></div><div class="scale"><span>20 m</span><div></div><small>METRIC</small></div></div>
-<div class="connection-author"><select id="draw-kind" aria-label="Connection type"><option value="asphalt">Asphalt road</option><option value="walkway">Park walkway</option><option value="concrete">Concrete access road</option><option value="bridge">Vehicle-width park bridge</option></select><button id="draw-connection">${icon("plus")} Draw</button></div><div id="tool-hint" class="tool-hint hidden"></div><div id="loading" class="loading"><span class="spinner"></span>Preparing your road workspace…</div></div>
+<div class="connection-author"><select id="draw-kind" aria-label="Connection type"><option value="asphalt">Asphalt road</option><option value="roadbridge">Network bridge road</option><option value="walkway">Park walkway</option><option value="concrete">Concrete access road</option><option value="bridge">Legacy park footbridge</option></select><label title="Construction elevation above ground">Y <input id="draw-elevation" aria-label="Draw elevation" type="number" value="0" min="0" max="40" step="0.25"> m</label><button id="draw-connection">${icon("plus")} Draw</button></div><div id="tool-hint" class="tool-hint hidden"></div><div id="loading" class="loading"><span class="spinner"></span>Preparing your road workspace…</div></div>
 <section class="asset-browser"><div class="browser-header"><div class="browser-tabs"><button class="active" data-asset="Networks">Network library</button><button data-asset="Details">Street details</button><button data-asset="Surfaces">Surfaces</button></div><div class="browser-right"><span>PROCEDURAL ASSETS</span><button id="collapse-assets" class="icon-button" title="Collapse library">${icon("chevron-down")}</button></div></div><div class="asset-content"><div class="asset-intro"><div class="eyebrow" id="asset-eyebrow">START WITH A NETWORK</div><h3 id="asset-heading">A foundation for<br>every journey.</h3><p id="asset-description">Choose a layout. Make it your own.</p><button id="new-network">${icon("plus")} Empty project</button></div><div class="asset-cards" id="asset-cards"></div></div></section></section>
 <aside class="sidebar"><div class="panel-tabs"><button class="active" data-tab="network">${icon("layers-2")} Layers</button><button data-tab="materials">${icon("swatch-book")} Materials</button><button id="add-layer" class="icon-button" title="Add road">${icon("plus")}</button></div><div class="outliner"><div class="section-heading"><span id="layer-heading">SCENE COLLECTION</span><span id="layer-count">8 LAYERS</span></div><div class="collection-row">${icon("chevron-down")}${icon("folder-open")}<strong>Road network</strong><span class="tag">LIVE</span></div><div id="layer-list"></div><button class="add-layer" id="draw-road">${icon("plus")} Draw a road <kbd>B</kbd></button></div><div class="inspector-header"><span>${icon("sliders-horizontal")} Inspector</span><span id="inspector-context">NETWORK</span></div><div class="inspector" id="inspector"></div><div class="sidebar-footer"><span class="live-dot"></span><span>Non-destructive workflow</span>${icon("shield-check")}</div></aside></main>
 <footer class="statusbar"><div><span class="live-dot"></span><span id="status">Ready</span><span class="status-separator">/</span><span id="road-count"></span><span id="junction-count"></span></div><div><span id="mesh-stat"></span><span class="status-separator">|</span><span id="fps">— FPS</span><span class="status-separator">|</span><span>1 unit = 1 meter</span>${icon("check-check")}</div></footer><div id="toast" role="status"></div><dialog id="dialog"></dialog><input type="file" id="import-input" accept=".json,.slate" hidden>`;
@@ -449,14 +464,15 @@ function inspector(section = inspectorSection) {
           ($("#node-" + k).onchange = (e) => {
             const v = Number(e.target.value);
             if (Number.isFinite(v) && Math.abs(v) < 10000)
-              mutate(() =>
+              mutate(() => {
                 moveJunction(
                   model,
                   node.id,
                   k === "x" ? v : node.x,
                   k === "z" ? v : node.z,
-                ),
-              );
+                );
+                reconcileIntersections(model);
+              });
             else toast("Enter a coordinate between −10,000 and 10,000 m");
           }),
       );
@@ -490,6 +506,7 @@ function inspector(section = inspectorSection) {
           b = model.nodes.find((n) => n.id === road.b);
         delete road.points;
         road.control = [(a.x + b.x) / 2, (a.z + b.z) / 2 + v];
+        reconcileIntersections(model);
       });
       $("#delete-road").onclick = () =>
         mutate(() => {
@@ -499,6 +516,81 @@ function inspector(section = inspectorSection) {
           );
           selected = null;
         });
+    }
+  }
+  if (tab === "network" && section === "geometry") {
+    const node = model.nodes.find((n) => n.id === selected),
+      r = model.roads.find((r) => r.id === selected);
+    if (node) {
+      props.insertAdjacentHTML(
+        "afterbegin",
+        `<div class="section-heading"><span>ELEVATION · SHARED JUNCTION</span></div>${range("node-y", "Junction height", heightOf(node), 0, 40, 0.25, "m")}<div class="info-note">All connected road ends move together. Shift-drag this junction vertically in Move mode.</div>`,
+      );
+      bindRange("node-y", (v) => {
+        node.y = v;
+        reconcileIntersections(model);
+      });
+    }
+    if (r) {
+      const [a, b] = roadLevels(r, model),
+        source = scene.data.sampled.find((x) => x.id === r.id),
+        L = source.samples.lengthMeters,
+        grade =
+          (Math.abs(b - a) * 1.5) /
+          Math.max(
+            0.01,
+            L - landingRun(source, model) - landingRun(source, model, 1),
+          );
+      props.insertAdjacentHTML(
+        "afterbegin",
+        `<div class="section-heading"><span>ROAD / BRIDGE · ONE GRAPH</span></div>${range("road-elevation", "Raise road / shared ends", (a + b) / 2, 0, 40, 0.25, "m")}${range("road-start-y", "Start elevation", a, 0, 40, 0.25, "m")}${range("road-end-y", "End elevation", b, 0, 40, 0.25, "m")}<div class="info-note">${isElevated(r, model) ? "Bridge structure generated automatically." : "Ground road — raise either end to generate a bridge."} Shared endpoints remain connected; adjoining roads become approaches. ${(grade * 100).toFixed(1)}% peak centreline grade.${grade > 0.083 ? " Approach is steeper than the 8.3% preview target." : ""} Separate overpasses do not connect.</div>${(
+          scene.data.roadChecks || []
+        )
+          .filter((c) => c.roads.includes(r.id) && c.clearance < 5)
+          .map(
+            (c) =>
+              `<div class="info-note design-warning">${icon("triangle-alert")}Road proximity: ${c.clearance.toFixed(2)} m sampled deck clearance (5 m preview target). Review crossing geometry and vehicle envelope.</div>`,
+          )
+          .join(
+            "",
+          )}<div class="info-note">400 mm concept slab; guardrails and candidate supports. Not structurally designed. Elevated pedestrian sidewalks and detailed bridge drainage are not yet generated.</div><button id="focus-road" class="wide-button">${icon("scan")} Frame road / bridge</button><div class="section-heading"><span>SPLINE CONTROL · METRES</span></div><div class="xy-fields"><label>X <input id="spline-x" type="number" step="1" value="${r.control?.[0] ?? (model.nodes.find((n) => n.id === r.a).x + model.nodes.find((n) => n.id === r.b).x) / 2}"></label><label>Z <input id="spline-z" type="number" step="1" value="${r.control?.[1] ?? (model.nodes.find((n) => n.id === r.a).z + model.nodes.find((n) => n.id === r.b).z) / 2}"></label></div><div class="info-note">Edit the quadratic control point, or drag its handle in Move mode. Editing a sampled split segment replaces it with a quadratic curve. Same-level crossings are rebuilt on release.</div>`,
+      );
+      $("#focus-road").onclick = () => {
+        topView = false;
+        scene.focus(r.id);
+        $("#perspective").innerHTML =
+          icon("box") + "Perspective" + icon("chevron-down");
+        iconize();
+      };
+      bindRange("road-elevation", (v) => {
+        liftRoad(model, r.id, v);
+        reconcileIntersections(model);
+      });
+      for (const [id, end] of [
+        ["road-start-y", "a"],
+        ["road-end-y", "b"],
+      ])
+        bindRange(id, (v) => {
+          model.nodes.find((n) => n.id === r[end]).y = v;
+          reconcileIntersections(model);
+        });
+      for (const axis of ["x", "z"])
+        $("#spline-" + axis).onchange = () => {
+          const x = Number($("#spline-x").value),
+            z = Number($("#spline-z").value);
+          if (
+            !Number.isFinite(x) ||
+            !Number.isFinite(z) ||
+            Math.abs(x) > 9999 ||
+            Math.abs(z) > 9999
+          )
+            return;
+          mutate(() => {
+            delete r.points;
+            r.control = [x, z];
+            reconcileIntersections(model);
+          });
+        };
     }
   }
   propertyCards(props);
@@ -535,7 +627,7 @@ function rebuild() {
   $("#road-count").textContent = `${model.roads.length} segments`;
   $("#junction-count").textContent = `${junctions()} junctions`;
   $("#mesh-stat").textContent =
-    `${(data.mesh.indices.length / 3).toLocaleString()} surface triangles`;
+    `${((data.mesh.indices.length + (data.structures || []).reduce((s, p) => s + p.top.indices.length, 0)) / 3).toLocaleString()} surface triangles`;
   names();
   layers();
   scene.selection(selected);
@@ -594,8 +686,8 @@ function setTool(v) {
   $("#tool-hint").classList.toggle("hidden", v === "select");
   $("#tool-hint").innerHTML =
     v === "draw"
-      ? `${icon("spline")} ${drawKind === "asphalt" ? "Road" : drawKind === "bridge" ? "Bridge · ends in parks" : drawKind === "walkway" ? "Walkway · snaps to footway" : "Concrete · snaps to road"}: start → control → end <span>ESC to cancel</span>`
-      : `${icon("move")} Drag a junction to move all connected roads <span>V to select</span>`;
+      ? `${icon("spline")} ${drawKind === "asphalt" ? "Road" : drawKind === "roadbridge" ? `Road bridge · Y ${drawElevation} m` : drawKind === "bridge" ? "Park bridge · ends in parks" : drawKind === "walkway" ? "Walkway · snaps to footway" : "Concrete · snaps to road"}: start → control → end <span>ESC to cancel</span>`
+      : `${icon("move")} Drag a junction or curve handle · Shift-drag junction to change height <span>V to select</span>`;
   if (v !== "draw") {
     drawPoints = [];
     scene?.draft([]);
@@ -612,23 +704,22 @@ function setTab(value) {
 }
 function thumb(kind) {
   const defs = `<defs><pattern id="grid-${kind}" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M 16 0 L 0 0 0 16" fill="none" stroke="#ffffff" stroke-opacity=".04"/></pattern></defs>`;
-  let paths =
-    kind === "parks"
-      ? ["M85 -10 V115", "M85 78 H175", "M-5 35 H175"]
-      : kind === "district"
-        ? [
-            "M-10 36 H180",
-            "M-10 78 H180",
-            "M46 -10 V115",
-            "M112 -10 Q102 50 131 110",
-          ]
-        : kind === "junction"
-          ? ["M-10 52 H180", "M85 -10 V115"]
-          : [
-              "M15 108 Q70 73 85 49",
-              "M85 49 Q95 22 138 -10",
-              "M85 49 Q58 27 45 -10",
-            ];
+  let paths = ["parks", "bridges"].includes(kind)
+    ? ["M85 -10 V115", "M85 78 H175", "M-5 35 H175"]
+    : kind === "district"
+      ? [
+          "M-10 36 H180",
+          "M-10 78 H180",
+          "M46 -10 V115",
+          "M112 -10 Q102 50 131 110",
+        ]
+      : kind === "junction"
+        ? ["M-10 52 H180", "M85 -10 V115"]
+        : [
+            "M15 108 Q70 73 85 49",
+            "M85 49 Q95 22 138 -10",
+            "M85 49 Q58 27 45 -10",
+          ];
   return `<svg viewBox="0 0 170 105">${defs}<rect width="170" height="105" fill="#303030"/><rect width="170" height="105" fill="url(#grid-${kind})"/>${paths.map((d) => `<path d="${d}" fill="none" stroke="#747474" stroke-width="18"/>`).join("")}${paths.map((d) => `<path d="${d}" fill="none" stroke="#252525" stroke-width="13"/>`).join("")}${paths.map((d) => `<path d="${d}" fill="none" stroke="#aaa9a7" stroke-width=".7" stroke-dasharray="4 5"/>`).join("")}<circle cx="85" cy="52" r="3" fill="#cccccc"/></svg>`;
 }
 const pavingThumbs = new Map();
@@ -642,6 +733,7 @@ function assets() {
   const entries =
     assetTab === "Networks"
       ? [
+          ["bridges", "Unified road & bridges", "ONE GRAPH · 3D JUNCTIONS"],
           ["district", "Urban district", "CONNECTED NETWORK"],
           ["junction", "Four-way junction", "4 APPROACHES"],
           ["fork", "Y-junction", "3 APPROACHES"],
@@ -732,7 +824,7 @@ function download(content, name, type = "application/json") {
 $("#export").onclick = () => {
   modal(
     "Export network",
-    `<p>Keep the editable graph, or export the merged road surface in real-world meters.</p><button class="export-option" id="export-project">${icon("file-json")}<span><strong>Slate project</strong><small>JSON · editable curves, graph & settings</small></span>${icon("arrow-down-to-line")}</button><button class="export-option" id="export-mesh">${icon("box")}<span><strong>Road surface mesh</strong><small>OBJ · indexed triangles · asphalt surface only</small></span>${icon("arrow-down-to-line")}</button><div class="info-note">${icon("info")}Asphalt cutouts are exported. Ramps, gutter inserts, manhole covers, curbs and props are not included.</div>`,
+    `<p>Keep the editable graph, or export the merged road surface in real-world meters.</p><button class="export-option" id="export-project">${icon("file-json")}<span><strong>Slate project</strong><small>JSON · editable curves, graph & settings</small></span>${icon("arrow-down-to-line")}</button><button class="export-option" id="export-mesh">${icon("box")}<span><strong>Road surface mesh</strong><small>OBJ · road faces + network bridge slabs</small></span>${icon("arrow-down-to-line")}</button><div class="info-note">${icon("info")}Ground road cutouts and network bridge slab tops/shells are exported. Bridge rails/supports, park connections, paving/ramp detail, curbs and props are not included.</div>`,
   );
   $("#export-project").onclick = () => {
     download(JSON.stringify(model, null, 2), "network.slate");
@@ -788,7 +880,7 @@ $("#save").onclick = () => {
 $("#help").onclick = () =>
   modal(
     "A road workspace, not a node editor",
-    `<p>Orbit with left drag, pan with middle drag, and scroll to zoom. Hold right mouse to look and fly with WASD. Q/E move down/up; Shift is 4× faster; the wheel changes fly speed. Release RMB or press Escape to stop. Flight has no terrain collision. Click a road or junction to inspect it.</p><div class="shortcut-list"><span>Select<kbd>V</kbd></span><span>Move a shared junction<kbd>G</kbd></span><span>Draw: start → control → end<kbd>B</kbd></span><span>Frame the network<kbd>F</kbd></span><span>Undo / redo<kbd>Ctrl Z / Shift Z</kbd></span></div><h3>What this build supports</h3><p>Local road networks, boolean-unioned intersections, continuous sidewalks and curbs, procedural surface materials, markings, street lights, bollards, raised speed humps, planting, and a maximum of 25 graph-following vehicles.</p><h3>Production scope still to build</h3><p>Engineered interchanges, grade-separated bridges, tunnels, rail/subway systems, construction staging, potholes and certified traffic rules are not implemented. Curb ramps and tactile paving are implemented, but require local accessibility review. Acute junctions still need design validation. This is a functional foundation, not an AAA-ready civil engineering suite.</p>`,
+    `<p>Orbit with left drag, pan with middle drag, and scroll to zoom. Hold right mouse to look and fly with WASD. Q/E move down/up; Shift is 4× faster; the wheel changes fly speed. Release RMB or press Escape to stop. Flight has no terrain collision. Click a road or junction to inspect it. Choose Network bridge road and a Y height to draw elevated roads. Use the elevation sliders to raise existing roads; Shift-drag a junction in Move mode to change its height. Same-level crossings join; different-height roads remain overpasses.</p><div class="shortcut-list"><span>Select<kbd>V</kbd></span><span>Move a shared junction<kbd>G</kbd></span><span>Draw: start → control → end<kbd>B</kbd></span><span>Frame the network<kbd>F</kbd></span><span>Undo / redo<kbd>Ctrl Z / Shift Z</kbd></span></div><h3>What this build supports</h3><p>One road/bridge graph with editable spline controls and endpoint elevations, same-height merged junctions, grade-separated crossings, continuous ground sidewalks and curbs, procedural surface materials, markings, street lights, bollards, raised speed humps, planting, and a maximum of 25 graph-following vehicles.</p><h3>Production scope still to build</h3><p>Engineering-rated bridges/interchanges, tunnels, rail/subway systems, construction staging, potholes and certified traffic rules are not implemented. Network bridge slabs, rails, candidate supports and sloping approaches are previews, not load-rated designs. Curb ramps and tactile paving are implemented, but require local accessibility review. Acute junctions still need design validation. This is a functional foundation, not an AAA-ready civil engineering suite.</p>`,
   );
 $("#fly-status").onclick = () => $("#help").click();
 $("#settings").onclick = () =>
@@ -801,9 +893,19 @@ $("#redo-tool").onclick = redo;
 $("#new-network").onclick = () => replaceNetwork("empty");
 $("#draw-kind").onchange = (e) => {
   drawKind = e.target.value;
+  drawElevation = drawKind === "roadbridge" ? 6 : 0;
+  $("#draw-elevation").value = drawElevation;
+  scene?.setDrawElevation(drawElevation);
   drawPoints = [];
   scene?.draft([]);
   if (tool === "draw") setTool("draw");
+};
+$("#draw-elevation").onchange = (e) => {
+  drawElevation = Math.max(0, Math.min(40, Number(e.target.value) || 0));
+  e.target.value = drawElevation;
+  scene?.setDrawElevation(drawElevation);
+  drawPoints = [];
+  scene?.draft([]);
 };
 $("#draw-connection").onclick = () => setTool("draw");
 $("#draw-road").onclick = $("#add-layer").onclick = () => setTool("draw");
@@ -1015,12 +1117,19 @@ try {
         dragSnapshot = true;
       }
       const n = model.nodes.find((n) => n.id === id);
-      moveJunction(
-        model,
-        id,
-        Math.round(p[0] * 2) / 2,
-        Math.round(p[1] * 2) / 2,
-      );
+      const r = model.roads.find((r) => r.id === id);
+      if (r) {
+        delete r.points;
+        r.control = [p[0], p[1]];
+      } else if (p[2] !== undefined) n.y = Math.max(0, Math.min(40, p[2]));
+      else
+        moveJunction(
+          model,
+          id,
+          Math.round(p[0] * 2) / 2,
+          Math.round(p[1] * 2) / 2,
+        );
+      if (done) reconcileIntersections(model);
       if (done || performance.now() - lastDrag > 150) {
         rebuild();
         lastDrag = performance.now();
@@ -1032,8 +1141,14 @@ try {
       }
     },
     (p) => {
-      if (drawKind !== "asphalt" && drawPoints.length !== 1)
+      if (
+        ["walkway", "bridge", "concrete"].includes(drawKind) &&
+        drawElevation === 0 &&
+        drawPoints.length !== 1
+      )
         p = snapConnection(p, model, drawKind);
+      if (!["walkway", "bridge"].includes(drawKind) && drawPoints.length !== 1)
+        p = snapRoadDrawingPoint(model, p, drawElevation);
       drawPoints.push(p);
       scene.draft(drawPoints);
       if (drawPoints.length === 3) {
@@ -1067,19 +1182,32 @@ try {
               points,
               drawKind === "concrete" ? 5 : 10,
               drawKind === "concrete"
-                ? { surface: "concrete", name: "Concrete access" }
-                : {},
+                ? {
+                    surface: "concrete",
+                    name: "Concrete access",
+                    elevation: drawElevation,
+                    levels: [a[2] ?? drawElevation, b[2] ?? drawElevation],
+                    control: c,
+                  }
+                : {
+                    elevation: drawElevation,
+                    levels: [a[2] ?? drawElevation, b[2] ?? drawElevation],
+                    name: drawElevation > 0 ? "Bridge road" : "Drawn road",
+                    control: c,
+                  },
             );
-            if (drawKind === "concrete") selected = created.at(-1)?.id;
+            selected = created.at(-1)?.id;
           });
         drawPoints = [];
         scene.draft([]);
         toast(
           drawKind === "asphalt"
-            ? "Curve added · crossings connected"
+            ? "Road added · same-level crossings connected"
             : drawKind === "concrete"
               ? "Concrete access added · road graph connected"
-              : "Park connection added · inspect placement warnings",
+              : drawKind === "roadbridge"
+                ? "Bridge added to the road graph · select to edit elevation"
+                : "Park connection added · inspect placement warnings",
         );
         if (drawKind !== "asphalt") setTool("select");
       } else
@@ -1091,6 +1219,8 @@ try {
     },
   );
   rebuild();
+  if (model.roads.some((r) => isElevated(r, model)))
+    scene.setView("perspective");
   inspector();
   $("#backend").textContent = scene.backend.toUpperCase();
   $("#loading").remove();
@@ -1125,6 +1255,16 @@ window.__slate = {
   },
   get traffic() {
     return scene?.trafficState;
+  },
+  get roadChecks() {
+    return structuredClone(scene?.data.roadChecks || []);
+  },
+  get roadStructures() {
+    return (scene?.data.structures || []).map((p) => ({
+      id: p.id,
+      kind: p.kind,
+      triangles: p.top.indices.length / 3,
+    }));
   },
   get mesh() {
     return scene?.data.mesh;

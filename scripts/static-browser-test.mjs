@@ -1,3 +1,4 @@
+import { PerspectiveCamera, Vector3 } from "three";
 import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
 import { resolve, extname } from "node:path";
@@ -79,6 +80,57 @@ try {
     path: ".artifacts/published-park-demo.png",
     timeout: 90000,
   });
+  await page.goto(
+    `http://127.0.0.1:${server.address().port}${prefix}index.html?demo=bridges&renderer=webgl`,
+  );
+  await page.waitForFunction(
+    () => window.__slate?.model.name === "One network · bridge district",
+  );
+  assert.equal(
+    await page.evaluate(() => window.__slate.model.roads.length),
+    36,
+  );
+  assert.equal(
+    await page.evaluate(() => window.__slate.model.connections.length),
+    0,
+  );
+  assert.equal(await page.evaluate(() => window.__slate.traffic.length), 18);
+  assert.ok(
+    await page.evaluate(() =>
+      window.__slate.traffic.some((c) => c.height > 5.9),
+    ),
+  );
+  assert.ok(
+    await page.evaluate(() =>
+      window.__slate.roadChecks.every((c) => c.clearance >= 5),
+    ),
+  );
+  await page.screenshot({
+    path: ".artifacts/published-unified-network.png",
+    timeout: 90000,
+  });
+  const nav = await page.evaluate(() => window.__slate.navigation),
+    box = await page.locator("#viewport canvas").boundingBox(),
+    camera = new PerspectiveCamera(37, box.width / box.height, 0.1, 4000);
+  camera.position.fromArray(nav.position);
+  camera.quaternion.fromArray(nav.quaternion);
+  camera.updateMatrixWorld(true);
+  const point = new Vector3(50, 6.12, 45).project(camera);
+  await page.mouse.click(
+    box.x + ((point.x + 1) * box.width) / 2,
+    box.y + ((1 - point.y) * box.height) / 2,
+  );
+  await page.waitForSelector("#road-elevation");
+  assert.equal(await page.locator("#road-elevation").inputValue(), "6");
+  await page.click("#focus-road");
+  await page.locator("#road-elevation").scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: ".artifacts/published-network-bridge-detail.png",
+    timeout: 90000,
+  });
+  console.log(
+    "PASS: compiled unified bridge demo, 36 connected roads, elevated traffic, deck picking and focused 3D inspector",
+  );
   assert.deepEqual(errors, []);
   assert.deepEqual(bad, []);
   console.log(

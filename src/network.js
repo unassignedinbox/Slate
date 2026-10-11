@@ -1,3 +1,5 @@
+import { buildElevatedNetwork } from "./road-decks.js";
+import { roadElevation, heightOf, isElevated } from "./road-elevation.js";
 import ClipperLib from "clipper-lib";
 import earcut from "earcut";
 import {
@@ -155,18 +157,30 @@ export function triangulate(paths, y = 0) {
   visit(tree);
   return { positions, indices, uvs };
 }
-export function buildNetwork(model) {
+export function buildNetwork(
+  model,
+  extraSurface = [],
+  alignmentRoads = model.roads,
+) {
+  if (model.roads.some((r) => isElevated(r, model)))
+    return buildElevatedNetwork(model);
   const sampled = model.roads.map((r) => ({
     ...r,
-    samples: sampleRoad(r, model.nodes, model.roads),
+    samples: sampleRoad(r, model.nodes, alignmentRoads),
   }));
   sampled.forEach((r) => {
     r.samples.widths = r.samples.stations.map((s) =>
-      widthProfile(r, model, s, r.samples.lengthMeters),
+      widthProfile(
+        r,
+        { ...model, roads: alignmentRoads },
+        s,
+        r.samples.lengthMeters,
+      ),
     );
   });
-  const raw = union(
-    sampled.map((r) => {
+  const raw = union([
+    ...extraSurface,
+    ...sampled.map((r) => {
       const p = ClipperLib.Clipper.CleanPolygon(
         toPath(ribbon(r.samples, r.width)),
         1,
@@ -174,7 +188,7 @@ export function buildNetwork(model) {
       if (!ClipperLib.Clipper.Orientation(p)) p.reverse();
       return p;
     }),
-  );
+  ]);
   // Morphological closing fills concave junction corners without layered road faces.
   const surface =
     model.radius > 0 ? offset(offset(raw, model.radius), -model.radius) : raw;
@@ -267,6 +281,55 @@ export function nearestRoad(point, model) {
   return best;
 }
 export function preset(kind = "district") {
+  if (kind === "bridges") {
+    const m = preset("empty");
+    m.name = "One network · bridge district";
+    m.nodes = [];
+    m.roads = [];
+    m.connections = [];
+    m.traffic = 18;
+    const node = (x, z, y = 0) => {
+      let n = m.nodes.find((n) => n.x === x && n.z === z && heightOf(n) === y);
+      if (!n) {
+        n = { id: `bnode${m.nodes.length}`, x, z, y };
+        m.nodes.push(n);
+      }
+      return n.id;
+    };
+    const road = (a, b, name, control) =>
+      m.roads.push({
+        id: `broad${m.roads.length}`,
+        a: node(...a),
+        b: node(...b),
+        width: 10,
+        name,
+        control,
+      });
+    const xs = [-250, -125, 0, 125, 250],
+      zs = [-130, 0, 130];
+    for (const z of zs)
+      for (let i = 1; i < xs.length; i++)
+        road([xs[i - 1], z], [xs[i], z], "Ground boulevard");
+    for (const x of xs) {
+      const levels = Math.abs(x) === 250 ? [-130, 0, 45, 130] : zs;
+      for (let i = 1; i < levels.length; i++)
+        road([x, levels[i - 1]], [x, levels[i]], "Ground avenue");
+    }
+    road([-250, 45], [-100, 45, 6], "West rising approach", [-175, 65]);
+    road([-100, 45, 6], [0, 45, 6], "West bridge span");
+    road([0, 45, 6], [100, 45, 6], "East bridge span");
+    road([100, 45, 6], [250, 45], "East descending approach", [175, 65]);
+    road([0, -280], [0, -100, 6], "North rising approach", [-20, -190]);
+    road([0, -100, 6], [0, 45, 6], "North bridge span");
+    road([0, 45, 6], [0, 140, 6], "South bridge span");
+    road([0, 140, 6], [0, 310], "South descending approach", [20, 225]);
+    road([-125, -130], [-125, -280], "North local link");
+    road([-125, -280], [0, -280], "North landing link");
+    road([125, 130], [125, 310], "South local link");
+    road([125, 310], [0, 310], "South landing link");
+    reconcileIntersections(m);
+    return m;
+  }
   if (kind === "parks") {
     const m = preset("junction");
     m.name = "Park connections";
@@ -431,56 +494,207 @@ export function preset(kind = "district") {
     seed: 42,
   };
 }
+export function snapRoadDrawingPoint(model, point, elevation) {
+  let best = null;
+  for (const raw of model.roads) {
+    const r = { ...raw, samples: sampleRoad(raw, model.nodes, model.roads) };
+    for (let i = 1; i < r.samples.length; i++) {
+      const hit = nearestOnSegment(point, r.samples[i - 1], r.samples[i]);
+      if (
+        hit.distance > r.width / 2 + 2 ||
+        (best && hit.distance >= best.distance)
+      )
+        continue;
+      const s =
+          r.samples.stations[i - 1] +
+          hit.t * (r.samples.stations[i] - r.samples.stations[i - 1]),
+        y = roadElevation(r, model, s);
+      if (Math.abs(y - elevation) < 0.25) best = { ...hit, y };
+    }
+  }
+  return best ? [...best.point, best.y] : [...point, elevation];
+}
 export function addCurve(model, points, width = 10, attributes = {}) {
-  // Intersect sampled centerlines, split both roads, and share graph vertices.
-  const created = [];
-  const findNode = (p) => {
-    let n = model.nodes.find((n) => distance([n.x, n.z], p) < 0.6);
+  const elevation = attributes.elevation ?? 0;
+  const find = (p, elevation) => {
+    let n = model.nodes.find(
+      (n) =>
+        distance([n.x, n.z], p) < 0.6 &&
+        Math.abs(heightOf(n) - elevation) < 0.02,
+    );
     if (!n) {
-      n = { id: crypto.randomUUID(), x: p[0], z: p[1] };
+      n = { id: crypto.randomUUID(), x: p[0], z: p[1], y: elevation };
       model.nodes.push(n);
     }
     return n.id;
   };
-  const cuts = [
-      { s: 0, p: points[0] },
-      { s: points.length - 1, p: points.at(-1) },
-    ],
-    replacements = [];
-  for (const r of model.roads) {
-    const samples = sampleRoad(r, model.nodes, model.roads),
-      rc = [];
-    for (let i = 0; i < points.length - 1; i++)
-      for (let j = 0; j < samples.length - 1; j++) {
-        const a = points[i],
-          b = points[i + 1],
-          c = samples[j],
-          d = samples[j + 1],
-          vx = b[0] - a[0],
-          vz = b[1] - a[1],
-          wx = d[0] - c[0],
-          wz = d[1] - c[1],
-          det = vx * wz - vz * wx;
-        if (Math.abs(det) < 1e-8) continue;
-        const t = ((c[0] - a[0]) * wz - (c[1] - a[1]) * wx) / det,
-          u = ((c[0] - a[0]) * vz - (c[1] - a[1]) * vx) / det;
-        if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-          const p = [a[0] + t * vx, a[1] + t * vz];
-          cuts.push({ s: i + t, p });
-          rc.push({ s: j + u, p });
-        }
+  const { elevation: unused, levels, ...rest } = attributes;
+  const road = {
+    ...rest,
+    id: crypto.randomUUID(),
+    name: attributes.name || "Drawn road",
+    width,
+    a: find(points[0], levels?.[0] ?? elevation),
+    b: find(points.at(-1), levels?.[1] ?? elevation),
+    points: points.slice(1, -1),
+  };
+  model.roads.push(road);
+  const changed = reconcileIntersections(model);
+  return changed.length
+    ? [
+        ...changed.filter((r) => r.id !== road.id),
+        ...model.roads.filter((r) => r.id === road.id),
+      ]
+    : [road];
+}
+// Reconcile actual 3D centreline crossings. A bridge crossing a lower road is
+// not a junction. Shared vertices, rather than stacked surfaces, define joins.
+export function reconcileIntersections(model) {
+  // Moving/lowering an endpoint onto another endpoint welds their graph IDs.
+  const canonical = [];
+  for (const n of model.nodes) {
+    const other = canonical.find(
+      (v) =>
+        distance([v.x, v.z], [n.x, n.z]) < 0.02 &&
+        Math.abs(heightOf(v) - heightOf(n)) < 0.02,
+    );
+    if (other) {
+      for (const r of model.roads) {
+        if (r.a === n.id) r.a = other.id;
+        if (r.b === n.id) r.b = other.id;
       }
-    if (rc.length)
-      replacements.push({
-        r,
-        samples,
-        cuts: [
-          { s: 0, p: samples[0] },
-          ...rc,
-          { s: samples.length - 1, p: samples.at(-1) },
-        ],
-      });
+    } else canonical.push(n);
   }
+  model.nodes = canonical;
+  model.roads = model.roads.filter((r) => r.a !== r.b);
+  const created = [];
+  const findNode = (p, y) => {
+    let n = model.nodes.find(
+      (n) => distance([n.x, n.z], p) < 0.02 && Math.abs(heightOf(n) - y) < 0.02,
+    );
+    if (!n) {
+      n = { id: crypto.randomUUID(), x: p[0], z: p[1], y };
+      model.nodes.push(n);
+    }
+    return n.id;
+  };
+  const entries = model.roads.map((r) => {
+    const samples = sampleRoad(r, model.nodes, model.roads),
+      road = { ...r, samples };
+    return {
+      r,
+      road,
+      samples,
+      cuts: [
+        {
+          s: 0,
+          p: samples[0],
+          y: heightOf(model.nodes.find((n) => n.id === r.a)),
+        },
+        {
+          s: samples.length - 1,
+          p: samples.at(-1),
+          y: heightOf(model.nodes.find((n) => n.id === r.b)),
+        },
+      ],
+    };
+  });
+  for (let a = 0; a < entries.length; a++)
+    for (let b = a + 1; b < entries.length; b++) {
+      const A = entries[a],
+        B = entries[b];
+      const bounds = (e) =>
+        (e.bounds ??= [
+          Math.min(...e.samples.map((p) => p[0])),
+          Math.min(...e.samples.map((p) => p[1])),
+          Math.max(...e.samples.map((p) => p[0])),
+          Math.max(...e.samples.map((p) => p[1])),
+        ]);
+      const ba = bounds(A),
+        bb = bounds(B);
+      if (ba[2] < bb[0] || bb[2] < ba[0] || ba[3] < bb[1] || bb[3] < ba[1])
+        continue;
+      for (let i = 0; i < A.samples.length - 1; i++)
+        for (let j = 0; j < B.samples.length - 1; j++) {
+          const p = A.samples[i],
+            q = A.samples[i + 1],
+            c = B.samples[j],
+            d = B.samples[j + 1];
+          if (
+            Math.max(p[0], q[0]) < Math.min(c[0], d[0]) ||
+            Math.max(c[0], d[0]) < Math.min(p[0], q[0]) ||
+            Math.max(p[1], q[1]) < Math.min(c[1], d[1]) ||
+            Math.max(c[1], d[1]) < Math.min(p[1], q[1])
+          )
+            continue;
+          const vx = q[0] - p[0],
+            vz = q[1] - p[1],
+            wx = d[0] - c[0],
+            wz = d[1] - c[1],
+            det = vx * wz - vz * wx;
+          if (Math.abs(det) < 1e-8) {
+            for (const [first, second, k, l] of [
+              [A, B, i, j],
+              [B, A, j, i],
+            ])
+              for (const end of [0, first.samples.length - 1]) {
+                if (end !== k && end !== k + 1) continue;
+                const p = first.samples[end],
+                  hit = nearestOnSegment(
+                    p,
+                    second.samples[l],
+                    second.samples[l + 1],
+                  ),
+                  s = l + hit.t;
+                if (
+                  hit.distance > 0.002 ||
+                  s < 1e-5 ||
+                  s > second.samples.length - 1 - 1e-5
+                )
+                  continue;
+                const y = roadElevation(
+                    first.road,
+                    model,
+                    first.samples.stations[end],
+                  ),
+                  other = roadElevation(
+                    second.road,
+                    model,
+                    second.samples.stations[l] +
+                      hit.t *
+                        (second.samples.stations[l + 1] -
+                          second.samples.stations[l]),
+                  );
+                if (Math.abs(y - other) < 0.02) second.cuts.push({ s, p, y });
+              }
+            continue;
+          }
+          let t = ((c[0] - p[0]) * wz - (c[1] - p[1]) * wx) / det,
+            u = ((c[0] - p[0]) * vz - (c[1] - p[1]) * vx) / det;
+          if (t < -1e-8 || t > 1 + 1e-8 || u < -1e-8 || u > 1 + 1e-8) continue;
+          t = Math.max(0, Math.min(1, t));
+          u = Math.max(0, Math.min(1, u));
+          const ya = roadElevation(
+              A.road,
+              model,
+              A.samples.stations[i] +
+                t * (A.samples.stations[i + 1] - A.samples.stations[i]),
+            ),
+            yb = roadElevation(
+              B.road,
+              model,
+              B.samples.stations[j] +
+                u * (B.samples.stations[j + 1] - B.samples.stations[j]),
+            );
+          if (Math.abs(ya - yb) > 0.02) continue;
+          const point = [p[0] + t * vx, p[1] + t * vz],
+            y = (ya + yb) / 2;
+          if (i + t > 1e-5 && i + t < A.samples.length - 1 - 1e-5)
+            A.cuts.push({ s: i + t, p: point, y });
+          if (j + u > 1e-5 && j + u < B.samples.length - 1 - 1e-5)
+            B.cuts.push({ s: j + u, p: point, y });
+        }
+    }
   function split(samples, breaks, base) {
     breaks.sort((a, b) => a.s - b.s);
     breaks = breaks.filter((c, i) => !i || c.s - breaks[i - 1].s > 1e-5);
@@ -526,21 +740,37 @@ export function addCurve(model, points, width = 10, attributes = {}) {
         ...base,
         driveway,
         speedHump,
-        id: crypto.randomUUID(),
-        a: findNode(a.p),
-        b: findNode(b.p),
+        id: i === 1 ? base.id : crypto.randomUUID(),
+        a: findNode(a.p, a.y),
+        b: findNode(b.p, b.y),
         control: undefined,
         points: samples.slice(Math.floor(a.s) + 1, Math.ceil(b.s)),
       });
     }
   }
-  replacements.forEach(({ r, samples, cuts }) => split(samples, cuts, r));
+
+  const replacements = entries.filter((e) => e.cuts.length > 2);
+  for (const e of replacements) split(e.samples, e.cuts, e.r);
   model.roads = model.roads.filter(
-    (r) => !replacements.some((x) => x.r.id === r.id),
+    (r) => !replacements.some((e) => e.r.id === r.id),
   );
-  split(points, cuts, { name: "Drawn road", width, ...attributes });
   model.roads.push(...created);
-  return created;
+  const unique = [];
+  for (const r of model.roads) {
+    const duplicate = unique.find((q) => {
+      if (!((r.a === q.a && r.b === q.b) || (r.a === q.b && r.b === q.a)))
+        return false;
+      const a = sampleRoad(r, model.nodes, model.roads),
+        b = sampleRoad(q, model.nodes, model.roads);
+      return a.every((p) =>
+        b.some((q, i) => i && nearestOnSegment(p, b[i - 1], q).distance < 0.02),
+      );
+    });
+    if (duplicate) duplicate.width = Math.max(duplicate.width, r.width);
+    else unique.push(r);
+  }
+  model.roads = unique;
+  return created.filter((r) => unique.includes(r));
 }
 export function validateModel(m) {
   if (
@@ -606,6 +836,8 @@ export function validateModel(m) {
   }
   const ids = new Set();
   for (const n of m.nodes) {
+    if (n.y !== undefined && (!Number.isFinite(n.y) || n.y < 0 || n.y > 40))
+      throw Error("Invalid junction elevation");
     if (
       typeof n.id !== "string" ||
       ids.has(n.id) ||

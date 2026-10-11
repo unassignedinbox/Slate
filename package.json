@@ -1,6 +1,6 @@
 {
   "name": "slate-road-studio",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -15,7 +15,8 @@
     "test:parks-browser": "node scripts/park-connections-browser-test.mjs",
     "publish:static": "vite build --outDir published && node scripts/prepare-static.mjs",
     "test:corners-browser": "node scripts/pavement-corners-browser-test.mjs",
-    "test:static-browser": "node scripts/static-browser-test.mjs"
+    "test:static-browser": "node scripts/static-browser-test.mjs",
+    "test:elevated-browser": "node scripts/elevated-network-browser-test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.3.0",

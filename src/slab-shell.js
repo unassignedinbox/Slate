@@ -8,6 +8,7 @@ export function slabShell(
   bottom = -0.2,
   step = 0.15,
   creaseVertices = [],
+  bottomMesh = null,
 ) {
   // Include top-patch crease vertices so sampled walls cannot bridge a ramp
   // kink and leave a triangular slit. A spatial index keeps large networks cheap.
@@ -64,10 +65,10 @@ export function slabShell(
           k = positions.length / 3;
         positions.push(
           p[0],
-          bottom,
+          typeof bottom === "function" ? bottom(...p) : bottom,
           p[1],
           q[0],
-          bottom,
+          typeof bottom === "function" ? bottom(...q) : bottom,
           q[1],
           q[0],
           yq,
@@ -77,13 +78,18 @@ export function slabShell(
           p[1],
         );
         const segment = length * (cuts[j + 1] - cuts[j]);
-        uvs.push(0, bottom, segment, bottom, segment, yq, 0, yp);
+        uvs.push(0, 0, segment, 0, segment, yq, 0, yp);
         indices.push(k, k + 2, k + 1, k, k + 3, k + 2);
       }
     }
   }
-  const cap = triangulate(paths, bottom),
+  const cap =
+      bottomMesh ||
+      triangulate(paths, typeof bottom === "function" ? 0 : bottom),
     base = positions.length / 3;
+  if (!bottomMesh && typeof bottom === "function")
+    for (let i = 0; i < cap.positions.length; i += 3)
+      cap.positions[i + 1] = bottom(cap.positions[i], cap.positions[i + 2]);
   for (const v of cap.positions) positions.push(v);
   for (const v of cap.uvs) uvs.push(v);
   for (let i = 0; i < cap.indices.length; i += 3)

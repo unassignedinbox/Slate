@@ -1,3 +1,5 @@
+import { heightOf, roadElevation, isElevated } from "./road-elevation.js";
+import { roadStationAt } from "./road-decks.js";
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
@@ -383,7 +385,11 @@ export async function createScene(host, onSelect, onMove, onDraw) {
         offset = lateral(w);
       for (const edge of [-1, 1]) {
         const o = offset + (edge * width) / 2;
-        positions.push(p.x - p.dz * o, 0.123, p.z + p.dx * o);
+        positions.push(
+          p.x - p.dz * o,
+          0.123 + roadElevation(road, model, s),
+          p.z + p.dx * o,
+        );
         uvs.push(s, edge);
       }
       if (i) {
@@ -526,7 +532,7 @@ export async function createScene(host, onSelect, onMove, onDraw) {
         ? bridgeResults.some((b) => b.id === c.id && b.valid)
         : model.layers.walkways !== false,
     );
-    for (const r of data.sampled) {
+    for (const r of data.groundSampled || data.sampled) {
       const len = roadLength(r.samples);
       for (let s = 15; s < len - 12; s += 29) {
         const p = station(r.samples, s);
@@ -549,6 +555,12 @@ export async function createScene(host, onSelect, onMove, onDraw) {
             closestConnection(
               [x, z],
               links.map((c) => ({ ...c, width: c.width + 3 })),
+            )
+          )
+            continue;
+          if (
+            (data.structures || []).some((part) =>
+              containsPoint(part.paths, x, z),
             )
           )
             continue;
@@ -651,6 +663,13 @@ export async function createScene(host, onSelect, onMove, onDraw) {
     for (const road of data.sampled) {
       const d = humpMesh(road, model);
       if (!d) continue;
+      for (const positions of [d.positions, d.paintPositions])
+        for (let i = 0; i < positions.length; i += 3)
+          positions[i + 1] += roadElevation(
+            road,
+            model,
+            roadStationAt(road, positions[i], positions[i + 2]),
+          );
       const geo = new THREE.BufferGeometry();
       geo.setAttribute(
         "position",
@@ -820,6 +839,105 @@ export async function createScene(host, onSelect, onMove, onDraw) {
       if (merged) mesh(merged, material, group);
     }
   }
+  function buildRoadDecks() {
+    for (const part of data.structures || []) {
+      const group = new THREE.Group();
+      group.userData[part.kind === "road" ? "roadId" : "nodeId"] = part.id;
+      groups.bridges.add(group);
+      generated(
+        part.top,
+        part.surface === "concrete" ? concrete : asphalt,
+        group,
+      );
+      generated(part.shell, concrete, group);
+      const incident =
+        part.kind === "road"
+          ? data.sampled.filter((r) => r.id === part.id)
+          : data.sampled.filter((r) => r.a === part.id || r.b === part.id);
+      const beam = (a, b) => {
+        const d = new THREE.Vector3().subVectors(b, a);
+        if (d.length() < 0.02) return;
+        const m = mesh(
+          new THREE.BoxGeometry(0.1, 0.14, d.length()),
+          metal,
+          group,
+        );
+        m.position.copy(a).add(b).multiplyScalar(0.5);
+        m.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, 0, 1),
+          d.normalize(),
+        );
+      };
+      for (const path of part.paths) {
+        let postRemaining = 0;
+        const pts = fromPath(path);
+        for (let i = 0; i < pts.length; i++) {
+          const a = pts[i],
+            b = pts[(i + 1) % pts.length],
+            mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+          // The cut across a shared junction mouth is NOT an exposed deck edge.
+          if (
+            incident.some((r) => {
+              const t = roadStationAt(r, ...mid),
+                p = atStation(r.samples, t),
+                w = r.samples.widths[p.index];
+              return Math.hypot(p.x - mid[0], p.z - mid[1]) < w / 2 - 0.06;
+            })
+          )
+            continue;
+          const h = (p) =>
+            part.kind === "junction"
+              ? 0.12 + heightOf(model.nodes.find((n) => n.id === part.id))
+              : 0.12 +
+                roadElevation(
+                  incident[0],
+                  model,
+                  roadStationAt(incident[0], ...p),
+                );
+          for (const rail of [0.6, 1.1])
+            beam(
+              new THREE.Vector3(a[0], h(a) + rail, a[1]),
+              new THREE.Vector3(b[0], h(b) + rail, b[1]),
+            );
+          const len = distance(a, b);
+          let t = postRemaining;
+          for (; t < len; t += 2.5) {
+            const p = [
+              a[0] + ((b[0] - a[0]) * t) / len,
+              a[1] + ((b[1] - a[1]) * t) / len,
+            ];
+            box(0.1, 1.15, 0.1, p[0], h(p) + 0.575, p[1], metal, group);
+          }
+          postRemaining = t - len;
+        }
+      }
+      if (part.kind === "road") {
+        const r = incident[0];
+        for (let t = 18; t < r.samples.lengthMeters - 12; t += 28) {
+          const p = atStation(r.samples, t),
+            height = roadElevation(r, model, t) - 0.52;
+          if (height < 1) continue;
+          // Do not place a concept support in a carriageway below the deck.
+          const blocked = data.sampled.some(
+            (other) =>
+              other.id !== r.id &&
+              (() => {
+                const s = roadStationAt(other, p.x, p.z),
+                  q = atStation(other.samples, s);
+                return (
+                  Math.hypot(q.x - p.x, q.z - p.z) <
+                    other.width / 2 + model.sidewalk + 1 &&
+                  roadElevation(other, model, s) < height
+                );
+              })(),
+          );
+          if (!blocked)
+            box(1.1, height, 1.1, p.x, 0.24 + height / 2, p.z, concrete, group);
+        }
+      }
+      batch(group);
+    }
+  }
   function buildBridges() {
     bridgeResults = [];
     if (model.layers.bridges === false) return;
@@ -904,7 +1022,10 @@ export async function createScene(host, onSelect, onMove, onDraw) {
   function rebuild(m) {
     model = m;
     data = buildNetwork(m);
-    street = buildStreetscape(m, data);
+    street = buildStreetscape(m, {
+      ...data,
+      sampled: data.groundSampled || data.sampled,
+    });
     data.mesh = triangulate(street.asphalt, 0.12);
     Object.values(groups).forEach(clear);
     asphalt.color.set(m.materials.asphalt);
@@ -945,12 +1066,13 @@ export async function createScene(host, onSelect, onMove, onDraw) {
             [minX, maxZ],
           ]),
         ],
-        data.walkOuter,
+        [...data.walkOuter, ...(data.groundMask || [])],
       ),
       0.24,
       parkGrass,
       groups.parkland,
     );
+    buildRoadDecks();
     buildBridges();
     flat(street.walk, 0.27, paving, groups.sidewalks);
     flat(street.curb, 0.27, concrete, groups.curbs);
@@ -1025,16 +1147,17 @@ export async function createScene(host, onSelect, onMove, onDraw) {
         groups.selection,
       );
       ring.rotation.x = Math.PI / 2;
-      ring.position.set(n.x, 0.5, n.z);
+      ring.position.set(n.x, 0.5 + heightOf(n), n.z);
       ring.renderOrder = 10;
       for (const [axis, col] of [
+        [new THREE.Vector3(0, 1, 0), "#a6c897"],
         [new THREE.Vector3(1, 0, 0), "#d9897f"],
         [new THREE.Vector3(0, 0, 1), "#7eade1"],
       ])
         groups.selection.add(
           new THREE.ArrowHelper(
             axis,
-            new THREE.Vector3(n.x, 0.6, n.z),
+            new THREE.Vector3(n.x, 0.6 + heightOf(n), n.z),
             9,
             col,
             1.5,
@@ -1045,7 +1168,14 @@ export async function createScene(host, onSelect, onMove, onDraw) {
       const r = data.sampled.find((r) => r.id === id);
       if (r) {
         const geo = new THREE.BufferGeometry().setFromPoints(
-          r.samples.map((p) => new THREE.Vector3(p[0], 0.3, p[1])),
+          r.samples.map(
+            (p, i) =>
+              new THREE.Vector3(
+                p[0],
+                0.3 + roadElevation(r, model, r.samples.stations[i]),
+                p[1],
+              ),
+          ),
         );
         groups.selection.add(
           new THREE.Line(
@@ -1056,20 +1186,29 @@ export async function createScene(host, onSelect, onMove, onDraw) {
         for (const p of [
           r.samples[0],
           r.samples.at(-1),
-          ...(r.control ? [r.control] : []),
+          r.control || [
+            (r.samples[0][0] + r.samples.at(-1)[0]) / 2,
+            (r.samples[0][1] + r.samples.at(-1)[1]) / 2,
+          ],
         ]) {
           const m = mesh(
             new THREE.SphereGeometry(0.9, 16, 12),
             new THREE.MeshBasicMaterial({ color: "#c4e6ab" }),
             groups.selection,
           );
-          m.position.set(p[0], 0.8, p[1]);
+          m.position.set(
+            p[0],
+            0.8 + roadElevation(r, model, roadStationAt(r, ...p)),
+            p[1],
+          );
         }
       }
     }
   }
   const ray = new THREE.Raycaster(),
     plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  let drawHeight = 0,
+    verticalDrag = null;
   function groundPoint(event) {
     camera.updateMatrixWorld(true);
     const rect = renderer.domElement.getBoundingClientRect();
@@ -1081,13 +1220,27 @@ export async function createScene(host, onSelect, onMove, onDraw) {
       camera,
     );
     const p = new THREE.Vector3();
-    return ray.ray.intersectPlane(plane, p) ? [p.x, p.z] : null;
+    const level =
+      mode === "draw"
+        ? drawHeight
+        : drag
+          ? model.nodes.find((n) => n.id === drag)
+            ? heightOf(model.nodes.find((n) => n.id === drag))
+            : (() => {
+                const r = data.sampled.find((r) => r.id === drag);
+                return r
+                  ? roadElevation(r, model, r.samples.lengthMeters / 2)
+                  : 0;
+              })()
+          : 0;
+    const pickPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -level);
+    return ray.ray.intersectPlane(pickPlane, p) ? [p.x, p.z] : null;
   }
   let down = null,
     drag = null;
   renderer.domElement.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
-    down = { x: e.clientX, y: e.clientY };
+    down = { x: e.clientX, y: e.clientY, mode };
     const p = groundPoint(e);
     if (!p) return;
     if (mode === "draw") {
@@ -1096,31 +1249,108 @@ export async function createScene(host, onSelect, onMove, onDraw) {
       return;
     }
     if (mode === "move") {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const screenDistance = (x, y, z) => {
+        const p = new THREE.Vector3(x, y, z).project(camera);
+        return Math.hypot(
+          rect.left + ((p.x + 1) * rect.width) / 2 - e.clientX,
+          rect.top + ((1 - p.y) * rect.height) / 2 - e.clientY,
+        );
+      };
+      const r = model.roads.find((r) => r.id === selected),
+        a = r && model.nodes.find((n) => n.id === r.a),
+        b = r && model.nodes.find((n) => n.id === r.b),
+        control = r && (r.control || [(a.x + b.x) / 2, (a.z + b.z) / 2]);
+      if (
+        r &&
+        screenDistance(
+          control[0],
+          0.8 +
+            roadElevation(
+              data.sampled.find((x) => x.id === r.id),
+              model,
+              roadStationAt(
+                data.sampled.find((x) => x.id === r.id),
+                ...control,
+              ),
+            ),
+          control[1],
+        ) < 18
+      ) {
+        drag = r.id;
+        controls.enabled = false;
+        renderer.domElement.setPointerCapture(e.pointerId);
+        return;
+      }
       const n = model.nodes
-        .filter((n) => distance([n.x, n.z], p) < 7)
-        .sort((a, b) => distance([a.x, a.z], p) - distance([b.x, b.z], p))[0];
+        .map((n) => ({ n, d: screenDistance(n.x, heightOf(n) + 0.5, n.z) }))
+        .filter((v) => v.d < 24)
+        .sort((a, b) => a.d - b.d)[0]?.n;
       if (n) {
         drag = n.id;
         controls.enabled = false;
         onSelect(n.id);
         renderer.domElement.setPointerCapture(e.pointerId);
+        if (e.shiftKey)
+          verticalDrag = {
+            x: n.x,
+            z: n.z,
+            y: heightOf(n),
+            pixel: e.clientY,
+            scale:
+              (2 *
+                camera.position.distanceTo(
+                  new THREE.Vector3(n.x, heightOf(n), n.z),
+                ) *
+                Math.tan((camera.fov * Math.PI) / 360)) /
+              rect.height,
+          };
       }
     }
   });
   renderer.domElement.addEventListener("pointermove", (e) => {
     if (drag) {
       const p = groundPoint(e);
-      if (p) onMove(drag, p, false);
+      if (verticalDrag)
+        onMove(
+          drag,
+          [
+            verticalDrag.x,
+            verticalDrag.z,
+            Math.round(
+              (verticalDrag.y +
+                (verticalDrag.pixel - e.clientY) * verticalDrag.scale) *
+                4,
+            ) / 4,
+          ],
+          false,
+        );
+      else if (p) onMove(drag, p, false);
     }
   });
   renderer.domElement.addEventListener("pointerup", (e) => {
     if (drag) {
       const p = groundPoint(e);
-      if (p) onMove(drag, p, true);
+      if (verticalDrag)
+        onMove(
+          drag,
+          [
+            verticalDrag.x,
+            verticalDrag.z,
+            Math.round(
+              (verticalDrag.y +
+                (verticalDrag.pixel - e.clientY) * verticalDrag.scale) *
+                4,
+            ) / 4,
+          ],
+          true,
+        );
+      else if (p) onMove(drag, p, true);
       drag = null;
+      verticalDrag = null;
     } else if (
       mode === "select" &&
-      down &&
+      down?.mode === "select" &&
       Math.hypot(e.clientX - down.x, e.clientY - down.y) < 5
     ) {
       const p = groundPoint(e);
@@ -1139,7 +1369,9 @@ export async function createScene(host, onSelect, onMove, onDraw) {
         const n = model.nodes.find((n) => distance([n.x, n.z], p) < 6);
         const r = nearestRoad(p, { ...model, roads: data.sampled });
         onSelect(
-          bridgeId ||
+          bridgeHit?.object.parent?.userData.roadId ||
+            bridgeHit?.object.parent?.userData.nodeId ||
+            bridgeId ||
             connection?.id ||
             n?.id ||
             (r && r.distance < r.road.width / 2 + 2 ? r.road.id : null),
@@ -1151,6 +1383,7 @@ export async function createScene(host, onSelect, onMove, onDraw) {
   });
   renderer.domElement.addEventListener("pointercancel", () => {
     drag = null;
+    verticalDrag = null;
     down = null;
     controls.enabled = mode !== "draw";
   });
@@ -1324,7 +1557,7 @@ export async function createScene(host, onSelect, onMove, onDraw) {
       const r =
         street.driveways.find((r) => r.roadId === selected) ||
         street.ramps.find((r) => r.roadId === selected) ||
-        street.ramps[0];
+        (!selected ? street.ramps[0] : null);
       if (node) {
         const source = data.sampled.find(
           (r) => r.a === node.id || r.b === node.id,
@@ -1336,8 +1569,8 @@ export async function createScene(host, onSelect, onMove, onDraw) {
           ),
           eye = localPoint(p, -5, p.width / 2 - 2),
           target = localPoint(p, 0, p.width / 2 + 1);
-        camera.position.set(eye[0], 2.8, eye[1]);
-        controls.target.set(target[0], 0.27, target[1]);
+        camera.position.set(eye[0], 2.8 + heightOf(node), eye[1]);
+        controls.target.set(target[0], 0.27 + heightOf(node), target[1]);
       } else if (r) {
         const eye = rampPoint(r, -r.half - 2, -2.5),
           target = rampPoint(r, 0, Math.min(0.8, r.depth));
@@ -1357,8 +1590,9 @@ export async function createScene(host, onSelect, onMove, onDraw) {
           },
           eye = localPoint(p, -5, p.width / 2 - 2.5),
           target = localPoint(p, 0, p.width / 2 + 0.8);
-        camera.position.set(eye[0], 1.65, eye[1]);
-        controls.target.set(target[0], 0.4, target[1]);
+        const level = roadElevation(r, model, r.samples.lengthMeters / 2);
+        camera.position.set(eye[0], 1.65 + level, eye[1]);
+        controls.target.set(target[0], 0.4 + level, target[1]);
       }
       camera.near = 0.03;
       camera.updateProjectionMatrix();
@@ -1371,8 +1605,27 @@ export async function createScene(host, onSelect, onMove, onDraw) {
         camera.position.set(0, 410, 0.01);
         controls.target.set(0, 0, 0);
       } else {
-        camera.position.set(222, 255, 268);
-        controls.target.set(5, 0, -5);
+        const xs = model.nodes.map((n) => n.x),
+          zs = model.nodes.map((n) => n.z),
+          span = Math.max(
+            340,
+            Math.max(...xs) - Math.min(...xs),
+            Math.max(...zs) - Math.min(...zs),
+          ),
+          scale = span / 340;
+        if (scale > 1.3) {
+          controls.target.set(
+            (Math.max(...xs) + Math.min(...xs)) / 2,
+            0,
+            (Math.max(...zs) + Math.min(...zs)) / 2,
+          );
+          camera.position
+            .copy(controls.target)
+            .add(new THREE.Vector3(222, 255, 268).multiplyScalar(scale * 1.15));
+        } else {
+          camera.position.set(222, 255, 268);
+          controls.target.set(5, 0, -5);
+        }
       }
       controls.update();
       camera.updateMatrixWorld(true);
@@ -1402,18 +1655,37 @@ export async function createScene(host, onSelect, onMove, onDraw) {
         camera.updateMatrixWorld(true);
         return;
       }
+      const road = data.sampled.find((r) => r.id === id);
+      if (road) {
+        fly.stop();
+        const s = road.samples.lengthMeters / 2,
+          p = atStation(road.samples, s),
+          size = Math.max(25, road.samples.lengthMeters * 0.6);
+        controls.target.set(p.x, 0.12 + roadElevation(road, model, s), p.z);
+        camera.position
+          .copy(controls.target)
+          .add(new THREE.Vector3(size * 0.9, size * 0.55, size * 0.8));
+        controls.update();
+        camera.updateMatrixWorld(true);
+        return;
+      }
       const n = model.nodes.find((n) => n.id === id);
       if (n) {
         const d = camera.position.clone().sub(controls.target);
-        controls.target.set(n.x, 0, n.z);
+        controls.target.set(n.x, heightOf(n), n.z);
         camera.position.copy(controls.target).add(d.multiplyScalar(0.6));
       }
+    },
+    setDrawElevation(y) {
+      drawHeight = y;
     },
     draft(points) {
       clear(groups.draft);
       if (points.length) {
         const geo = new THREE.BufferGeometry().setFromPoints(
-          points.map((p) => new THREE.Vector3(p[0], 0.6, p[1])),
+          points.map(
+            (p) => new THREE.Vector3(p[0], 0.6 + (p[2] ?? drawHeight), p[1]),
+          ),
         );
         groups.draft.add(
           new THREE.Line(
@@ -1427,17 +1699,30 @@ export async function createScene(host, onSelect, onMove, onDraw) {
             new THREE.MeshBasicMaterial({ color: "#c3e5a4" }),
             groups.draft,
           );
-          m.position.set(p[0], 0.6, p[1]);
+          m.position.set(p[0], 0.6 + (p[2] ?? drawHeight), p[1]);
         });
       }
     },
     exportOBJ() {
-      let out = "# Slate merged surface — metres\n";
-      const d = data.mesh;
-      for (let i = 0; i < d.positions.length; i += 3)
-        out += `v ${d.positions[i]} ${d.positions[i + 1]} ${d.positions[i + 2]}\n`;
-      for (let i = 0; i < d.indices.length; i += 3)
-        out += `f ${d.indices[i] + 1} ${d.indices[i + 1] + 1} ${d.indices[i + 2] + 1}\n`;
+      let out =
+          "# Slate road surfaces and network bridge slab components — metres\n",
+        base = 0;
+      const parts = [
+        { id: "ground", mesh: data.mesh },
+        ...(data.structures || []).flatMap((p) => [
+          { id: p.id + "_top", mesh: p.top },
+          { id: p.id + "_shell", mesh: p.shell },
+        ]),
+      ];
+      for (const part of parts) {
+        const d = part.mesh;
+        out += `o ${part.id}\n`;
+        for (let i = 0; i < d.positions.length; i += 3)
+          out += `v ${d.positions[i]} ${d.positions[i + 1]} ${d.positions[i + 2]}\n`;
+        for (let i = 0; i < d.indices.length; i += 3)
+          out += `f ${base + d.indices[i] + 1} ${base + d.indices[i + 1] + 1} ${base + d.indices[i + 2] + 1}\n`;
+        base += d.positions.length / 3;
+      }
       return out;
     },
   };
