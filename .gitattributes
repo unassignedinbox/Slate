@@ -1,0 +1,3 @@
+# Keep generated shader strings and verbatim dependency notices unchanged.
+published/** linguist-generated=true -whitespace
+licenses/** linguist-vendored=true -whitespace
