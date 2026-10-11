@@ -151,17 +151,32 @@ generator imports and runs in Node. Only `main.js`, `ui/*` and `gfx/*` touch the
 
 ## Verification
 
+The app needs no install to run. `npm i` only pulls the dev-only checkers (`naga-wasi-cli`,
+`wgsl_reflect`), and then:
+
 ```
-npm run check          # shaders parse, modules import, render path, topology audits
+npm run check                      # everything below, in order
+
+node tools/wgsl-check.mjs          # type-checks all 5 WGSL modules with naga (the wgpu/Firefox
+                                   #   front-end) + binding reflection with wgsl_reflect
+node tools/dev/import-check.mjs    # every module imports against a DOM stub; renders both layer
+                                   #   stacks and every inspector panel
+node tools/dev/gpu-smoke.mjs       # drives the real renderer against a recording WebGPU mock:
+                                   #   buffer alignment/overflow, attribute vs. stride, index
+                                   #   overrun, resolve targets, bind groups, picking maths
+node tools/dev/app-boot.mjs        # boots src/main.js headlessly (DOM stub + GPU mock + driven
+                                   #   rAF) and plays a session: click an intersection, drag the
+                                   #   gizmo, wait for the deferred rebuild, toggle every layer,
+                                   #   cycle the lighting presets, edit a texture channel, author
+                                   #   potholes/works, hit every shortcut — asserting zero errors
 node tools/validate.mjs            # 7-node reference network, junction topology
 node tools/validate.mjs --scene    # full city: geometry, traffic soak, gizmo-drag rebuild
 node tools/validate.mjs --scene --preset interchange --seed 42 --verbose
-node tools/wgsl-check.mjs          # parses every WGSL module with wgsl_reflect
-node tools/dev/gpu-smoke.mjs       # drives the renderer against a recording GPU mock
 ```
 
 `--scene` also runs 30 s of traffic (checks for NaN poses, the 25-vehicle cap, stuck vehicles),
-then drags a live intersection 16 m and re-audits the rebuilt mesh.
+then drags a live intersection 16 m and re-audits the rebuilt mesh. In the browser the live
+editor is on `window.roadsmith` (`editor`, `camera`, `renderer`, `api`) for console poking.
 
 ## Known limits
 

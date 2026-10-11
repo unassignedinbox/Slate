@@ -50,7 +50,8 @@ fn fs_main(i: VSOut) -> @location(0) vec4f {
   // night: stars and a cooler dome
   let night = G.flags.z;
   if (night > 0.01) {
-    let sp = d / max(abs(d.y) + 0.35, 0.001);
+    // gnomonic-ish projection of the dome onto a 2D star field
+    let sp = d.xz / max(abs(d.y) + 0.35, 0.001);
     let cell = worley(sp * 42.0);
     let star = smoothstep(0.055, 0.0, cell.x) * step(0.84, cell.y) * smoothstep(0.0, 0.25, up);
     let twinkle = 0.6 + 0.4 * sin(G.camPos.w * 2.1 + cell.y * 90.0);

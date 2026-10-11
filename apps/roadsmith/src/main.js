@@ -21,11 +21,14 @@ let needsRebuild = false;
 let lastFrame = performance.now();
 let fps = 60;
 let simTimeMs = 0;
+let lastChannelVersion = -1;
+let hudTimer = 0;
 
 const api = {
   generate() {
     shell.setBusy(true, 'Generating road network…');
-    requestAnimationFrame(() => {
+    // two frames: the first paints the veil, the second does the (blocking) work
+    afterPaint(() => {
       try {
         editor.generate();
         applyScene();
@@ -72,6 +75,11 @@ const api = {
   },
 };
 
+/** Run work after the browser has painted the current frame (so busy veils are visible). */
+function afterPaint(fn) {
+  requestAnimationFrame(() => requestAnimationFrame(fn));
+}
+
 function applyScene() {
   const scene = editor.scene;
   scene.channels = editor.channels;
@@ -86,7 +94,7 @@ function applyScene() {
 function doRebuild() {
   if (!editor.scene) return;
   shell.setBusy(true, 'Rebuilding road network…');
-  requestAnimationFrame(() => {
+  afterPaint(() => {
     try {
       editor.rebuildGeometry();
       applyScene();
@@ -182,7 +190,7 @@ function setupInput(canvas) {
       const hit = pickScene(editor.scene, ray);
       if (hit) {
         editor.select({ type: hit.type, id: hit.id });
-        if (editor.stackTab === 'texture') { editor.stackTab = 'scene'; }
+        if (editor.stackTab === 'texture') { shell.setTab('scene'); }
       } else {
         editor.select(null);
       }
@@ -213,11 +221,17 @@ function setupInput(canvas) {
       api.generate();
     } else if (k === 'q') {
       editor.setView('wireframe', !editor.view.wireframe);
+      shell.syncView();
     } else if (k === 'l') {
       editor.setView('laneGraph', !editor.view.laneGraph);
+      shell.syncView();
+    } else if (k === 'n') {
+      editor.setView('network', !editor.view.network);
+      shell.syncView();
     } else if (k === ' ') {
       e.preventDefault();
       editor.setView('simulate', !editor.view.simulate);
+      shell.syncView();
     }
   });
 }
@@ -251,7 +265,10 @@ function tick(now) {
 
   updateInstances(renderer, scene, editor.hidden);
   updateSignals(renderer, scene, now / 1000);
-  renderer.setMaterialsFromChannels(editor.channels);
+  if (editor.channelVersion !== lastChannelVersion) {
+    lastChannelVersion = editor.channelVersion;
+    renderer.setMaterialsFromChannels(editor.channels);
+  }
 
   buildOverlay(overlay, scene, {
     camera, view: editor.view, selection: editor.selection, hover,
@@ -272,6 +289,11 @@ function tick(now) {
     wireframe: editor.view.wireframe,
     hiddenLayers: editor.hidden,
   });
+
+  // the HUD and status bar are DOM writes: 8 Hz is plenty
+  hudTimer -= dtRaw;
+  if (hudTimer > 0) return;
+  hudTimer = 0.125;
 
   const st = renderer.stats;
   shell.setHud([
@@ -316,6 +338,9 @@ async function boot() {
   });
   editor.on('channels', () => { renderer.setMaterialsFromChannels(editor.channels); shell.refreshStack(); });
   editor.on('selection', () => { shell.refreshStack(); shell.refreshInspector(); });
+
+  // handy in the browser console, and the hook the headless boot harness drives
+  window.roadsmith = { editor, camera, api, overlay, get renderer() { return renderer; }, get shell() { return shell; } };
 
   requestAnimationFrame(tick);
 }

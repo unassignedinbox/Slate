@@ -8,7 +8,8 @@
     "validate:scene": "node tools/validate.mjs --scene",
     "validate:all": "for p in downtown riverside interchange industrial; do node tools/validate.mjs --scene --preset $p || exit 1; done",
     "shaders": "node tools/wgsl-check.mjs",
-    "check": "node tools/wgsl-check.mjs && node tools/dev/import-check.mjs && node tools/dev/gpu-smoke.mjs && node tools/validate.mjs && node tools/validate.mjs --scene"
+    "check": "node tools/wgsl-check.mjs && node tools/dev/import-check.mjs && node tools/dev/gpu-smoke.mjs && node tools/dev/app-boot.mjs && node tools/validate.mjs && node tools/validate.mjs --scene",
+    "boot": "node tools/dev/app-boot.mjs"
   },
   "keywords": [],
   "author": "",
@@ -16,6 +17,7 @@
   "type": "module",
   "private": true,
   "devDependencies": {
+    "naga-wasi-cli": "^0.1.0",
     "wgsl_reflect": "^1.6.0"
   }
 }

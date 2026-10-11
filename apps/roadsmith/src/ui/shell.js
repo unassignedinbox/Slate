@@ -22,14 +22,15 @@ export function buildShell(editor, api) {
   const generateBtn = h('button', { class: 'btn primary', onclick: () => api.generate() },
     h('span', { html: icon('refresh', 15) }), 'Generate');
 
-  const viewToggle = (key, label, iconName) => h('button', {
+  const viewButtons = {};
+  const viewToggle = (key, label, iconName) => (viewButtons[key] = h('button', {
     'aria-pressed': editor.view[key] ? 'true' : 'false', title: label,
     onclick: (e) => {
       const next = !editor.view[key];
       editor.setView(key, next);
       e.currentTarget.setAttribute('aria-pressed', next ? 'true' : 'false');
     },
-  }, h('span', { html: icon(iconName, 14) }), label);
+  }, h('span', { html: icon(iconName, 14) }), label));
 
   const topbar = h('div', { class: 'topbar' },
     h('div', { class: 'brand' }, h('b', {}, 'Roadsmith'), h('span', {}, 'WebGPU road network')),
@@ -90,6 +91,12 @@ export function buildShell(editor, api) {
       busy.style.display = on ? 'grid' : 'none';
       if (label) busy.textContent = label;
       generateBtn.disabled = on;
+    },
+    setTab,
+    syncView() {
+      for (const [key, btn] of Object.entries(viewButtons)) {
+        btn.setAttribute('aria-pressed', editor.view[key] ? 'true' : 'false');
+      }
     },
     refreshStack() { renderStack(editor, stackScroll); },
     refreshInspector() { renderInspector(editor, inspector, api); },

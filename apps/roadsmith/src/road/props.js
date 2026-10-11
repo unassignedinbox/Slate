@@ -382,7 +382,7 @@ export function buildProps(net, surface, settings, rng) {
       const pos = { x: f.p.x + f.right.x * t, y: f.p.y + (urban ? 0.16 : -0.05), z: f.p.z + f.right.z * t };
       const yaw = Math.atan2(-f.right.z * side, -f.right.x * side);
       const lamp = lampPost(mbs.lighting, pos, yaw, { height: p.class === ROAD_CLASS.HIGHWAY ? 12 : 9, reach: p.class === ROAD_CLASS.HIGHWAY ? 2.6 : 1.9 });
-      lights.push({ p: lamp.lightPos, colour: [1.0, 0.82, 0.56], intensity: 1.0, radius: 26 });
+      lights.push({ p: lamp.lightPos, colour: [1.0, 0.82, 0.56], intensity: 140, range: 30 });
       if (p.class !== ROAD_CLASS.HIGHWAY) side = -side;
     }
 

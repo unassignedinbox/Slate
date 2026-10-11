@@ -10,6 +10,7 @@ export class Editor {
   constructor() {
     this.settings = defaultSettings('downtown');
     this.channels = defaultChannels();
+    this.channelVersion = 0;
     this.envName = 'clear';
     this.env = { ...ENV_PRESETS.clear, markings: true, wearGain: 1, vignette: 0.38, grain: 0.016 };
     this.view = {
@@ -128,6 +129,7 @@ export class Editor {
     const c = this.channel(id);
     if (!c) return;
     c[key] = value;
+    this.channelVersion++;
     this.emit('channels', this.channels);
   }
 

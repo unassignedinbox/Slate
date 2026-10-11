@@ -423,10 +423,10 @@ export class Renderer {
         const { l } = scored[i];
         const o = i * 8;
         this.lightData[o] = l.p.x; this.lightData[o + 1] = l.p.y; this.lightData[o + 2] = l.p.z;
-        this.lightData[o + 3] = l.range ?? 22;
+        this.lightData[o + 3] = l.range ?? l.radius ?? 24;
         const c = l.colour || [1, 0.86, 0.68];
         this.lightData[o + 4] = c[0]; this.lightData[o + 5] = c[1]; this.lightData[o + 6] = c[2];
-        this.lightData[o + 7] = (l.intensity ?? 30) * night;
+        this.lightData[o + 7] = (l.intensity ?? 220) * night;
       }
     }
     this.lightCount = n;
