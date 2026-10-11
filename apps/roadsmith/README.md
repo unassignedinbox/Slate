@@ -25,6 +25,7 @@ The generator itself is headless and runs in Node — see **Verification** below
 | Markings | Lane dashes, edge lines, double centre lines, stop bars, zebras, turn arrows, parking bays — painted in the shader from the real lane band carried in the vertex stream |
 | Condition | Potholes, sunken patches, speed tables, excavated roadworks trenches, polished wheel paths, gutter grime — all displaced geometry plus a per-vertex wear channel |
 | City | Closed city blocks extracted from the half-edge faces of the graph, welded to the kerb line, paved with seven bonds (no buildings, by design) |
+| Terrain | A carved apron, not a flat plane: the ground lattice is cut away wherever a road corridor or block sits, and a graded shoulder is extruded from the exact outer verge vertex so grass meets kerb with no seam, no gap and nothing buried. Viaducts and tunnels are skipped so the land passes under them |
 | Structures | Bridge decks, parapets, piers, retaining walls, tunnel portals/linings and a cut-and-cover subway bore |
 | Rail | Ballast, sleepers and UIC rail; the permanent way breaks and re-lays through each level crossing, with road plates, flangeways, booms and warning lights |
 | Props | Streetlights, traffic signals, signs, 4 bollard designs, guardrails and pedestrian railings, billboards, shelters, benches, cones, barriers, gullies and covers |
@@ -43,7 +44,7 @@ network        downtown · 45 nodes · 66 roads · 31 junctions · 8.50 km
 road surface   116,435 verts · 110,566 quads · 221,140 tris
 welds          4,774 vertices fused during build
 quad warp      p50 0.000 · p99 0.079 · max 0.637
-whole scene    336,456 verts · 287,174 quads · 584,078 tris · 98.3% quad
+whole scene    354,833 verts · 301,647 quads · 613,024 tris · 98.4% quad
 city           20 blocks · 5 level crossings · 90 parked · 18 AI vehicles
 
   ✓ finite geometry — 0 NaN components
@@ -54,9 +55,11 @@ city           20 blocks · 5 level crossings · 90 parked · 18 AI vehicles
   ✓ quads near-planar (p99) — p99 0.079 · max 0.637
   ✓ junction seams welded — 458 coincident vertices (surface-id splits only)
   ✓ vertex normals valid — 0 problems
-  ✓ props + city quad-dominant — 97.3%
+  ✓ props + city quad-dominant — 97.5%
   ✓ fleet never exceeds 25 vehicles · no permanently stuck vehicles
   ✓ city blocks closed — 20 blocks
+  ✓ terrain never covers the road surface — 91,455 road points checked
+  ✓ terrain never covers a junction plate — 0/1,620 plate samples buried
   ✓ moved junction stays finite / manifold / welded / quad-dominant
 ```
 

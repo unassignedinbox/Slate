@@ -5,7 +5,7 @@
 import { MeshBuilder, SURF, MARK } from '../core/mesh.js';
 import { grid, quadPatch } from '../core/geokit.js';
 import {
-  v3, v3sub, v3add, v3scale, normXZ, headingOf, angleDelta, clamp, lerp,
+  v3, v3sub, v3add, v3scale, normXZ, headingOf, angleDelta, clamp, lerp, smoothstep,
   polygonAreaXZ, polygonCentroidXZ, pointInPolygonXZ, v3dist2D,
 } from '../core/math.js';
 import { fbm2D } from '../core/rng.js';
@@ -293,23 +293,285 @@ function pointInTri(p, a, b, c) {
   return !(neg && pos);
 }
 
-/** Terrain shell under everything: large grid with gentle relief and a soil apron. */
-export function buildGround(bounds, settings = {}) {
+/**
+ * Terrain shell. The ground never lies on top of the road: the lattice is carved away
+ * anywhere near a corridor or a city block, and the gap is closed by a graded shoulder
+ * ("skirt") that starts exactly on the outer edge of the verge and falls away to grade.
+ * Spacing is fine over the city and coarse out to the horizon.
+ */
+export function buildGround(bounds, settings = {}, world = {}) {
   const mb = new MeshBuilder('ground');
-  const pad = settings.pad ?? 260;
-  const min = { x: bounds.min.x - pad, z: bounds.min.z - pad };
-  const sizeX = (bounds.max.x - bounds.min.x) + pad * 2;
-  const sizeZ = (bounds.max.z - bounds.min.z) + pad * 2;
-  const n = 64;
-  const baseY = settings.baseY ?? 0.04;
-  mb.attr({ surface: SURF.GRASS });
-  grid(mb, { x: min.x, y: baseY, z: min.z }, sizeX, sizeZ, n, n, (x, z) => {
-    const d = Math.min(
+  const relief = world.relief || (() => 0);
+  const pad = settings.pad ?? 420;
+  const step = settings.step ?? 11;
+  const padSteps = 9;
+  const SKIRT = [0, 3, 7, 12, 20];       // shoulder rings, metres out from the verge edge
+  const REACH = 18;                      // how far the apron looks for the road it must meet
+
+  /** terrain height away from the roads, including the fall-off beyond the city */
+  const terrainAt = (x, z) => {
+    let y = relief(x, z);
+    const edge = Math.min(
       Math.min(x - bounds.min.x, bounds.max.x - x),
       Math.min(z - bounds.min.z, bounds.max.z - z),
     );
-    const outside = clamp(-d / pad, 0, 1);
-    return baseY - outside * 2.2 + (fbm2D(x * 0.004, z * 0.004, 3, 11) - 0.5) * 1.2 * outside;
-  }, { attrs: { surface: SURF.SOIL, wear: 0.5, ao: 1, flags: 0, mark: 0, laneWidth: 1, laneA: -1e4, laneB: 1e4, param: 5 } });
+    const outside = clamp(-edge / pad, 0, 1);
+    if (outside > 0) y += -outside * 2.4 + (fbm2D(x * 0.004, z * 0.004, 3, 11) - 0.5) * 2.6 * outside;
+    return y;
+  };
+
+  // ---------------------------------------------------------------- corridor field
+  // Only road that actually touches the ground carves it: a viaduct overhead or a tunnel
+  // underneath must leave the terrain intact, or the scene ends up with holes.
+  const atGrade = (x, z, y) => Math.abs(y - terrainAt(x, z)) <= 1.0;
+  const samples = [];
+  if (world.surface) {
+    for (const rib of world.surface.ribbons.values()) {
+      const stations = rib.stations;
+      const take = Math.max(1, Math.round(2.6 / Math.max(0.6, (stations[1]?.s ?? 3) - (stations[0]?.s ?? 0))));
+      for (let i = 0; i < stations.length; i += take) {
+        const st = stations[i];
+        const pts = st.row.pts;
+        const l = pts[0].world || pts[0].p;
+        const r = pts[pts.length - 1].world || pts[pts.length - 1].p;
+        const c = st.frame.p;
+        const ey = Math.min(l.y, r.y);
+        if (atGrade(c.x, c.z, ey)) samples.push({ x: c.x, z: c.z, hw: Math.max(v3dist2D(c, l), v3dist2D(c, r)), y: ey });
+      }
+    }
+    for (const info of world.surface.junctions.values()) {
+      const jy = info.centre.y ?? 0;
+      if (atGrade(info.centre.x, info.centre.z, jy)) {
+        samples.push({ x: info.centre.x, z: info.centre.z, hw: (info.radius ?? 8) + 1.2, y: jy });
+      }
+    }
+  }
+  const CELL = 36;
+  const hash = new Map();
+  let maxHw = 0;
+  for (const s of samples) {
+    maxHw = Math.max(maxHw, s.hw);
+    const k = `${Math.floor(s.x / CELL)},${Math.floor(s.z / CELL)}`;
+    let list = hash.get(k);
+    if (!list) hash.set(k, (list = []));
+    list.push(s);
+  }
+  const reach = REACH;
+  const rings = Math.min(4, Math.ceil((maxHw + reach) / CELL));
+  /** distance outside the nearest road edge + the lowest road edge height in reach */
+  const nearestRoad = (x, z) => {
+    const ci = Math.floor(x / CELL), cj = Math.floor(z / CELL);
+    let bestD = Infinity, low = Infinity;
+    for (let i = -rings; i <= rings; i++) {
+      for (let j = -rings; j <= rings; j++) {
+        const list = hash.get(`${ci + i},${cj + j}`);
+        if (!list) continue;
+        for (const s of list) {
+          const d = Math.hypot(x - s.x, z - s.z) - s.hw;
+          if (d < bestD) bestD = d;
+          // follow the *lowest* road nearby: a ramp into an underpass pulls the ground
+          // down with it instead of being buried by whatever crosses above
+          if (d < reach && s.y < low) low = s.y;
+        }
+      }
+    }
+    return bestD === Infinity ? null : { d: bestD, y: low };
+  };
+
+  // ---------------------------------------------------------------- block footprints
+  const foot = [];
+  for (const b of world.blocks || []) {
+    let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
+    for (const p of b.ring) {
+      if (p.x < minx) minx = p.x;
+      if (p.x > maxx) maxx = p.x;
+      if (p.z < minz) minz = p.z;
+      if (p.z > maxz) maxz = p.z;
+    }
+    foot.push({ ring: b.ring, minx, maxx, minz, maxz });
+  }
+  const inBlock = (x, z) => {
+    for (const b of foot) {
+      if (x < b.minx || x > b.maxx || z < b.minz || z > b.maxz) continue;
+      if (pointInPolygonXZ({ x, y: 0, z }, b.ring)) return true;
+    }
+    return false;
+  };
+
+  /** final ground height: terrain, pulled down to meet the nearest road edge */
+  const groundAt = (x, z) => {
+    const t = terrainAt(x, z);
+    const n = nearestRoad(x, z);
+    if (!n) return t;
+    const rimY = Math.min(t, n.y - 0.12);
+    if (n.d < 0) return rimY - 0.65;
+    return lerp(rimY, t, smoothstep(clamp(n.d / 24, 0, 1)));
+  };
+
+  // ---------------------------------------------------------------- lattice
+  const axis = (lo, hi) => {
+    const out = [];
+    for (let i = padSteps; i >= 1; i--) out.push(lo - pad * Math.pow(i / padSteps, 2.3));
+    const n = Math.max(2, Math.ceil((hi - lo) / step));
+    for (let i = 0; i <= n; i++) out.push(lo + ((hi - lo) * i) / n);
+    for (let i = 1; i <= padSteps; i++) out.push(hi + pad * Math.pow(i / padSteps, 2.3));
+    return out;
+  };
+  const xs = axis(bounds.min.x, bounds.max.x);
+  const zs = axis(bounds.min.z, bounds.max.z);
+
+  const H = [], D = [];
+  for (let i = 0; i < xs.length; i++) {
+    H[i] = new Float64Array(zs.length);
+    D[i] = new Float64Array(zs.length);
+    for (let j = 0; j < zs.length; j++) {
+      const n = nearestRoad(xs[i], zs[j]);
+      D[i][j] = n ? n.d : Infinity;
+      H[i][j] = groundAt(xs[i], zs[j]);
+    }
+  }
+
+  const baseAttrs = { wear: 0.5, ao: 1, flags: 0, mark: 0, laneWidth: 1, laneA: -1e4, laneB: 1e4, param: 5 };
+  const vert = (x, y, z, wear = 0.5) => mb.vertex({ x, y, z }, { u: x, v: z, ...baseAttrs, wear });
+  // how far inside the built-up rectangle a point is; negative once you leave it
+  const inset = (x, z) => Math.min(
+    Math.min(x - bounds.min.x, bounds.max.x - x),
+    Math.min(z - bounds.min.z, bounds.max.z - z),
+  );
+  let kept = 0, dropped = 0;
+  for (let i = 0; i < xs.length - 1; i++) {
+    for (let j = 0; j < zs.length - 1; j++) {
+      // any corner inside a corridor, or a centre inside a block: the road shoulder and
+      // the block paving own that ground, so the lattice stays out of it entirely
+      if (Math.min(D[i][j], D[i + 1][j], D[i][j + 1], D[i + 1][j + 1]) < 0) { dropped++; continue; }
+      const cx = (xs[i] + xs[i + 1]) / 2, cz = (zs[j] + zs[j + 1]) / 2;
+      if (inBlock(cx, cz)) { dropped++; continue; }
+      // Outskirts dry out before they turn to bare soil, and the grass/soil line is
+      // dithered by noise so it reads as a ragged field edge rather than a rectangle.
+      const out = clamp((-inset(cx, cz) - 6) / 90, 0, 1);
+      const patch = fbm2D(cx * 0.0055, cz * 0.0055, 3, 37);
+      const wear = clamp(0.22 + patch * 0.55 + out * 0.5, 0, 1);
+      mb.attr({ surface: out > 0.34 + (patch - 0.5) * 0.44 ? SURF.SOIL : SURF.GRASS });
+      kept++;
+      mb.quad(
+        vert(xs[i], H[i][j], zs[j], wear),
+        vert(xs[i], H[i][j + 1], zs[j + 1], wear),
+        vert(xs[i + 1], H[i + 1][j + 1], zs[j + 1], wear),
+        vert(xs[i + 1], H[i + 1][j], zs[j], wear),
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------- graded shoulder
+  // Starts on the exact outer vertex of the verge (so it reads as one surface with the
+  // road), falls at ~2 % and blends into the lattice, which it overlaps by 3 m.
+  let skirts = 0;
+  if (world.surface) {
+    mb.attr({ surface: SURF.GRASS });
+    for (const rib of world.surface.ribbons.values()) {
+      const stations = rib.stations;
+      for (const side of [-1, 1]) {
+        let prev = null;
+        for (let i = 0; i < stations.length; i++) {
+          const st = stations[i];
+          const pts = st.row.pts;
+          const edgeP = side < 0 ? (pts[0].world || pts[0].p) : (pts[pts.length - 1].world || pts[pts.length - 1].p);
+          const right = st.frame.right;
+          const ox = right.x * side, oz = right.z * side;
+          // the paved block on the inside of a face already covers this ground
+          // (only when the whole strip is inside it — a narrow block tail still needs a shoulder)
+          if (inBlock(edgeP.x + ox * 1.6, edgeP.z + oz * 1.6)
+            && inBlock(edgeP.x + ox * 11, edgeP.z + oz * 11)
+            && inBlock(edgeP.x + ox * 20, edgeP.z + oz * 20)) { prev = null; continue; }
+          // viaducts, embankments and cuttings are the structure builder's business —
+          // a graded shoulder there would pour dirt over whatever passes underneath
+          if (Math.abs(edgeP.y - terrainAt(edgeP.x, edgeP.z)) > 0.8) { prev = null; continue; }
+          const ring = [];
+          for (const r of SKIRT) {
+            const x = edgeP.x + ox * r, z = edgeP.z + oz * r;
+            let y;
+            if (r < 0.001) y = edgeP.y;                                  // welds onto the verge
+            else {
+              y = Math.min(
+                lerp(edgeP.y, groundAt(x, z) + 0.04, smoothstep(clamp(r / 20, 0, 1))),
+                edgeP.y - 0.02 * r,                                      // 2 % fall for drainage
+                groundAt(x, z) + 0.15,                                   // never mound up
+              );
+              // where the shoulder runs under other paving it simply tucks out of sight
+              const n = nearestRoad(x, z);
+              if (inBlock(x, z) || (n && n.d < -0.6)) y = Math.min(y, (n ? n.y : edgeP.y) - 0.55);
+            }
+            ring.push(vert(x, y, z));
+          }
+          if (prev) {
+            for (let k = 0; k < ring.length - 1; k++) {
+              if (side < 0) mb.quad(prev[k], prev[k + 1], ring[k + 1], ring[k]);
+              else mb.quad(ring[k], ring[k + 1], prev[k + 1], prev[k]);
+              skirts++;
+            }
+          }
+          prev = ring;
+        }
+      }
+    }
+  }
+
+
+  // ---------------------------------------------------------------- junction aprons
+  // Every plate (including dead-end bull-noses) gets the same graded collar, offset from
+  // its real boundary polygon, so there is no gap where roads meet or stop.
+  let collars = 0;
+  if (world.surface) {
+    const OFFS = [0, 3, 7, 12, 20];
+    for (const info of world.surface.junctions.values()) {
+      const bnd = info.boundary;
+      if (!bnd || bnd.length < 6) continue;
+      const c = info.centre;
+      if (Math.abs((c.y ?? 0) - terrainAt(c.x, c.z)) > 0.8) continue;      // elevated junction
+      // decimate the boundary to ~3 m so the collar stays cheap but still hugs the plate
+      const loop = [];
+      for (const p of bnd) {
+        const last = loop[loop.length - 1];
+        if (!last || v3dist2D(last, p) > 3) loop.push(p);
+      }
+      if (loop.length > 2 && v3dist2D(loop[0], loop[loop.length - 1]) < 1.5) loop.pop();
+      if (loop.length < 4) continue;
+      mb.attr({ surface: SURF.GRASS });
+      let prev = null, first = null;
+      for (let i = 0; i <= loop.length; i++) {
+        const p = loop[i % loop.length];
+        const dx = p.x - c.x, dz = p.z - c.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const ox = dx / len, oz = dz / len;
+        const ring = [];
+        for (const o0 of OFFS) {
+          const o = o0 + 0.18;                                            // clear of the plate edge
+          const x = p.x + ox * o, z = p.z + oz * o;
+          let y;
+          if (o0 === 0) y = p.y - 0.04;
+          else {
+            y = Math.min(
+              lerp(p.y, groundAt(x, z) + 0.01, smoothstep(clamp(o / 20, 0, 1))),
+              p.y - 0.02 * o,
+              groundAt(x, z) + 0.12,
+            );
+            const n = nearestRoad(x, z);
+            if (inBlock(x, z) || (n && n.d < -0.6)) y = Math.min(y, (n ? n.y : p.y) - 0.55);
+          }
+          ring.push(vert(x, y, z));
+        }
+        if (prev) {
+          for (let k = 0; k < ring.length - 1; k++) {
+            mb.quad(prev[k], prev[k + 1], ring[k + 1], ring[k]);
+            collars++;
+          }
+        }
+        prev = ring;
+        if (!first) first = ring;
+      }
+    }
+  }
+
+  mb.meta = { cells: kept, dropped, skirts, collars };
   return mb.finish();
 }

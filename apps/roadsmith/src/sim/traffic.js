@@ -164,6 +164,7 @@ export class TrafficSim {
     this.signalCycle = { green: 13, amber: 3.2, allRed: 1.6 };
     this.spawnable = [...graph.lanes.values()].filter((l) => l.length > 18);
     this.trainBlocked = new Set();
+    this.recycled = 0;
     this.populate();
   }
 
@@ -379,6 +380,7 @@ export class TrafficSim {
   }
 
   recycle(v) {
+    this.recycled++;
     if (v.conn) releaseConn(v.conn, v);
     if (v.lane) v.lane.vehicles = v.lane.vehicles.filter((x) => x !== v);
     this.vehicles = this.vehicles.filter((x) => x !== v);

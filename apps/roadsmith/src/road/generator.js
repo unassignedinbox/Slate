@@ -8,6 +8,13 @@ import { makeRailLine, findRailCrossings } from './rail.js';
 import { makeRng, fbm2D } from '../core/rng.js';
 import { clamp, lerp, v3dist2D, normXZ, v3sub } from '../core/math.js';
 
+/** Ground relief shared by the node layout and the terrain apron, so they never disagree. */
+export function terrainHeight(settings) {
+  const amp = settings.terrain || 0;
+  const seed = settings.seed ?? 1;
+  return (x, z) => amp * (fbm2D(x * 0.0022, z * 0.0022, 3, seed) - 0.5) * 2;
+}
+
 export const PRESETS = {
   downtown: {
     label: 'Downtown grid',
@@ -58,7 +65,7 @@ export function generateCity(settings) {
   const warp = settings.curvature;
   const grid = [];
 
-  const terrainY = (x, z) => (settings.terrain || 0) * (fbm2D(x * 0.0022, z * 0.0022, 3, settings.seed) - 0.5) * 2;
+  const terrainY = terrainHeight(settings);
 
   for (let i = 0; i <= nx; i++) {
     grid[i] = [];

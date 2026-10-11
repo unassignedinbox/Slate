@@ -4,6 +4,7 @@ import { generateCity, defaultSettings, networkBounds } from './generator.js';
 import { buildSurface } from './build.js';
 import { buildProps, PROP_LAYERS } from './props.js';
 import { buildBlocks, buildGround } from './blocks.js';
+import { terrainHeight } from './generator.js';
 import { buildStructures, buildSubway } from './structures.js';
 import { buildRail, buildCrossingFurniture, buildBoomMesh, buildTrainMesh } from './rail.js';
 import { buildLaneGraph, TrafficSim, TrainSim, generateParkedCars } from '../sim/traffic.js';
@@ -36,7 +37,7 @@ export function assembleScene(world, settings, opts = {}) {
   t0 = timer();
   const blocks = buildBlocks(net, surface, settings, rng);
   const bounds = networkBounds(net);
-  const ground = buildGround(bounds, {});
+  const ground = buildGround(bounds, settings, { surface, blocks: blocks.blocks, relief: terrainHeight(settings) });
   t.blocks = timer() - t0;
 
   t0 = timer();

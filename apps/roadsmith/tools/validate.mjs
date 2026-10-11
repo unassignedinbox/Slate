@@ -235,6 +235,74 @@ if (!sceneMode) {
   check(scene.laneGraph.lanes.size > 20 && scene.laneGraph.connections.length > 20,
     'lane graph connected', `${scene.laneGraph.lanes.size} lanes · ${scene.laneGraph.connections.length} turns`);
 
+
+  // ---- terrain: the apron must never cover the road it sits beside
+  {
+    const g = scene.ground;
+    const STRIDE = 20, GC = 24;
+    const gh = new Map();
+    for (let t = 0; t < g.indices.length; t += 3) {
+      const T = [0, 1, 2].map((k) => {
+        const o = g.indices[t + k] * STRIDE;
+        return { x: g.vertices[o], y: g.vertices[o + 1], z: g.vertices[o + 2] };
+      });
+      const mnx = Math.min(T[0].x, T[1].x, T[2].x), mxx = Math.max(T[0].x, T[1].x, T[2].x);
+      const mnz = Math.min(T[0].z, T[1].z, T[2].z), mxz = Math.max(T[0].z, T[1].z, T[2].z);
+      for (let i = Math.floor(mnx / GC); i <= Math.floor(mxx / GC); i++) {
+        for (let j = Math.floor(mnz / GC); j <= Math.floor(mxz / GC); j++) {
+          const k = `${i},${j}`;
+          let l = gh.get(k); if (!l) gh.set(k, (l = []));
+          l.push(T);
+        }
+      }
+    }
+    const groundAt = (x, z) => {
+      const l = gh.get(`${Math.floor(x / GC)},${Math.floor(z / GC)}`);
+      if (!l) return null;
+      let best = null;
+      for (const [A, B, C] of l) {
+        const d = (B.z - C.z) * (A.x - C.x) + (C.x - B.x) * (A.z - C.z);
+        if (Math.abs(d) < 1e-9) continue;
+        const w0 = ((B.z - C.z) * (x - C.x) + (C.x - B.x) * (z - C.z)) / d;
+        const w1 = ((C.z - A.z) * (x - C.x) + (A.x - C.x) * (z - C.z)) / d;
+        const w2 = 1 - w0 - w1;
+        if (w0 < -1e-6 || w1 < -1e-6 || w2 < -1e-6) continue;
+        const y = w0 * A.y + w1 * B.y + w2 * C.y;
+        if (best === null || y > best) best = y;
+      }
+      return best;
+    };
+    let gBuried = 0, gWorst = 0, gTotal = 0;
+    for (const rib of scene.surface.ribbons.values()) {
+      for (const st of rib.stations) {
+        for (const q of st.row.pts) {
+          const p = q.world || q.p;
+          gTotal++;
+          const gy = groundAt(p.x, p.z);
+          if (gy === null) continue;
+          const over = gy - p.y;
+          if (over > 0.12) { gBuried++; gWorst = Math.max(gWorst, over); }
+        }
+      }
+    }
+    let plateUnder = 0, plateTotal = 0;
+    for (const info of scene.surface.junctions.values()) {
+      for (let a = 0; a < 12; a++) {
+        for (const f of [0.3, 0.6, 0.9]) {
+          const r = info.radius * f;
+          const x = info.centre.x + Math.cos((a / 12) * Math.PI * 2) * r;
+          const z = info.centre.z + Math.sin((a / 12) * Math.PI * 2) * r;
+          plateTotal++;
+          const gy = groundAt(x, z);
+          if (gy !== null && gy > (info.centre.y ?? 0) + 0.05) plateUnder++;
+        }
+      }
+    }
+    check(gBuried === 0, 'terrain never covers the road surface',
+      gBuried ? `${gBuried}/${gTotal} road points under the apron (worst ${gWorst.toFixed(2)} m)` : `${gTotal} road points checked`);
+    check(plateUnder === 0, 'terrain never covers a junction plate', `${plateUnder}/${plateTotal} plate samples buried`);
+  }
+
   // ---- gizmo edit: drag an intersection and make sure the whole junction re-solves cleanly
   const movable = [...scene.net.nodes.values()].filter((n) => n.edges.length >= 3 && !n.locked);
   const target = movable[Math.floor(movable.length / 2)];
