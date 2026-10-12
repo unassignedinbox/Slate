@@ -72,6 +72,25 @@ for (const node of net.nodes) {
   const r = Math.max(1.5, ((node.width || 10) / 2) * scale);
   disc(...px(node), Math.min(9, r), [0.34, 0.34, 0.38], 0.55);
 }
+// Roundabouts get their ring drawn, because the ring is the thing that makes the junction read.
+for (const node of net.nodes) {
+  if (!node.roundabout || !node.roundaboutRadius) continue;
+  const steps = 48;
+  for (let i = 0; i < steps; i++) {
+    const a0 = (i / steps) * Math.PI * 2;
+    const a1 = ((i + 1) / steps) * Math.PI * 2;
+    const outer = node.roundaboutRadius * scale;
+    const inner = node.centreIslandRadius * scale;
+    for (const [r0, r1] of [[outer, inner]]) {
+      const p0 = [px(node)[0] + Math.cos(a0) * r0, px(node)[1] + Math.sin(a0) * r0];
+      const p1 = [px(node)[0] + Math.cos(a1) * r0, px(node)[1] + Math.sin(a1) * r0];
+      line(p0, p1, [1, 1, 1], 0, 0.55);
+      const q0 = [px(node)[0] + Math.cos(a0) * r1, px(node)[1] + Math.sin(a0) * r1];
+      const q1 = [px(node)[0] + Math.cos(a1) * r1, px(node)[1] + Math.sin(a1) * r1];
+      line(q0, q1, [0.5, 0.5, 0.5], 0, 0.4);
+    }
+  }
+}
 let km = 0;
 for (const road of net.roads) {
   const c = colours[road.cls] || [0.8, 0.8, 0.8];
@@ -132,5 +151,7 @@ console.log(`${out}  ${W}x${H}`);
 console.log(`preset ${preset} seed ${seed} extent ${extent} m`);
 console.log(`generate ${(t1 - t0).toFixed(0)} ms`);
 console.log(`roads ${stats.roads}   nodes ${stats.nodes}   road ${(km / 1000).toFixed(1)} km   blocks ${stats.blocks}`);
+const roundabouts = net.nodes.filter((n) => n.roundabout).length;
+console.log(`junctions ${net.nodes.length}   roundabouts ${roundabouts}`);
 console.log(`validation ${report.validation.errors} errors, ${report.validation.warnings} warnings`);
 console.log(`colours: motorway red, trunk orange, arterial yellow, collector lime, local blue, alley indigo, canyon cyan, footway pink, railway grey, subway violet`);

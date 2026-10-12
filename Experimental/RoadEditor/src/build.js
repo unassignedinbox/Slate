@@ -92,6 +92,9 @@ export function buildRoadSurfaces(mb, net, ctx) {
     const isPath = road.cls === 'footway' || road.cls === 'cycleway';
     rowsTotal += road._geoPath.length;
     mb.beginGroup(`${road.cls}:${road.profileId}`, { road: road.id, cls: road.cls, kind: 'road' });
+    // A junction-skin sliver carries the junction surface and nothing else: no kerbs, no footway, no
+    // lane lines. Only the carriageway bands are swept.
+    const skinBands = road.junctionSkin ? new Set(section.lanes.map((l) => l.band)) : null;
     const rows = [];
     const carry = section.carriageway;
     for (let i = 0; i < road._geoPath.length; i++) {
@@ -99,6 +102,7 @@ export function buildRoadSurfaces(mb, net, ctx) {
       rows.push(t);
     }
     for (const ribbon of section.ribbons) {
+      if (skinBands && !skinBands.has(ribbon.band)) continue;
       const a = ribbon.a;
       const b = ribbon.b;
       const face = ribbon.face;
@@ -161,6 +165,27 @@ function strokeSegment(mb, a, b, width, mat, tint = [1, 1, 1]) {
   polylineQuad(mb, { x: a.x, y: a.y, z: a.z }, { x: b.x, y: b.y, z: b.z }, width, mat, tint);
 }
 
+/** A broken stroke: the marking used for give-way and lane-change lines. */
+function strokeDashed(mb, a, b, width, dash, gap, mat, tint = [1, 1, 1]) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 0.1) return;
+  const ux = dx / len;
+  const uy = dy / len;
+  for (let s = 0; s < len; s += dash + gap) {
+    const e = Math.min(len, s + dash);
+    polylineQuad(
+      mb,
+      { x: a.x + ux * s, y: a.y + uy * s, z: a.z },
+      { x: a.x + ux * e, y: a.y + uy * e, z: b.z },
+      width,
+      mat,
+      tint,
+    );
+  }
+}
+
 /** Strokes a list of glyph polylines into a local frame (origin, x-axis, y-axis). */
 function strokeGlyph(mb, strokes, origin, axis, width, mat, tint = [1, 1, 1]) {
   for (const s of strokes) {
@@ -188,7 +213,7 @@ const LINE_STYLE = {
 export function buildRoadMarkings(mb, net, opts = {}) {
   const detail = opts.markingDetail ?? 1;
   for (const road of net.roads) {
-    if (!road._frames) continue;
+    if (!road._frames || road.junctionSkin) continue;
     const section = road._section || sectionOf(road.profile);
     const isPath = road.cls === 'footway' || road.cls === 'cycleway';
     if (isPath) continue;
@@ -361,6 +386,14 @@ export function buildJunctions(mb, net, opts = {}, propOut = []) {
     // Find the node's own surface height from its arms.
     const zAvg = entry.reduce((s, e) => s + e.pos.z, 0) / entry.length;
     centre.z = zAvg;
+
+    if (node.roundabout && node.roundaboutRadius && entry.length >= 3) {
+      buildRoundabout(mb, node, entry, centre, propOut);
+      node._built = { entry, centre };
+      mb.endGroup();
+      built++;
+      continue;
+    }
 
     // --- carriageway polygon: kerb-line points with a fillet between consecutive arms
     const ring = [];
@@ -580,6 +613,139 @@ function buildJunctionMarkings(mb, node, entry, centre, rng) {
 }
 
 /**
+ * A roundabout, drawn as the three things a driver actually reads: a raised centre island with a
+ * kerb on it, a circulating carriageway around that kerb, and a splitter island in the gap between
+ * every neighbouring pair of approach arms. The splitter islands are what make the picture read as
+ * a roundabout rather than as a plaza — a leg coming in sees kerb on its right and on its left.
+ *
+ * The circulating carriageway is lifted a centimetre and a half above the junction plane. The arms
+ * are cut at its outer edge, so their asphalt and the ring's overlap around each mouth; without the
+ * lift the two surfaces are coplanar and fight for the same pixels.
+ */
+function buildRoundabout(mb, node, entry, centre, propOut) {
+  const outerR = node.roundaboutRadius;
+  const islandR = node.centreIslandRadius;
+  const kerbH = 0.14;
+  const z = centre.z + 0.015;
+  const N = { x: 0, y: 0, z: 1 };
+  const TAU = Math.PI * 2;
+  const seg = clamp(Math.round(outerR * 2.6), 40, 120);
+  const at = (a, r, zz) => ({ x: centre.x + Math.cos(a) * r, y: centre.y + Math.sin(a) * r, z: zz });
+  const tint = [0.96, 0.96, 0.97];
+
+  // --- circulating carriageway
+  for (let i = 0; i < seg; i++) {
+    const a0 = (i / seg) * TAU;
+    const a1 = ((i + 1) / seg) * TAU;
+    const p0 = at(a0, islandR, z);
+    const p1 = at(a0, outerR, z);
+    const p2 = at(a1, islandR, z);
+    const p3 = at(a1, outerR, z);
+    const v0 = mb.vertex(p0, N, tintOf(tint, p0.x, p0.y, 0.05), MAT.ASPHALT);
+    const v1 = mb.vertex(p1, N, tintOf(tint, p1.x, p1.y, 0.05), MAT.ASPHALT);
+    const v2 = mb.vertex(p2, N, tintOf(tint, p2.x, p2.y, 0.05), MAT.ASPHALT);
+    const v3 = mb.vertex(p3, N, tintOf(tint, p3.x, p3.y, 0.05), MAT.ASPHALT);
+    if (islandR > 0.2) mb.quadIdx(v0, v2, v1, v3, true);
+    else mb.tri(v0, v2, v1);
+  }
+
+  // --- centre island: kerb upstand on the outside, paved top inside
+  if (islandR > 0.5) {
+    const top = [];
+    for (let i = 0; i < seg; i++) {
+      const a = (i / seg) * TAU;
+      const p = at(a, islandR, z + kerbH);
+      top.push(mb.vertex(p, N, tintOf([1, 1, 1], p.x, p.y, 0.04), MAT.CONCRETE));
+      const b = at(a, islandR, z);
+      const bNext = at((i + 1) / seg * TAU, islandR, z);
+      const tNext = at((i + 1) / seg * TAU, islandR, z + kerbH);
+      const out = norm2({ x: Math.cos(a), y: Math.sin(a) });
+      const k0 = mb.vertex(p, out, [1, 1, 1], MAT.CONCRETE);
+      const k1 = mb.vertex(b, out, [1, 1, 1], MAT.CONCRETE);
+      const k2 = mb.vertex(tNext, out, [1, 1, 1], MAT.CONCRETE);
+      const k3 = mb.vertex(bNext, out, [1, 1, 1], MAT.CONCRETE);
+      mb.quadIdx(k0, k1, k2, k3, true);
+    }
+    const cTop = mb.vertex({ x: centre.x, y: centre.y, z: z + kerbH }, N, [1, 1, 1], MAT.CONCRETE);
+    for (let i = 0; i < top.length; i++) mb.tri(cTop, top[i], top[(i + 1) % top.length]);
+  }
+
+  // --- splitter island between each neighbouring pair of arms
+  const islands = [];
+  for (let i = 0; i < entry.length; i++) {
+    const cur = entry[i];
+    const next = entry[(i + 1) % entry.length];
+    const a0 = Math.atan2(cur.kerb.a.y - centre.y, cur.kerb.a.x - centre.x);
+    let a1 = Math.atan2(next.kerb.b.y - centre.y, next.kerb.b.x - centre.x);
+    // Take the short way round: the long way is the rest of the roundabout.
+    let sweep = a1 - a0;
+    while (sweep <= -Math.PI) sweep += TAU;
+    while (sweep > Math.PI) sweep -= TAU;
+    if (Math.abs(sweep) < 0.12) continue;
+    const nose = clamp(outerR * 0.5, 4, 11);
+    const steps = Math.max(3, Math.ceil((Math.abs(sweep) * outerR) / 2.2));
+    const walkMat = cur.section.walkBands.length ? cur.section.walkBands[0].mat : MAT.CONCRETE;
+    const inner = [];
+    const outerArc = [];
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps;
+      const a = a0 + sweep * t;
+      const bulge = Math.pow(Math.sin(Math.PI * t), 1.35) * nose;
+      inner.push(at(a, outerR, z + kerbH));
+      outerArc.push(at(a, outerR + bulge, z + kerbH));
+    }
+    // Paved top: the band between the ring edge and the bulging outer edge.
+    for (let k = 0; k < steps; k++) {
+      const p0 = inner[k];
+      const p1 = outerArc[k];
+      const p2 = inner[k + 1];
+      const p3 = outerArc[k + 1];
+      const v0 = mb.vertex(p0, N, tintOf([1, 1, 1], p0.x, p0.y, 0.06), walkMat);
+      const v1 = mb.vertex(p1, N, tintOf([1, 1, 1], p1.x, p1.y, 0.06), walkMat);
+      const v2 = mb.vertex(p2, N, tintOf([1, 1, 1], p2.x, p2.y, 0.06), walkMat);
+      const v3 = mb.vertex(p3, N, tintOf([1, 1, 1], p3.x, p3.y, 0.06), walkMat);
+      mb.quadIdx(v0, v1, v2, v3);
+    }
+    // Kerb upstand along the ring edge of the island, and along both sides facing the mouths.
+    for (let k = 0; k < steps; k++) {
+      const a = a0 + sweep * ((k + 0.5) / steps);
+      const out = norm2({ x: Math.cos(a), y: Math.sin(a) });
+      const p0 = inner[k];
+      const p1 = inner[k + 1];
+      const f0 = mb.vertex(p0, { x: -out.x, y: -out.y, z: 0 }, [1, 1, 1], MAT.CONCRETE);
+      const f1 = mb.vertex({ x: p0.x, y: p0.y, z: z }, { x: -out.x, y: -out.y, z: 0 }, [1, 1, 1], MAT.CONCRETE);
+      const f2 = mb.vertex(p1, { x: -out.x, y: -out.y, z: 0 }, [1, 1, 1], MAT.CONCRETE);
+      const f3 = mb.vertex({ x: p1.x, y: p1.y, z: z }, { x: -out.x, y: -out.y, z: 0 }, [1, 1, 1], MAT.CONCRETE);
+      mb.quadIdx(f0, f1, f2, f3, true);
+    }
+    const sideFace = (p, q, sign) => {
+      const dir = norm2({ x: q.x - p.x, y: q.y - p.y });
+      const nrm = norm2({ x: -dir.y * sign, y: dir.x * sign });
+      const s0 = mb.vertex(p, nrm, [1, 1, 1], MAT.CONCRETE);
+      const s1 = mb.vertex({ x: p.x, y: p.y, z: z }, nrm, [1, 1, 1], MAT.CONCRETE);
+      const s2 = mb.vertex(q, nrm, [1, 1, 1], MAT.CONCRETE);
+      const s3 = mb.vertex({ x: q.x, y: q.y, z: z }, nrm, [1, 1, 1], MAT.CONCRETE);
+      mb.quadIdx(s0, s1, s2, s3, true);
+    };
+    if (outerArc.length > 1) {
+      sideFace(inner[0], outerArc[0], 1);
+      sideFace(outerArc[outerArc.length - 1], inner[inner.length - 1], 1);
+    }
+    // Give-way line across the entry the island guards: one dashed line per entry, which is the
+    // marking a driver is looking for when they reach the roundabout.
+    const mouth = at(a0, outerR * 0.94, z + 0.005);
+    const dir = norm2({ x: mouth.x - centre.x, y: mouth.y - centre.y });
+    strokeDashed(mb, { x: mouth.x - (-dir.y) * cur.width * 0.45, y: mouth.y - dir.x * cur.width * 0.45, z: mouth.z },
+      { x: mouth.x + -dir.y * cur.width * 0.45, y: mouth.y + dir.x * cur.width * 0.45, z: mouth.z }, 0.34, 0.55, 0.5, MAT.MARK_WHITE);
+    const mid = a0 + sweep * 0.5;
+    const noseP = at(mid, outerR + nose * 0.35 + 0.4, z + kerbH);
+    islands.push({ x: noseP.x, y: noseP.y, z: noseP.z, angle: mid });
+  }
+  node._islands = islands;
+  for (const isl of islands) propOut.push({ kind: 'keepright', x: isl.x, y: isl.y, z: isl.z + 0.02, rot: isl.angle, scale: 1 });
+}
+
+/**
  * Street furniture that belongs to the junction rather than to a road: signal heads on the approach
  * kerbs, and a keep-right bollard on the nose of a roundabout island.
  */
@@ -602,10 +768,7 @@ function buildJunctionProps(node, entry, centre, rng, out) {
       }
     }
   }
-  if (node.roundabout && node.centreIslandRadius) {
-    const r = node.centreIslandRadius;
-    out.push({ kind: 'keepright', x: centre.x - r - 1.2, y: centre.y, z: centre.z + 0.05, rot: 0, scale: 1 });
-  }
+  // Roundabout islands place their own keep-right bollards in buildRoundabout.
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -620,7 +783,7 @@ export function buildPropInstances(net, opts = {}) {
   const out = [];
   const lampSpacing = { motorway: 52, trunk: 44, arterial: 38, collector: 34, local: 30 };
   for (const road of net.roads) {
-    if (!road._frames) continue;
+    if (!road._frames || road.junctionSkin) continue;
     const section = road._section || sectionOf(road.profile);
     const total = road.length;
     for (const prop of section.props) {

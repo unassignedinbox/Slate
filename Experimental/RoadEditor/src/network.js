@@ -728,9 +728,17 @@ export function stitchEnds(net, requests = [], opts = {}) {
 //--------------------------------------------------------------------------------------------------
 //  Node creation: cluster requests spatially, merge the arms and emit JunctionNode records.
 //--------------------------------------------------------------------------------------------------
-export function createNodes(net, requests) {
+export function createNodes(net, requests, opts = {}) {
   const grid = new SegmentGrid(24);
   const nodes = [];
+  // Two crossing requests become one junction only when they really are one junction: the merge
+  // radius is the width of the carriageways involved plus a little room for the kerb returns, not
+  // the width of the widest street times one and a half. A generous radius swallowed every
+  // crossing in a dense district and produced junctions with twenty arms, each arm a ten-metre
+  // stub of a street that had been cut three times in the same spot. Requests that stay separate
+  // get their own junction, and the short edge dissolution pass merges the pair properly if the
+  // sliver between them turns out to be junction surface rather than street.
+  const maxArms = opts.maxMergeArms ?? 8;
   for (const req of requests) {
     if (!req || req.arms.length < 2) continue;
     // A grade-separated crossing is not a junction. If it were made into one it would trim both
@@ -738,11 +746,14 @@ export function createNodes(net, requests) {
     // and, on screen, two roads merging into a ramp that goes nowhere.
     if (req.gradeSep) continue;
     let host = null;
+    const armHalf = Math.max(...req.arms.map((a) => a.road.halfWidth));
     grid.query(req.point.x - 40, req.point.y - 40, req.point.x + 40, req.point.y + 40, (n) => {
       if (host || n.gradeSep || req.gradeSep) return;
-      const armHalf = Math.max(...req.arms.map((a) => a.road.halfWidth));
-      const mergeR = Math.max(5, armHalf + n._halfW * 0.6);
-      if (dist2(n, req.point) < mergeR) host = n;
+      const mergeR = clamp(3 + (armHalf + n._halfW) * 0.4, 5, opts.mergeReach ?? 15);
+      if (dist2(n, req.point) > mergeR) return;
+      const fresh = req.arms.filter((a) => !n.arms.some((b) => b.roadId === a.road.id && b.which === a.which)).length;
+      if (n.arms.length + fresh > maxArms) return;
+      host = n;
     });
     let node = host;
     if (!node) {
@@ -759,6 +770,12 @@ export function createNodes(net, requests) {
       node.arms.push({ roadId: arm.road.id, which: arm.which, road: arm.road });
     }
     node._n++;
+  }
+  if (globalThis.__RENODES) {
+    const big = nodes.filter((n) => n.arms.length >= 8).map((n) => [n.id, n.arms.length, +n.x.toFixed(0), +n.y.toFixed(0)]);
+    console.error('NODES: requests', requests.length, 'nodes', nodes.length, 'with 8+ arms', big.length, big.slice(0, 12));
+    const reqBig = requests.filter((r) => r.arms.length >= 8).map((r) => [r.kind, r.arms.length, +r.point.x.toFixed(0), +r.point.y.toFixed(0), r.arms.map((a) => a.road.cls).join('/')]);
+    console.error('NODES: fat requests', reqBig.length, reqBig.slice(0, 8));
   }
   net.nodes.push(...nodes);
   return nodes;
@@ -797,25 +814,88 @@ export function dissolveShortEdges(net, opts = {}) {
     }
     return r;
   };
+  // A group of collapsed nodes keeps one arm per street that still arrives at it, so the number of
+  // arms a group will have is known before the group is formed. Junctions with more arms than a
+  // driver can read are worse than a short street between two junctions, so a merge that would
+  // push a group past `maxArms` is refused and the short road stays where it is.
+  const armKey = (a) => `${a.roadId}|${a.which}`;
+  const maxArms = opts.maxArms ?? 10;
+  const maxStreets = opts.maxStreets ?? 5;
+  // What a driver has to read at a junction is the number of *streets*, not the number of arms: a
+  // four-way crossing has eight arms and one decision each. So a group is measured in streets, and
+  // two arms that leave the node in opposite directions are the same street passing through.
+  const armAngle = (node, arm) => {
+    const o = arm.outward || armOutward(arm, node);
+    return Math.atan2(o.y, o.x);
+  };
+  const streetCount = (angles) => {
+    const used = new Array(angles.length).fill(false);
+    let count = 0;
+    for (let i = 0; i < angles.length; i++) {
+      if (used[i]) continue;
+      used[i] = true;
+      count++;
+      for (let j = i + 1; j < angles.length; j++) {
+        if (used[j]) continue;
+        let d = Math.abs(angles[j] - angles[i]);
+        if (d > Math.PI) d = Math.PI * 2 - d;
+        if (Math.abs(d - Math.PI) < 0.6) {
+          used[j] = true;
+          break;
+        }
+      }
+    }
+    return count;
+  };
+  const groupArms = new Map();
+  const groupKeys = new Map();
+  for (const n of nodes) {
+    groupKeys.set(n, new Set((n.arms || []).map(armKey)));
+    groupArms.set(n, (n.arms || []).map((a) => armAngle(n, a)));
+  }
   const union = (a, b) => {
     const ra = find(a);
     const rb = find(b);
-    if (ra !== rb) parent.set(rb, ra);
+    if (ra === rb) return false;
+    const ka = groupKeys.get(ra);
+    const kb = groupKeys.get(rb);
+    const mergedKeys = new Set(ka);
+    for (const k of kb) mergedKeys.add(k);
+    const mergedAngles = groupArms.get(ra).concat(groupArms.get(rb));
+    if (mergedKeys.size > maxArms || streetCount(mergedAngles) > maxStreets) return false;
+    parent.set(rb, ra);
+    groupKeys.set(ra, mergedKeys);
+    groupArms.set(ra, mergedAngles);
+    groupKeys.delete(rb);
+    groupArms.delete(rb);
+    return true;
   };
 
   let collapsed = 0;
+  let refused = 0;
   const removed = new Set();
   for (const road of net.roads) {
     if (road.closedLoop || !road.startNode || !road.endNode) continue;
     if (road.startNode === road.endNode) continue;
-    const realDeck = (road.bridges || []).some((b) => b.s1 - b.s0 > 10);
+    // A span longer than ten metres is a real bridge deck — the road is carrying traffic over
+    // something, so it is not junction surface however short it is. The span has to fit inside the
+    // road to count: after a split, the span lists still carry the whole original deck.
+    const realDeck = (road.bridges || []).some((b) => b.s1 - b.s0 > 10 && b.s1 - b.s0 <= road.length * 1.2);
     if (realDeck) continue;
     if (road.gradeSep) continue;
     if (road.length > maxLen) continue;
     // Two junctions closer than the threshold are one junction, however far apart the terrain has
     // left them: a twelve-metre street with four metres of fall in it is not a street.
     if (road.length > 8 && Math.abs(road.startNode.z - road.endNode.z) > 2.5) continue;
-    union(road.startNode, road.endNode);
+    if (!union(road.startNode, road.endNode)) {
+      refused++;
+      // The arm cap refused this merge, so two junctions stay a few metres apart with a sliver of
+      // asphalt between them. That sliver is not a street — it is the junction surface the two
+      // polygons leave uncovered — so it is drawn as carriageway and nothing else, and it is not
+      // reported as a street that is too short to exist.
+      if (opts.junctionSkin && road.length <= (opts.skinLength ?? 6)) road.junctionSkin = true;
+      continue;
+    }
     removed.add(road);
     collapsed++;
   }
@@ -835,7 +915,6 @@ export function dissolveShortEdges(net, opts = {}) {
 
   // Rebuild the surviving nodes with the union of the group's arms.
   const survivors = [];
-  const armKey = (a) => `${a.roadId}|${a.which}`;
   for (const [r, list] of groups) {
     const keep = rep.get(r);
     const arms = [];
@@ -966,8 +1045,12 @@ export function dissolveShortEdges(net, opts = {}) {
     }
     node.arms.sort((a, b) => a.angle - b.angle);
   }
+  if (globalThis.__RENODES) {
+    const hist = net.nodes.reduce((a, n) => ((a[n.arms.length] = (a[n.arms.length] || 0) + 1), a), {});
+    console.error('DISSOLVE: collapsed', collapsed, 'refused', refused, 'debris', debris, 'arms', JSON.stringify(hist));
+  }
   net.nodes = net.nodes.filter((n) => n.arms.length >= 1);
-  return { collapsed, dissolved, debris, nodes: net.nodes.length, roads: net.roads.length };
+  return { collapsed, refused, dissolved, debris, skin: net.roads.filter((r) => r.junctionSkin).length, nodes: net.nodes.length, roads: net.roads.length };
 }
 
 /** Unit vector of an arm pointing away from the node along the road. */
@@ -1075,20 +1158,64 @@ export function planGrade(net, terrain) {
  * 20 % ramps that no carriageway would ever be built with. The limit is applied as a forward and
  * backward sweep so the fix stays local.
  */
-export function limitGrade(road, maxGrade = 0.11) {
+export function limitGrade(road, maxGrade = 0.11, opts = {}) {
   const path = road.path;
+  if (path.length === 2) {
+    // A two-point road is a single segment, and the gradient limiter used to walk straight past it:
+    // the road kept whatever the terrain gave it, which on a cliff face is a wall rather than a
+    // street. One of the two ends has to give, and it is the one no junction is holding.
+    const dl = Math.hypot(path[1].x - path[0].x, path[1].y - path[0].y);
+    if (dl < 0.3) {
+      path[1].z = path[0].z;
+      return;
+    }
+    const max = maxGrade * dl;
+    const dz = path[1].z - path[0].z;
+    if (Math.abs(dz) <= max) return;
+    const heldA = !!road.startNode;
+    const heldB = !!road.endNode;
+    if (heldA && heldB) return;
+    if (heldA) path[1].z = path[0].z + Math.sign(dz) * max;
+    else path[0].z = path[1].z - Math.sign(dz) * max;
+    return;
+  }
   if (path.length < 3) return;
+  // Pinned ends: the two ends of a road are set by the junctions they land on, so the limiter is
+  // allowed to reshape the profile between them but not to move the ends themselves. Without this
+  // the last call in the relaxation walks the ends straight back off their junctions. The backward
+  // sweep starts two points from the end either way, because it reads its neighbour ahead of it.
+  const last = path.length - 2;
   const onStructure = (i) => road.bridges.some((b) => {
     const s = arcLengthIndex(path, i);
     return s > b.s0 - 4 && s < b.s1 + 4;
   });
-  for (const dir of [1, -1]) {
-    const start = dir === 1 ? 1 : path.length - 2;
+  const sweeps = Math.max(1, opts.sweeps ?? 1);
+  // The sweeps alternate, and the sweep that runs last has the final word on the profile: ending on
+  // a forward sweep means the residual steep segment, when the street is too short to hold the grade
+  // at all, sits at the far end from the junction rather than right on the junction mouth.
+  const dirs = [];
+  for (let sweep = 0; sweep < sweeps; sweep++) dirs.push(1, -1);
+  if (opts.pinEnds) dirs.push(1);
+  for (const dir of dirs) {
+    const start = dir === 1 ? 1 : last;
     const end = dir === 1 ? path.length : -1;
     for (let i = start; i !== end; i += dir) {
+      if (opts.pinEnds && (i === 0 || i === path.length - 1)) {
+        // A pinned end with a neighbour on top of it: the pair is shorter than a kerb stone, so the
+        // neighbour takes the end's height instead of leaving a vertical sliver of asphalt.
+        const nb = path[i === 0 ? 1 : path.length - 2];
+        if (nb && Math.hypot(path[i].x - nb.x, path[i].y - nb.y) < 0.3) nb.z = path[i].z;
+        continue;
+      }
       if (onStructure(i)) continue;
       const prev = path[i - dir];
-      const dl = Math.hypot(path[i].x - prev.x, path[i].y - prev.y) || 1e-6;
+      const dl = Math.hypot(path[i].x - prev.x, path[i].y - prev.y);
+      // A duplicated control point has no length in plan, so it has no gradient either; it takes its
+      // neighbour's height rather than leaving a vertical jog in the profile.
+      if (dl < 0.3) {
+        path[i].z = prev.z;
+        continue;
+      }
       const max = maxGrade * dl;
       const dz = path[i].z - prev.z;
       if (Math.abs(dz) > max) path[i].z = prev.z + Math.sign(dz) * max;
@@ -1134,7 +1261,7 @@ export function arcLengthIndex(path, i) {
 //--------------------------------------------------------------------------------------------------
 //  Pass 6 — junctions
 //--------------------------------------------------------------------------------------------------
-export function buildJunctions(net) {
+export function buildJunctions(net, opts = {}) {
   for (const node of net.nodes) {
     const arms = node.arms
       .map((a) => {
@@ -1162,36 +1289,70 @@ export function buildJunctions(net) {
       node.kind = 'dead-end';
       continue;
     }
-    node.kind = arms.length === 2 ? 'tee' : arms.length === 3 ? 'tee' : arms.length === 4 ? 'cross' : 'multi';
+    node.kind = arms.length === 2 ? 'bend' : arms.length === 3 ? 'tee' : arms.length === 4 ? 'cross' : 'multi';
     const fillet = clamp(4 + arms.reduce((s, a) => s + a.halfWidth, 0) / arms.length, 4, 15);
     node.fillet = fillet;
+
+    // Five or more arms meeting at one point is not a junction a driver can read — it is a hub,
+    // and the plan has one wherever radial arterials converge. Nine arms of stop lines would be
+    // both unbuildable and unreadable, so a hub becomes a roundabout: every approach is then a
+    // single give-way movement, the circulating carriageway does the sorting out, and the junction
+    // gets one shared plane instead of one grade per pair of arms. Freeway-class roads never join
+    // one — a trunk or motorway arm meeting that many streets means the plan is wrong elsewhere,
+    // not that the roundabout needs to be bigger.
+    const widest = arms.reduce((m, a) => Math.max(m, a.halfWidth), 0);
+    const freewayArm = arms.some((a) => a.road.family >= 5);
+    if (opts.roundabouts !== false && !node.roundabout && !node.gradeSep && arms.length >= 5 && !freewayArm) {
+      const ring = clamp(Math.max(widest * 0.85, 6.5) + arms.length * 1.1 + 2.5, 9, 26);
+      node.roundabout = true;
+      node.roundaboutRadius = ring;
+      node.centreIslandRadius = Math.max(3, ring - (widest > 7 ? 7.4 : 4.8));
+    }
+
     let maxCut = 0;
     const cuts = {};
     for (const a of arms) {
       let cut = a.halfWidth * 0.9;
-      for (const b of arms) {
-        if (a === b) continue;
-        const d = deltaAngle(a.angle, b.angle);
-        const sin = Math.max(0.34, Math.sin(d));
-        cut = Math.max(cut, (b.halfWidth + 0.6) / sin);
+      if (node.roundabout) {
+        // Every arm stops at the circulating carriageway; the ring owns the space in between.
+        cut = Math.max(node.roundaboutRadius, a.halfWidth * 1.1);
+      } else {
+        // How far back an arm has to be cut is set by where its kerb line stops crossing another
+        // arm's carriageway. Two arms pointing the same way fork off and constrain each other; two
+        // arms pointing opposite ways are the two halves of one street, where the far carriageway's
+        // kerb is simply the continuing kerb, and demanding clearance from it drove the cut out to
+        // fifty metres and the junction to a hundred. Shallow angles still need a long cut — that is
+        // real, a street crossing at twenty degrees occupies a lot of kerb — so the sine is only
+        // floored, never discarded.
+        for (const b of arms) {
+          if (a === b) continue;
+          const d = deltaAngle(a.angle, b.angle);
+          if (d > Math.PI * 0.62) continue;
+          const sin = Math.max(0.5, Math.sin(d));
+          cut = Math.max(cut, (b.halfWidth + Math.max(0, 0.5 * a.halfWidth * Math.cos(d))) / sin);
+        }
+        cut = Math.min(cut, 34) + fillet * 0.4;
       }
-      cut = Math.min(cut, 44) + fillet * 0.5;
       cuts[a.roadId] = cut;
       maxCut = Math.max(maxCut, cut);
     }
-    node.width = maxCut * 2;
+    node.width = node.roundabout ? (node.roundaboutRadius + 3) * 2 : maxCut * 2;
     node.trim = cuts;
     let zsum = 0;
     for (const a of arms) zsum += a.which === 'a' ? a.road.path[0].z : a.road.path[a.road.path.length - 1].z;
     node.z = zsum / arms.length;
 
+    // Control type follows what the junction has to do, not how many lanes pass through it: two
+    // arms are a bend or a level crossing and need nothing, four arms of arterials need signals,
+    // and a lone arterial crossing a street yields. Counting total lanes signalled half the city.
+    const arterials = arms.filter((a) => a.road.family === 4).length;
     const totalLanes = arms.reduce((s, a) => s + a.lanes, 0);
-    const majorArms = arms.filter((a) => a.road.family >= 4).length;
     if (node.roundabout) node.control = 'roundabout';
-    else if (majorArms >= 2 || totalLanes >= 10) node.control = 'signal';
-    else if (arms.some((a) => a.road.family >= 5)) node.control = 'priority';
-    else if (totalLanes <= 4) node.control = 'none';
-    else node.control = 'yield';
+    else if (arms.length === 2) node.control = 'none';
+    else if (arterials >= 2 || (arterials >= 1 && totalLanes >= 20) || (arms.length >= 4 && totalLanes >= 26)) node.control = 'signal';
+    else if (freewayArm) node.control = 'priority';
+    else if (totalLanes >= 10) node.control = 'yield';
+    else node.control = 'none';
   }
   // Trimming happens after every cut distance is known so no arm is cut twice.
   for (const node of net.nodes) {
@@ -1282,7 +1443,13 @@ export function relaxNodes(net, opts = {}) {
   // A street shorter than its own approach ramps cannot have two different heights at its ends: no
   // carriageway rises six metres over forty of them. Its two junctions are averaged together, and
   // that passes on along the chain of short streets until every cluster sits at one level.
-  for (let pass = 0; pass < 6; pass++) {
+  // Averaging is a diffusion: each sweep only moves a junction halfway toward its neighbours, so a
+  // cluster of short streets needs about as many sweeps as it is junctions across. Six was enough
+  // for a pair and nowhere near enough for a block: junctions two streets apart were still half a
+  // metre apart, which over a two-metre street is a twenty per cent grade. A hundred sweeps over
+  // two thousand roads costs a few milliseconds and settles the whole city to a level.
+  const chainPasses = opts.chainPasses ?? 96;
+  for (let pass = 0; pass < chainPasses; pass++) {
     let changed = 0;
     for (const road of net.roads) {
       if (road.closedLoop || !road.startNode || !road.endNode) continue;
@@ -1365,7 +1532,22 @@ export function relaxNodes(net, opts = {}) {
     }
     for (const road of net.roads) limitGrade(road, 0.14);
   }
-  for (const road of net.roads) limitGrade(road, 0.14);
+  // Last word: every arm end sits on its junction, and the limiter is allowed to smooth the street
+  // behind it but not to lift the end off the junction again.
+  for (const node of net.nodes) {
+    const target = targets.get(node);
+    if (target === undefined || !node.arms) continue;
+    for (const arm of node.arms) {
+      const road = arm.road;
+      if (!road || road.closedLoop || road.path.length < 2) continue;
+      const end = arm.which === 'a' ? road.path[0] : road.path[road.path.length - 1];
+      end.z = target;
+    }
+  }
+  // Repeated sweeps, because one pass only moves each excess to the next pair of points: with the
+  // ends pinned, the profile has to walk the excess along the street until it is spread thin, and a
+  // single sweep leaves a cliff wherever the fix landed. Eight sweeps is where it stops changing.
+  for (const road of net.roads) limitGrade(road, 0.14, { pinEnds: true, sweeps: 8 });
   return net;
 }
 
@@ -1440,7 +1622,9 @@ export function validateNetwork(net) {
   const minRadius = { motorway: 220, trunk: 150, arterial: 90, collector: 55, local: 18, rural: 110, canyon: 24 };
   for (const r of net.roads) {
     if (r.length < 6) {
-      push('error', 'SHORT_ROAD', `${r.cls} segment is only ${r.length.toFixed(1)} m long`, { roadId: r.id, x: r.path[0].x, y: r.path[0].y });
+      // A sliver of junction surface between two junctions is expected geometry; anything else this
+      // short is a street that should not exist.
+      push(r.junctionSkin ? 'info' : 'error', 'SHORT_ROAD', `${r.cls} segment is only ${r.length.toFixed(1)} m long`, { roadId: r.id, x: r.path[0].x, y: r.path[0].y });
       continue;
     }
     const floorR = minRadius[r.cls];
@@ -1488,8 +1672,8 @@ export function validateNetwork(net) {
     if (isPath) push('info', 'PATH_ONLY', `${r.cls} carries no motor traffic`, { roadId: r.id, x: r.path[0].x, y: r.path[0].y });
     for (let i = 1; i < r.path.length; i++) {
       const dh = r.path[i].z - r.path[i - 1].z;
-      const dl = dist2(r.path[i], r.path[i - 1]) || 1e-6;
-      if (Math.abs(dh / dl) > 0.15) {
+      const dl = dist2(r.path[i], r.path[i - 1]);
+      if (dl > 0.3 && Math.abs(dh / dl) > 0.15) {
         push('warn', 'STEEP_GRADE', `${(Math.abs(dh / dl) * 100).toFixed(0)} % grade on ${r.cls}`, { roadId: r.id, x: r.path[i].x, y: r.path[i].y });
         break;
       }
@@ -1513,7 +1697,12 @@ export function validateNetwork(net) {
   }
   const errs = issues.filter((i) => i.sev === 'error').length;
   const warns = issues.filter((i) => i.sev === 'warn').length;
-  return { issues: issues.slice(0, 400), errors: errs, warnings: warns, info: issues.length - errs - warns, clean: errs === 0 };
+  // The panel shows the first four hundred issues, so the list is ordered by what the reader has to
+  // act on rather than by the order the roads happen to be stored in: a hundred informational notes
+  // about footways must not push the junctions that clash out of the report.
+  const rank = { error: 0, warn: 1, info: 2 };
+  const ordered = issues.slice().sort((a, b) => rank[a.sev] - rank[b.sev]);
+  return { issues: ordered.slice(0, 400), errors: errs, warnings: warns, info: issues.length - errs - warns, clean: errs === 0 };
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1551,15 +1740,20 @@ export function buildNetwork(net, opts = {}) {
   const t3 = now();
   const stitched = stitchEnds(net, attachReqs.concat(crossReqs), opts.stitch || {});
   const t4 = now();
-  createNodes(net, stitched.requests);
+  createNodes(net, stitched.requests, opts.nodes || {});
   report.topology = dissolveShortEdges(net, opts.topology || {});
   trace('topology');
   planGrade(net, net.terrain);
   const t5 = now();
-  buildJunctions(net);
+  buildJunctions(net, opts.junctions || {});
   // Trimming shortens every arm, which can leave a few metres of road between two junctions that
   // were already close. Those slivers are junction surface, not street, so they are dissolved here.
-  report.topologyAfterTrim = dissolveShortEdges(net, { collapseLength: opts.topology?.collapseLength ?? 13, dissolveTurn: opts.topology?.dissolveTurn ?? 0.3, debrisLength: 4 });
+  report.topologyAfterTrim = dissolveShortEdges(net, {
+    collapseLength: opts.topology?.collapseLength ?? 13,
+    dissolveTurn: opts.topology?.dissolveTurn ?? 0.3,
+    debrisLength: opts.topology?.debrisLengthSecond ?? 6,
+    junctionSkin: true,
+  });
   trace('topology2');
   // Heights are settled last, on the trimmed arms: a junction has to read as one level, and only
   // after trimming is the arm end the point that actually meets it.
