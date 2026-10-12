@@ -39,6 +39,10 @@ clone. Only `three` is needed at runtime.
 | `P` `R` `C` `M` `H` `B` | pause · restart · camera · mute · HUD · bloom |
 | gamepad | supported (left stick, triggers, A/B) |
 
+![The bollard zipper](docs/zipper.png)
+![A maglev consist crossing the deck](docs/maglev.png)
+![The Y-fork crane yard](docs/crane-yfork.png)
+
 ## The four dynamic elements
 
 1. **Bollard zipper** — an entire avenue of bollards rises in a travelling wave
