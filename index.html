@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Slate — Road Editor</title>
+<meta name="description" content="Procedural road-network authoring: curbs, boulevards, cycle lanes, bus lanes, tram grooves, level crossings and an underground, baked to clean topology in a worker." />
+<style>
+    /* The boot veil: the first paint has to wait for a second of solving, and a black box reads as broken. */
+    html, body { margin: 0; height: 100%; background: #0b0c0d; color: #d8dde2; font: 12px/1.5 "Inter", "Segoe UI", system-ui, sans-serif; }
+    #boot { position: fixed; inset: 0; display: grid; place-content: center; gap: 10px; justify-items: center; letter-spacing: .11em; text-transform: uppercase; font-size: 10.5px; color: #8b949e; }
+    #boot i { display: block; width: 120px; height: 2px; background: #23272c; position: relative; overflow: hidden; }
+    #boot i::after { content: ""; position: absolute; inset: 0; width: 40%; background: #4fd8e0; animation: slide 1.1s ease-in-out infinite; }
+    @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+</style>
+</head>
+<body>
+<div id="app"><div id="boot">solving the network<i></i></div></div>
+<script type="module" src="/Editor/RoadEditor/main.js"></script>
+<script>
+    // The veil lifts when the chrome has taken over the host, and never later than the timeout below.
+    addEventListener('load', () => {
+        const kill = () => document.getElementById('boot')?.remove();
+        const obs = new MutationObserver(() => { if (document.querySelector('.re-root .record')) { kill(); obs.disconnect(); } });
+        obs.observe(document.getElementById('app'), { childList: true, subtree: true });
+        setTimeout(kill, 9000);
+    });
+</script>
+</body>
+</html>
