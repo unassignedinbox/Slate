@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>SPINE RUNNER — Neo-Kowloon Spine</title>
+<style>
+  :root{
+    --cyan:#38f2ff; --mag:#ff3ec8; --amber:#ffb42e; --red:#ff3b3b; --lime:#a6ff2e;
+    --ink:#05070d; --panel:rgba(6,10,18,.62); --edge:rgba(56,242,255,.32);
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--ink);color:#dff6ff;font-family:var(--mono);overflow:hidden}
+  canvas{display:block}
+  #app{position:fixed;inset:0}
+  #gl{position:absolute;inset:0;width:100%;height:100%}
+
+  /* ---------- shared panel chrome ---------- */
+  .panel{
+    background:var(--panel); backdrop-filter:blur(9px) saturate(1.2);
+    border:1px solid var(--edge); border-radius:3px;
+    box-shadow:0 0 0 1px rgba(0,0,0,.5), 0 8px 30px rgba(0,0,0,.45), inset 0 0 24px rgba(56,242,255,.05);
+    padding:9px 11px; position:relative;
+  }
+  .panel::before{content:"";position:absolute;left:-1px;top:-1px;width:9px;height:9px;
+    border-left:2px solid var(--cyan);border-top:2px solid var(--cyan)}
+  .panel::after{content:"";position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;
+    border-right:2px solid var(--cyan);border-bottom:2px solid var(--cyan)}
+  .lbl{font-size:9px;letter-spacing:.18em;color:#7fd0e6;text-transform:uppercase;opacity:.9}
+  .big{font-size:24px;font-weight:700;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+  .dim{color:#7fd0e6}
+
+  /* ---------- HUD layout ---------- */
+  #hud{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .4s ease}
+  #hud.on{opacity:1}
+  .corner{position:absolute}
+  #p-tl{top:14px;left:14px;min-width:186px}
+  #p-tr{top:14px;right:14px;min-width:210px}
+  #p-bl{bottom:14px;left:14px;min-width:232px}
+  #p-bc{bottom:14px;left:50%;transform:translateX(-50%);text-align:center;min-width:220px}
+  #p-br{bottom:14px;right:14px;padding:7px}
+
+  .row{display:flex;justify-content:space-between;align-items:baseline;gap:14px}
+  .row+.row{margin-top:3px}
+  .hr{height:1px;background:linear-gradient(90deg,transparent,var(--edge),transparent);margin:7px 0}
+
+  /* meters */
+  .meter{height:7px;border:1px solid rgba(127,208,230,.35);border-radius:2px;
+    background:rgba(0,0,0,.5);overflow:hidden;position:relative}
+  .meter>i{display:block;height:100%;width:0%;transition:width .08s linear}
+  .meter.turbo>i{background:linear-gradient(90deg,#0a84ff,var(--cyan));box-shadow:0 0 12px var(--cyan)}
+  .meter.hull>i{background:linear-gradient(90deg,#7a5200,var(--amber));box-shadow:0 0 12px rgba(255,180,46,.7)}
+  .meter.pulse>i{background:linear-gradient(90deg,#0f6f7a,#7affd8 60%,var(--cyan));box-shadow:0 0 12px #7affd8}
+  .meter.cd>i{background:repeating-linear-gradient(90deg,#ff3ec8 0 6px,rgba(255,62,200,.2) 6px 12px)}
+  .mkeys{display:flex;justify-content:space-between;font-size:9px;letter-spacing:.14em;margin-bottom:2px;color:#7fd0e6}
+
+  #speed{font-size:40px;font-weight:800;line-height:.95;letter-spacing:.02em;
+    font-variant-numeric:tabular-nums;text-shadow:0 0 18px rgba(56,242,255,.55)}
+  #speedBar{height:4px;margin-top:4px;background:rgba(127,208,230,.18);border-radius:2px;overflow:hidden}
+  #speedBar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--mag))}
+
+  /* alerts / banners */
+  #center{position:absolute;left:50%;top:19%;transform:translate(-50%,-50%);text-align:center;
+    pointer-events:none;width:min(760px,86vw)}
+  #banner{font-size:clamp(20px,3.4vw,40px);font-weight:800;letter-spacing:.1em;opacity:0;
+    text-shadow:0 0 26px rgba(56,242,255,.8);transition:opacity .18s ease}
+  #banner.red{color:var(--red);text-shadow:0 0 26px rgba(255,59,59,.85)}
+  #banner.cyan{color:var(--cyan)}
+  #banner.mag{color:var(--mag);text-shadow:0 0 26px rgba(255,62,200,.85)}
+  #banner.amber{color:var(--amber);text-shadow:0 0 26px rgba(255,180,46,.85)}
+  #subbanner{font-size:11px;letter-spacing:.24em;color:#a9e8f6;opacity:0;transition:opacity .18s}
+  #countdown{font-size:clamp(60px,13vw,170px);font-weight:800;color:#fff;opacity:0;
+    text-shadow:0 0 44px rgba(56,242,255,.9);line-height:1}
+
+  /* threat list */
+  #threats{margin-top:0}
+  .threat{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.1em;padding:2px 0;
+    color:#9fdcea;opacity:.62}
+  .threat.active{opacity:1;color:#fff}
+  .threat .dot{width:7px;height:7px;border-radius:50%;background:#2c4a55;flex:0 0 auto}
+  .threat.active .dot{background:var(--lime);box-shadow:0 0 9px var(--lime)}
+  .threat .d{margin-left:auto;font-variant-numeric:tabular-nums;color:#7fd0e6}
+  .threat.t-train.active .dot{background:var(--red);box-shadow:0 0 9px var(--red)}
+  .threat.t-zip.active .dot{background:var(--cyan);box-shadow:0 0 9px var(--cyan)}
+  .threat.t-crane.active .dot{background:var(--mag);box-shadow:0 0 9px var(--mag)}
+
+  /* minimap */
+  #mapWrap{position:relative}
+  #map{display:block;width:236px;height:170px}
+
+  /* ---------- overlays ---------- */
+  .screen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 40%,rgba(8,14,26,.72),rgba(3,5,10,.94));
+    backdrop-filter:blur(3px);z-index:20}
+  .screen.hidden{display:none}
+  .card{width:min(940px,92vw);max-height:92vh;overflow:auto;padding:26px 30px}
+  h1{margin:0;font-size:clamp(30px,5.6vw,62px);letter-spacing:.16em;font-weight:800;
+    background:linear-gradient(92deg,var(--cyan),#fff 45%,var(--mag));-webkit-background-clip:text;
+    background-clip:text;color:transparent;filter:drop-shadow(0 0 22px rgba(56,242,255,.35))}
+  h2{font-size:11px;letter-spacing:.3em;color:var(--cyan);margin:0 0 8px;font-weight:600}
+  p{font-size:12.5px;line-height:1.65;color:#bfe6f2;margin:6px 0}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 6px}
+  button{
+    font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+    padding:11px 20px;color:#eafcff;background:linear-gradient(180deg,rgba(56,242,255,.15),rgba(56,242,255,.04));
+    border:1px solid var(--edge);border-radius:2px;cursor:pointer;pointer-events:auto;
+    transition:all .16s ease}
+  button:hover{background:linear-gradient(180deg,rgba(56,242,255,.34),rgba(56,242,255,.1));
+    box-shadow:0 0 22px rgba(56,242,255,.35);transform:translateY(-1px)}
+  button.primary{border-color:var(--mag);color:#ffe9f8;
+    background:linear-gradient(180deg,rgba(255,62,200,.24),rgba(255,62,200,.06))}
+  button.primary:hover{box-shadow:0 0 26px rgba(255,62,200,.45)}
+  button kbd{font-size:9px;opacity:.6;margin-left:7px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(212px,1fr));gap:11px;margin:14px 0}
+  .el{border:1px solid rgba(56,242,255,.18);border-radius:3px;padding:10px 12px;background:rgba(4,8,16,.5)}
+  .el b{display:block;font-size:11px;letter-spacing:.1em;margin-bottom:5px}
+  .el small{font-size:11px;line-height:1.55;color:#a9d7e4;display:block}
+  .el.zip{border-color:rgba(56,242,255,.5)} .el.zip b{color:var(--cyan)}
+  .el.trn{border-color:rgba(255,59,59,.45)} .el.trn b{color:var(--red)}
+  .el.trf{border-color:rgba(166,255,46,.4)} .el.trf b{color:var(--lime)}
+  .el.crn{border-color:rgba(255,62,200,.45)} .el.crn b{color:var(--mag)}
+  kbd{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-bottom-width:2px;
+    border-radius:3px;padding:1px 5px;font-size:10px;font-family:var(--mono);color:#eafcff}
+  .keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:6px 16px;margin-top:6px}
+  .keys div{font-size:11px;color:#a9d7e4;display:flex;gap:7px;align-items:center}
+  #results .card table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:12px}
+  #results th,#results td{text-align:left;padding:7px 8px;border-bottom:1px solid rgba(56,242,255,.13)}
+  #results th{font-size:9.5px;letter-spacing:.2em;color:#7fd0e6;font-weight:500}
+  #results tr.you td{color:#fff;background:rgba(56,242,255,.1)}
+  .tag{font-size:9px;letter-spacing:.14em;padding:2px 6px;border-radius:2px;border:1px solid currentColor}
+
+  /* showcase caption */
+  #caption{position:absolute;left:50%;bottom:11%;transform:translateX(-50%);width:min(720px,86vw);
+    text-align:center;opacity:0;transition:opacity .35s ease;pointer-events:none}
+  #caption.on{opacity:1}
+  #caption b{display:block;font-size:clamp(15px,2.3vw,25px);letter-spacing:.12em;color:#fff;
+    text-shadow:0 0 20px rgba(56,242,255,.7);margin-bottom:6px}
+  #caption span{font-size:12.5px;line-height:1.6;color:#cfeefb}
+  #caption .k{color:var(--cyan)}
+
+  #help{position:absolute;inset:auto 14px 14px auto;z-index:15;pointer-events:none}
+  #fps{position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:10px;
+    letter-spacing:.14em;color:#6fb9cc;opacity:.7}
+  .warn{color:var(--amber)}
+  .hide{display:none !important}
+  @media (max-width:760px){
+    #p-tr,#p-bl{transform:scale(.86);transform-origin:top right}
+    #p-bl{transform-origin:bottom left}
+    #map{width:170px;height:124px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+
+  <!-- ================= HUD ================= -->
+  <div id="hud">
+    <div class="corner panel" id="p-tl">
+      <div class="row"><span class="lbl">Lap</span><span class="big" id="lap">1<small class="dim" style="font-size:13px">/3</small></span></div>
+      <div class="hr"></div>
+      <div class="row"><span class="lbl">Position</span><span class="big" id="pos">1<small class="dim" style="font-size:13px">/4</small></span></div>
+      <div class="hr"></div>
+      <div class="row"><span class="lbl">Time</span><span id="time" style="font-size:15px">0:00.00</span></div>
+      <div class="row"><span class="lbl">Best lap</span><span id="best" class="dim" style="font-size:12px">--:--.--</span></div>
+      <div class="row"><span class="lbl">Last lap</span><span id="last" class="dim" style="font-size:12px">--:--.--</span></div>
+      <div class="row"><span class="lbl">Sector</span><span id="sector" style="font-size:12px">S1</span></div>
+    </div>
+
+    <div class="corner panel" id="p-tr">
+      <div class="lbl">Track element scan</div>
+      <div id="threats"></div>
+      <div class="hr"></div>
+      <div class="row"><span class="lbl">Hull integrity</span><span id="hullpct" style="font-size:12px">100%</span></div>
+      <div class="row"><span class="lbl">Gap ahead</span><span id="gap" style="font-size:12px">--</span></div>
+    </div>
+
+    <div class="corner panel" id="p-bl">
+      <div class="mkeys"><span>Hyperboost</span><span><kbd>Shift</kbd></span></div>
+      <div class="meter turbo"><i id="mTurbo"></i></div>
+      <div style="height:7px"></div>
+      <div class="mkeys"><span>Hull</span><span id="hullState" class="dim">NOMINAL</span></div>
+      <div class="meter hull"><i id="mHull"></i></div>
+      <div style="height:7px"></div>
+      <div class="mkeys"><span>PULSE — zipper call</span><span><kbd>Z</kbd></span></div>
+      <div class="meter pulse"><i id="mPulse"></i></div>
+      <div class="meter cd" style="margin-top:3px;height:3px"><i id="mPulseCd"></i></div>
+      <div class="row" style="margin-top:5px"><span class="lbl" id="pulseState">PULSE: on station</span></div>
+    </div>
+
+    <div class="corner panel" id="p-bc">
+      <div id="speed">000</div>
+      <div class="lbl">km/h</div>
+      <div id="speedBar"><i></i></div>
+    </div>
+
+    <div class="corner panel" id="p-br">
+      <div id="mapWrap"><canvas id="map" width="472" height="340"></canvas></div>
+    </div>
+
+    <div id="center">
+      <div id="banner"></div>
+      <div id="subbanner"></div>
+      <div id="countdown"></div>
+    </div>
+    <div id="caption"></div>
+  </div>
+
+  <div id="fps"></div>
+
+  <!-- ================= TITLE / BRIEFING ================= -->
+  <div class="screen" id="briefing">
+    <div class="card panel">
+      <h1>SPINE RUNNER</h1>
+      <p style="letter-spacing:.2em;font-size:11px;color:#7fd0e6;margin-top:2px">
+        NEO-KOWLOON SPINE &nbsp;·&nbsp; <span id="tracklen">2.27</span> KM &nbsp;·&nbsp; 3 LAPS &nbsp;·&nbsp; ANTI-GRAVITY CLASS
+      </p>
+      <p>An elevated quarantine circuit through the Kowloon stacks. The deck is never yours alone:
+      the city's infrastructure runs <i>through</i> the racing line. Twenty six hundred tonnes of maglev,
+      municipal traffic, a wave of rising bollards and the yard cranes. Learn the rhythm, or learn the wall.</p>
+
+      <h2 style="margin-top:18px">Dynamic track elements</h2>
+      <div class="grid">
+        <div class="el zip"><b>◤ BOLLARD ZIPPER</b><small><b style="color:#fff;font-size:11px">Zipper Avenue · 56 m deck · ~1,150 bollards</b><br>
+          over a thousand bollards rise in a travelling diagonal wave: two corridors stay open, the gap sliding across the deck row by row.
+          A timed slalom at 300 km/h.<br><br>
+          <span style="color:var(--cyan)">PULSE CALL (<kbd>Z</kbd>)</span> — your teammate dives into the wave and <i>draws the
+          pattern toward your lane</i>: the teeth collapse in front of you and a wide gap opens where you actually are.
+          Cost: their capacitor. Watch it recharge.</small></div>
+
+        <div class="el trn"><b>◤ MAGLEV CROSSINGS</b><small><b style="color:#fff;font-size:11px">East Span · 3 crossings</b><br>
+          Heavy freight crosses the deck perpendicular at ~380 km/h. Lamps flash, horns sound, gates drop.
+          Crossings fire on staggered random clocks — sometimes back to back, sometimes a double consist.
+          Time the gap or eat a train.</small></div>
+
+        <div class="el trf"><b>◤ TRAFFIC DISTRICT</b><small><b style="color:#fff;font-size:11px">South Span · 4 lanes</b><br>
+          Municipal hover-traffic crawls the deck: haulers, taxis, buses. Two of the four lanes run
+          <i>oncoming</i> — headlights in your racing line. Thread it.</small></div>
+
+        <div class="el crn"><b>◤ MAGNETIC CRANES</b><small><b style="color:#fff;font-size:11px">Crane Yard · Y-fork at 1.36 km, T-split at 1.53 km</b><br>
+          Yard cranes swing capture cones across the deck. Enter a cone and the magnet <b>lifts your ship off the deck</b>,
+          carries you, and throws you down the branch it has locked. Markers on the deck show which branch is claimed.<br><br>
+          <span style="color:var(--mag)">Y-FORK</span>: two lanes, either side. <span style="color:var(--mag)">T-SPLIT</span>:
+          the high-line climbs, the low-line dives.
+          Fight the magnet with airbrakes to break lock — or ride it and take the boost on release.</small></div>
+      </div>
+
+      <div class="btnrow">
+        <button class="primary" id="btnRace">Start race <kbd>Enter</kbd></button>
+        <button id="btnShowcase">Track showcase <kbd>C</kbd></button>
+        <button id="btnDemo">Watch AI laps</button>
+      </div>
+      <h2 style="margin-top:16px">Controls</h2>
+      <div class="keys">
+        <div><kbd>W</kbd><kbd>S</kbd> throttle / brake</div>
+        <div><kbd>A</kbd><kbd>D</kbd> steer</div>
+        <div><kbd>Q</kbd><kbd>E</kbd> airbrake drift</div>
+        <div><kbd>Shift</kbd> hyperboost</div>
+        <div><kbd>Z</kbd> PULSE zipper call</div>
+        <div><kbd>C</kbd> camera mode</div>
+        <div><kbd>P</kbd> pause &nbsp; <kbd>R</kbd> restart</div>
+        <div><kbd>H</kbd> help &nbsp; <kbd>M</kbd> mute</div>
+        <div>Gamepad: left stick / triggers supported</div>
+      </div>
+      <p class="dim" style="font-size:10.5px;margin-top:14px">Auto-throttle is on: the ship accelerates off the line by itself.
+      Wall contact scrubs speed, hull and your lap.</p>
+    </div>
+  </div>
+
+  <!-- ================= PAUSE ================= -->
+  <div class="screen hidden" id="pause">
+    <div class="card panel" style="max-width:620px">
+      <h1 style="font-size:34px">PAUSED</h1>
+      <div class="btnrow">
+        <button class="primary" id="btnResume">Resume <kbd>P</kbd></button>
+        <button id="btnRestart">Restart <kbd>R</kbd></button>
+        <button id="btnQuit">Back to briefing</button>
+      </div>
+      <div id="pauseInfo" class="dim" style="font-size:11px;margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- ================= RESULTS ================= -->
+  <div class="screen hidden" id="results">
+    <div class="card panel" style="max-width:720px">
+      <h1 style="font-size:38px" id="resultTitle">RACE COMPLETE</h1>
+      <p id="resultSub" style="letter-spacing:.16em;font-size:11px;color:#7fd0e6"></p>
+      <table>
+        <thead><tr><th>Pos</th><th>Pilot</th><th>Time / Gap</th><th>Best lap</th><th>Hull</th></tr></thead>
+        <tbody id="resultRows"></tbody>
+      </table>
+      <div class="btnrow">
+        <button class="primary" id="btnAgain">Race again <kbd>R</kbd></button>
+        <button id="btnBriefing2">Briefing</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./js/spine.js"></script>
+</body>
+</html>
