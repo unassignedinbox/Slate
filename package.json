@@ -1,0 +1,20 @@
+{
+  "name": "slate-road-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Slate \u2014 a robust procedural road network editor with Unreal-style viewport navigation",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node tools/smoke.mjs",
+    "test:ui": "node tools/dom-smoke.mjs"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}
