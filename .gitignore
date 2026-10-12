@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.cache/
+.arena/
+coverage/
+*.local
+.DS_Store

@@ -1,0 +1,32 @@
+{
+  "name": "frontier-road-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test tests/*.test.js",
+    "test:e2e": "node tests/editor.e2e.js && node tests/infrastructure.e2e.js && node tests/streetscape.e2e.js && node tests/catalog.e2e.js",
+    "test:e2e:infrastructure": "node tests/infrastructure.e2e.js",
+    "format": "prettier --write src tests README.md NOTICE.md index.html vite.config.js package.json .prettierrc.json",
+    "format:check": "prettier --check src tests README.md NOTICE.md index.html vite.config.js package.json .prettierrc.json",
+    "test:e2e:streetscape": "node tests/streetscape.e2e.js",
+    "test:e2e:catalog": "node tests/catalog.e2e.js"
+  },
+  "dependencies": {
+    "@fontsource/dm-sans": "^5.2.6",
+    "@fontsource/ibm-plex-mono": "^5.2.6",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@sparticuz/chromium": "^153.0.0",
+    "prettier": "^3.9.10",
+    "vite": "^6.0.0"
+  }
+}
