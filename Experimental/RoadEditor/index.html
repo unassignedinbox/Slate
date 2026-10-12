@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ProjectZeroEditor — Road Editor</title>
+<link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 20 L12 3 L20 20 M12 3 L12 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span class="brand-name">ProjectZero</span>
+      <span class="brand-sub">Road Editor</span>
+      <span class="version">ROAD EDITOR · SLATE 0.1</span>
+    </div>
+    <div class="topbar-actions">
+      <div class="view-presets" id="viewPresets"></div>
+      <button class="ghost" id="btnSave">Save</button>
+      <button class="ghost" id="btnLoad">Load</button>
+      <button class="ghost" id="btnExportObj">Export OBJ</button>
+      <button class="ghost" id="btnExportJson">Export JSON</button>
+      <button class="ghost" id="btnShot">Screenshot</button>
+      <button class="ghost" id="btnHelp">Controls</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <aside class="panel left">
+      <div class="scene-label"><span id="sceneName">UNTITLED NETWORK</span><span class="dot" id="dirtyDot"></span></div>
+      <div class="tabs" id="leftTabs">
+        <button data-tab="build" class="active">Build</button>
+        <button data-tab="library">Library</button>
+        <button data-tab="issues">Issues</button>
+      </div>
+      <div class="scroll" id="leftBody"></div>
+    </aside>
+
+    <section class="viewport" id="viewport">
+      <canvas id="gl"></canvas>
+      <div class="hud hud-tl" id="hud"></div>
+      <div class="hud hud-tr" id="viewTools"></div>
+      <div class="hud hud-bl" id="legend"></div>
+      <div class="progress" id="progress"><div class="bar"><i></i></div><span></span></div>
+      <div class="fatal" id="fatal"></div>
+      <div class="help-overlay" id="helpOverlay"></div>
+    </section>
+
+    <aside class="panel right">
+      <div class="tabs" id="rightTabs">
+        <button data-tab="inspect" class="active">Inspector</button>
+        <button data-tab="book">Road book</button>
+        <button data-tab="stats">Stats</button>
+      </div>
+      <div class="scroll" id="rightBody"></div>
+    </aside>
+  </main>
+
+  <footer class="statusbar">
+    <span id="status">Ready.</span>
+    <span class="spacer"></span>
+    <span id="perf"></span>
+  </footer>
+</div>
+<script type="module" src="./src/app.js"></script>
+</body>
+</html>

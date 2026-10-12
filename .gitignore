@@ -1,0 +1,4 @@
+# Node tooling for the experimental editor builds — nothing here is part of the source.
+node_modules/
+Experimental/*/node_modules/
+*.log
