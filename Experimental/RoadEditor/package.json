@@ -1,0 +1,17 @@
+{
+  "name": "roadeditor-prototype",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Frontier / ProjectZeroEditor — Road Editor browser prototype. The editor itself has zero runtime dependencies (the renderer is hand-written WebGL2); esbuild is only a devDependency for the single-file release build.",
+  "scripts": {
+    "serve": "node tools/serve.mjs 8080",
+    "bundle": "node tools/bundle.mjs",
+    "smoke": "node tools/smoke.mjs",
+    "preview": "node tools/preview.mjs",
+    "headless": "node tools/headless.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
