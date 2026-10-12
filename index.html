@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slate Pursuit — AI street racing</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="stage">
+      <canvas id="view"></canvas>
+      <div id="hud">
+        <div id="top-left">
+          <div id="heat" class="panel"></div>
+          <div id="standings" class="panel"></div>
+        </div>
+        <div id="top-right">
+          <div id="target" class="panel"></div>
+        </div>
+        <div id="bottom-left">
+          <div id="feed" class="panel"></div>
+        </div>
+        <canvas id="minimap" width="220" height="220"></canvas>
+        <div id="bottom-bar">
+          <div id="status"></div>
+          <div id="racebar"></div>
+          <div class="hint">H help · 1 free · 2 follow · 3 director · Tab / [ ] next car · Space pause · T speed · N next race</div>
+        </div>
+        <div id="help" class="panel hidden">
+          <div class="label">CONTROLS — spectator only, the AI does all the driving</div>
+          <div class="row2"><b>Camera</b> RMB + mouse look · RMB + WASD/QE fly · Shift boost · wheel dolly · MMB pan</div>
+          <div class="row2"><b>Modes</b> 1 free camera · 2 follow selected car · 3 auto director (cuts between hot targets)</div>
+          <div class="row2"><b>Targets</b> Tab / ] next · [ previous</div>
+          <div class="row2"><b>Sim</b> Space pause · T speed (0.5× 1× 2× 4×) · N skip to next race · M minimap · H help</div>
+          <div class="row2"><b>Legend</b> racers = coloured dots · police = red/blue · helicopter = yellow · drones = orange · bollards = amber · roadblocks in white</div>
+          <div class="row2"><b>Gadgets</b> tire net (spike-strip replacement) · EMP pulse · signal jammer · photon wall · drone wall · bollard lockdown</div>
+        </div>
+      </div>
+      <div id="loading">
+        <div class="title">SLATE PURSUIT</div>
+        <div class="bar"><span id="load-bar"></span></div>
+        <div id="load-text">Generating city…</div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

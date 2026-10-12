@@ -1,0 +1,20 @@
+{
+  "name": "slate-pursuit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI-driven 3D street racing and police pursuit on a procedurally generated city map.",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "test:sim": "node scripts/sim-test.mjs",
+    "test:map": "node scripts/map-smoke.mjs"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
