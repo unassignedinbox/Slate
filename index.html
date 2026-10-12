@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slate · Road Editor (Experimental)</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="topbar">
+        <div class="brand">Slate<span> · Road Editor</span><em>experimental · ProjectZeroEditor lineage</em></div>
+        <div class="group">
+          <button id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
+          <button id="btn-redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+        </div>
+        <div class="group">
+          <button id="btn-city" class="primary">Generate city…</button>
+          <button id="btn-frame" title="Frame everything">Frame all</button>
+        </div>
+        <div class="group">
+          <button id="btn-import">Import</button>
+          <button id="btn-export">Export</button>
+          <button id="btn-clear" class="danger">Clear</button>
+        </div>
+        <div class="group toggles">
+          <label><input type="checkbox" id="tgl-snap" checked /> Snap (G)</label>
+          <label><input type="checkbox" id="tgl-tunnels" checked /> Subway tunnels</label>
+        </div>
+      </header>
+
+      <nav id="tools"></nav>
+      <main id="view"></main>
+      <aside id="panel"></aside>
+
+      <footer id="status">
+        <div id="hint"></div>
+        <div id="stats"></div>
+        <div id="controls">RMB: look · WASD/QE: fly · Shift: boost · Wheel: speed · F: frame · Del: delete</div>
+      </footer>
+
+      <dialog id="city-dialog">
+        <form method="dialog" id="city-form">
+          <h2>Generate city</h2>
+          <p class="muted">Replaces the current network. Street grid with avenues (bus + bike lanes), arterials, local streets, a highway ring, a railway (auto gates at crossings), subway lines and footpaths.</p>
+          <label>Blocks per side <input name="blocks" type="number" min="4" max="60" value="24" /></label>
+          <label>Block size (m) <input name="blockSize" type="number" min="60" max="220" value="110" /></label>
+          <label>Seed <input name="seed" type="number" value="1337" /></label>
+          <label class="check"><input name="ring" type="checkbox" checked /> Highway ring + ramps</label>
+          <label class="check"><input name="rail" type="checkbox" checked /> Railway line</label>
+          <label class="check"><input name="subway" type="checkbox" checked /> Subway lines</label>
+          <label class="check"><input name="footpaths" type="checkbox" checked /> Footpaths</label>
+          <label class="check"><input name="props" type="checkbox" checked /> Street furniture (lamps, bus stops, bumps, bollards)</label>
+          <div class="row end">
+            <button value="cancel" type="submit">Cancel</button>
+            <button value="ok" id="city-ok" type="submit" class="primary">Generate</button>
+          </div>
+        </form>
+      </dialog>
+      <input type="file" id="file-input" accept="application/json,.json" hidden />
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
