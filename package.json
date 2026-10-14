@@ -4,7 +4,7 @@
   "type": "module",
   "description": "WebGPU SDF global illumination in the architecture of Unreal's Lumen, with Project-Drive's ControlVehicle driving through it.",
   "scripts": {
-    "serve": "python3 -m http.server 8000 --bind 0.0.0.0",
+    "serve": "python3 Tools/serve.py",
     "test": "node tests/verify.mjs"
   }
 }
