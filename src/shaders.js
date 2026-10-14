@@ -676,7 +676,9 @@ struct VOut { @builtin(position) clip: vec4f, @location(0) uv: vec2f };
 fn vs(@builtin(vertex_index) vi: u32) -> VOut {
   var out: VOut;
   let p = vec2f(f32((vi << 1u) & 2u), f32(vi & 2u));
-  out.uv = p; out.clip = vec4f(p * 2.0 - vec2f(1.0), 0.0, 1.0);
+  // WebGPU texture UVs originate at the top-left while clip-space y=-1 is the
+  // bottom of the framebuffer; flip v or the presented frame is upside down.
+  out.uv = vec2f(p.x, 1.0 - p.y); out.clip = vec4f(p * 2.0 - vec2f(1.0), 0.0, 1.0);
   return out;
 }
 @fragment

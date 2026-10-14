@@ -54,6 +54,9 @@ const shaders = buildShaders({ ATLAS_N: 1024 * 512, GDF_N: 64 ** 3, triCount: 80
 const all = Object.values(shaders).join('\n');
 for (const stage of ['traceGDF', 'sampleMeshDF', 'sampleGDF', 'findCard', 'hemisphereDir', 'softShadowGDF'])
   check(`WGSL contains ${stage}`, all.includes(stage));
+// Presentation orientation: WebGPU UV origin is top-left, clip y=-1 is the
+// framebuffer bottom — the blit must flip v, or the frame presents upside down.
+check('blit flips v so the frame is not upside down', shaders.BLIT.includes('vec2f(p.x, 1.0 - p.y)'));
 check('no alias-table anywhere', !/alias/i.test(all));
 check('no triangle trace in GI (no triIntersect/rayTri)', !/intersectTri|rayTriangle|TriangleIntersect/i.test(all));
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
