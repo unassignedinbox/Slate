@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SLATE — Portal Rush: ControlVehicle Obstacle GP</title>
+<link rel="stylesheet" href="src/style.css"/>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<div id="app"></div>
+<div id="hud">
+  <div class="panel" id="top">
+    <div><b>🏁 SLATE: PORTAL RUSH</b><span id="zoneName"></span></div>
+    <div id="zones"></div>
+    <div class="row"><span>⏱ <b id="time">0:00.0</b></span><span>❤️ <b id="health">100</b></span><span>🧭 <b id="next">Portal</b></span></div>
+    <div id="healthbar"><i></i></div>
+    <div id="pressureWrap">SEWER PRESSURE <div id="pressure"><i></i></div></div>
+  </div>
+  <div class="panel" id="toast"></div>
+  <div class="panel" id="speed"><b id="kmh">0</b><small>km/h</small><div id="gear">DRIVE</div></div>
+  <div class="panel" id="help">W/↑ throttle · S/↓ brake/reverse · A D steer · <b>Space</b> handbrake · <b>R</b> respawn · <b>P</b> pause<br/>Drive into the glowing portal to jump to the next scene. Reach the chequered finish!</div>
+  <div id="touch"><button data-k="up">▲</button><button data-k="left">◀</button><button data-k="right">▶</button><button data-k="down">▼</button></div>
+</div>
+<div id="overlay"><div class="card">
+  <h1>🏁 SLATE — PORTAL RUSH</h1>
+  <p>The <b>ControlVehicle from Frontier's Project-Drive</b>, dropped into 7 modular obstacle scenes linked by portals:</p>
+  <ol>
+    <li>☁️ Floating fractured rooftops &amp; flying debris</li>
+    <li>🚿 Sewer pipe — steam cracks, rising pressure</li>
+    <li>🪲 Dung-beetle hill — rolling dung crossing</li>
+    <li>🚦 Sensor bollards that wave up at traffic lights</li>
+    <li>🚝 Monorail crossings</li>
+    <li>🧲 Magnetic crane — falling scrap… and it likes cars</li>
+    <li>💥 D-Day minefield maze under turret fire</li>
+  </ol>
+  <button id="start">START ENGINE</button>
+  <p class="tiny">WASD / arrows · Space handbrake · R respawn · Survive at &gt;0 ❤️</p>
+</div></div>
+<script type="module" src="src/game.js"></script>
+</body>
+</html>
