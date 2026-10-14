@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slate — WebGPU SDF GI (Lumen-style) · ControlVehicle</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<div id="wrap">
+  <canvas id="view"></canvas>
+  <div id="pipLabel" hidden>GDF CLIPMAP SLICE · live</div>
+
+  <header>
+    <div class="wordmark">SLATE <span>/ SDF·GI</span></div>
+    <div class="badge">WEBGPU · MESH DF → GLOBAL DF CLIPMAPS → SURFACE CACHE → SCREEN PROBES</div>
+  </header>
+
+  <aside id="panel">
+    <div class="ptitle">LUMEN-STYLE SDF GI</div>
+    <p class="note">Every GI ray sphere-traces the Global Distance Field. Hits sample
+    Surface Cache card radiance. No triangle GI fallback, no alias table.</p>
+
+    <label>View
+      <select id="viewMode">
+        <option value="0" selected>Final (direct + probes + reflections)</option>
+        <option value="1">Indirect only (screen probes)</option>
+        <option value="2">Direct only</option>
+        <option value="3">Surface Cache irradiance (own card)</option>
+        <option value="4">Surface Cache outgoing radiance</option>
+        <option value="5">Global Distance Field slice</option>
+        <option value="10">GDF clipmap levels</option>
+        <option value="7">GDF raymarched surface (no raster)</option>
+        <option value="6">Sphere-tracing step cost (magenta = exhausted)</option>
+        <option value="8">Surface Cache atlas</option>
+        <option value="9">Mesh cards</option>
+        <option value="11">Screen probe grid</option>
+      </select>
+    </label>
+
+    <div class="row">
+      <button id="pauseBtn">Pause</button>
+      <button id="resetVehicle">Reset vehicle (R)</button>
+      <button id="cameraMode">Camera: Chase (C)</button>
+    </div>
+
+    <label class="check"><input type="checkbox" id="autoDrive" checked> Auto-drive (watch the GDF follow the car)</label>
+    <label class="check"><input type="checkbox" id="freezeGdf"> Freeze Global Distance Field <small>car moves, field does not — stale GI</small></label>
+    <label class="check"><input type="checkbox" id="pip" checked> GDF slice picture-in-picture</label>
+    <label class="check"><input type="checkbox" id="screenTraces" checked> Screen traces before GDF (probe detail)</label>
+    <label class="check"><input type="checkbox" id="includeSmall"> Small emissive meshes in Lumen Scene
+      <small>Off = Unreal behaviour: culled from Mesh DF / Surface Cache, visible only via screen traces</small></label>
+
+    <label>Sun azimuth <span id="sunAzVal"></span><input type="range" id="sunAz" min="0" max="360" step="1" value="135"></label>
+    <label>Sun elevation <span id="sunElVal"></span><input type="range" id="sunEl" min="8" max="80" step="1" value="42"></label>
+    <label>Exposure <span id="exposureVal"></span><input type="range" id="exposure" min="0.2" max="3" step="0.05" value="1.1"></label>
+    <label>Render scale <span id="scaleVal"></span><input type="range" id="renderScale" min="0.4" max="1" step="0.05" value="0.75"></label>
+
+    <label>Surface-cache radiosity rays
+      <select id="raysStatic"><option value="4">4 / texel</option><option value="8" selected>8 / texel</option><option value="16">16 / texel</option></select>
+    </label>
+    <label>Static cache update per frame
+      <select id="updateFraction"><option value="0.0625">1/16 of texels</option><option value="0.125" selected>1/8 of texels</option><option value="0.25">1/4 of texels</option><option value="1">all texels</option></select>
+    </label>
+    <label>Screen-probe rays
+      <select id="probeRays"><option value="8">8 / probe</option><option value="16" selected>16 / probe</option><option value="32">32 / probe</option></select>
+    </label>
+
+    <div class="ptitle">DRIVE — SAME KEYS AS PROJECT-DRIVE</div>
+    <p class="keys">W throttle · S brake/reverse · A/D steer · Space handbrake<br>
+    R respawn · C chase/free camera · drag = orbit (free) · wheel = zoom</p>
+    <p class="note" id="culledList"></p>
+  </aside>
+
+  <footer id="stats">
+    <div><small>FRAME</small><b id="statFps">—</b></div>
+    <div><small>SCENE</small><b id="statScene">—</b></div>
+    <div><small>THIS FRAME</small><b id="statPasses">—</b></div>
+    <div><small>VEHICLE</small><b id="statVehicle">—</b></div>
+    <div><small>PROBE TRACES (readback)</small><b id="statCounters">—</b></div>
+    <div><small>CLIPMAP CENTRES</small><b id="statClips">—</b></div>
+  </footer>
+
+  <div id="status" role="status">Initialising…</div>
+  <div id="failure" role="alert" hidden><h2>SDF GI unavailable</h2><p id="failureText"></p></div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
