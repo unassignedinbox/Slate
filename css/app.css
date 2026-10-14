@@ -1,0 +1,122 @@
+:root {
+    --bg-dark: #0a0c10;
+    --bg-panel: #13161f;
+    --bg-header: #1a1e2b;
+    --border-color: #262c3d;
+    --accent: #f97316;
+    --accent-hover: #fb923c;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --metric-val: #38bdf8;
+    --success: #22c55e;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+}
+#viewport-container {
+    flex: 1;
+    position: relative;
+    background: #000;
+    overflow: hidden;
+}
+canvas#glcanvas { width: 100%; height: 100%; display: block; }
+#hud-overlay {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background: rgba(19, 22, 31, 0.92);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 10;
+    min-width: 420px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.hud-title {
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    gap: 16px;
+}
+.status-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(34, 197, 94, 0.2);
+    color: var(--success);
+    border: 1px solid rgba(34, 197, 94, 0.4);
+    white-space: nowrap;
+}
+.hud-line { display: flex; justify-content: space-between; margin: 4px 0; color: var(--text-secondary); gap: 24px; }
+.hud-val { color: var(--metric-val); font-weight: 600; text-align: right; }
+.hud-val.good { color: var(--success); }
+
+#hint-bar {
+    position: absolute;
+    left: 16px;
+    bottom: 14px;
+    background: rgba(19, 22, 31, 0.85);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    z-index: 10;
+}
+#hint-bar b { color: var(--accent); }
+
+#sidebar {
+    width: 340px;
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    z-index: 20;
+}
+.panel-header { padding: 18px 20px; background: var(--bg-header); border-bottom: 1px solid var(--border-color); }
+.panel-header h1 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.panel-header p { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.panel-content { padding: 18px 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 18px; }
+.section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 10px; font-weight: 700; }
+select, input[type="range"] {
+    width: 100%;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+}
+select:focus { border-color: var(--accent); }
+.control-group { display: flex; flex-direction: column; gap: 6px; }
+.control-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); }
+.control-row span.val { color: var(--metric-val); font-family: monospace; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; margin: 6px 0; gap: 12px; }
+.toggle-row input { cursor: pointer; accent-color: var(--accent); }
+.note {
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: var(--text-muted);
+    background: rgba(249, 115, 22, 0.07);
+    border: 1px solid rgba(249, 115, 22, 0.25);
+    border-radius: 8px;
+    padding: 10px 12px;
+}

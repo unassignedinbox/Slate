@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slate — WebGPU SDF Global Illumination (Lumen-architecture: mesh SDF · cards · surface cache · global DF · voxel light · final gather)</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div id="viewport-container">
+    <canvas id="glcanvas" width="1280" height="720"></canvas>
+    <div id="hud-overlay">
+        <div class="hud-title">
+            <span>SDF GLOBAL ILLUMINATION</span>
+            <span class="status-badge" id="hud-mode">Full composite</span>
+        </div>
+        <div class="hud-line"><span class="hud-label">Scene</span><span class="hud-val good">Project-Drive course · ControlVehicle</span></div>
+        <div class="hud-line"><span class="hud-label">FPS</span><span class="hud-val good" id="hud-fps">—</span></div>
+        <div class="hud-line"><span class="hud-label">Frame Time</span><span class="hud-val" id="hud-frametime">—</span></div>
+        <div class="hud-line"><span class="hud-label">CPU Plan</span><span class="hud-val" id="hud-plan">—</span></div>
+        <div class="hud-line"><span class="hud-label">Speed</span><span class="hud-val good" id="hud-speed">—</span></div>
+        <div class="hud-line"><span class="hud-label">GDF tiles in use</span><span class="hud-val" id="hud-tiles">—</span></div>
+        <div class="hud-line"><span class="hud-label">GDF tiles rebuilt (L0/L1/L2)</span><span class="hud-val" id="hud-rebuilt">—</span></div>
+        <div class="hud-line"><span class="hud-label">Pipeline</span><span class="hud-val good">MeshSDF → Cards → SurfaceCache → GlobalDF → VoxelLight → FinalGather</span></div>
+    </div>
+    <div id="hint-bar">
+        <b>W/S</b> throttle·brake &nbsp;<b>A/D</b> steer &nbsp;<b>Space</b> handbrake &nbsp;<b>R</b> respawn &nbsp;·&nbsp;
+        <b>F8</b> free cam &nbsp;<b>C</b> camera &nbsp;<b>1‑8</b> views &nbsp;·&nbsp; autopilot drives until you touch the wheel
+    </div>
+</div>
+
+<div id="sidebar">
+    <div class="panel-header">
+        <h1><span>📦</span> SDF GI — Lumen architecture</h1>
+        <p>Every stage on the GPU · surface-cache lighting amortized across frames · ControlVehicle live</p>
+    </div>
+
+    <div class="panel-content">
+        <div>
+            <div class="section-title">Pipeline display mode</div>
+            <select id="select-viewmode">
+                <option value="0">Full composite (direct + SDF GI)</option>
+                <option value="1">Indirect GI only</option>
+                <option value="2">Direct only (sun + shadows)</option>
+                <option value="3">Surface cache — mesh cards atlas</option>
+                <option value="4">Global distance field — top-down slice</option>
+                <option value="5">Mesh SDF — ControlVehicle body slice</option>
+                <option value="6">Voxel lighting — clipmap 0 slice</option>
+                <option value="7">Mesh cards — id view</option>
+                <option value="8">World normals</option>
+                <option value="9">Linearized depth</option>
+            </select>
+        </div>
+
+        <div>
+            <div class="section-title">Lumen Scene stages</div>
+            <label class="toggle-row">Mesh distance fields (bake) <input id="ck-meshsdf" type="checkbox"></label>
+            <label class="toggle-row">Global distance field (build) <input id="ck-gdf" type="checkbox"></label>
+            <label class="toggle-row">Mesh cards (capture) <input id="ck-cards" type="checkbox"></label>
+            <label class="toggle-row">Surface cache (relight) <input id="ck-sc" type="checkbox"></label>
+            <label class="toggle-row">Voxel lighting <input id="ck-vox" type="checkbox"></label>
+            <label class="toggle-row">Final gather (cone tracing) <input id="ck-fg" type="checkbox"></label>
+            <label class="toggle-row">Small emissive meshes in Lumen Scene <input id="ck-emissive" type="checkbox"></label>
+        </div>
+
+        <div>
+            <div class="section-title">Sun & exposure</div>
+            <div class="control-group">
+                <div class="control-row"><span>Sun elevation</span><span class="val" id="rg-sunelev-val"></span></div>
+                <input id="rg-sunelev" type="range" min="12" max="80" step="1" value="52">
+                <div class="control-row"><span>Sun azimuth</span><span class="val" id="rg-sunazim-val"></span></div>
+                <input id="rg-sunazim" type="range" min="0" max="360" step="1" value="128">
+                <div class="control-row"><span>Sun irradiance</span><span class="val" id="rg-sunint-val"></span></div>
+                <input id="rg-sunint" type="range" min="0" max="60" step="0.5" value="26">
+                <div class="control-row"><span>Exposure</span><span class="val" id="rg-exposure-val"></span></div>
+                <input id="rg-exposure" type="range" min="0.2" max="3" step="0.01" value="1">
+                <div class="control-row"><span>GI intensity</span><span class="val" id="rg-gi-val"></span></div>
+                <input id="rg-gi" type="range" min="0" max="2" step="0.01" value="1">
+            </div>
+        </div>
+
+        <div>
+            <div class="section-title">Update budgets & drive</div>
+            <div class="control-group">
+                <div class="control-row"><span>GDF L0 tiles/frame</span><span class="val" id="rg-alloc-val"></span></div>
+                <input id="rg-alloc" type="range" min="4" max="96" step="4" value="48">
+                <div class="control-row"><span>Voxel tiles/frame</span><span class="val" id="rg-vx-val"></span></div>
+                <input id="rg-vx" type="range" min="4" max="64" step="4" value="32">
+                <div class="control-row"><span>Debug slice height</span><span class="val" id="rg-slice-val"></span></div>
+                <input id="rg-slice" type="range" min="0.0" max="1.6" step="0.01" value="0.45">
+            </div>
+            <label class="toggle-row" style="margin-top:8px">Autopilot tour (drives itself) <input id="ck-autopilot" type="checkbox"></label>
+        </div>
+
+        <div class="note">
+            Headlights (48.7 nit) and taillights light the course through the surface cache. Turn
+            “Small emissive meshes” OFF to reproduce Epic's documented culling caveat: they drop out of
+            the Lumen Scene and their GI contribution disappears while the drawn mesh remains.
+        </div>
+    </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
