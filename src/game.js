@@ -37,7 +37,7 @@ function textSprite(txt,color='#fff',scale=1){
 }
 
 /* ---------- world layout ---------- */
-const ZONE_LEN=190, ZONE_GAP=330, WIDTH=38;
+const ZONE_LEN=190, ZONE_GAP=330, WIDTH=38, TOTAL=14;
 const zones=[]; const updaters=[]; const colliders=[]; // {x,z,r|hw,hd, zone, push}
 const balls=[]; // rolling hazards {mesh,r,zone,hit}
 let zoneIdx=0, checkpoint={pos:new THREE.Vector3(0,20,-80),heading:0};
@@ -48,7 +48,7 @@ function makePortal(i,x,z,y=0){
   const ring=new THREE.Mesh(new THREE.TorusGeometry(4.2,.45,14,40),new THREE.MeshStandardMaterial({color:0x111111,emissive:0x00e5ff,emissiveIntensity:2.2,metalness:.8,roughness:.2}));
   ring.castShadow=true; g.add(ring);
   const disc=new THREE.Mesh(new THREE.CircleGeometry(3.9,32),M.portal); g.add(disc);
-  const label=textSprite(i<7?`➡ PORTAL ${i+1}`:'🏁 FINISH','#7df9ff'); label.position.y=6.2; g.add(label);
+  const label=textSprite(i<TOTAL-1?`➡ PORTAL ${i+1}`:'🏁 FINISH','#7df9ff'); label.position.y=6.2; g.add(label);
   scene.add(g);
   updaters.push((dt,t)=>{ring.rotation.z+=dt*.8; disc.material.opacity=.4+.2*Math.sin(t*4); label.position.y=6.2+Math.sin(t*2)*.3;});
   return g;
@@ -348,9 +348,7 @@ function buildZone7(){
     });
   }
   const s=textSprite('ZONE 7 · MINEFIELD — turrets live!','#ffb3a3'); s.position.set(0,10,zc-88); scene.add(s);
-  // FINISH instead of portal
-  const fin=makePortal(6,0,zc+82,0); fin.children[0].material.emissive.set(0xffc400);
-  for(let fx=-8;fx<=8;fx+=2) for(let fz=0;fz<2;fz++) box(2,.05,1,(fx/2+fz)%2?M.dark:M.white,fx,.06,zc+78+fz);
+  makePortal(6,0,zc+82,0);
   groundFns[i]=()=>0; zones[i].spawn={pos:new THREE.Vector3(0,1,zc-80),heading:0};
 }
 updaters.push((dt)=>{
@@ -358,6 +356,161 @@ updaters.push((dt)=>{
     if(s.life<=0) s.mesh.visible=false;
     else if(s.mesh.position.distanceTo(new THREE.Vector3(car.pos.x,car.pos.y+.6,car.pos.z))<1.5){ s.life=0;s.mesh.visible=false; damage(3); car.speed*=.96; spark(car.pos.x,car.pos.y+1,car.pos.z); } }
 });
+
+
+/* ================= ZONE 8 — volcanic glass bridge ================= */
+const lavaPanels=[];
+function buildZone8(){
+  const i=7,zc=zoneBase(i); zones[i]={name:'🌋 Volcanic Glass Bridge',groundY:0};
+  const lava=box(60,.4,ZONE_LEN,new THREE.MeshStandardMaterial({color:0xff4400,emissive:0xff2200,emissiveIntensity:1.6,roughness:.4}),0,-.8,zc,scene,false);
+  for(const sx of [-1,1]) box(4,3,ZONE_LEN,M.dark,sx*20,1,zc); // basalt rails
+  for(let k=0;k<8;k++){ const x=(k%2?7:-7), z=zc-75+k*21;
+    const panel=box(14,.5,17,new THREE.MeshStandardMaterial({color:0xbfefff,transparent:true,opacity:.45,roughness:.1,metalness:.2}),x,0,z);
+    lavaPanels.push({mesh:panel,x,z,w:14,d:17,phase:k*0.9});
+  }
+  updaters.push((dt,t)=>{ for(const pn of lavaPanels){ const down=Math.sin(t*.45+pn.phase)<-0.55; pn.mesh.position.y+= ((down?-3:0)-pn.mesh.position.y)*Math.min(1,dt*2); pn.mesh.material.opacity=down?.15:.45; }
+    if(zoneIdx===7&&Math.random()<dt*.7){ const gx=Math.random()*24-12, gz=zc+Math.random()*160-80; burst(new THREE.Vector3(gx,1,gz),0xff6f00,12,2,10); if(Math.hypot(car.pos.x-gx,car.pos.z-gz)<3) hitCar(8,gx>car.pos.x?-2:2,6); } // lava geysers
+  });
+  const s=textSprite('ZONE 8 · GLASS OVER LAVA','#ffd0a8'); s.position.set(0,10,zc-88); scene.add(s);
+  makePortal(7,0,zc+82,0);
+  groundFns[i]=(x,z)=>{ for(const pn of lavaPanels){ if(Math.abs(x-pn.x)<=pn.w/2&&Math.abs(z-pn.z)<=pn.d/2) return Math.sin(tGlobal*.45+pn.phase)<-0.55 ? -Infinity : 0; } return -Infinity; };
+  zones[i].spawn={pos:new THREE.Vector3(-7,1,zc-80),heading:0};
+}
+
+/* ================= ZONE 9 — flooded dam, floating debris ================= */
+function buildZone9(){
+  const i=8,zc=zoneBase(i); zones[i]={name:'🌊 Flooded Dam Release',groundY:0};
+  groundSlab(i,WIDTH,ZONE_LEN,M.road(0x3a4a52)); stripes(i);
+  const water=box(44,.5,ZONE_LEN,new THREE.MeshStandardMaterial({color:0x1976d2,transparent:true,opacity:.75,roughness:.15}),0,.25,zc,scene,false);
+  box(50,8,4,M.concrete,0,4,zc-96); const s0=textSprite('⚠ DAM RELEASE ⚠','#aee9ff'); s0.position.set(0,9,zc-93); scene.add(s0);
+  for(let k=0;k<6;k++){ const log=cyl(.7,.7,5,M.dung,Math.random()*24-12,0.8,zc-70+k*26,scene,10); log.rotation.z=Math.PI/2;
+    updaters.push((dt)=>{ log.position.z+=dt*7; log.rotation.x+=dt*2; if(log.position.z>zc+90) log.position.z=zc-90;
+      if(zoneIdx===8){ car.pos.x+=Math.sin(tGlobal*.8+log.position.z*.05)*dt*1.2; // flood current
+        if(log.position.distanceTo(car.pos)<3) hitCar(7,(car.pos.x-log.position.x),3); } });
+  }
+  for(let k=0;k<5;k++){ const barrel=cyl(.55,.55,1.3,M.yellow,Math.random()*26-13,.7,zc-60+k*32,scene,10);
+    updaters.push((dt,t)=>{ barrel.position.y=.7+Math.sin(t*2+k)*0.25; barrel.position.x+=Math.sin(t*.6+k*2)*dt*2; barrel.rotation.y+=dt;
+      if(zoneIdx===8&&barrel.position.distanceTo(car.pos)<2.2) hitCar(5,(car.pos.x-barrel.position.x),3); });
+  }
+  updaters.push((dt,t)=>{ water.position.y=.25+Math.sin(t*.5)*.35; });
+  const s=textSprite('ZONE 9 · DAM RELEASE','#aee9ff'); s.position.set(0,10,zc-88); scene.add(s);
+  makePortal(8,0,zc+82,0);
+  groundFns[i]=()=>0; zones[i].spawn={pos:new THREE.Vector3(0,1,zc-80),heading:0};
+}
+
+/* ================= ZONE 10 — tornado farm alley ================= */
+function buildZone10(){
+  const i=9,zc=zoneBase(i); zones[i]={name:'🌪️ Tornado Farm Alley',groundY:0};
+  groundSlab(i,WIDTH,ZONE_LEN,M.road(0x7a6a45)); stripes(i);
+  for(const sx of [-1,1]){ box(6,4,8,M.red,sx*24,2,zc-50); box(6,4,8,new THREE.MeshStandardMaterial({color:0xd7ccc8}),sx*24,2,zc+40);
+    for(let f=0;f<4;f++) box(.3,2.5,.3,M.dark,sx*20,1.2,zc-80+f*45); }
+  for(let k=0;k<7;k++){ const hay=cyl(1,1,1.4,M.yellow,Math.random()*30-15,1,zc-80+k*24,scene,12); hay.rotation.z=Math.PI/2;
+    updaters.push((dt,t)=>{ hay.position.y=1+Math.max(0,Math.sin(t*1.3+k*2))*2.5; hay.rotation.x+=dt*3;
+      if(zoneIdx===9&&hay.position.distanceTo(car.pos)<2.4) hitCar(6,(car.pos.x-hay.position.x),4); }); }
+  const tornado=new THREE.Group(); scene.add(tornado);
+  for(let l=0;l<5;l++){ const cone=cyl(1.2+l*1.1,0.7+l*0.8,4,new THREE.MeshBasicMaterial({color:0xcfd8dc,transparent:true,opacity:.35}),0,2+l*3.4,0,tornado,16); }
+  updaters.push((dt,t)=>{
+    tornado.position.set(Math.sin(t*.22)*13, zoneIdx===9?0:-999, zc+Math.sin(t*.37)*55);
+    tornado.rotation.y+=dt*7;
+    if(zoneIdx===9){ const d=Math.hypot(car.pos.x-tornado.position.x,car.pos.z-tornado.position.z);
+      if(d<13){ car.pos.x+=(tornado.position.x-car.pos.x)*dt*0.9; car.pos.z+=(tornado.position.z-car.pos.z)*dt*0.9; car.heading+=dt*3; car.vy=Math.max(car.vy,3.5); car.grounded=false; if(Math.random()<dt*6) damage(2); } }
+  });
+  const s=textSprite('ZONE 10 · TORNADO ALLEY','#fff3c4'); s.position.set(0,11,zc-88); scene.add(s);
+  makePortal(9,0,zc+82,0);
+  groundFns[i]=()=>0; zones[i].spawn={pos:new THREE.Vector3(0,1,zc-80),heading:0};
+}
+
+/* ================= ZONE 11 — airport runway crossing ================= */
+function buildZone11(){
+  const i=10,zc=zoneBase(i); zones[i]={name:'✈️ Airport Runway Crossing',groundY:0};
+  groundSlab(i,60,ZONE_LEN,M.road(0x2b2f36));
+  for(let z=-85;z<=85;z+=10){ box(.4,.03,4,M.white,-8,.03,zc+z,scene,false); box(.4,.03,4,M.white,8,.03,zc+z,scene,false); }
+  for(let k=0;k<10;k++){ const lamp=sph(.22,new THREE.MeshStandardMaterial({color:0x111,emissive:0x00e5ff,emissiveIntensity:2}),k%2?19:-19,.3,zc-80+k*17,scene); }
+  box(16,6,10,M.concrete,-32,3,zc-60); box(12,4,8,M.metal,32,2,zc+55);
+  // luggage carts trundling across
+  for(let k=0;k<3;k++){ const cart=box(3,1.2,1.6,M.yellow,0,0.8,zc-40+k*45);
+    updaters.push((dt,t)=>{ cart.position.x=Math.sin(t*.35+k*2.1)*15; if(zoneIdx===10&&cart.position.distanceTo(car.pos)<2.6) hitCar(6,(car.pos.x-cart.position.x),3); }); }
+  // plane crossing low, with jet blast
+  const plane=new THREE.Group(); scene.add(plane);
+  box(14,2.2,3,new THREE.MeshStandardMaterial({color:0xf5f5f5,metalness:.6,roughness:.3}),0,0,0,plane);
+  box(2,3,.4,M.red,6.5,1.8,0,plane); box(9,.3,1,M.metal,0,0.4,0,plane);
+  for(const wz of [-1,1]) box(.4,.3,5,M.red,-1,1.2,wz*2.6,plane);
+  updaters.push((dt,t)=>{ const tt=((t%16)/16), x=-70+tt*140, z=zc+5;
+    plane.position.set(x, 3.2+Math.sin(tt*Math.PI)*7, z); plane.rotation.z=Math.sin(tt*9)*0.05;
+    if(zoneIdx===10&&Math.abs(x)<20&&Math.abs(car.pos.z-z)<7){ car.speed*= (1-dt*1.8); car.pos.x-=dt*9; toast('💨 JET BLAST!'); if(Math.random()<dt*4) damage(3); }
+    if(zoneIdx===10&&plane.position.distanceTo(car.pos)<8) hitCar(18,car.pos.x-x,7,true); });
+  const s=textSprite('ZONE 11 · RUNWAY — clear for takeoff?','#cfe8ff'); s.position.set(0,12,zc-88); scene.add(s);
+  makePortal(10,0,zc+82,0);
+  groundFns[i]=()=>0; zones[i].spawn={pos:new THREE.Vector3(0,1,zc-80),heading:0};
+}
+
+/* ================= ZONE 12 — ice warehouse (slippery!) ================= */
+const fallingIce=[];
+function buildZone12(){
+  const i=11,zc=zoneBase(i); zones[i]={name:'🧊 Freezer Warehouse — SLIPPERY',groundY:0};
+  groundSlab(i,WIDTH,ZONE_LEN,new THREE.MeshStandardMaterial({color:0xbfe8f5,roughness:.08,metalness:.15}));
+  for(const sx of [-1,1]) for(let z=-80;z<=80;z+=20){ box(5,4,6,M.concrete,sx*22,2,zc+z); for(let bIdx=0;bIdx<3;bIdx++) box(3.4,1,4,[M.yellow,M.red,M.metal][bIdx%3],sx*22,1+bIdx*1.1,zc+z); }
+  for(let k=0;k<8;k++){ const cx=(k%2?15:-15), cz2=zc-70+k*20; box(3,2.4,3,k%2?M.rust:M.metal,cx,1.2,cz2); colliders.push({x:cx,z:cz2,r:2,zone:i}); }
+  // forklifts shuttling shelves
+  for(let k=0;k<2;k++){ const fk=new THREE.Group(); fk.position.set(0,0,zc-30+k*60); scene.add(fk);
+    box(2,1.4,3,M.yellow,0,.9,0,fk); box(.18,3,.18,M.dark,-.8,1.8,1.4,fk); box(.18,3,.18,M.dark,.8,1.8,1.4,fk); box(2.4,1,2,M.rust,0,2.6,1.4,fk);
+    updaters.push((dt,t)=>{ fk.position.x=Math.sin(t*.5+k*3)*13; fk.rotation.y=Math.cos(t*.5+k*3)>0?Math.PI/2:-Math.PI/2;
+      if(zoneIdx===11&&fk.position.distanceTo(car.pos)<3) hitCar(8,(car.pos.x-fk.position.x),4); }); }
+  // falling icicles
+  updaters.push((dt)=>{ if(zoneIdx===11&&Math.random()<dt*1.2){ const ic=cyl(.02,.28,1.8,new THREE.MeshStandardMaterial({color:0xe0f7fa,transparent:true,opacity:.85}),car.pos.x+(Math.random()*16-8),14,car.pos.z+(Math.random()*24-6),scene,7); fallingIce.push({mesh:ic,vy:0}); }
+    for(const f of fallingIce){ if(f.done) continue; f.vy-=20*dt; f.mesh.position.y+=f.vy*dt;
+      if(f.mesh.position.y<.6){ f.done=true; f.mesh.visible=false; burst(f.mesh.position,0xbfefff,5,2,2); }
+      if(zoneIdx===11&&f.mesh.position.distanceTo(car.pos)<1.7){ f.done=true; f.mesh.visible=false; hitCar(7,0,3); } } });
+  const s=textSprite('ZONE 12 · FREEZER — it\'s slippery!','#d8faff'); s.position.set(0,10,zc-88); scene.add(s);
+  makePortal(11,0,zc+82,0);
+  groundFns[i]=()=>0; zones[i].spawn={pos:new THREE.Vector3(0,1,zc-80),heading:0};
+}
+
+/* ================= ZONE 13 — pirate ship deck in a storm ================= */
+function buildZone13(){
+  const i=12,zc=zoneBase(i); zones[i]={name:'🏴‍☠️ Pirate Deck — Storm',groundY:0};
+  const deck=box(34,1,150,new THREE.MeshStandardMaterial({color:0x7a5230,roughness:.95}),0,-.5,zc);
+  for(const sx of [-1,1]){ box(1,2.4,150,M.dung,sx*17,1.2,zc); box(24,.6,4,M.dung,0,.3,zc-78); }
+  for(const mz of [-45,25]){ cyl(.35,.5,20,M.dung,0,10,zc+mz,scene,10); box(14,.25,9,new THREE.MeshStandardMaterial({color:0xf5e9c9}),0,13,zc+mz); box(8,5,.3,M.dark,0,17,zc+mz,scene,false); }
+  for(let k=0;k<7;k++){ const barrel=cyl(.6,.6,1.3,M.dung,Math.random()*24-12,.7,zc-65+k*20,scene,10); colliders.push({x:barrel.position.x,z:barrel.position.z,r:1.1,zone:i}); }
+  box(7,3,6,M.dung,0,1.5,zc+68); colliders.push({x:0,z:zc+68,hw:3.5,hd:3,zone:i});
+  // cannonballs fired across the deck + rolling deck push
+  updaters.push((dt,t)=>{
+    if(zoneIdx===12){ car.pos.x+=Math.sin(t*.6)*dt*3.2; if(Math.random()<dt*.25) shake=Math.max(shake,.15); // storm roll
+      if(Math.random()<dt*.55){ const fromLeft=Math.random()<.5, ball=sph(.55,M.dark,fromLeft?-24:24,1.4,car.pos.z+(Math.random()*30-15));
+        turretShots.push({mesh:ball,vel:new THREE.Vector3(fromLeft?26:-26,2.5,0),life:2}); } }
+  });
+  const s=textSprite('ZONE 13 · PIRATE DECK','#ffe2b3'); s.position.set(0,12,zc-88); scene.add(s);
+  makePortal(12,0,zc+82,0);
+  groundFns[i]=()=>0; zones[i].spawn={pos:new THREE.Vector3(0,1,zc-80),heading:0};
+}
+
+/* ================= ZONE 14 — low-gravity moon base ================= */
+const meteors=[];
+function buildZone14(){
+  const i=13,zc=zoneBase(i); zones[i]={name:'🌕 Moon Base — Low Gravity',groundY:0};
+  groundSlab(i,WIDTH,ZONE_LEN,new THREE.MeshStandardMaterial({color:0xb8bcc4,roughness:1}));
+  for(let k=0;k<9;k++){ const crater=cyl(2+Math.random()*2,2.6,.5,M.dark,Math.random()*30-15,.05,zc-80+Math.random()*160,scene,14); if(Math.abs(crater.position.x)>5) colliders.push({x:crater.position.x,z:crater.position.z,r:2,zone:i}); }
+  // habitat domes
+  for(const [x,z] of [[-14,-40],[13,15],[-13,60]]){ const dome=sph(4.5,new THREE.MeshStandardMaterial({color:0xe8f4ff,transparent:true,opacity:.55,roughness:.1}),x,0,zc+z); colliders.push({x,z:zc+z,r:4.6,zone:i}); box(3,2,3,M.white,x,1,zc+z+4); }
+  box(1,9,1,M.white,14,4.5,zc-70); const flag=box(3,1.8,.1,M.red,15.4,8,zc-70,scene,false);
+  // bounce pads
+  for(const [x,z] of [[0,-45],[-7,0],[6,45]]){ const pad=cyl(2.4,2.8,.4,new THREE.MeshStandardMaterial({color:0x76ff03,emissive:0x33691e,emissiveIntensity:1}),x,.2,zc+z,scene,16);
+    updaters.push((dt,t)=>{ pad.position.y=.2+Math.sin(t*3+z)*.06; if(zoneIdx===13&&Math.hypot(car.pos.x-x,car.pos.z-(zc+z))<2.6&&car.grounded){ car.vy=15; car.grounded=false; toast('🟢 BOING!'); } }); }
+  // UFO tractor beam + meteors
+  const ufo=new THREE.Group(); scene.add(ufo);
+  sph(2.6,M.metal,0,0,0,ufo).scale.set(1,.45,1); cyl(.1,3.4,5,new THREE.MeshBasicMaterial({color:0xaeea00,transparent:true,opacity:.3}),0,-3,0,ufo,16);
+  updaters.push((dt,t)=>{ ufo.position.set(Math.sin(t*.4)*11,13,zc+Math.cos(t*.3)*50); ufo.rotation.y+=dt;
+    if(zoneIdx===13&&Math.hypot(car.pos.x-ufo.position.x,car.pos.z-ufo.position.z)<4){ car.vy=Math.max(car.vy,4); car.pos.y+=dt*3; car.heading+=dt*1.5; if(Math.random()<dt*5) spark(car.pos.x,car.pos.y+1,car.pos.z); } // tractor beam spins you!
+    if(zoneIdx===13&&Math.random()<dt*.5){ const m=sph(.6,M.rust,car.pos.x+(Math.random()*20-10),22,car.pos.z+(Math.random()*20-5)); meteors.push({mesh:m,vy:-6}); } });
+  updaters.push((dt)=>{ for(const m of meteors){ if(m.done) continue; m.mesh.position.y+=m.vy*dt; m.vy-=6*dt;
+    if(m.mesh.position.y<.5){ m.done=true; explosion(m.mesh.position.x,.5,m.mesh.position.z); if(zoneIdx===13&&m.mesh.position.distanceTo(car.pos)<3.4) hitCar(12,(car.pos.x-m.mesh.position.x),7); } } });
+  const s=textSprite('ZONE 14 · MOON BASE — final stretch!','#eef2ff'); s.position.set(0,11,zc-88); scene.add(s);
+  // FINISH
+  const fin=makePortal(13,0,zc+82,0); fin.children[0].material.emissive.set(0xffc400);
+  for(let fx=-8;fx<=8;fx+=2) for(let fz=0;fz<2;fz++) box(2,.05,1,((fx/2+fz)%2)?M.dark:M.white,fx,.06,zc+78+fz);
+  groundFns[i]=()=>0; zones[i].spawn={pos:new THREE.Vector3(0,1,zc-80),heading:0};
+}
 
 /* ---------- particles / effects ---------- */
 const fx=[];
@@ -376,8 +529,9 @@ function respawn(){ const s=zones[zoneIdx].spawn; car.pos.copy(s.pos); car.headi
 function toast(msg,ms=2200){ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',ms); }
 
 /* ---------- build all ---------- */
-for(let i=0;i<7;i++) zones[i]=zones[i]||{};
+for(let i=0;i<TOTAL;i++) zones[i]=zones[i]||{};
 buildZone1(); buildZone2(); buildZone3(); buildZone4(); buildZone5(); buildZone6(); buildZone7();
+buildZone8(); buildZone9(); buildZone10(); buildZone11(); buildZone12(); buildZone13(); buildZone14();
 await buildCar();
 respawn();
 
@@ -391,14 +545,14 @@ document.querySelectorAll('#touch button').forEach(b=>{
 });
 
 /* ---------- HUD ---------- */
-const zoneIcons=['☁️','🚿','🪲','🚦','🚝','🧲','💥'];
+const zoneIcons=['☁️','🚿','🪲','🚦','🚝','🧲','💥','🌋','🌊','🌪️','✈️','🧊','🏴‍☠️','🌕'];
 document.getElementById('zones').innerHTML=zoneIcons.map((z,i)=>`<span data-z="${i}">${z}</span>`).join('')+'<span>🏁</span>';
 function fmt(t){ return `${Math.floor(t/60)}:${(t%60).toFixed(1).padStart(4,'0')}` }
 
 /* ---------- main loop ---------- */
 const clock=new THREE.Clock(); let tGlobal=0, raceTime=0, camPos=new THREE.Vector3(0,26,-100);
 function groundAt(x,z){
-  const i=Math.max(0,Math.min(6,Math.round(z/ZONE_GAP)));
+  const i=Math.max(0,Math.min(TOTAL-1,Math.round(z/ZONE_GAP)));
   return groundFns[i]?groundFns[i](x,z):0;
 }
 function animate(){
@@ -412,17 +566,18 @@ function animate(){
   const steer=((keys.KeyA||keys.ArrowLeft)?1:0)-((keys.KeyD||keys.ArrowRight)?1:0);
   if(throttle&&!started){started=true; toast('🏁 GO! Reach the portal!');}
   const maxSpd= keys.ShiftLeft?44:32;
-  if(throttle) car.speed+= (car.grounded?16:4)*dt;
+  const accel = zoneIdx===11 ? 9 : 16;   // 🧊 ice warehouse: slippery
+  if(throttle) car.speed+= (car.grounded?accel:4)*dt;
   if(brake) car.speed-= (car.speed>0.5?22:10)*dt;
-  car.speed-=car.speed*.55*dt; if(keys.Space) car.speed-=car.speed*2.4*dt;
+  car.speed-=car.speed*(zoneIdx===11?0.16:0.55)*dt; // ice barely slows you if(keys.Space) car.speed-=car.speed*2.4*dt;
   car.speed=THREE.MathUtils.clamp(car.speed,-10,maxSpd);
-  if(Math.abs(car.speed)>.2) car.heading+=steer*1.55*dt*Math.sign(car.speed)*(keys.Space?1.5:1)*Math.min(1,Math.abs(car.speed)/8);
+  if(Math.abs(car.speed)>.2) car.heading+=steer*(zoneIdx===11?2.0:1.55)*dt*Math.sign(car.speed)*(keys.Space?1.5:1)*Math.min(1,Math.abs(car.speed)/8);
   car.steerVis+= (steer-car.steerVis)*dt*8;
   const fxv=Math.sin(car.heading), fzv=Math.cos(car.heading);
   car.pos.x+=fxv*car.speed*dt; car.pos.z+=fzv*car.speed*dt;
   // ground / gravity
   const g=groundAt(car.pos.x,car.pos.z);
-  if(car.pos.y>g+0.02){ car.vy-=24*dt; car.grounded=false; } else { car.pos.y=g; car.vy=0; car.grounded=true; }
+  if(car.pos.y>g+0.02){ car.vy-=(zoneIdx===13?8:24)*dt; car.grounded=false; } // 🌕 moon: low gravity else { car.pos.y=g; car.vy=0; car.grounded=true; }
   car.pos.y+=car.vy*dt;
   if(car.pos.y<g){car.pos.y=g;car.vy=0;car.grounded=true;}
   if(car.pos.y<-12){ toast('🕳️ You fell! Back to the roof.'); damage(8); respawn(); }
@@ -443,11 +598,11 @@ function animate(){
   // portal / finish check
   const zc=zoneBase(zoneIdx), portalZ=zc+82;
   if(Math.abs(car.pos.z-portalZ)<5 && Math.abs(car.pos.x)<6 && Math.abs(car.pos.y-(groundAt(car.pos.x,car.pos.z)))<6){
-    if(zoneIdx<6){ zoneIdx++; pressure=0; const s=zones[zoneIdx].spawn; car.pos.copy(s.pos); car.heading=s.heading;
+    if(zoneIdx<TOTAL-1){ zoneIdx++; pressure=0; const s=zones[zoneIdx].spawn; car.pos.copy(s.pos); car.heading=s.heading;
       document.getElementById('pressureWrap').style.display=zoneIdx===1?'block':'none';
       toast(`🌀 PORTAL! ${zones[zoneIdx].name}`); burst(car.pos,0x00e5ff,30,5,6);
     } else if(!finished){ finished=true; burst(car.pos,0xffc400,60,8,10);
-      document.querySelector('#overlay .card').innerHTML=`<h1>🏆 FINISH!</h1><p>You conquered all 7 scenes in the Project-Drive ControlVehicle!</p><p>⏱ Time: <b>${fmt(raceTime)}</b> &nbsp; ❤️ Health left: <b>${Math.round(health)}%</b></p><button onclick="location.reload()">RACE AGAIN</button>`;
+      document.querySelector('#overlay .card').innerHTML=`<h1>🏆 FINISH!</h1><p>You conquered all 14 scenes in the Project-Drive ControlVehicle!</p><p>⏱ Time: <b>${fmt(raceTime)}</b> &nbsp; ❤️ Health left: <b>${Math.round(health)}%</b></p><button onclick="location.reload()">RACE AGAIN</button>`;
       document.getElementById('overlay').style.display='grid'; }
   }
   // zone from position (for ground dispatch cosmetics)
@@ -457,7 +612,7 @@ function animate(){
   document.getElementById('health').textContent=Math.round(health);
   document.querySelector('#healthbar i').style.width=health+'%';
   document.getElementById('kmh').textContent=Math.round(Math.abs(car.speed)*3.6);
-  document.getElementById('next').textContent= zoneIdx<6?`Portal ${Math.max(0,Math.round(portalZ-car.pos.z))}m`:'FINISH!';
+  document.getElementById('next').textContent= zoneIdx<TOTAL-1?`Portal ${Math.max(0,Math.round(portalZ-car.pos.z))}m`:'FINISH!';
   // camera chase
   const back=new THREE.Vector3(car.pos.x-fxv*11,car.pos.y+5.2,car.pos.z-fzv*11);
   camPos.lerp(back,1-Math.pow(.001,dt)); if(shake>0){shake-=dt; camPos.x+=(Math.random()-.5)*shake; camPos.y+=(Math.random()-.5)*shake;}

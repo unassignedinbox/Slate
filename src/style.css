@@ -3,7 +3,7 @@ canvas{display:block}
 .panel{position:fixed;z-index:5;background:rgba(8,12,24,.72);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:10px 14px;backdrop-filter:blur(8px)}
 #top{top:12px;left:12px;min-width:300px}
 #zoneName{margin-left:8px;color:#7df9ff}
-#zones{display:flex;gap:4px;margin:8px 0;font-size:15px}
+#zones{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0;font-size:15px;max-width:340px}
 #zones span{opacity:.35;filter:grayscale(1)}#zones span.done{opacity:1;filter:none}#zones span.now{opacity:1;filter:none;text-shadow:0 0 8px #0ff;font-size:18px}
 .row{display:flex;gap:16px}
 #healthbar,#pressure{height:8px;background:#222;border-radius:99px;overflow:hidden;margin-top:6px}

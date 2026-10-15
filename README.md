@@ -1,6 +1,6 @@
 # SLATE — Portal Rush 🏁
 
-A 3D arcade obstacle-course racer (Three.js) built from 7 small, modular, detailed scenes
+A 3D arcade obstacle-course racer (Three.js) built from 14 small, modular, detailed scenes
 linked by **portal checkpoints**. Finish one scene, drive through the glowing portal, and you
 materialise at the start of the next — all the way to the chequered finish.
 
@@ -20,6 +20,13 @@ Brake, Trim, Headlight & Taillight. Tyre/hub/brake faces are split into 4 spinni
 5. **🚝 Monorail Crossings** — two elevated monorail crossings, warning lights, trains that wreck you.
 6. **🧲 Magnet Crane** — a swinging crane drops scrap… and its magnet periodically **sucks the car up** too.
 7. **💥 D-Day Minefield Maze** — hedgehog/concrete maze, live mines, and rotating turrets firing machine-gun tracers.
+8. **🌋 Volcanic Glass Bridge** — glass panels over lava periodically drop away; lava geysers erupt around you.
+9. **🌊 Flooded Dam Release** — flood current pushes the car while floating logs and barrels sweep downstream.
+10. **🌪️ Tornado Farm Alley** — barns, flying hay bales, and a roaming tornado that sucks the car in and spins it.
+11. **✈️ Airport Runway Crossing** — low crossing planes with jet blast, plus luggage carts trundling across.
+12. **🧊 Freezer Warehouse** — genuinely slippery handling (low drag, loose steering), forklifts, falling icicles.
+13. **🏴‍☠️ Pirate Deck in a Storm** — the deck roll constantly shoves the car sideways; cannonballs fire across deck.
+14. **🌕 Moon Base Finale** — low gravity, bounce pads, a UFO tractor beam that lifts & spins you, and meteor strikes before the gold finish portal.
 
 ## Play
 Open `index.html` (or serve the folder) — `python3 -m http.server 8000`
