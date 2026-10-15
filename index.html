@@ -13,13 +13,14 @@
   <div class="panel" id="top">
     <div><b>🏁 SLATE: PORTAL RUSH</b><span id="zoneName"></span></div>
     <div id="zones"></div>
+    <div class="levelRow"><span>🗺️ LEVEL</span><button class="mini" id="prevLevel" title="Previous level [">◀</button><select id="levelSelect" title="Select a level"></select><button class="mini" id="nextLevel" title="Next level ]">▶</button></div>
     <div class="row"><span>⏱ <b id="time">0:00.0</b></span><span>❤️ <b id="health">100</b></span><span>🧭 <b id="next">Portal</b></span></div>
     <div id="healthbar"><i></i></div>
     <div id="pressureWrap">SEWER PRESSURE <div id="pressure"><i></i></div></div>
   </div>
   <div class="panel" id="toast"></div>
   <div class="panel" id="speed"><b id="kmh">0</b><small>km/h</small><div id="gear">DRIVE</div></div>
-  <div class="panel" id="help">W/↑ throttle · S/↓ brake/reverse · A D steer · <b>Space</b> handbrake · <b>R</b> respawn · <b>P</b> pause<br/>Drive into the glowing portal to jump to the next scene. Reach the chequered finish!</div>
+  <div class="panel" id="help">W/↑ throttle · S/↓ brake/reverse · A D steer · <b>Space</b> handbrake · <b>R</b> respawn · <b>P</b> pause<br/>Drive into the glowing portal to jump to the next scene — or jump straight to any scene with the 🗺️ LEVEL selector (top-left).</div>
   <div id="touch"><button data-k="up">▲</button><button data-k="left">◀</button><button data-k="right">▶</button><button data-k="down">▼</button></div>
 </div>
 <div id="overlay"><div class="card">
@@ -41,8 +42,10 @@
     <li>🏴‍☠️ Storm-tossed pirate deck — rolling deck &amp; cannonballs</li>
     <li>🌕 Moon base finale — low-g, bounce pads, UFO beam &amp; meteors</li>
   </ol>
-  <button id="start">START ENGINE</button>
-  <p class="tiny">WASD / arrows · Space handbrake · R respawn · Survive at &gt;0 ❤️</p>
+  <button id="start">▶ FULL RUN — START AT LEVEL 1</button>
+  <h3 class="pick">…or select a level:</h3>
+  <div id="levelGrid"></div>
+  <p class="tiny">WASD / arrows · Space handbrake · R respawn · [ / ] previous/next level · Survive at &gt;0 ❤️</p>
 </div></div>
 <script type="module" src="src/game.js"></script>
 </body>

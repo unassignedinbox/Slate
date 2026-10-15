@@ -15,7 +15,7 @@ canvas{display:block}
 #gear{color:#7df9ff;font-size:11px;letter-spacing:.15em}
 #help{left:12px;bottom:12px;font-size:12px;line-height:1.5;opacity:.9}
 #overlay{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:radial-gradient(circle at 50% 30%,rgba(30,80,120,.55),rgba(3,6,16,.92))}
-.card{max-width:620px;width:92%;background:rgba(10,16,30,.92);border:1px solid #3af;border-radius:20px;padding:26px 30px;box-shadow:0 0 60px #06c8}
+.card{max-width:620px;max-height:92vh;overflow-y:auto;width:92%;background:rgba(10,16,30,.92);border:1px solid #3af;border-radius:20px;padding:26px 30px;box-shadow:0 0 60px #06c8}
 .card h1{margin:.1em 0}.card li{margin:4px 0}
 button{background:linear-gradient(180deg,#ffb300,#ff6f00);border:0;border-radius:12px;padding:14px 28px;font-weight:900;font-size:18px;cursor:pointer;color:#221}
 button:hover{filter:brightness(1.15)}
@@ -23,3 +23,14 @@ button:hover{filter:brightness(1.15)}
 #touch{display:none;position:fixed;right:10px;bottom:90px;z-index:6;gap:6px}
 #touch button{padding:14px;color:#fff;background:rgba(255,255,255,.15)}
 @media(pointer:coarse){#touch{display:flex}#help{display:none}}
+
+.levelRow{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px}
+.levelRow select{flex:1;min-width:0;background:#101a2e;color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:5px;font-size:12px}
+.mini{background:rgba(255,255,255,.14);color:#fff;padding:5px 10px;font-size:12px;border:1px solid rgba(255,255,255,.25);border-radius:8px}
+.mini:hover{background:rgba(0,229,255,.3)}
+.pick{margin:14px 0 6px;font-size:14px;opacity:.9}
+#levelGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#levelGrid button{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(0,229,255,.35);border-radius:10px;padding:9px 10px;font-size:13px;font-weight:600;text-align:left}
+#levelGrid button:hover{background:rgba(0,229,255,.25);filter:none}
+#levelGrid button small{display:block;opacity:.65;font-weight:400}
+@media(max-width:560px){#levelGrid{grid-template-columns:1fr}}

@@ -525,6 +525,16 @@ let health=100, hitCd=0, shake=0, finished=false, started=false, paused=false;
 function damage(n){ if(hitCd>0&&n<5) return; health=Math.max(0,health-n); if(health<=0){ toast('💀 WRECKED! Respawning…'); health=55; respawn(); } }
 function hitCar(dmg,pushX,pushY,hard=false){ if(hitCd>0&&!hard) return; hitCd=.5; damage(dmg); car.speed*=.45; car.pos.x+=pushX*.12; car.vy=Math.max(car.vy,pushY); car.grounded=false; shake=Math.max(shake,.35); burst(car.pos,0xffa726,10,3,4); }
 function respawn(){ const s=zones[zoneIdx].spawn; car.pos.copy(s.pos); car.heading=s.heading; car.speed=0; car.vy=0; }
+function snapCamera(){ camPos.set(car.pos.x-Math.sin(car.heading)*11, car.pos.y+5.2, car.pos.z-Math.cos(car.heading)*11); }
+/* Jump straight to any level: sets the scene, respawns the car there, refills health, snaps the camera. */
+function goToLevel(i,{resetTimer=false,announce=true}={}){
+  zoneIdx=THREE.MathUtils.clamp(i,0,TOTAL-1); pressure=0; finished=false; paused=false;
+  respawn(); health=100; hitCd=0; shake=0; snapCamera();
+  if(resetTimer) raceTime=0;
+  document.getElementById('pressureWrap').style.display=zoneIdx===1?'block':'none';
+  const sel=document.getElementById('levelSelect'); if(sel) sel.value=String(zoneIdx);
+  if(announce) toast(`🗺️ Level ${zoneIdx+1}: ${zones[zoneIdx].name}`);
+}
 function toast(msg,ms=2200){ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',ms); }
 
 /* ---------- build all ---------- */
@@ -536,7 +546,7 @@ respawn();
 
 /* ---------- input ---------- */
 const keys={};
-addEventListener('keydown',e=>{ keys[e.code]=true; if(e.code==='KeyR') respawn(); if(e.code==='KeyP'){paused=!paused; toast(paused?'⏸ PAUSED':'▶ RESUMED');} if(['ArrowUp','ArrowDown','Space'].includes(e.code))e.preventDefault(); });
+addEventListener('keydown',e=>{ keys[e.code]=true; if(e.code==='BracketLeft') goToLevel(zoneIdx-1); if(e.code==='BracketRight') goToLevel(zoneIdx+1); if(e.code==='KeyR') respawn(); if(e.code==='KeyP'){paused=!paused; toast(paused?'⏸ PAUSED':'▶ RESUMED');} if(['ArrowUp','ArrowDown','Space'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>keys[e.code]=false);
 document.querySelectorAll('#touch button').forEach(b=>{
   const map={up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD'};
@@ -546,6 +556,17 @@ document.querySelectorAll('#touch button').forEach(b=>{
 /* ---------- HUD ---------- */
 const zoneIcons=['☁️','🚿','🪲','🚦','🚝','🧲','💥','🌋','🌊','🌪️','✈️','🧊','🏴‍☠️','🌕'];
 document.getElementById('zones').innerHTML=zoneIcons.map((z,i)=>`<span data-z="${i}">${z}</span>`).join('')+'<span>🏁</span>';
+/* --- level select: HUD dropdown, prev/next buttons and the start-screen grid (all 14 open, no locks) --- */
+const levelSelect=document.getElementById('levelSelect');
+levelSelect.innerHTML=zones.map((z,i)=>`<option value="${i}">Level ${i+1} — ${z.name}</option>`).join('');
+levelSelect.addEventListener('change',()=>{ goToLevel(parseInt(levelSelect.value,10)); levelSelect.blur(); });
+document.getElementById('prevLevel').onclick=e=>{ goToLevel(zoneIdx-1); e.currentTarget.blur(); };
+document.getElementById('nextLevel').onclick=e=>{ goToLevel(zoneIdx+1); e.currentTarget.blur(); };
+document.getElementById('levelGrid').innerHTML=zones.map((z,i)=>`<button data-level="${i}">${zoneIcons[i]} Level ${i+1}<small>${z.name.replace(/^\S+\s?/,'')}</small></button>`).join('');
+document.querySelectorAll('#levelGrid button').forEach(b=>b.onclick=()=>{
+  document.getElementById('overlay').style.display='none'; started=false;
+  goToLevel(parseInt(b.dataset.level,10),{resetTimer:true});
+});
 function fmt(t){ return `${Math.floor(t/60)}:${(t%60).toFixed(1).padStart(4,'0')}` }
 
 /* ---------- main loop ---------- */
@@ -568,7 +589,8 @@ function animate(){
   const accel = zoneIdx===11 ? 9 : 16;   // 🧊 ice warehouse: slippery
   if(throttle) car.speed+= (car.grounded?accel:4)*dt;
   if(brake) car.speed-= (car.speed>0.5?22:10)*dt;
-  car.speed-=car.speed*(zoneIdx===11?0.16:0.55)*dt; // ice barely slows you if(keys.Space) car.speed-=car.speed*2.4*dt;
+  car.speed-=car.speed*(zoneIdx===11?0.16:0.55)*dt; // ice barely slows you
+  if(keys.Space) car.speed-=car.speed*2.4*dt;
   car.speed=THREE.MathUtils.clamp(car.speed,-10,maxSpd);
   if(Math.abs(car.speed)>.2) car.heading+=steer*(zoneIdx===11?2.0:1.55)*dt*Math.sign(car.speed)*(keys.Space?1.5:1)*Math.min(1,Math.abs(car.speed)/8);
   car.steerVis+= (steer-car.steerVis)*dt*8;
@@ -576,7 +598,8 @@ function animate(){
   car.pos.x+=fxv*car.speed*dt; car.pos.z+=fzv*car.speed*dt;
   // ground / gravity
   const g=groundAt(car.pos.x,car.pos.z);
-  if(car.pos.y>g+0.02){ car.vy-=(zoneIdx===13?8:24)*dt; car.grounded=false; } // 🌕 moon: low gravity else { car.pos.y=g; car.vy=0; car.grounded=true; }
+  if(car.pos.y>g+0.02){ car.vy-=(zoneIdx===13?8:24)*dt; car.grounded=false; } // 🌕 moon: low gravity
+  else { car.pos.y=g; car.vy=0; car.grounded=true; }
   car.pos.y+=car.vy*dt;
   if(car.pos.y<g){car.pos.y=g;car.vy=0;car.grounded=true;}
   if(car.pos.y<-12){ toast('🕳️ You fell! Back to the roof.'); damage(8); respawn(); }
@@ -599,6 +622,7 @@ function animate(){
   if(Math.abs(car.pos.z-portalZ)<5 && Math.abs(car.pos.x)<6 && Math.abs(car.pos.y-(groundAt(car.pos.x,car.pos.z)))<6){
     if(zoneIdx<TOTAL-1){ zoneIdx++; pressure=0; const s=zones[zoneIdx].spawn; car.pos.copy(s.pos); car.heading=s.heading;
       document.getElementById('pressureWrap').style.display=zoneIdx===1?'block':'none';
+      snapCamera(); { const sel=document.getElementById('levelSelect'); if(sel) sel.value=String(zoneIdx); }
       toast(`🌀 PORTAL! ${zones[zoneIdx].name}`); burst(car.pos,0x00e5ff,30,5,6);
     } else if(!finished){ finished=true; burst(car.pos,0xffc400,60,8,10);
       document.querySelector('#overlay .card').innerHTML=`<h1>🏆 FINISH!</h1><p>You conquered all 14 scenes in the Project-Drive ControlVehicle!</p><p>⏱ Time: <b>${fmt(raceTime)}</b> &nbsp; ❤️ Health left: <b>${Math.round(health)}%</b></p><button onclick="location.reload()">RACE AGAIN</button>`;
@@ -620,5 +644,5 @@ function animate(){
   renderer.render(scene,camera);
 }
 animate();
-document.getElementById('start').onclick=()=>{ document.getElementById('overlay').style.display='none'; toast('🏁 Zone 1: cross the rooftops to the portal!'); };
+document.getElementById('start').onclick=()=>{ document.getElementById('overlay').style.display='none'; started=false; goToLevel(0,{resetTimer:true}); toast('🏁 Full run! Cross the rooftops to the portal!'); };
 

@@ -29,6 +29,8 @@ Brake, Trim, Headlight & Taillight. Tyre/hub/brake faces are split into 4 spinni
 14. **🌕 Moon Base Finale** — low gravity, bounce pads, a UFO tractor beam that lifts & spins you, and meteor strikes before the gold finish portal.
 
 ## Play
+
+**Level select:** all 14 scenes are open from the start — pick one from the grid on the start screen, use the 🗺️ LEVEL dropdown / ◀ ▶ buttons in the top-left HUD mid-run, or hop with `[` / `]`. Selecting a level respawns you at its start with full health and refocuses the camera; portals still chain onward from wherever you are, and the full-run button runs all 14 in order.
 Open `index.html` (or serve the folder) — `python3 -m http.server 8000`
 
 | Key | Action |
@@ -39,6 +41,7 @@ Open `index.html` (or serve the folder) — `python3 -m http.server 8000`
 | Shift | boost |
 | R | respawn at scene start |
 | P | pause |
+| [ / ] | previous / next level |
 
 Damage (❤️) from debris, dung, steam, trains, scrap, mines & turret fire. Hit 0 and you respawn at 55%.
 HUD tracks time, speed, portal distance, and sewer pressure. Touch pedals appear on coarse pointers.
