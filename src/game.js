@@ -104,8 +104,7 @@ async function buildCar(){
       const pivot=new THREE.Group(); pivot.position.copy(c); g.translate(-c.x,-c.y,-c.z); pivot.add(mesh); carGroup.add(pivot); wheelPivots.push(pivot);
     } else carGroup.add(mesh);
   }
-  // cabin steering wheel hint + plate, so orientation reads at a glance
-  box(.9,.06,.5,M.dark,0,1.02,2.55,carGroup);
+  // (no added bodywork — the authored ControlVehicle shell stands on its own)
 }
 const car={pos:new THREE.Vector3(0,20,-80),heading:0,speed:0,vy:0,grounded:false,steerVis:0};
 
