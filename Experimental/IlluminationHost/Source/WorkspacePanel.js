@@ -9,7 +9,8 @@
 //    whatever is selected from InspectorPanel, PlumePanel and FracturePanel. H hides both docks and the debug windows
 //    for a bare view and brings back what was showing; their state survives a reload, as the quality grade reloads.
 
-import { InspectorKit, ConstructVehiclePage, ConstructLightingPage, ConstructRenderingPage, ConstructStressPage, ConstructSmashPage } from "./InspectorPanel.js";
+import { InspectorKit, ConstructVehiclePage, ConstructLightingPage, ConstructRenderingPage, ConstructStressPage, ConstructSmashPage, ConstructCabinPage } from "./InspectorPanel.js";
+import { CabinEyeOrder } from "./CabinStructure.js";
 import { ConstructPlumePage } from "./PlumePanel.js";
 import { ConstructBreakablePage, FractureEditor } from "./FracturePanel.js";
 import { BreakableKinds } from "./YardStructure.js";
@@ -49,6 +50,7 @@ const Glyphs = {
     barrier:  '<path d="M2 13h12M4 13l1.2-7h5.6L12 13"/>',
     light:    '<path d="M5 14h6M8 14V5M8 5l4-1.6M10.5 2.5h3v2.2h-3z"/>',
     gauge:    '<path d="M2.5 11a5.5 5.5 0 1 1 11 0"/><path d="M8 11l3-3.5"/>',
+    wheel:    '<circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.4"/><path d="M8 8V2.5M8 8l-4.8 2.8M8 8l4.8 2.8"/>',
     stack:    '<rect x="2" y="9" width="12" height="4"/><rect x="3" y="4" width="10" height="4"/>'
 };
 const KindGlyphs = { Crate: "crate", Pane: "pane", Barrel: "barrel", Block: "block", Barrier: "barrier" };
@@ -125,6 +127,8 @@ export class WorkspacePanel
                                 ["Breakable props", () => String(Exhibit.Scene.Breakables.length)]]) });
         Rows.push({ Id: "vehicle", Name: "ControlVehicle", Glyph: "car", Depth: 1, Tags: ["vehicle"], Summary: () => `${(Math.abs(Exhibit.Vehicle.QueryTelemetry().Speed) * 3.6).toFixed(0)} km/h`,
                     Status: () => Exhibit.Vehicle.QueryTelemetry().TyresBurning > 0 ? "burning" : "", Page: ConstructVehiclePage });
+        Rows.push({ Id: "cabin", Name: "Cockpit", Glyph: "wheel", Depth: 1, Tags: ["vehicle"], Summary: () => Exhibit.CabinCamera >= 0 ? CabinEyeOrder[Exhibit.CabinCamera] : "chase",
+                    Page: ConstructCabinPage });
         Rows.push({ Id: "plume", Name: "Smoke & fire", Glyph: "flame", Depth: 1, Tags: ["effects"], Summary: () => Exhibit.Plume.QueryDescription().Grade,
                     Status: () => !this.Settings.PlumeEnabled ? "idle" : Exhibit.Plume.Resident ? (Exhibit.Vehicle.QueryTelemetry().TyresBurning > 0 ? "burning" : "") : "idle",
                     Page: ConstructPlumePage });
@@ -258,7 +262,11 @@ export class WorkspacePanel
             Button.addEventListener("click", () =>
             {
                 Button.blur();
-                if ((Button.dataset.mode === "free") !== this.Exhibit.FreeCamera)
+                if (Button.dataset.mode === "cabin")
+                    this.OnChange("CycleCabin");
+                else if (Button.dataset.mode === "chase")
+                    this.OnChange("CameraChase");
+                else if (!this.Exhibit.FreeCamera)
                     this.OnChange("ToggleCamera");
             });
         const Burnout = document.getElementById("burnout-button");
@@ -285,10 +293,13 @@ export class WorkspacePanel
         this.AssignCameraMode(false);
     }
 
-    AssignCameraMode(Free)
+    AssignCameraMode(Free, Cabin = -1)
     {
         for (const Button of document.querySelectorAll("#camera-mode button"))
-            Button.setAttribute("aria-pressed", (Button.dataset.mode === "free") === Free);
+        {
+            const Mode = Button.dataset.mode;
+            Button.setAttribute("aria-pressed", Mode === "free" ? !!Free : Mode === "cabin" ? Cabin >= 0 : !Free && Cabin < 0);
+        }
     }
 
     // 📝 Applies the overlay toggles and remembers them. The restore button appears whenever the docks are hidden.

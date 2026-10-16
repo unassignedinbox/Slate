@@ -45,10 +45,12 @@ export class DisplayProjection
         for (const Texture of this.Textures || [])
             Texture.destroy();
         const Usage = GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING;
-        const Construct = (Label) => this.Exchange.ConstructTexture({ label: Label, size: ScreenExtent, format: "rgba16float", usage: Usage });
-        const Recombined = Construct("Recombined radiance");
+        // 📝 Recombined and Resolved double as render targets for the cabin forward pass (screens, glazing).
+        const CabinUsage = Usage | GPUTextureUsage.RENDER_ATTACHMENT;
+        const Construct = (Label, Target = Usage) => this.Exchange.ConstructTexture({ label: Label, size: ScreenExtent, format: "rgba16float", usage: Target });
+        const Recombined = Construct("Recombined radiance", CabinUsage);
         const Inspection = Construct("Inspection radiance");
-        const Resolved   = [Construct("Resolved radiance A"), Construct("Resolved radiance B")];
+        const Resolved   = [Construct("Resolved radiance A", CabinUsage), Construct("Resolved radiance B", CabinUsage)];
         this.Textures = [Recombined, Inspection, ...Resolved];
         this.ScreenExtent = ScreenExtent;
         this.Views = { Recombined: Recombined.createView(), Inspection: Inspection.createView(), Resolved: Resolved.map((Texture) => Texture.createView()) };
@@ -75,20 +77,29 @@ export class DisplayProjection
         Pass.end();
     }
 
-    RecordResolve(Encoder, Parity, TimestampWrites)
+    // 📝 CabinScope ({ Cabin, Scene, Surface, VertexRecords, Screens }) splices the cabin forward pass into the
+    //    resolve: screens composite into the recombined radiance before the antialiasing settles it, glazing blends
+    //    over the resolved frame after. Null omits the cabin (omit=Cabin).
+    RecordResolve(Encoder, Parity, TimestampWrites, CabinScope = null)
     {
         const [Width, Height] = this.ScreenExtent;
         const Pass = Encoder.beginComputePass({ label: "Display resolve", timestampWrites: TimestampWrites });
         Pass.setPipeline(this.RecombineProgram);
         Pass.setBindGroup(0, this.RecombineGroup);
         Pass.dispatchWorkgroups(Math.ceil(Width / 8), Math.ceil(Height / 8));
-        Pass.setPipeline(this.AntialiasProgram);
-        Pass.setBindGroup(0, this.AntialiasGroups[Parity]);
-        Pass.dispatchWorkgroups(Math.ceil(Width / 8), Math.ceil(Height / 8));
-        Pass.setPipeline(this.ExposureProgram);
-        Pass.setBindGroup(0, this.ExposureGroups[Parity]);
-        Pass.dispatchWorkgroups(1);
         Pass.end();
+        if (CabinScope && CabinScope.Screens)
+            CabinScope.Cabin.RecordScreens(Encoder, CabinScope.Surface, this);
+        const Settle = Encoder.beginComputePass({ label: "Display settle" });
+        Settle.setPipeline(this.AntialiasProgram);
+        Settle.setBindGroup(0, this.AntialiasGroups[Parity]);
+        Settle.dispatchWorkgroups(Math.ceil(Width / 8), Math.ceil(Height / 8));
+        Settle.setPipeline(this.ExposureProgram);
+        Settle.setBindGroup(0, this.ExposureGroups[Parity]);
+        Settle.dispatchWorkgroups(1);
+        Settle.end();
+        if (CabinScope)
+            CabinScope.Cabin.RecordGlass(Encoder, Parity, CabinScope.Scene, CabinScope.Surface, this, CabinScope.VertexRecords);
     }
 
     RecordPresent(Encoder, Parity, TargetView, DistanceGroup)

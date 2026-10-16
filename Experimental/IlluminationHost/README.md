@@ -49,8 +49,10 @@ loads from Google Fonts; offline it falls back to the system sans.
 | B (hold)     | line lock — front brakes held, rears free: throttle for a burnout     |
 | R            | respawn the vehicle at the burnout box                                |
 | F8 or F      | free camera (WASD, Q/E, Shift) / chase camera                         |
+| C            | cycle the interior cameras: driver → passenger → rear bench → chase   |
+| [ and ]      | switch the tablet tab (− / = climate, M next track)                   |
 | H            | bare view: hide both docks and every debug window, or bring them back |
-| drag, wheel  | orbit the chase camera, zoom                                          |
+| drag, wheel  | orbit the chase camera, zoom — or look around the cabin               |
 
 ## The workspace
 
@@ -123,6 +125,26 @@ constant sliding power per tyre:
 | 30 kW slide                 | fire after 19 s                | never                               |
 | drift, 70 kW on / 10 kW off | fire within a minute           | never; tread gone after ~90 s       |
 | line-lock burnout (~110 kW) | fire after ~5 s                | fire after ~20 s, burst after ~32 s |
+
+## Cockpit
+
+The cabin from Project-Drive's HMI demo, estimated from the authored shell exactly as `DriveCabinLayout.h`
+estimates it: dashboard, cluster cowl, column and console, two seats, a headliner lamp, and a steering wheel that
+turns with the road wheels. The shell's 74 glazing facets leave the deferred body set and blend over the resolved
+frame (smoked tint, fresnel sheen, sun glint), so the cabin reads through the windscreen from outside and the yard
+reads through it from the driver's eye.
+
+The tablet and the cluster are live HMI screens (`CabinDisplaySequence.js`): the cluster shows speed, revs, gear,
+pedals, the four tyre corners and warnings against the four prototype outlines (hexagon, 70 % circle, trapezoid,
+pill, each rastered at its own aspect); the tablet keeps the prototype's twelve applications with live tyres,
+telemetry, vehicle, climate, media, garage and settings pages. Touch was unusable from the chase camera in the
+native demo, so the exhibit drives its screens from the workspace: the Cockpit inspector page (or `C`, `[` `]`,
+`-` `=`, `M`) switches cameras, tabs, outlines, climate and tracks. The tyre bay there also exposes what had no
+UI before — cold pressures per axle, fresh rubber, and a nail or a blowout per corner.
+
+Three chassis-rigid interior cameras — driver (Project-Drive's eye, 70°), passenger and rear bench — cycle on `C`,
+with drag to look around; the segmented control and the Cockpit outliner row switch them too. `omit=Cabin` leaves
+the whole forward pass out of the frame for diagnostics.
 
 ## Fracture
 

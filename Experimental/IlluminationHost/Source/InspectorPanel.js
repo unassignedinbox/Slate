@@ -9,6 +9,8 @@
 //    settings key or to a Read / Write pair, and every bound control and live readout registers with the kit, so a
 //    preset, a key press or the host's measurements bring the page up to date without rebuilding it.
 
+import { TabletApplications } from "./CabinDisplaySequence.js";
+
 export const InspectionModes = [
     ["Final image", 0], ["Direct sun only", 1], ["Indirect diffuse (GI)", 2], ["Indirect irradiance (denoised)", 3],
     ["ReSTIR irradiance (raw, no denoise)", 4], ["Glossy reflections", 5], ["Global distance field", 6],
@@ -476,4 +478,43 @@ export function ConstructSmashPage(Parent, Context)
                         { Label: "Reassemble all", Action: () => Change("ReassembleAll"), Class: "emphasis" }]);
     Kit.Note(Rules, "Fragments are raster and dynamic: one draw call for all of them, sun shadows from the cascades, rigid-body contacts "
                   + "with the road, the walls and the car. The distance field drops a broken prop at once.");
+}
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                                    CABIN PAGE
+//------------------------------------------------------------------------------------------------------------------------
+
+export function ConstructCabinPage(Parent, Context)
+{
+    const { Kit, Exhibit, Change } = Context;
+    Kit.Heading(Parent, "Vehicle · interior", "Cockpit", "Chassis-rigid interior cameras, the HMI screens on the glass, and the tyre bay. C cycles the cameras, [ ] switch the tablet tab.");
+
+    const Camera = Kit.Card(Parent, "Interior cameras", "Driver · passenger · bench");
+    Kit.Buttons(Camera, [{ Label: "Driver", Action: () => Change("CameraCabin:0") }, { Label: "Passenger", Action: () => Change("CameraCabin:1") },
+                         { Label: "Rear bench", Action: () => Change("CameraCabin:2") }, { Label: "Chase", Action: () => Change("CameraChase") }]);
+    Kit.Readout(Camera, "Eye", () => Exhibit.CabinCamera >= 0 ? ["Driver's eye · 70°", "Passenger eye · 65°", "Rear bench · 65°"][Exhibit.CabinCamera] : "Chase camera");
+    Kit.Note(Camera, "C cycles driver → passenger → bench → chase. Drag looks around the cabin; the wheel turns with the road wheels and the cluster sits behind it.");
+
+    const Screens = Kit.Card(Parent, "HMI screens", "Tablet · cluster");
+    Kit.Switch(Screens, { Label: "Cabin screens lit", Key: "CabinScreens" });
+    Kit.Slider(Screens, { Label: "Screen brightness", Key: "CabinBrightness", Minimum: 0, Maximum: 2, Decimals: 2, Unit: "×" });
+    Kit.Select(Screens, { Label: "Cluster outline", Key: "ClusterOutline",
+                           Options: [["Hexagon", "hexagon"], ["70 % circle", "arc"], ["Trapezoid", "trapezoid"], ["Wide pill", "pill"]] });
+    Kit.Select(Screens, { Label: "Tablet tab", Key: "TabletTab",
+                           Options: TabletApplications.map((Application) => [Application.Name, Application.Identifier]) });
+    Kit.Readout(Screens, "Sheet revisions", () => `cluster ${Exhibit.Displays.ClusterRevision} · tablet ${Exhibit.Displays.TabletRevision}`);
+
+    const Tablet = Kit.Card(Parent, "Tablet", "Climate · media");
+    Kit.Readout(Tablet, "Climate setpoint", () => `${Exhibit.Displays.ClimateSetpoint.toFixed(1)} °C`);
+    Kit.Buttons(Tablet, [{ Label: "Cooler (−)", Action: () => Change("ClimateDown") }, { Label: "Warmer (+)", Action: () => Change("ClimateUp") },
+                         { Label: "Next track (M)", Action: () => Change("MediaNext") }]);
+
+    const Bay = Kit.Card(Parent, "Tyre bay", "Pressure · punctures");
+    Kit.Slider(Bay, { Label: "Front cold pressure", Key: "TyrePressureFront", Minimum: 120, Maximum: 300, Decimals: 0, Unit: "kPa" });
+    Kit.Slider(Bay, { Label: "Rear cold pressure", Key: "TyrePressureRear", Minimum: 120, Maximum: 300, Decimals: 0, Unit: "kPa" });
+    Kit.Readout(Bay, "Pressures FL · FR · RL · RR", () => Exhibit.Vehicle.QueryTelemetry().Pressures.map((kPa) => kPa.toFixed(0)).join(" · ") + " kPa");
+    Kit.Buttons(Bay, [{ Label: "Fresh cold tyres", Action: () => Change("TyresFresh"), Class: "emphasis" }]);
+    Kit.Buttons(Bay, [0, 1, 2, 3].map((Wheel) => ({ Label: `Nail ${["FL", "FR", "RL", "RR"][Wheel]}`, Action: () => Change(`Puncture:${Wheel}`) })));
+    Kit.Buttons(Bay, [0, 1, 2, 3].map((Wheel) => ({ Label: `Blowout ${["FL", "FR", "RL", "RR"][Wheel]}`, Action: () => Change(`Blowout:${Wheel}`), Class: "caution" })));
+    Kit.Note(Bay, "A nail leaks a tyre down over ~20 s so the carcass sags on its cords; a blowout vents it at once. Roll a flat far enough and the rubber shreds off onto the rim.");
 }
