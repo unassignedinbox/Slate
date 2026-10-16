@@ -104,6 +104,20 @@
   .mode span{padding:5px 12px;border-radius:999px;color:var(--mut);cursor:pointer;font-size:12px}
   .mode span.on{background:var(--card3);color:#fff}
   .panel{display:none}.panel.on{display:block}
+  #designer{position:fixed;inset:0;z-index:50;background:var(--bg);display:none;flex-direction:column;padding:10px;gap:10px}
+  #designer.on{display:flex}
+  #dbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 12px;background:var(--card);border-radius:18px}
+  #dbar .grp{display:flex;align-items:center;gap:4px;padding:0 8px;border-right:1px solid var(--line)}
+  #dbar .grp:last-child{border-right:0;margin-left:auto}
+  #dbar label{color:var(--mut);font-size:12px;margin-left:4px}
+  #dbar input[type=number]{width:62px;background:var(--card2);color:var(--txt);border:0;border-radius:999px;padding:6px 10px;font:inherit;font-size:12px}
+  #dbar button.tool{padding:7px 12px}
+  #dbar button.tool.on{background:#fff;color:#111}
+  #dcanvasWrap{flex:1;min-height:0;position:relative;border-radius:18px;overflow:hidden;background:#0b0c0e}
+  #dcanvas{width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}
+  #dstatus{position:absolute;left:14px;bottom:10px;color:var(--mut);font-size:12px;pointer-events:none;background:rgba(23,24,27,.7);padding:5px 10px;border-radius:999px}
+  #dhelp{position:absolute;right:14px;top:10px;color:var(--mut);font-size:11.5px;line-height:1.6;background:rgba(23,24,27,.75);padding:10px 14px;border-radius:14px;pointer-events:none;max-width:280px}
+  #dhelp b{color:var(--txt);font-weight:400}
 </style>
 </head>
 <body>
@@ -111,7 +125,7 @@
   <header>
     <div class="logo"></div>
     <div class="tabs" id="tabs">
-      <div class="tab on" data-tab="size">Tyre</div><div class="tab" data-tab="look">Look</div><div class="tab" data-tab="export">Export</div>
+      <div class="tab on" data-tab="size">Tyre</div><div class="tab" data-tab="look">Look</div><div class="tab" data-tab="export">Export</div><div class="tab" id="openDesigner" style="color:var(--yellow)">✎ Tread designer</div>
     </div>
   </header>
 
@@ -177,6 +191,18 @@
 
 </div>
 
+<div id="designer">
+  <div id="dbar">
+    <div class="grp"><button class="tool on" data-tool="select" title="V">Select</button><button class="tool" data-tool="path" title="P">Groove</button><button class="tool" data-tool="poly" title="G">Polygon</button><button class="tool" data-tool="rect" title="R">Rect</button><button class="tool" data-tool="circle" title="C">Circle</button><button class="tool" data-tool="hex" title="H">Hex</button></div>
+    <div class="grp"><label>Width</label><input type="number" id="dWidth" value="6" min="0.5" max="40" step="0.5"><label>Depth</label><input type="number" id="dDepth" value="1" min="0.05" max="1" step="0.05"><label>Repeat ×</label><input type="number" id="dRepeat" value="24" min="1" max="200" step="1"><label>Mirror</label><input type="checkbox" id="dMirror" style="accent-color:#fff"></div>
+    <div class="grp"><label>Snap</label><input type="checkbox" id="dSnap" checked style="accent-color:#fff"><input type="number" id="dStep" value="1" min="0.1" max="20" step="0.1" title="snap step (mm)"><button class="small" id="dFit">Fit</button><button class="small" id="dTile">Tile view</button></div>
+    <div class="grp"><button class="small" id="dUndo">Undo</button><button class="small" id="dRedo">Redo</button><button class="small" id="dDelete">Delete</button><button class="small" id="dClear">Clear shapes</button></div>
+    <div class="grp"><button class="small" id="dApply">Update 3D</button><button class="primary" id="dClose">Done</button></div>
+  </div>
+  <div id="dcanvasWrap"><canvas id="dcanvas"></canvas><div id="dstatus"></div>
+    <div id="dhelp"><b>Groove / Polygon:</b> click points, Enter or double-click to finish, Esc cancels, Shift = 45°<br><b>Rect / Circle / Hex:</b> drag<br><b>Select:</b> drag shapes or vertices · drag handles of parametric layers<br><b>Wheel</b> zoom · <b>Space / middle-drag</b> pan · <b>Del</b> delete · <b>Ctrl-Z/Y</b></div>
+  </div>
+</div>
 <script src="https://unpkg.com/clipper-lib@6.4.2/clipper.js"></script>
 <script type="importmap">
 { "imports": {
@@ -211,14 +237,15 @@ const LAYER_DEFS = {
   sipe:    { label: 'Sipes',                   color: '#9aa4ff', count: 140, angle: 0, width: 1.2, depth: 0.55, from: -1, to: 1, phase: 0.5, mirror: false, curve: 0, zig: 1.5 },
   dimple:  { label: 'Circular pattern',        color: '#4fc3f7', rows: 3, count: 60, radius: 3, depth: 0.5, from: -0.7, to: 0.7, stagger: true, ring: false },
   hex:     { label: 'Hexagon cells',           color: '#e5423f', size: 14, width: 3, depth: 0.8, from: -1, to: 1, rotate: 0 },
-  noise:   { label: 'Micro texture',           color: '#8a8d94', amount: 0.06, scale: 3 }
+  noise:   { label: 'Micro texture',           color: '#8a8d94', amount: 0.06, scale: 3 },
+  shape:   { label: 'Drawn shape',             color: '#ffffff', kind: 'path', pts: [], width: 6, depth: 1, repeat: 24, mirror: false }
 };
 const RANGES = {
   pos: [-1.3, 1.3, 0.01], width: [0.5, 30, 0.1], depth: [0.05, 1, 0.01], zig: [0, 12, 0.1], zigCount: [4, 240, 1],
   count: [2, 300, 1], angle: [-80, 80, 1], from: [-1.3, 1.3, 0.01], to: [-1.3, 1.3, 0.01], phase: [0, 1, 0.01], curve: [-1.5, 1.5, 0.01],
-  rows: [1, 14, 1], radius: [0.5, 15, 0.1], size: [4, 40, 0.5], rotate: [0, 60, 1], amount: [0, 0.5, 0.01], scale: [1, 12, 0.5]
+  rows: [1, 14, 1], radius: [0.5, 15, 0.1], repeat: [1, 200, 1], size: [4, 40, 0.5], rotate: [0, 60, 1], amount: [0, 0.5, 0.01], scale: [1, 12, 0.5]
 };
-const LABELS = { pos: 'Across position', width: 'Width (mm)', depth: 'Depth (×tread)', zig: 'Zig-zag (mm)', zigCount: 'Zig-zag count', count: 'Count around', angle: 'Angle (°)', from: 'From (across)', to: 'To (across)', phase: 'Phase', curve: 'Curvature', rows: 'Rows', radius: 'Radius (mm)', size: 'Cell size (mm)', rotate: 'Cell rotation (°)', amount: 'Amount', scale: 'Scale', mirror: 'Mirror (V)', stagger: 'Stagger rows', ring: 'Rings instead of dots' };
+const LABELS = { repeat: 'Repeat around', pos: 'Across position', width: 'Width (mm)', depth: 'Depth (×tread)', zig: 'Zig-zag (mm)', zigCount: 'Zig-zag count', count: 'Count around', angle: 'Angle (°)', from: 'From (across)', to: 'To (across)', phase: 'Phase', curve: 'Curvature', rows: 'Rows', radius: 'Radius (mm)', size: 'Cell size (mm)', rotate: 'Cell rotation (°)', amount: 'Amount', scale: 'Scale', mirror: 'Mirror (V)', stagger: 'Stagger rows', ring: 'Rings instead of dots' };
 
 // =====================================================================================================================
 //  PRESETS — each one is a named tread design with its own default tyre size
@@ -366,6 +393,9 @@ function renderPattern(pattern, d, H, wear = 0, wearBias = 0, treadDepth = 8, sk
             if (ly.ring) { ctx.lineWidth = Math.max(0.6, ly.radius * 0.4); ctx.stroke(); } else ctx.fill();
           }
         }
+      } else if (ly.type === 'shape') {
+        for (const inst of shapeInstances(ly, circ)) { ctx.beginPath(); inst.pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+          if (inst.kind === 'path') { ctx.lineWidth = ly.width; ctx.stroke(); } else { ctx.closePath(); ctx.fill(); } }
       } else if (ly.type === 'hex') {
         const s = Math.max(2, ly.size); const nx = Math.max(2, 2 * Math.round(circ / (3 * s))); const sx = circ / nx; const sy = Math.sqrt(3) * s;
         const y0 = ly.from * th, y1 = ly.to * th; ctx.save(); ctx.beginPath(); ctx.rect(-5, y0, circ + 10, y1 - y0); ctx.clip();
@@ -519,6 +549,22 @@ function exPolygons(paths) {                               // → [{outer:[[x,y]
   const L = CL(); const c = new L.Clipper(); c.AddPaths(paths, L.PolyType.ptSubject, true); const tree = new L.PolyTree(); c.Execute(L.ClipType.ctUnion, tree, L.PolyFillType.pftNonZero, L.PolyFillType.pftNonZero);
   return L.JS.PolyTreeToExPolygons(tree).map(ex => ({ outer: ex.outer.map(p => [p.X / CS, p.Y / CS]), holes: ex.holes.map(h => h.map(p => [p.X / CS, p.Y / CS])) }));
 }
+
+// drawn shapes → concrete instances in tread mm space
+function shapeInstances(ly, circ) {
+  const out = []; const rep = Math.max(1, Math.round(ly.repeat || 1)); const base = shapeOutline(ly);
+  if (!base) return out;
+  for (let k = 0; k < rep; k++) { const dx = k * circ / rep; out.push({ kind: ly.kind, pts: base.pts.map(p => [p[0] + dx, p[1]]), r: base.r, c: base.c && [base.c[0] + dx, base.c[1]] });
+    if (ly.mirror) out.push({ kind: ly.kind, pts: base.pts.map(p => [p[0] + dx, -p[1]]), r: base.r, c: base.c && [base.c[0] + dx, -base.c[1]] }); }
+  return out;
+}
+function shapeOutline(ly) {   // {pts (polygon/polyline), c, r}
+  const P = ly.pts; if (!P || !P.length) return null;
+  if (ly.kind === 'rect') { if (P.length < 2) return null; const [a, b] = P; return { pts: [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]] }; }
+  if (ly.kind === 'circle' || ly.kind === 'hex') { if (P.length < 2) return null; const r = Math.hypot(P[1][0] - P[0][0], P[1][1] - P[0][1]); if (ly.kind === 'circle') return { pts: circleRing(P[0][0], P[0][1], r, Math.max(16, Math.min(64, Math.round(r * 6)))), c: P[0], r };
+    const pts = []; for (let v = 0; v < 6; v++) pts.push([P[0][0] + r * Math.cos(v * Math.PI / 3), P[0][1] + r * Math.sin(v * Math.PI / 3)]); return { pts, c: P[0], r }; }
+  return { pts: P.map(p => [p[0], p[1]]) };
+}
 // Every groove layer as Clipper paths with its depth
 function patternPolygons(pattern, d, treadDepth) {
   const th = d.treadHalf, circ = d.circ, A = d.acrossHalf; const out = []; const bars = [];
@@ -543,6 +589,9 @@ function patternPolygons(pattern, d, treadDepth) {
       for (let r = 0; r < rows; r++) { const cc = rows === 1 ? (ly.from + ly.to) / 2 : ly.from + (ly.to - ly.from) * r / (rows - 1); const y = cc * th; const sh = ly.stagger && r % 2 ? 0.5 : 0;
         for (let i = 0; i < n; i++) { const x = (i + sh) / n * circ; const seg = Math.max(12, Math.min(48, Math.round(ly.radius * 6))); rings.push(circleRing(x, y, ly.radius, seg)); } }
       paths = ly.ring ? strokePaths(rings, Math.max(0.6, ly.radius * 0.4), true) : rings.map(r => orient(toPath(r)));
+    } else if (ly.type === 'shape') {
+      const inst = shapeInstances(ly, circ); const lines = inst.filter(i => i.kind === 'path' && i.pts.length > 1).map(i => i.pts); const polys = inst.filter(i => i.kind !== 'path' && i.pts.length > 2).map(i => orient(toPath(i.pts)));
+      paths = (lines.length ? strokePaths(lines, ly.width) : []).concat(polys);
     } else if (ly.type === 'hex') {
       const sz = Math.max(2, ly.size); const nx = Math.max(2, 2 * Math.round(circ / (3 * sz))); const sx = circ / nx; const sy = Math.sqrt(3) * sz; const y0 = ly.from * th, y1 = ly.to * th; const rot = ly.rotate * Math.PI / 180;
       const j0 = Math.floor((y0 - sy) / sy), j1 = Math.ceil((y1 + sy) / sy); const hexes = [];
@@ -914,7 +963,7 @@ function rebuild(full = true) {
   const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, normalMap: tex(sw.normal), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.8, metalness: 0 });
   tyreMesh = new THREE.Group(); let triCount = 0; quadMeshData = null;
   if (useQuad) {
-    const keep = ly => !(ly.type === 'sipe' || (ly.width !== undefined && ly.width < T.quadPitch * 0.9 && ly.type !== 'circ' && ly.type !== 'dimple' && ly.type !== 'hex'));   // features thinner than a cell stay in the normal map
+    const keep = ly => !(ly.type === 'sipe' || (ly.width !== undefined && ly.width < T.quadPitch * 0.9 && (ly.type === 'lateral' || ly.type === 'chevron' || (ly.type === 'shape' && ly.kind === 'path'))));   // features thinner than a cell stay in the normal map
     const pmGeo = renderPattern(P, d, 512, T.wear, T.wearBias, T.treadDepth, true, keep); const prof = buildProfile(d); profileCache = prof;
     const geo = buildQuadTyre(d, pmGeo, levelsOf(P, T.treadDepth, keep), prof); quadMeshData = geo.userData.quadMesh;
     tyreMesh.add(new THREE.Mesh(geo, [treadMat, sideMat])); triCount = geo.userData.tris;
@@ -1021,7 +1070,7 @@ renderer.setAnimationLoop(now => { const dt = (now - last) / 1000; last = now; i
 // =====================================================================================================================
 //  UI
 // =====================================================================================================================
-let timer; const schedule = () => { clearTimeout(timer); timer = setTimeout(() => rebuild(), T.meshMode === 'quad' ? 220 : 40); };
+let timer; const schedule = () => { if (DZ.on) return; clearTimeout(timer); timer = setTimeout(() => rebuild(), T.meshMode === 'quad' ? 220 : 40); };
 function slider(parent, label, obj, key, min, max, step, fmt = v => v, after = schedule) {
   const row = document.createElement('div'); row.className = 'row'; row.innerHTML = `<label title="${label}">${label}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${obj[key]}"><span class="val">${fmt(obj[key])}</span>`;
   const inp = row.querySelector('input'), val = row.querySelector('.val');
@@ -1081,7 +1130,7 @@ function buildLayerUI() {
   const box = document.getElementById('layers'); box.innerHTML = '';
   P.layers.forEach((ly, i) => {
     const def = LAYER_DEFS[ly.type]; const el = document.createElement('div'); el.className = 'layer' + (i === UI.sel ? ' sel' : '');
-    const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`;
+    const desc = ly.type === 'shape' ? `${ly.kind} · ×${ly.repeat}${ly.mirror ? ' · mirrored' : ''}` : ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`;
     el.innerHTML = `<span class="ic" style="background:${def.color}"></span><span class="nm">${def.label} <small>${desc}</small></span><button title="duplicate">⧉</button><button title="up">↑</button><button title="down">↓</button><button title="delete">✕</button>`;
     const [dup, up, dn, del] = el.querySelectorAll('button');
     el.onclick = () => { UI.sel = i; buildLayerUI(); };
@@ -1097,7 +1146,7 @@ function buildLayerUI() {
   props.className = '';
   const t = document.createElement('div'); t.className = 'hint'; t.innerHTML = `<b style="color:${LAYER_DEFS[ly.type].color}">${LAYER_DEFS[ly.type].label}</b>`; props.appendChild(t);
   for (const k in ly) {
-    if (k === 'type') continue;
+    if (k === 'type' || k === 'kind' || Array.isArray(ly[k])) continue;
     if (typeof ly[k] === 'boolean') check(props, LABELS[k] || k, ly, k, () => { buildLayerUI(); schedule(); });
     else if (RANGES[k]) slider(props, LABELS[k] || k, ly, k, ...RANGES[k], v => (+v).toFixed(RANGES[k][2] < 1 ? 2 : 0), () => { refreshLayerLabel(); schedule(); });
   }
@@ -1113,7 +1162,7 @@ function refreshLayerLabel() { const els = document.querySelectorAll('#layers .l
 document.getElementById('pType').innerHTML = TYPES.map(t => `<option>${t}</option>`).join('');
 document.getElementById('pType').onchange = e => { P.type = e.target.value; schedule(); };
 document.getElementById('pName').oninput = e => { P.name = e.target.value; schedule(); };
-document.getElementById('addLayer').innerHTML = Object.keys(LAYER_DEFS).map(k => `<option value="${k}">${LAYER_DEFS[k].label}</option>`).join('');
+document.getElementById('addLayer').innerHTML = Object.keys(LAYER_DEFS).filter(k => k !== 'shape').map(k => `<option value="${k}">${LAYER_DEFS[k].label}</option>`).join('');
 document.getElementById('addLayerBtn').onclick = () => { P.layers.push(L(document.getElementById('addLayer').value)); UI.sel = P.layers.length - 1; buildLayerUI(); schedule(); };
 document.getElementById('randomBtn').onclick = () => { randomTyre(); refreshAll(); };
 document.getElementById('randomName').onclick = () => { P.name = randomName(); document.getElementById('pName').value = P.name; schedule(); };
@@ -1145,6 +1194,152 @@ document.getElementById('exportGlb').onclick = () => {
 document.getElementById('exportObj').onclick = () => { if (!quadMeshData) return toast('Switch Mesh mode to quad first'); dl(P.name.replace(/\s+/g, '_') + '.obj', URL.createObjectURL(new Blob([exportOBJ(quadMeshData, P.name)], { type: 'text/plain' }))); toast(quadMeshData.F.length + ' quads exported'); };
 document.getElementById('importJson').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); if (j.tyre) Object.assign(T, j.tyre); if (j.pattern) { P.name = j.pattern.name; P.type = j.pattern.type; P.layers = j.pattern.layers; } UI.sel = -1; refreshAll(); toast('Imported ' + P.name); }); };
 window.addEventListener('keydown', e => { if (e.key === 'r' && !e.target.matches('input,select')) { randomTyre(); refreshAll(); } });
+
+
+// =====================================================================================================================
+//  2D TREAD DESIGNER
+// =====================================================================================================================
+const DZ = { on: false, tool: 'select', z: 1, ox: 0, oy: 0, draft: null, sel: -1, selPt: -1, hover: null, drag: null, undo: [], redo: [], bg: null, bgTimer: null, tile: false, space: false };
+const dEl = id => document.getElementById(id);
+const dcan = dEl('dcanvas'), dctx = dcan.getContext('2d');
+const W2S = (x, y) => [x * DZ.z + DZ.ox, y * DZ.z + DZ.oy], S2W = (px, py) => [(px - DZ.ox) / DZ.z, (py - DZ.oy) / DZ.z];
+function dOpen() { DZ.on = true; dEl('designer').classList.add('on'); dResize(); dFit(); dRefreshBg(); dDraw(); }
+function dClose() { DZ.on = false; dEl('designer').classList.remove('on'); buildLayerUI(); rebuild(); }
+function dResize() { const r = dcan.getBoundingClientRect(); dcan.width = Math.round(r.width * devicePixelRatio); dcan.height = Math.round(r.height * devicePixelRatio); }
+function dFit() { const d = dims(); const span = DZ.tile ? d.circ / Math.max(1, +dEl('dRepeat').value || 1) * 1.2 : d.circ; DZ.z = Math.min(dcan.width / span, dcan.height / (d.acrossHalf * 2.3)); DZ.ox = (dcan.width - (DZ.tile ? span / 1.2 : d.circ) * DZ.z) / 2; DZ.oy = dcan.height / 2; dDraw(); }
+function dPushUndo() { DZ.undo.push(JSON.stringify(P.layers)); if (DZ.undo.length > 60) DZ.undo.shift(); DZ.redo.length = 0; }
+function dRestore(json) { P.layers = JSON.parse(json); DZ.sel = -1; DZ.selPt = -1; dChanged(); }
+function dChanged() { dRefreshBg(); dDraw(); }
+function dRefreshBg() { clearTimeout(DZ.bgTimer); DZ.bgTimer = setTimeout(() => { const d = dims(); const pm = renderPattern(P, d, 192, T.wear, T.wearBias, T.treadDepth, true); const img = new ImageData(pm.W, pm.H);
+  for (let i = 0; i < pm.W * pm.H; i++) { const v = 62 - 52 * Math.min(1, pm.depth[i]); img.data[i * 4] = v; img.data[i * 4 + 1] = v + 1; img.data[i * 4 + 2] = v + 3; img.data[i * 4 + 3] = 255; }
+  const c = document.createElement('canvas'); c.width = pm.W; c.height = pm.H; c.getContext('2d').putImageData(img, 0, 0); DZ.bg = c; dDraw(); }, 50); }
+function dSnap(x, y, anchor, shift) {
+  if (dEl('dSnap').checked) { const st = Math.max(0.1, +dEl('dStep').value || 1); x = Math.round(x / st) * st; y = Math.round(y / st) * st; }
+  if (shift && anchor) { const dx = x - anchor[0], dy = y - anchor[1]; const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * Math.PI / 4; const l = Math.hypot(dx, dy); x = anchor[0] + Math.cos(a) * l; y = anchor[1] + Math.sin(a) * l; }
+  return [x, y];
+}
+// ----- parametric layer handles (first instance) -----
+function paramHandles(d) {
+  const th = d.treadHalf, circ = d.circ; const H = []; const vx = S2W(dcan.width / 2, 0)[0];   // visible centre x for circumferential handles
+  P.layers.forEach((ly, li) => {
+    if (ly.type === 'circ') { H.push({ li, id: 'pos', x: vx, y: ly.pos * th, color: '#38c46d' }); H.push({ li, id: 'w+', x: vx + 20 / DZ.z, y: ly.pos * th + ly.width / 2, color: '#38c46d', small: true }); H.push({ li, id: 'w-', x: vx + 20 / DZ.z, y: ly.pos * th - ly.width / 2, color: '#38c46d', small: true }); }
+    else if (ly.type === 'lateral' || ly.type === 'chevron' || ly.type === 'sipe') {
+      const tan = Math.tan(ly.angle * Math.PI / 180), n = Math.max(1, Math.round(ly.count)); const x0 = ly.phase / n * circ; const at = cc => { const ac = ly.mirror ? Math.abs(cc) : cc; return [x0 + ac * th * tan + (ly.curve || 0) * ac * ac * th * 0.5, cc * th]; };
+      const a = at(ly.from), b = at(ly.to); H.push({ li, id: 'from', x: a[0], y: a[1], color: LAYER_DEFS[ly.type].color }); H.push({ li, id: 'to', x: b[0], y: b[1], color: LAYER_DEFS[ly.type].color }); const m = at((ly.from + ly.to) / 2); H.push({ li, id: 'phase', x: m[0], y: m[1], color: LAYER_DEFS[ly.type].color, body: true }); }
+    else if (ly.type === 'dimple') { const n = Math.max(1, Math.round(ly.count)); H.push({ li, id: 'from', x: 0, y: ly.from * th, color: '#4fc3f7' }); H.push({ li, id: 'to', x: (ly.stagger && (ly.rows - 1) % 2 ? 0.5 / n : 0) * circ, y: ly.to * th, color: '#4fc3f7' }); }
+  });
+  return H;
+}
+function applyParamDrag(h, x, y, d) {
+  const ly = P.layers[h.li]; const th = d.treadHalf, circ = d.circ; const cl = THREE.MathUtils.clamp;
+  if (ly.type === 'circ') { if (h.id === 'pos') ly.pos = +cl(y / th, -1.3, 1.3).toFixed(2); else ly.width = +cl(2 * Math.abs(y - ly.pos * th), 0.5, 30).toFixed(1); }
+  else if (ly.type === 'dimple') { ly[h.id] = +cl(y / th, -1.3, 1.3).toFixed(2); }
+  else { const n = Math.max(1, Math.round(ly.count));
+    if (h.id === 'phase') { ly.phase = +(((DZ.drag.phase0 + (x - DZ.drag.x0) / (circ / n)) % 1 + 1) % 1).toFixed(2); }
+    else { const cc = +cl(y / th, -1.3, 1.3).toFixed(2); ly[h.id] = cc; const ac = ly.mirror ? Math.abs(cc) : cc; const x0 = ly.phase / n * circ; if (Math.abs(ac) > 0.05) { const tan = (x - x0 - (ly.curve || 0) * ac * ac * th * 0.5) / (ac * th); ly.angle = Math.round(cl(Math.atan(tan) * 180 / Math.PI, -80, 80)); } } }
+}
+// ----- hit testing -----
+function distSeg(p, a, b) { const dx = b[0] - a[0], dy = b[1] - a[1]; const l2 = dx * dx + dy * dy || 1e-9; const t = THREE.MathUtils.clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2, 0, 1); return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy); }
+function dHit(wx, wy) {
+  const tol = 8 / DZ.z; const d = dims();
+  if (DZ.sel >= 0 && P.layers[DZ.sel]?.type === 'shape') { const ly = P.layers[DZ.sel]; for (let i = 0; i < ly.pts.length; i++) if (Math.hypot(ly.pts[i][0] - wx, ly.pts[i][1] - wy) < tol) return { kind: 'pt', li: DZ.sel, pi: i }; }
+  for (const h of paramHandles(d)) if (Math.hypot(h.x - wx, h.y - wy) < tol * (h.small ? 0.8 : 1.2)) return { kind: 'param', h };
+  for (let li = P.layers.length - 1; li >= 0; li--) { const ly = P.layers[li]; if (ly.type !== 'shape') continue;
+    for (const inst of shapeInstances(ly, d.circ)) { const pts = inst.pts; let hit = false;
+      if (inst.kind === 'path') { for (let i = 0; i + 1 < pts.length; i++) if (distSeg([wx, wy], pts[i], pts[i + 1]) < Math.max(tol, ly.width / 2)) hit = true; }
+      else hit = pointInRing(wx, wy, pts) || pts.some((p, i) => distSeg([wx, wy], p, pts[(i + 1) % pts.length]) < tol);
+      if (hit) return { kind: 'shape', li, dx: inst.pts[0][0] - shapeOutline(ly).pts[0][0] }; } }
+  return null;
+}
+// ----- drawing -----
+function dDraw() {
+  if (!DZ.on) return; const d = dims(); const W = dcan.width, H = dcan.height; const ctx = dctx; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#0b0c0e'; ctx.fillRect(0, 0, W, H);
+  const A = d.acrossHalf, th = d.treadHalf, circ = d.circ;
+  // background depth render, tiled ×3 for wrap
+  if (DZ.bg) { ctx.imageSmoothingEnabled = DZ.z < 2; for (const k of [-1, 0, 1]) { const [sx, sy] = W2S(k * circ, -A); ctx.globalAlpha = k ? 0.45 : 1; ctx.drawImage(DZ.bg, sx, sy, circ * DZ.z, 2 * A * DZ.z); } ctx.globalAlpha = 1; }
+  // grid
+  const step = DZ.z > 12 ? 1 : DZ.z > 4 ? 5 : DZ.z > 1.2 ? 10 : 50; ctx.lineWidth = 1;
+  const [wx0, wy0] = S2W(0, 0), [wx1, wy1] = S2W(W, H);
+  ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.beginPath(); for (let x = Math.floor(wx0 / step) * step; x < wx1; x += step) { const [sx] = W2S(x, 0); ctx.moveTo(sx, 0); ctx.lineTo(sx, H); } for (let y = Math.floor(wy0 / step) * step; y < wy1; y += step) { const [, sy] = W2S(0, y); ctx.moveTo(0, sy); ctx.lineTo(W, sy); } ctx.stroke();
+  // tread edges, centre, seam
+  const line = (x0, y0, x1, y1, col, dash) => { ctx.strokeStyle = col; ctx.setLineDash(dash || []); ctx.beginPath(); const a = W2S(x0, y0), b = W2S(x1, y1); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]); };
+  line(wx0, th, wx1, th, 'rgba(214,201,58,.55)', [6, 4]); line(wx0, -th, wx1, -th, 'rgba(214,201,58,.55)', [6, 4]); line(wx0, A, wx1, A, 'rgba(255,255,255,.25)'); line(wx0, -A, wx1, -A, 'rgba(255,255,255,.25)'); line(wx0, 0, wx1, 0, 'rgba(255,255,255,.08)', [2, 6]);
+  for (const k of [0, 1]) line(k * circ, -A - 100, k * circ, A + 100, 'rgba(79,195,247,.5)', [3, 3]);
+  // shapes
+  P.layers.forEach((ly, li) => { if (ly.type !== 'shape') return; const selected = li === DZ.sel; const insts = shapeInstances(ly, circ);
+    insts.forEach((inst, k) => { ctx.beginPath(); inst.pts.forEach((p, i) => { const s = W2S(p[0], p[1]); i ? ctx.lineTo(s[0], s[1]) : ctx.moveTo(s[0], s[1]); }); if (inst.kind !== 'path') ctx.closePath();
+      if (inst.kind === 'path') { ctx.lineCap = 'butt'; ctx.lineJoin = 'round'; ctx.strokeStyle = selected ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.22)'; ctx.lineWidth = Math.max(1, ly.width * DZ.z); ctx.stroke(); }
+      else { ctx.fillStyle = selected ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.14)'; ctx.fill(); }
+      ctx.lineWidth = k === 0 ? 1.5 : 1; ctx.strokeStyle = k === 0 ? (selected ? '#fff' : 'rgba(255,255,255,.7)') : 'rgba(255,255,255,.25)'; ctx.stroke(); });
+    if (selected) { ctx.fillStyle = '#fff'; ly.pts.forEach((p, i) => { const s = W2S(p[0], p[1]); ctx.beginPath(); ctx.arc(s[0], s[1], i === DZ.selPt ? 6 : 4, 0, Math.PI * 2); ctx.fill(); if (i === DZ.selPt) { ctx.strokeStyle = '#38c46d'; ctx.lineWidth = 2; ctx.stroke(); } }); } });
+  // draft
+  if (DZ.draft) { const dr = DZ.draft; ctx.strokeStyle = '#38c46d'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); const o = shapeOutline(Object.assign({}, dr, { pts: dr.pts.concat(dr.cursor ? [dr.cursor] : []) }));
+    if (o) { ctx.beginPath(); o.pts.forEach((p, i) => { const s = W2S(p[0], p[1]); i ? ctx.lineTo(s[0], s[1]) : ctx.moveTo(s[0], s[1]); }); if (dr.kind !== 'path') ctx.closePath(); ctx.stroke(); if (dr.kind === 'path') { ctx.setLineDash([]); ctx.globalAlpha = 0.25; ctx.lineWidth = dr.width * DZ.z; ctx.stroke(); ctx.globalAlpha = 1; } }
+    ctx.setLineDash([]); ctx.fillStyle = '#38c46d'; dr.pts.forEach(p => { const s = W2S(p[0], p[1]); ctx.beginPath(); ctx.arc(s[0], s[1], 4, 0, Math.PI * 2); ctx.fill(); }); }
+  // parametric handles
+  for (const h of paramHandles(d)) { const s = W2S(h.x, h.y); ctx.beginPath(); ctx.arc(s[0], s[1], h.small ? 4 : 6, 0, Math.PI * 2); ctx.fillStyle = '#111'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = h.color; ctx.stroke();
+    if (h.id === 'pos') { ctx.fillStyle = h.color; ctx.font = `300 ${11 * devicePixelRatio}px Outfit, system-ui`; ctx.fillText(LAYER_DEFS[P.layers[h.li].type].label, s[0] + 10, s[1] - 8); } }
+  // status
+  dEl('dstatus').textContent = `${DZ.tool} · ${(DZ.z / devicePixelRatio).toFixed(2)} px/mm · grid ${step} mm · ${P.layers.filter(l => l.type === 'shape').length} drawn shape(s)` + (DZ.hover ? ` · ${DZ.hover[0].toFixed(1)}, ${DZ.hover[1].toFixed(1)} mm` : '');
+}
+// ----- interaction -----
+function dSetTool(t) { DZ.tool = t; DZ.draft = null; document.querySelectorAll('#dbar .tool').forEach(b => b.classList.toggle('on', b.dataset.tool === t)); dDraw(); }
+function dSyncInputs() { const ly = P.layers[DZ.sel]; if (!ly || ly.type !== 'shape') return; dEl('dWidth').value = ly.width; dEl('dDepth').value = ly.depth; dEl('dRepeat').value = ly.repeat; dEl('dMirror').checked = !!ly.mirror; }
+function dNewShape(kind, pts) { dPushUndo(); const ly = L('shape', { kind, pts, width: +dEl('dWidth').value || 6, depth: +dEl('dDepth').value || 1, repeat: +dEl('dRepeat').value || 1, mirror: dEl('dMirror').checked }); P.layers.push(ly); DZ.sel = P.layers.length - 1; DZ.selPt = -1; UI.sel = DZ.sel; dChanged(); }
+function dFinishDraft() { const dr = DZ.draft; if (!dr) return; const need = dr.kind === 'path' ? 2 : 3; if (dr.pts.length >= need) dNewShape(dr.kind, dr.pts); DZ.draft = null; dDraw(); }
+dcan.addEventListener('contextmenu', e => e.preventDefault());
+dcan.addEventListener('wheel', e => { e.preventDefault(); const r = dcan.getBoundingClientRect(); const px = (e.clientX - r.left) * devicePixelRatio, py = (e.clientY - r.top) * devicePixelRatio; const [wx, wy] = S2W(px, py); const f = Math.exp(-e.deltaY * 0.0015); DZ.z = THREE.MathUtils.clamp(DZ.z * f, 0.05, 80); DZ.ox = px - wx * DZ.z; DZ.oy = py - wy * DZ.z; dDraw(); }, { passive: false });
+dcan.addEventListener('pointerdown', e => {
+  const r = dcan.getBoundingClientRect(); const px = (e.clientX - r.left) * devicePixelRatio, py = (e.clientY - r.top) * devicePixelRatio; const [wx, wy] = S2W(px, py); dcan.setPointerCapture(e.pointerId);
+  if (e.button === 1 || e.button === 2 || DZ.space) { DZ.drag = { kind: 'pan', px, py, ox: DZ.ox, oy: DZ.oy }; return; }
+  const sp = dSnap(wx, wy, DZ.draft?.pts.at(-1), e.shiftKey);
+  if (DZ.tool === 'path' || DZ.tool === 'poly') { if (!DZ.draft) DZ.draft = { kind: DZ.tool, pts: [], width: +dEl('dWidth').value || 6 }; const last = DZ.draft.pts.at(-1); if (last && Math.hypot(last[0] - sp[0], last[1] - sp[1]) < 0.01) { dFinishDraft(); return; } DZ.draft.pts.push(sp); dDraw(); return; }
+  if (DZ.tool === 'rect' || DZ.tool === 'circle' || DZ.tool === 'hex') { DZ.draft = { kind: DZ.tool, pts: [sp], width: 0 }; DZ.drag = { kind: 'draft' }; return; }
+  // select tool
+  const hit = dHit(wx, wy); const d = dims();
+  if (!hit) { DZ.sel = -1; DZ.selPt = -1; DZ.drag = { kind: 'pan', px, py, ox: DZ.ox, oy: DZ.oy }; dDraw(); return; }
+  if (hit.kind === 'pt') { dPushUndo(); DZ.selPt = hit.pi; DZ.drag = { kind: 'pt', li: hit.li, pi: hit.pi }; }
+  else if (hit.kind === 'shape') { dPushUndo(); DZ.sel = hit.li; UI.sel = hit.li; DZ.selPt = -1; DZ.drag = { kind: 'shape', li: hit.li, x0: wx, y0: wy, pts0: P.layers[hit.li].pts.map(p => p.slice()) }; dSyncInputs(); }
+  else if (hit.kind === 'param') { dPushUndo(); DZ.sel = hit.h.li; UI.sel = hit.h.li; DZ.drag = { kind: 'param', h: hit.h, x0: wx, phase0: P.layers[hit.h.li].phase || 0 }; }
+  dDraw();
+});
+dcan.addEventListener('pointermove', e => {
+  const r = dcan.getBoundingClientRect(); const px = (e.clientX - r.left) * devicePixelRatio, py = (e.clientY - r.top) * devicePixelRatio; const [wx, wy] = S2W(px, py); DZ.hover = [wx, wy];
+  if (DZ.draft && !DZ.drag) { DZ.draft.cursor = dSnap(wx, wy, DZ.draft.pts.at(-1), e.shiftKey); dDraw(); return; }
+  if (!DZ.drag) { dcan.style.cursor = DZ.tool === 'select' ? (dHit(wx, wy) ? 'grab' : 'default') : 'crosshair'; dDraw(); return; }
+  const dr = DZ.drag; const d = dims();
+  if (dr.kind === 'pan') { DZ.ox = dr.ox + px - dr.px; DZ.oy = dr.oy + py - dr.py; dDraw(); return; }
+  if (dr.kind === 'draft') { DZ.draft.pts[1] = dSnap(wx, wy, DZ.draft.pts[0], e.shiftKey); dDraw(); return; }
+  if (dr.kind === 'pt') { const ly = P.layers[dr.li]; ly.pts[dr.pi] = dSnap(wx, wy, null, false); dChanged(); return; }
+  if (dr.kind === 'shape') { const ly = P.layers[dr.li]; let dx = wx - dr.x0, dy = wy - dr.y0; if (dEl('dSnap').checked) { const st = Math.max(0.1, +dEl('dStep').value || 1); dx = Math.round(dx / st) * st; dy = Math.round(dy / st) * st; } ly.pts = dr.pts0.map(p => [p[0] + dx, p[1] + dy]); dChanged(); return; }
+  if (dr.kind === 'param') { applyParamDrag(dr.h, wx, wy, d); dChanged(); }
+});
+const dUp = e => { if (DZ.drag?.kind === 'draft') { const dr = DZ.draft; DZ.draft = null; if (dr.pts.length === 2 && Math.hypot(dr.pts[1][0] - dr.pts[0][0], dr.pts[1][1] - dr.pts[0][1]) > 0.5) dNewShape(dr.kind, dr.pts); } DZ.drag = null; dDraw(); };
+dcan.addEventListener('pointerup', dUp); dcan.addEventListener('pointercancel', dUp);
+dcan.addEventListener('dblclick', e => { e.preventDefault(); if (DZ.draft && (DZ.draft.kind === 'path' || DZ.draft.kind === 'poly')) { DZ.draft.pts.pop(); dFinishDraft(); } });
+window.addEventListener('keydown', e => {
+  if (!DZ.on) return; if (e.target.matches('input')) return;
+  if (e.code === 'Space') { DZ.space = true; dcan.style.cursor = 'grab'; e.preventDefault(); return; }
+  if (e.key === 'Escape') { if (DZ.draft) { DZ.draft = null; dDraw(); } else dClose(); return; }
+  if (e.key === 'Enter') { dFinishDraft(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) dRedoFn(); else dUndoFn(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); dRedoFn(); return; }
+  if (e.key === 'Delete' || e.key === 'Backspace') { dDeleteFn(); return; }
+  const map = { v: 'select', p: 'path', g: 'poly', r: 'rect', c: 'circle', h: 'hex' }; if (map[e.key.toLowerCase()]) dSetTool(map[e.key.toLowerCase()]);
+  if (e.key.toLowerCase() === 's') { dEl('dSnap').checked = !dEl('dSnap').checked; } if (e.key.toLowerCase() === 'm') { dEl('dMirror').checked = !dEl('dMirror').checked; dEl('dMirror').dispatchEvent(new Event('change')); }
+});
+window.addEventListener('keyup', e => { if (e.code === 'Space') { DZ.space = false; dcan.style.cursor = 'default'; } });
+function dUndoFn() { if (!DZ.undo.length) return; DZ.redo.push(JSON.stringify(P.layers)); dRestore(DZ.undo.pop()); }
+function dRedoFn() { if (!DZ.redo.length) return; DZ.undo.push(JSON.stringify(P.layers)); dRestore(DZ.redo.pop()); }
+function dDeleteFn() { const ly = P.layers[DZ.sel]; if (!ly) return; dPushUndo(); if (ly.type === 'shape' && DZ.selPt >= 0 && ly.pts.length > (ly.kind === 'path' ? 2 : 3) && (ly.kind === 'path' || ly.kind === 'poly')) { ly.pts.splice(DZ.selPt, 1); DZ.selPt = -1; } else { P.layers.splice(DZ.sel, 1); DZ.sel = -1; DZ.selPt = -1; UI.sel = -1; } dChanged(); }
+document.querySelectorAll('#dbar .tool').forEach(b => b.onclick = () => dSetTool(b.dataset.tool));
+for (const [id, key] of [['dWidth', 'width'], ['dDepth', 'depth'], ['dRepeat', 'repeat'], ['dMirror', 'mirror']]) dEl(id).addEventListener('change', () => { const ly = P.layers[DZ.sel]; if (ly && ly.type === 'shape') { dPushUndo(); ly[key] = key === 'mirror' ? dEl(id).checked : +dEl(id).value; dChanged(); } else dDraw(); });
+dEl('dFit').onclick = () => { DZ.tile = false; dFit(); }; dEl('dTile').onclick = () => { DZ.tile = !DZ.tile; dFit(); };
+dEl('dUndo').onclick = dUndoFn; dEl('dRedo').onclick = dRedoFn; dEl('dDelete').onclick = dDeleteFn;
+dEl('dClear').onclick = () => { dPushUndo(); P.layers = P.layers.filter(l => l.type !== 'shape'); DZ.sel = -1; dChanged(); };
+dEl('dApply').onclick = () => { buildLayerUI(); rebuild(); toast('3D tyre updated'); };
+dEl('dClose').onclick = dClose; dEl('openDesigner').onclick = dOpen;
+new ResizeObserver(() => { if (DZ.on) { dResize(); dDraw(); } }).observe(dEl('dcanvasWrap'));
 
 applyPreset(0);
 </script>
