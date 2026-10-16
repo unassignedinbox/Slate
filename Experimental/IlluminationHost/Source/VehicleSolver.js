@@ -780,6 +780,12 @@ export class VehicleSolver
         return ConstructRigidTransform(this.Position, this.Orientation);
     }
 
+    // 📝 The road-wheel steer angle [rad], positive to the left; the cabin's steering wheel turns with it.
+    QuerySteerAngle()
+    {
+        return this.SteerAngle;
+    }
+
     // 📝 Hub = strut top + body −Z × strut length; rotation = body · steer about +Z · spin about the +Y axle.
     QueryWheelTransform(Index)
     {

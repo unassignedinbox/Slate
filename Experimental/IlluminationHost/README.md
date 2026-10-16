@@ -50,6 +50,7 @@ loads from Google Fonts; offline it falls back to the system sans.
 | B (hold)     | line lock — front brakes held, rears free: throttle for a burnout     |
 | R            | respawn the vehicle at the burnout box                                |
 | F8 or F      | free camera (WASD, Q/E, Shift) / chase camera                         |
+| F9           | cycle the camera views: chase, driver eye, passenger eye, rear, steering-wheel close-up, front-left axle |
 | H            | bare view: hide both docks and every debug window, or bring them back |
 | drag, wheel  | orbit the chase camera, zoom                                          |
 
@@ -82,6 +83,21 @@ straight, floodlights, kerbs, the ramp on the west run-up and a smash zone. Wall
 distance volume keeps a 10 cm voxel; volumes are now shelf-packed (37 MB where stacking along z alone needed 109 MB).
 The surface raster writes a per-pixel albedo factor for the road — patches, grain, stains, worn paint, and the rubber
 from `TyreMarkSpace.js`.
+
+## The cabin
+
+`CabinStructure.js` builds the interior the HMI cockpit sits in. The shell's opaque facets are copied inward into a
+liner (the inner skin, 35 mm inside, wound for viewing from within), with a floor pan, a dashboard and two seats. The
+steering wheel is procedural: a torus rim, three spokes and a hub, posed on the body and turned by the road-wheel angle
+× 15 (an assumed steering ratio). The glazing is its own occupant. It stays in the distance union, so the exterior
+look is unchanged, and it parks 500 m below the course while a cockpit view is active. The cabin occupants are
+raster-only and sit after the ground strips, outside the distance union, and are uploaded every frame
+(`SceneStructure.ConstructCabin`, `AssignCabinPose`). `CockpitCluster.js` is a DOM overlay on the projected hub:
+speed, gear, shift LEDs, throttle and the four tyre temperatures from the solver's telemetry.
+
+Limits: the cabin is raster only, so global illumination does not light it; the windscreen is opaque smoked glass
+outside the cockpit views, not alpha-blended; and the seat, eye and wheel positions are estimates from the body's
+measured glazing extents, not from a seating drawing. The driver side is +Y (left-hand drive).
 
 ## Smoke and fire
 

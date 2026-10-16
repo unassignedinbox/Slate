@@ -31,8 +31,10 @@ import { DebrisSolver } from "./DebrisSolver.js";
 import { VehicleSolver } from "./VehicleSolver.js";
 import { DriverInputIntegrator } from "./DriverInputIntegrator.js";
 import { ChaseCameraSolver, FreeCameraSolver } from "./ChaseCameraSolver.js";
+import { CabinViews, CabinGeometry, ResolveCabinCamera } from "./CabinStructure.js";
+import { CockpitCluster } from "./CockpitCluster.js";
 import { ConstructViewTransform, ConstructPerspectiveTransform, MultiplyTransform, InvertTransform, NormalizeVector,
-         SubtractVector, MultiplyAddVector, ProjectRadicalInverse } from "./TransformProjection.js";
+         SubtractVector, MultiplyAddVector, ProjectRadicalInverse, TransformPoint } from "./TransformProjection.js";
 
 const ShaderSources = [
     "SceneRecords.wgsl", "FrameDescriptor.wgsl", "PackingCodec.wgsl", "DiscrepancySequence.wgsl", "SkyProjection.wgsl",
@@ -128,6 +130,7 @@ class IlluminationHost
         this.Keys = new Set();
         this.FrameIndex = 0;
         this.FreeCamera = false;
+        this.CabinViewIndex = 0;
         this.Ready = false;
         this.ScriptedInput = null;
         // 🔍 Diagnostic only: ?omit=Union,Cards,Shadow,... leaves the named stages out of the frame.
@@ -177,6 +180,8 @@ class IlluminationHost
         this.Scene.RetainOccupantTransform(this.Scene.VehicleOccupants.Body);
         for (const Wheel of this.Scene.VehicleOccupants.Wheels)
             this.Scene.RetainOccupantTransform(Wheel);
+        for (const Occupant of [this.Scene.VehicleOccupants.Glazing, this.Scene.Cabin.Liner, this.Scene.Cabin.Trim, this.Scene.Cabin.Wheel])
+            this.Scene.RetainOccupantTransform(Occupant);
 
         // ① records every stage shares
         const Materials = ConstructMaterialSpecification();
@@ -266,6 +271,7 @@ class IlluminationHost
         this.Chase = new ChaseCameraSolver();
         this.Flight = new FreeCameraSolver();
         this.ConstructPanel();
+        this.Cluster = new CockpitCluster();
         this.ConstructInput();
         this.ReconstructScreenTargets();
         await Device.queue.onSubmittedWorkDone();
@@ -285,6 +291,10 @@ class IlluminationHost
         {
             if (Key === "ToggleCamera")
                 this.ToggleCamera();
+            else if (Key === "CycleCameraView")
+                this.CycleCabinView();
+            else if (Key.startsWith("CameraView:"))
+                this.SelectCabinView(Number(Key.slice("CameraView:".length)));
             else if (Key === "Respawn")
                 this.RespawnVehicle();
             else if (Key === "TraceScale")
@@ -352,10 +362,12 @@ class IlluminationHost
         {
             if (Event.target instanceof HTMLInputElement || Event.target instanceof HTMLSelectElement)
                 return;
-            if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "F8"].includes(Event.code))
+            if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "F8", "F9"].includes(Event.code))
                 Event.preventDefault();
             if (Event.code === "F8" || (Event.code === "KeyF" && !Event.repeat))
                 this.ToggleCamera();
+            if (Event.code === "F9" && !Event.repeat)
+                this.CycleCabinView();
             if (Event.code === "KeyR" && !Event.repeat)
                 this.RespawnVehicle();
             if (Event.code === "KeyH" && !Event.repeat)
@@ -477,6 +489,32 @@ class IlluminationHost
         this.Scene.AssignOccupantTransform(this.Scene.VehicleOccupants.Body, Body);
         for (let Wheel = 0; Wheel < 4; ++Wheel)
             this.Scene.AssignOccupantTransform(this.Scene.VehicleOccupants.Wheels[Wheel], this.Vehicle.QueryWheelTransform(Wheel));
+        this.Scene.AssignCabinPose(Body, this.Vehicle.QuerySteerAngle(), !this.CabinActive());
+    }
+
+    // 📝 F9 cycles the chase camera and the cabin views; F8 (or F) toggles the free camera over whichever view is set.
+    CabinView()
+    {
+        return CabinViews[this.CabinViewIndex];
+    }
+
+    // 📝 A cabin view is any non-chase view while the free camera is off. Interior views also park the glazing.
+    CabinActive()
+    {
+        return !this.FreeCamera && this.CabinView().Interior;
+    }
+
+    CycleCabinView()
+    {
+        this.SelectCabinView((this.CabinViewIndex + 1) % CabinViews.length);
+    }
+
+    SelectCabinView(Index)
+    {
+        this.CabinViewIndex = Index;
+        this.FreeCamera = false;
+        this.Panel.AssignCameraMode(this.FreeCamera);
+        this.Panel.AssignCameraView(Index);
     }
 
     ResolveCamera(Δτ)
@@ -491,6 +529,12 @@ class IlluminationHost
             Target = MultiplyAddVector(Eye, this.Flight.ResolveForward(), 10.0);
             FieldOfView = this.Flight.FieldOfView;
         }
+        else if (this.CabinView().Id !== "chase")
+        {
+            const View = this.CabinView();
+            ({ Position: Eye, Target } = ResolveCabinCamera(View, this.Vehicle.QueryBodyTransform()));
+            FieldOfView = View.FieldOfView;
+        }
         else
         {
             Eye = this.Chase.Eye;
@@ -500,6 +544,29 @@ class IlluminationHost
         const Forward = NormalizeVector(SubtractVector(Target, Eye));
         return { Position: Eye, Target, Forward, VerticalFieldOfView: FieldOfView * Math.PI / 180.0,
                  Aspect: this.ScreenExtent[0] / this.ScreenExtent[1], Near: 0.05 };
+    }
+
+    // 📝 The cluster sits on the steering hub's projected point, shown only while a cabin view is active.
+    UpdateCluster(Camera)
+    {
+        if (!this.Cluster || !this.Vehicle)
+            return;
+        if (!this.CabinActive())
+        {
+            this.Cluster.Place(0.0, 0.0, false);
+            return;
+        }
+        this.Cluster.Update(this.Vehicle.QueryTelemetry());
+        const Hub = TransformPoint(this.Vehicle.QueryBodyTransform(), CabinGeometry.WheelHub);
+        const Matrix = MultiplyTransform(ConstructPerspectiveTransform(Camera.VerticalFieldOfView, Camera.Aspect, Camera.Near),
+                                         ConstructViewTransform(Camera.Position, Camera.Target));
+        const x = Hub[0], y = Hub[1], z = Hub[2];
+        const w = Matrix[3] * x + Matrix[7] * y + Matrix[11] * z + Matrix[15];
+        const NdcX = (Matrix[0] * x + Matrix[4] * y + Matrix[8] * z + Matrix[12]) / w;
+        const NdcY = (Matrix[1] * x + Matrix[5] * y + Matrix[9] * z + Matrix[13]) / w;
+        const Rect = this.Canvas.getBoundingClientRect();
+        const Visible = w > 0.0 && Math.abs(NdcX) < 1.2 && Math.abs(NdcY) < 1.2;
+        this.Cluster.Place(Rect.left + (0.5 + 0.5 * NdcX) * Rect.width, Rect.top + (0.5 - 0.5 * NdcY) * Rect.height, Visible);
     }
 
     EncodeFrameRecord(Camera, Light)
@@ -642,6 +709,7 @@ class IlluminationHost
 
         // ② camera, light, cascade focus
         const Camera = this.ResolveCamera(Δτ);
+        this.UpdateCluster(Camera);
         this.Focus = MultiplyAddVector(Camera.Position, Camera.Forward, 0.45 * this.Grade.ClipResolution * this.Grade.FinestVoxel);
         const Light = this.Atmosphere.ResolveLight(this.Settings.SunElevation, this.Settings.SunAzimuth, this.Settings.SolarIlluminance);
         const Brightness = Light.Illuminance[0] + Light.Illuminance[1] + Light.Illuminance[2];
@@ -659,7 +727,8 @@ class IlluminationHost
         this.PriorLight = { Direction: Light.Direction.slice(), Brightness };
         this.EncodeFrameRecord(Camera, Light);
         Device.queue.writeBuffer(this.OccupantRecords, 0, this.Scene.EncodeOccupantRecords(this.Volumes, this.Scene.DynamicCount));
-        for (const Range of [StirredRange, FragmentRange])
+        const CabinRange = { First: this.Scene.InteriorFirst, Count: this.Scene.InteriorCount };
+        for (const Range of [StirredRange, FragmentRange, CabinRange])
             if (Range)
                 Device.queue.writeBuffer(this.OccupantRecords, Range.First * OccupantStride,
                                          this.Scene.EncodeOccupantRecords(this.Volumes, Range.Count, Range.First));
@@ -781,7 +850,7 @@ class IlluminationHost
             const Durations = Object.entries(this.Metrics.Durations).filter(([, Milliseconds]) => Milliseconds > 0.0);
             Lines.push(...Durations.map(([Name, Milliseconds]) => `  ${Name.padEnd(24)}${Milliseconds.toFixed(2).padStart(7)} ms`));
         }
-        Lines.push("W/S throttle·brake  A/D steer  Space handbrake  B line lock  R respawn  F8 free camera  H bare view  drag orbit");
+        Lines.push("W/S throttle·brake  A/D steer  Space handbrake  B line lock  R respawn  F8 free camera  F9 cabin views  H bare view  drag orbit");
         const Resolution = this.Grade.ClipResolution;
         this.FieldLines = this.Distance.Clips.map((Clip, Level) =>
             `cascade ${Level}: ${Resolution}³ · voxel ${(Clip.VoxelExtent * 100).toFixed(1)} cm · span ${(Clip.VoxelExtent * Resolution).toFixed(0)} m`);

@@ -13,6 +13,7 @@ import { InspectorKit, ConstructVehiclePage, ConstructLightingPage, ConstructRen
 import { ConstructPlumePage } from "./PlumePanel.js";
 import { ConstructBreakablePage, FractureEditor } from "./FracturePanel.js";
 import { BreakableKinds } from "./YardStructure.js";
+import { CabinViews } from "./CabinStructure.js";
 
 export const OverlayKeys = ["HudEnabled", "InsetEnabled", "PanelEnabled"];
 const OverlayStorageKey = "IlluminationHost.Overlays";
@@ -253,14 +254,27 @@ export class WorkspacePanel
                 this.ProjectOutliner();
             });
         }
+        // 📝 Chase and Free are the two modes; the view select names the cabin and debug views behind the chase camera.
         const Camera = document.getElementById("camera-mode");
         for (const Button of Camera.querySelectorAll("button"))
             Button.addEventListener("click", () =>
             {
                 Button.blur();
-                if ((Button.dataset.mode === "free") !== this.Exhibit.FreeCamera)
-                    this.OnChange("ToggleCamera");
+                if (Button.dataset.mode === "free")
+                {
+                    if (!this.Exhibit.FreeCamera)
+                        this.OnChange("ToggleCamera");
+                }
+                else
+                    this.OnChange("CameraView:0");
             });
+        const ViewSelect = document.getElementById("camera-view");
+        CabinViews.forEach((View, Index) => ViewSelect.add(new Option(View.Label, String(Index))));
+        ViewSelect.addEventListener("change", () =>
+        {
+            ViewSelect.blur();
+            this.OnChange(`CameraView:${ViewSelect.value}`);
+        });
         const Burnout = document.getElementById("burnout-button");
         Burnout.addEventListener("click", () =>
         {
@@ -287,8 +301,22 @@ export class WorkspacePanel
 
     AssignCameraMode(Free)
     {
+        this.CameraFree = Free;
+        this.ProjectCameraMode();
+    }
+
+    AssignCameraView(Index)
+    {
+        this.CameraView = Index;
+        document.getElementById("camera-view").value = String(Index);
+        this.ProjectCameraMode();
+    }
+
+    ProjectCameraMode()
+    {
+        const OnChase = !this.CameraFree && (this.CameraView || 0) === 0;
         for (const Button of document.querySelectorAll("#camera-mode button"))
-            Button.setAttribute("aria-pressed", (Button.dataset.mode === "free") === Free);
+            Button.setAttribute("aria-pressed", Button.dataset.mode === "free" ? !!this.CameraFree : OnChase);
     }
 
     // 📝 Applies the overlay toggles and remembers them. The restore button appears whenever the docks are hidden.

@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&amp;display=swap" rel="stylesheet">
 <link rel="stylesheet" href="Source/WorkspacePanel.css">
+    <link rel="stylesheet" href="Source/CockpitCluster.css">
 </head>
 <body>
     <div id="workspace" class="workspace">
@@ -34,6 +35,7 @@
                 <div class="scene-title"><b>Drift yard</b><small>Slate GI · Project-Drive ControlVehicle</small></div>
                 <span class="badge live">LIVE</span>
                 <div class="segmented" id="camera-mode"><button data-mode="chase">Chase</button><button data-mode="free">Free · F8</button></div>
+                <select id="camera-view" title="Chase, cabin and debug views · F9 cycles" aria-label="Camera view"></select>
                 <span class="spacer"></span>
                 <button id="burnout-button" title="Line lock: hold B, or latch it here">Burnout · B</button>
                 <button id="respawn-button" title="Put the car back at the burnout box">Respawn · R</button>

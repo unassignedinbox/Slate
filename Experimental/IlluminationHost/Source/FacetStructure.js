@@ -8,6 +8,8 @@ import { CourseMaterial } from "./MaterialSpecification.js";
 import * as Course from "./CourseStructure.js";
 import { ConstructYard, EmitYardGroundFacets } from "./YardStructure.js";
 import { VehicleGeometry, ResolveCoMAuthoredZ } from "./VehicleSpecification.js";
+import { EmitInnerSkinFacets, EmitCabinTrimFacets, EmitSteeringWheelFacets, ConstructSteeringTransform,
+         HiddenTransform } from "./CabinStructure.js";
 import { ConstructIdentityTransform, TransformBounds, InvertTransform,
          SubtractVector, CrossVector, NormalizeVector } from "./TransformProjection.js";
 
@@ -26,8 +28,9 @@ export const VertexStride = 32;   // [B] - position.xyz, family (u32), normal.xy
 //      [vehicle 5 | yard | scatter span | ground | ground tiles | fragment span]
 //    The union pass walks [0, DistanceCount), so the stress-test scatter span sits at its end: inserting or removing
 //    scatter occupants never renumbers an occupant whose identity the distance field or a reservoir already holds.
-//    Everything after the ground is outside the union: the fracture fragments, which the fragment depot replaces
-//    wholesale and draws in one call from their own vertex records.
+//    Everything after the ground is outside the union: the cabin (raster only, see InteriorFirst), then the fracture
+//    fragments, which the fragment depot replaces wholesale and draws in one call from their own vertex records.
+//    The vehicle's six occupants are the body, the four wheels and the glazing, which the union does carry.
 export const ScatterCapacity  = 1536;   // [-] - f16 identities are exact below 2045, the yard takes ~150
 export const FragmentCapacity = 1024;   // [-] - live fracture fragments
 
@@ -54,7 +57,10 @@ export class SceneStructure
     {
         this.FacetSets        = [];
         this.Occupants        = [];
-        this.VehicleOccupants = { Body: -1, Wheels: [-1, -1, -1, -1] };
+        this.VehicleOccupants = { Body: -1, Wheels: [-1, -1, -1, -1], Glazing: -1 };
+        this.Cabin            = { Liner: -1, Trim: -1, Wheel: -1 };
+        this.InteriorFirst    = 0;
+        this.InteriorCount    = 0;
         this.GroundTiles      = { First: -1, Strips: [-1, -1, -1, -1] };
         this.GroundOccupant   = -1;
         this.DistanceCount    = 0;
@@ -72,7 +78,13 @@ export class SceneStructure
         ]);
 
         // ① vehicle facet sets — and the bare rims a burst tyre leaves, transferred at bring-up so a burst swaps sets
-        const BodySet       = this.ConstructFacetSet("ControlVehicle body", ProjectBodyFacets(Body), 0.05, 40.0);
+        // 📝 The shell and its glazing are separate sets: the glazing can park out of the way in the cockpit views, and
+        //    the cabin liner is the opaque shell's inner side (the glazing is left open so the outside shows through).
+        const BodyFacets   = ProjectBodyFacets(Body);
+        const GlazingFacets = BodyFacets.filter((Facet) => Facet.Family === CourseMaterial.VehicleGlass);
+        const ShellFacets  = BodyFacets.filter((Facet) => Facet.Family !== CourseMaterial.VehicleGlass);
+        const BodySet       = this.ConstructFacetSet("ControlVehicle body", ShellFacets, 0.05, 40.0);
+        const GlazingSet    = this.ConstructFacetSet("ControlVehicle glazing", GlazingFacets, 0.05, 40.0);
         const WheelLeftSet  = this.ConstructFacetSet("ControlVehicle wheel (left)", ProjectWheelFacets(Tyre, Rim, false, true), 0.025, 40.0);
         const WheelRightSet = this.ConstructFacetSet("ControlVehicle wheel (right)", ProjectWheelFacets(Tyre, Rim, true, true), 0.025, 40.0);
         const RimLeftSet    = this.ConstructFacetSet("ControlVehicle rim (left)", ProjectWheelFacets(Tyre, Rim, false, false), 0.025, 40.0);
@@ -92,6 +104,7 @@ export class SceneStructure
             const Set = (Wheel & 1) ? WheelRightSet : WheelLeftSet;
             this.VehicleOccupants.Wheels[Wheel] = this.ConstructOccupant(WheelNames[Wheel], Set, ConstructIdentityTransform(), VehicleRoles);
         }
+        this.VehicleOccupants.Glazing = this.ConstructOccupant("ControlVehicle glazing", GlazingSet, ConstructIdentityTransform(), VehicleRoles);
         this.DynamicCount = this.Occupants.length;
         const Yard = ConstructYard(this, { Static: StaticRoles });
         this.Breakables = Yard.Breakables;
@@ -131,11 +144,44 @@ export class SceneStructure
             this.GroundTiles.Strips[Strip] = Occupant;
         }
 
+        // ③½ the cabin, after the ground so it is outside the distance union
+        this.ConstructCabin(ShellFacets);
+
         // ④ the fragment span starts empty; the fragment depot fills it
         this.FragmentSet   = this.ConstructFacetSet("Fracture fragments", [], 0.0, 0.0);
         this.FragmentFirst = this.Occupants.length;
         this.FragmentCount = 0;
         this.ResolveRasterRuns();
+    }
+
+    //--------------------------------------------------------------------------------------------------------------------
+    //                                                   THE CABIN
+    //--------------------------------------------------------------------------------------------------------------------
+
+    // 📝 Raster-only and Dynamic: the cabin is drawn into the surface projection and the shadow depth, but not unioned
+    //    into the distance field, so the shell remains the only solid the field sees. The span sits after the ground
+    //    strips, which keeps it out of [0, DistanceCount). It is uploaded every frame, like the fragments.
+    ConstructCabin(ShellFacets)
+    {
+        const Roles = OccupantRole.Raster | OccupantRole.Dynamic;
+        const LinerSet = this.ConstructFacetSet("Cabin liner", EmitInnerSkinFacets(ShellFacets), 0.0, 0.0);
+        const TrimSet  = this.ConstructFacetSet("Cabin trim", EmitCabinTrimFacets(), 0.0, 0.0);
+        const WheelSet = this.ConstructFacetSet("Steering wheel", EmitSteeringWheelFacets(), 0.0, 0.0);
+        this.InteriorFirst = this.Occupants.length;
+        this.Cabin.Liner = this.ConstructOccupant("Cabin liner", LinerSet, ConstructIdentityTransform(), Roles);
+        this.Cabin.Trim  = this.ConstructOccupant("Cabin trim", TrimSet, ConstructIdentityTransform(), Roles);
+        this.Cabin.Wheel = this.ConstructOccupant("Steering wheel", WheelSet, ConstructIdentityTransform(), Roles);
+        this.InteriorCount = this.Occupants.length - this.InteriorFirst;
+    }
+
+    // 📝 The cabin rides the body; the steering wheel also turns with the road-wheel angle. The glazing parks below the
+    //    course while a cockpit view is active, so the windscreen is see-through, and comes back for the outside views.
+    AssignCabinPose(BodyTransform, RoadWheelAngle, GlazingVisible)
+    {
+        this.AssignOccupantTransform(this.VehicleOccupants.Glazing, GlazingVisible ? BodyTransform : HiddenTransform.slice());
+        this.AssignOccupantTransform(this.Cabin.Liner, BodyTransform);
+        this.AssignOccupantTransform(this.Cabin.Trim, BodyTransform);
+        this.AssignOccupantTransform(this.Cabin.Wheel, ConstructSteeringTransform(BodyTransform, RoadWheelAngle));
     }
 
     //--------------------------------------------------------------------------------------------------------------------
@@ -171,6 +217,9 @@ export class SceneStructure
         this.GroundOccupant += Delta;
         this.GroundTiles.First += Delta;
         this.GroundTiles.Strips = this.GroundTiles.Strips.map((Index) => Index + Delta);
+        this.InteriorFirst += Delta;
+        for (const Part of ["Liner", "Trim", "Wheel"])
+            this.Cabin[Part] += Delta;
         this.FragmentFirst += Delta;
         for (let Index = this.ScatterFirst; Index < this.ScatterFirst + this.ScatterCount; ++Index)
             Invalidated.push(this.QueryWorldBounds(Index));
