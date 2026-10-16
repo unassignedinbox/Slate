@@ -7,12 +7,14 @@
 //! include "PackingCodec.wgsl"
 //! include "EffectRecords.wgsl"
 //! include "TyreCarcass.wgsl"
+//! include "GhostRecords.wgsl"
 
 @group(0) @binding(1) var<storage, read> Occupants : array<OccupantRecord>;
 @group(0) @binding(2) var TyreMarks                 : texture_2d<f32>;   // r deposit [0, 1], g lateral coordinate (0: untouched)
 @group(0) @binding(3) var TyreMarkSampler           : sampler;
 @group(0) @binding(4) var<uniform> Effect           : EffectRecord;
 @group(0) @binding(5) var<storage, read> VehicleState : VehicleRecord;
+@group(0) @binding(6) var<uniform> Ghost            : GhostRecord;
 
 const VehicleOccupantCount : u32 = 5u;   // the body and four wheels lead the occupant list
 
@@ -226,6 +228,20 @@ fn SurfaceFragment(Varying: SurfaceVarying) -> SurfaceTargets
                 Family = select(select(DerezGlowFamily, DerezGlitchFamily, Effect.Style == 1u), Family, Faces);
                 Glow = select(0.0, Effect.Colour.y, Faces);
             }
+        }
+    }
+    // 📝 The HMI's X-ray ghost: vehicle pixels behind the scan front dissolve (a dithered coin-flip, so temporal
+    //    antialiasing resolves the fade — the same trick the tyre rubber uses) and the ghost raster draws the car
+    //    back as a hologram over what is behind.
+    if (Varying.Vehicle == 1u && Ghost.Scan.y > 0.003)
+    {
+        let ScanD = Varying.BodyLocal.x - Ghost.Scan.x;
+        let Region = smoothstep(-0.9, -0.05, ScanD);
+        let ScanPixel = Varying.Position.xy + vec2f(5.588238 * f32(Frame.FrameIndex % 32u));
+        let ScanThreshold = fract(52.9829189 * fract(dot(ScanPixel, vec2f(0.06711056, 0.00583715))));
+        if (Region * Ghost.Scan.y > ScanThreshold)
+        {
+            discard;
         }
     }
     var Targets: SurfaceTargets;

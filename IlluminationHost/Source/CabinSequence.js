@@ -60,6 +60,9 @@ export class CabinSequence
         this.Metrics  = { TabletUploads: 0, ClusterUploads: 0, MirrorPasses: 0, PreviewPasses: 0, Hmi: "starting" };
         this.LiveRevision = -1;
         this.PumpedPressure = null;
+        this.Finish = null;   // the host's FinishSequence, once constructed
+        // 📝 The panel's Revision starts at 0: the authored coat stands until the Garage is touched.
+        this.FinishRevision = 0;
     }
 
     //--------------------------------------------------------------------------------------------------------------------
@@ -258,6 +261,14 @@ export class CabinSequence
         {
             this.PumpedPressure = Asked;
             return Asked;
+        }
+        // 📝 The Garage finish: paint, gloss and rims repaint the car live; the X-ray ghost.
+        const Finish = Screen.Finish;
+        if (this.Finish && Finish && Finish.Revision !== this.FinishRevision)
+        {
+            this.FinishRevision = Finish.Revision;
+            this.Finish.ApplyFinish(Finish.Paint, Finish.Metallic, Finish.Gloss, Finish.Rim, Finish.RimMachined);
+            this.Finish.AssignGhostMode(Finish.Ghost);
         }
         return null;
     }

@@ -42,6 +42,7 @@ import { TyreCarcassSolver, VehicleRecordBytes } from "./TyreCarcassSolver.js";
 import { ConstructHullPoints, HullPointRadius } from "./HullStructure.js";
 import { SparkSequence } from "./SparkSequence.js";
 import { CabinSequence } from "./CabinSequence.js";
+import { FinishSequence } from "./FinishSequence.js";
 import { CabinLayout, CameraRigs, CockpitDefaults, ResolveCockpitFrame, PlaceSeatedEye } from "./CabinStructure.js";
 import { VehicleGeometry } from "./VehicleSpecification.js";
 
@@ -57,7 +58,7 @@ const ShaderSources = [
     "DisplayExposure.wgsl", "DisplayPresent.wgsl", "FireIllumination.wgsl", "SmokeRecords.wgsl", "SmokeLattice.wgsl",
     "SmokeTransport.wgsl", "SmokePressure.wgsl", "SmokeAdvection.wgsl", "SmokeIllumination.wgsl", "SmokeMarch.wgsl", "SmokeComposite.wgsl",
     "FragmentDistance.wgsl", "EffectRecords.wgsl", "EffectRaster.wgsl", "TyreCarcass.wgsl", "SparkRaster.wgsl", "ForwardRaster.wgsl",
-    "CabinOverlay.wgsl", "CabinVolume.wgsl"
+    "CabinOverlay.wgsl", "CabinVolume.wgsl", "GhostRecords.wgsl", "GhostRaster.wgsl"
 ];
 
 // 📝 Quality grades trade cascade resolution, card density and traversal length; selected with ?quality=low|medium|high.
@@ -273,11 +274,16 @@ class IlluminationHost
         this.Effects.ConstructVehicleCells(this.Vehicle);
         await this.Effects.ConstructPrograms(this.FrameRecords);
         this.Effects.ApplyPalette(this.MaterialRecords);
+        // 📝 The HMI finish: the configurator's paint and rims, and the X-ray ghost the surface raster dissolves for.
+        this.Finish = new FinishSequence(this.Exchange, this.Shaders);
+        await this.Finish.ConstructResources({ FrameRecords: this.FrameRecords, OccupantRecords: this.OccupantRecords,
+                                               VehicleRecords: this.VehicleRecords, EffectRecords: this.Effects.Records,
+                                               MaterialRecords: this.MaterialRecords, Materials, Scene: this.Scene });
         await this.Shadow.ConstructMaskedProgram(this.OccupantRecords, this.Effects, this.VehicleRecords);
         this.Recovery = new RecoveryDirector(this);
         this.Surface = new SurfaceProjection(this.Exchange, this.Shaders);
         await this.Surface.ConstructPrograms(this.FrameRecords, this.OccupantRecords, this.MaterialRecords, this.Distance.TraversalLayout, this.Marks,
-                                             this.Effects, this.VehicleRecords);
+                                             this.Effects, this.VehicleRecords, this.Finish.Records);
         this.Resampling = new ResamplingSequence(this.Exchange, this.Shaders);
         await this.Resampling.ConstructPrograms(this.FrameRecords, this.MaterialRecords, this.Distance.TraversalLayout, this.Cards.SamplingLayout);
         this.Diffuse = new VarianceIntegrator(this.Exchange, this.Shaders, "Diffuse", { MinimumWeight: 0.08, TallyLimit: 24, WaveletIterations: 3, ColourSigma: 4.0 });
@@ -295,6 +301,7 @@ class IlluminationHost
         await this.Cabin.ConstructResources({ FrameRecords: this.FrameRecords, OccupantRecords: this.OccupantRecords, MaterialRecords: this.MaterialRecords,
                                               EffectRecords: this.Effects.Records, VehicleRecords: this.VehicleRecords, Shadow: this.Shadow,
                                               Atmosphere: this.Atmosphere, Scene: this.Scene });
+        this.Cabin.Finish = this.Finish;
         this.ReportProgress("Compiling drift smoke programs", 0.91);
         this.Thermal = new TyreThermalSolver(4);
         this.BurstPuffs = [];
@@ -965,6 +972,7 @@ class IlluminationHost
         this.Cones.Advance(Step);
         this.Stress.Advance(Step);
         this.Effects.Advance(Step);
+        this.Finish.Advance(Step);
         this.Training.Advance(Step);
 
         // ①b tyres: sliding heat into tread, carcass and gas; ignition; the wheels' smoke and fire sources
@@ -1069,9 +1077,10 @@ class IlluminationHost
                            ? (Target, TaaParity) => this.Smoke.RecordComposition(Target, TaaParity,
                                  { Inspection: this.Settings.Inspection }, this.Metrics.QueryWrites("Smoke render"))
                            : null;
-            // 📝 The cabin (glass, screens, mirrors) draws before the antialiasing; sparks after it.
+            // 📝 The X-ray ghost, then the cabin (glass, screens, mirrors), draw before the antialiasing; sparks after it.
             const Overlay = this.Settings.Inspection === 0 && Included("Cabin")
-                          ? (Target, View) => this.Cabin.RecordOverlay(Target, View, this.Surface.Views.Depth) : null;
+                          ? (Target, View) => { this.Finish.RecordGhost(Target, View, this.Surface.Views.Depth, this.Scene, this.VertexRecords);
+                                                this.Cabin.RecordOverlay(Target, View, this.Surface.Views.Depth); } : null;
             const PostOverlay = this.Sparks.Live > 0 && this.Settings.Inspection === 0 && Included("Sparks")
                               ? (Target, View) => this.Sparks.Record(Target, View, this.Surface.Views.Depth) : null;
             this.Display.RecordResolve(Encoder, Parity, this.Metrics.QueryWrites("Resolve"), Composer, Overlay, PostOverlay);

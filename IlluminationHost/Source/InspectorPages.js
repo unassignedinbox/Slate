@@ -15,6 +15,7 @@ import { FractureModes } from "./FractureSequence.js";
 import { VehicleGeometry } from "./VehicleSpecification.js";
 import { ArenaZones, TrainingDrills } from "./LevelStructure.js";
 import { DerezPresets } from "./EffectSequence.js";
+import { FinishPaints, FinishRims } from "./FinishSequence.js";
 import { FormatPrimary } from "./TrainingSequence.js";
 import { CameraRigs, CockpitDefaults } from "./CabinStructure.js";
 
@@ -367,7 +368,7 @@ function BuildCabin(Host, C, Body)
     const Screens = C.Card(Body, "HMI", "Monitor", { Accent: Accent.Vehicle, Index: 1, Subtitle: "Experimental/TabletPanel, live in the cabin" });
     C.Muted(Screens, "The accepted TabletPanel prototype — launcher, twelve applications, five launcher designs — and its hexagon cluster draw into their own canvases; "
                    + "here they are textures on the centre-stack tablet and the column binnacle. The cluster and the Telemetry and Tyres applications read the solver; "
-                   + "the Tyres slider pumps the tyres; the Garage shows this car, rendered live by the exhibit's own studio pass. From the cockpit, click the tablet.");
+                   + "the Tyres slider pumps the tyres; the Garage shows this car, rendered live by the exhibit's own studio pass, and paints it live. From the cockpit, click the tablet.");
     C.Switch(Screens, Settings, "Screens", { Label: "Screens on" });
     Slider(C, Screens, Settings, "Brightness", "Screen brightness", 0.1, 2, 0.05, "×", 2);
     const Apps = C.ActionRow(Screens);
@@ -375,7 +376,25 @@ function BuildCabin(Host, C, Body)
         C.Button(Apps, Caption, null, () => { if (!Cabin.Screen) return; if (Application) Cabin.Screen.PresentApplication(Application); else Cabin.Screen.PresentHome(); });
     C.Readout(Screens, () => Cabin.QueryReadout());
 
-    const Size = C.Card(Body, "Cockpit size", "MoveSpace", { Accent: Accent.Vehicle, Index: 2, Subtitle: "Scale and place the interior" });
+    const FinishCard = C.Card(Body, "Finish & X-ray", "Car", { Accent: Accent.Vehicle, Index: 2, Subtitle: "The Garage's configurator, from the inspector" });
+    C.Muted(FinishCard, "Paint, clear coat and rims rewrite the car's BodyCoat and Hub records live — the same finishes the Garage offers on the tablet. "
+                      + "The X-ray ghost dissolves the car behind a travelling scan front and draws it back as a hologram with its hard edges.");
+    if (Host.Finish)
+    {
+        C.Select(FinishCard, Host.Finish, "Paint", FinishPaints.map((Paint) => [Paint.Name, Paint.Hex]),
+                 { Label: "Paint", OnChange: (Hex) => Host.Finish.ApplyPaintHex(Hex) });
+        C.Segmented(FinishCard, Host.Finish, "Gloss", [["Gloss", true], ["Matte", false]],
+                    { Label: "Clear coat", OnChange: () => Host.Finish.Reapply() });
+        C.Select(FinishCard, Host.Finish, "Rim", FinishRims.map((Rim) => [Rim.Name, Rim.Hex]),
+                 { Label: "Wheels", OnChange: (Hex) => Host.Finish.ApplyRimHex(Hex) });
+        C.Segmented(FinishCard, Host.Finish, "Mode", [["Off", "off"], ["Scan", "scan"], ["Ghost", "ghost"]],
+                    { Label: "X-ray ghost", OnChange: (Mode) => Host.Finish.AssignGhostMode(Mode) });
+        C.Readout(FinishCard, () => Host.Finish.QueryReadout());
+    }
+    else
+        C.Muted(FinishCard, "The finish is unavailable in this host.");
+
+    const Size = C.Card(Body, "Cockpit size", "MoveSpace", { Accent: Accent.Vehicle, Index: 3, Subtitle: "Scale and place the interior" });
     C.Muted(Size, "The dashboard, console, column and wheel, binnacle, tablet and seats scale together about a point on the cabin floor under the "
                 + "dashboard, then shift; the seated eyes go with them, so the cockpit camera stays in its seat. The shell, its glass, the three "
                 + "mirrors and the carpet are the car's and stay put. The facets never change — the vertex stage places them — so drag freely; "
@@ -388,7 +407,7 @@ function BuildCabin(Host, C, Body)
     C.Button(SizeRow, "Authored size", "RotateCcw", () => { Object.assign(S, CockpitDefaults); C.Synchronise(); });
     C.Button(SizeRow, "Driver's view", "Camera", () => Host.AssignCameraMode("Cockpit"));
 
-    const Glass = C.Card(Body, "Glass & mirrors", "Eye", { Accent: Accent.Vehicle, Index: 3 });
+    const Glass = C.Card(Body, "Glass & mirrors", "Eye", { Accent: Accent.Vehicle, Index: 4 });
     C.Muted(Glass, "See-through glazing leaves the opaque raster and is drawn over what is behind it — the sky's Fresnel reflection and a sun glint, 72 % transmission; "
                  + "it casts no shadow, so the sun reaches the cabin. Each mirror renders the driver's eye reflected in its plane through an off-axis frustum fitted to "
                  + "its glass (a small lit forward pass), one mirror per frame while they can be seen.");
@@ -396,7 +415,7 @@ function BuildCabin(Host, C, Body)
     Slider(C, Glass, Settings, "GlassTransmission", "Transmission", 0.2, 0.95, 0.01, "", 2, ["Limo tint", "Clear"]);
     C.Segmented(Glass, Settings, "Mirrors", [["Off", 0], ["When visible", 1], ["Always", 2]], { Label: "Mirror views" });
 
-    const Views = C.Card(Body, "Interior cameras", "Camera", { Accent: Accent.Vehicle, Index: 4 });
+    const Views = C.Card(Body, "Interior cameras", "Camera", { Accent: Accent.Vehicle, Index: 5 });
     C.Select(Views, S, "CameraMode", Object.keys(CameraRigs).map((Name) => [Name, Name]), { Label: "Rig (C cycles)", OnChange: (Mode) => Host.AssignCameraMode(Mode) });
     const Row = C.ActionRow(Views);
     C.Button(Row, "Driver", "Camera", () => Host.AssignCameraMode("Cockpit"));

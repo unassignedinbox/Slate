@@ -1,5 +1,11 @@
 # IlluminationHost — distance-field GI · surface cards · ReSTIR GI (WebGPU)
 
+**Reconstruction.** This folder — the pre-C++ WebGPU prototype — was rebuilt file-by-file from Frontier-
+`arena/9440f4d0-frontier` `Experimental/01a141bc-a4a3-72ce-8295-398724231feb.patch`, which carried no binary
+content: the three `.facet` archives are bit-identical to the `SultanAladin/Slate` source they were imported
+from, and the DM Sans `woff2` files are re-sourced from `@fontsource/dm-sans` 5.3.0 (same OFL licence). The HMI
+finishes and the X-ray ghost below were added here; see `../PLAN.md` for the follow-up plan.
+
 A self-contained WebGPU exhibit inside the **Frontier Editor** UI: one scene distance field (four camera-centred
 toroidal cascades), a surface cache of oriented cards with multi-bounce radiosity, a ReSTIR GI final gather traced
 through that field, SVGF reconstruction, glossy reflections — and the Project-Drive ControlVehicle (a port of its
@@ -38,7 +44,7 @@ groups the scene; selecting an entry rebuilds the inspector (`Source/InspectorPa
 | Global distance field · Surface cache | cascade state and freezing, slice inset; card radiosity and relighting budget |
 | Sun & sky | presets (Noon · Golden · Dusk · Night), sun direction, solar / sky / emitter intensity |
 | ControlVehicle · Tyre marks | telemetry, **burnout / line lock**, **tyres** (pressures per axle, soft carcass and its **Deformation ×** exaggeration, wear, failure, puncture / blowout / shred buttons, deflection · patch · tread readouts), ignition, thermal grip, **camera rigs**; rubber deposit |
-| **Cabin · HMI** | the TabletPanel HMI live in the car (screens, brightness, open an app), **cockpit size** (scale, fore/aft, height, across), see-through glass and its transmission, mirror views, interior cameras |
+| **Cabin · HMI** | the TabletPanel HMI live in the car (screens, brightness, open an app), **cockpit size** (scale, fore/aft, height, across), see-through glass and its transmission, mirror views, interior cameras, **finish** (paint, clear coat, rims — live on the car) and the **X-ray ghost** (scan / ghost hologram view) |
 | **Smoke & fire** | the Smoke + Fire editor: Domain, Source, Simulation, Appearance, Fire, Presets — every gas quantity as a slider, plus a test emitter |
 | **Derez · VFX** | the Particle Editor's Derez cube · Reverse derez · Glitch dissolve presets, cube timing and motion, **the car's own colours or the palette**, face glow, **momentum**, recovery triggers, test buttons |
 | **Fracture** · each breakable prop | debris (rigid bodies, distance-field admission, respawn); per prop the Fracture editor: Material, Impact, Fragment quality, Bake, Geometry receipt |
@@ -231,7 +237,12 @@ stack, seats, a console, two door mirrors and a rear-view mirror.
   launcher designs, the hexagon cluster — drawn into its own canvases and uploaded as textures when they redraw. The
   cluster shows the car's speed, revs, gear and tyre pressures; Telemetry and Tyres read the solver; the Tyres slider
   pumps the tyres; the **Garage shows this car**, rendered live into its preview well by the exhibit's own studio pass
-  (its own camera and three lights, on a turntable you can drag). From the cockpit, click the tablet.
+  (its own camera and three lights, on a turntable you can drag — tap it to pause). From the cockpit, click the tablet.
+* **Finishes & X-ray** (Cabin · HMI, `Source/FinishSequence.js`, `Shader/GhostRaster.wgsl`): the configurator's eight
+  paints, gloss/matte clear coat and four rim sets repaint the car live — the Garage tablet or the inspector rewrites
+  the BodyCoat and Hub material records in place, so the car, its preview, its mirrors and its derez cubes all change
+  together. The X-ray ghost (Off / Scan / Ghost) dissolves the car behind a travelling scan front and draws it back
+  as a fresnel hologram — scanlines, a glowing wavefront, the shell's hard edges as lines.
 * **Glass** is see-through: the glazing leaves the opaque raster and the cabin overlay draws it over what is behind —
   the sky's Fresnel reflection, a sun glint, 72 % transmission; it casts no shadow, so the sun reaches the cabin. The
   cabin's traced indirect light is attenuated (`Shader/CabinVolume.wgsl`): its surfaces lie inside the body's
@@ -352,5 +363,6 @@ runaway wheel (see *Soft tyres, pressure and failure*).
 
 ## Licences of bundled assets
 
-`Style/Fonts/` — DM Sans, SIL Open Font License 1.1 (`Style/Fonts/OFL.txt`). `Source/EditorIcons.js` — lucide
+`Style/Fonts/` — DM Sans, SIL Open Font License 1.1 (`Style/Fonts/OFL.txt`), re-sourced from `@fontsource/dm-sans`
+5.3.0 in this reconstruction (same licence, same family). `Source/EditorIcons.js` — lucide
 path data, ISC License (notice in the file).

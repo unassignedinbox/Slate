@@ -17,16 +17,17 @@ export class SurfaceProjection
     // 📝 TyreMarks: the TyreMarkDepot whose deposit the raster reads for the road families.
     // 📝 Effects (EffectSequence) shares this pass: its record masks the car here, and its cubes draw after the runs.
     // 📝 VehicleRecords: the VehicleRecord the vertex stage deforms the tyres and turns the steering wheel by.
-    async ConstructPrograms(FrameRecords, OccupantRecords, MaterialRecords, DistanceLayout, TyreMarks, Effects, VehicleRecords)
+    // 📝 GhostRecords: the FinishSequence record the fragment stage dissolves the car behind the scan front by.
+    async ConstructPrograms(FrameRecords, OccupantRecords, MaterialRecords, DistanceLayout, TyreMarks, Effects, VehicleRecords, GhostRecords)
     {
         this.FrameRecords    = FrameRecords;
         this.OccupantRecords = OccupantRecords;
         this.MaterialRecords = MaterialRecords;
         this.Effects         = Effects;
-        this.RasterLayout = this.Exchange.ConstructDescriptorLayout(["Uniform", "StorageRead", "Texture2D", "Sampler", "Uniform", "StorageRead"],
+        this.RasterLayout = this.Exchange.ConstructDescriptorLayout(["Uniform", "StorageRead", "Texture2D", "Sampler", "Uniform", "StorageRead", "Uniform"],
                                                                     GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, "Surface raster");
         this.RasterGroup = this.Exchange.ConstructDescriptorGroup(this.RasterLayout, [FrameRecords, OccupantRecords, TyreMarks.View, TyreMarks.Sampler,
-                                                                                      Effects.Records, VehicleRecords]);
+                                                                                      Effects.Records, VehicleRecords, GhostRecords]);
         this.RasterProgram = await this.Shaders.ConstructRasterProgram("SurfaceRaster.wgsl", {
             VertexEntry: "SurfaceVertex", FragmentEntry: "SurfaceFragment",
             VertexLayouts: [{ arrayStride: VertexStride, attributes: [

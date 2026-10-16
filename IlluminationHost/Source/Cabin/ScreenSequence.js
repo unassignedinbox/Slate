@@ -9,6 +9,7 @@
 //    applications read Live — the car's real speed, tread temperatures and pressures — when the host provides it.
 
 import { Applications, LauncherDesigns, ScreenWidth, ScreenHeight, ResolveApplication, ResolveDesign } from "./AppSpecification.js";
+import { FinishPaints, FinishRims } from "../FinishSequence.js";
 
 const FontFamily = '"DM Sans", Arial, sans-serif';
 
@@ -40,7 +41,8 @@ export class ScreenSequence
         this.MessageDraft = "";
         this.Messages = [{ From: "Amelia", Text: "Same road. New adventure?" }, { From: "You", Text: "See you in the Drive Room." }];
         this.TextTarget = "";
-        this.FinishColour = "#a4d8be";
+        // Cabin: the Garage finish — paint, gloss and rims the host repaints the car with live, and the X-ray ghost.
+        this.Finish = { Paint: "#c2cf00", Metallic: true, Gloss: true, Rim: "#4581cf", RimMachined: false, Ghost: "off", Revision: 0 };
         this.Notice = "";
         this.Clock = "";
         this.ActiveTextInput = null;
@@ -611,19 +613,55 @@ export class ScreenSequence
                 this.RasterText(Preview.Facets.toLocaleString("en-GB") + " facets · ControlVehicle · own camera & lighting", 96, 630, 13, "#8fa89c");
             }
             else this.RasterText(Preview?.Failure ? "Preview unavailable: " + Preview.Failure : "Loading your car…", 428, 455, 20, "#7d968b", "center");
-            this.AdmitRegion("preview-orbit", 78, 248, 640, 400, null, { Orbit: true });
+            // 📝 A tap (no drag) pauses the turntable; a drag orbits — the pointer reports both.
+            this.AdmitRegion("preview-orbit", 78, 248, 640, 400,
+                () => { if (Preview) { Preview.Spin = !Preview.Spin; Preview.Dirty = true;
+                                        this.Notice = Preview.Spin ? "Turntable resumed." : "Turntable paused."; this.Dirty = true; } },
+                { Orbit: true });
             this.RasterText("YOUR GARAGE", 762, 291, 12, "#98a98f");
             this.RasterText("ControlVehicle", 760, 349, 39, "#dce8cc", "left", 300);
-            this.RasterText("The Project-Drive car. Drag to orbit. Visual only.", 763, 392, 17, "#849c81");
-            this.RasterText("Highlight colour for this UI study", 763, 440, 15, "#c5d9ba");
-            for (const [Index, Colour] of ["#a4d8be", "#d4bd88", "#9eb8df", "#e2ada4"].entries())
+            this.RasterText("Drag to orbit · tap pauses · finishes live", 763, 392, 14, "#849c81");
+            // Cabin: the configurator's finishes — paint, clear coat and rims repaint the car live through the host.
+            const Finish = this.Finish;
+            const BumpFinish = (Notice) => { Finish.Revision++; this.Notice = Notice; this.Dirty = true; };
+            this.RasterText("PAINT — LIVE ON THE CAR", 763, 420, 12, "#98a98f");
+            for (const [Index, Paint] of FinishPaints.entries())
             {
-                const Left = 762 + (Index % 2) * 128, Top = 462 + Math.floor(Index / 2) * 74;
-                this.RasterRectangle(Left, Top, 110, 58, 16, Colour, this.FinishColour === Colour ? "#e8e8d5" : null);
-                this.AdmitRegion("colour:" + Index, Left, Top, 110, 58, () => { this.FinishColour = Colour; this.Notice = "UI highlight selected. Vehicle materials have not been changed."; this.Dirty = true; });
+                const Left = 762 + (Index % 4) * 70, Top = 428 + Math.floor(Index / 4) * 36;
+                this.RasterRectangle(Left, Top, 62, 30, 10, Paint.Hex, Finish.Paint === Paint.Hex ? "#e8e8d5" : null);
+                this.AdmitRegion("paint:" + Paint.Id, Left, Top, 62, 30,
+                    () => { Finish.Paint = Paint.Hex; Finish.Metallic = Paint.Metallic;
+                            BumpFinish(`${Paint.Name} live on the ControlVehicle.`); });
             }
-            this.RasterButton("preview-spin", Preview?.Spin ? "Pause turntable" : "Resume turntable", 762, 618, 238, 42,
-                () => { if (Preview) { Preview.Spin = !Preview.Spin; Preview.Dirty = true; this.Dirty = true; } }, "#243931", "#acbba8");
+            for (const [Index, Label] of ["Gloss", "Matte"].entries())
+            {
+                const Active = (Label === "Gloss") === Finish.Gloss;
+                this.RasterButton("finish:" + Label, Label, 762 + Index * 140, 498, 134, 28,
+                    () => { Finish.Gloss = Label === "Gloss";
+                            BumpFinish(`${Label} clear coat live on the ControlVehicle.`); },
+                    Active ? "#a6c396" : "#243931", Active ? "#304734" : "#acbba8");
+            }
+            this.RasterText("WHEELS — LIVE ON THE RIMS", 763, 546, 12, "#98a98f");
+            for (const [Index, Rim] of FinishRims.entries())
+            {
+                const Left = 762 + Index * 70;
+                this.RasterRectangle(Left, 554, 62, 28, 10, Rim.Hex, Finish.Rim === Rim.Hex ? "#e8e8d5" : null);
+                this.AdmitRegion("rim:" + Rim.Id, Left, 554, 62, 28,
+                    () => { Finish.Rim = Rim.Hex; Finish.RimMachined = Rim.Machined;
+                            BumpFinish(`${Rim.Name} live on the rims.`); });
+            }
+            this.RasterText("X-RAY GHOST", 763, 600, 12, "#98a98f");
+            for (const [Index, [Caption, Mode]] of [["Off", "off"], ["Scan", "scan"], ["Ghost", "ghost"]].entries())
+            {
+                const Active = Finish.Ghost === Mode;
+                this.RasterButton("ghost:" + Mode, Caption, 762 + Index * 94, 608, 88, 28,
+                    () => { Finish.Ghost = Mode;
+                            BumpFinish(Mode === "off" ? "X-ray ghost off."
+                                     : Mode === "scan" ? "X-ray scan sweeping the car."
+                                     : "Ghost view — the car as a hologram."); },
+                    Active ? "#a6c396" : "#243931", Active ? "#304734" : "#acbba8");
+            }
+
         }
         else
         {
