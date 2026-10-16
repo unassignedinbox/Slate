@@ -141,7 +141,7 @@
     <div class="panel" data-panel="export">
       <div class="card" style="--bar:var(--red)"><h2>Export</h2>
         <div class="hint">Textures are exported at the current map resolution. GLB is in metres, Y-up, tyre axis along X.</div>
-        <div class="btns"><button id="exportJson">Pattern JSON</button><button id="exportHeight">Height PNG</button><button id="exportNormal">Normal PNG</button><button id="exportGlb" class="primary">GLB (3D)</button></div>
+        <div class="btns"><button id="exportJson">Pattern JSON</button><button id="exportHeight">Height PNG</button><button id="exportNormal">Normal PNG</button><button id="exportGlb" class="primary">GLB (3D)</button><button id="exportObj">OBJ (quads)</button></div>
         <div class="row" style="margin-top:12px"><label>Import JSON</label><input type="file" id="importJson" accept=".json"></div>
       </div>
     </div>
@@ -196,7 +196,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 const T = {                       // tyre carcass parameters (mm / inch / fractions)
   width: 245, aspect: 40, rim: 18, treadDepth: 8, wear: 0, wearBias: 0,
   treadFrac: 0.88, crown: 2.0, shoulder: 18, bulge: 1.0, rimWidthFrac: 0.78,
-  radial: 720, across: 96, meshMode: 'poly', polyDetail: 6,
+  radial: 720, across: 96, meshMode: 'quad', polyDetail: 6, quadPitch: 4, liner: true,
   rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE', spokes: 5, rimColor: '#c9ccd2', rimStyle: 'spoke'
 };
 const P = { name: 'GZero', type: 'Slick', layers: [] };   // tread pattern
@@ -316,7 +316,7 @@ function dims(t = T) {
 // =====================================================================================================================
 //  TREAD PATTERN RENDERER  (mm space → depth map). White = full rubber, black = full tread depth cut.
 // =====================================================================================================================
-function renderPattern(pattern, d, H, wear = 0, wearBias = 0, treadDepth = 8, skipNoise = false) {
+function renderPattern(pattern, d, H, wear = 0, wearBias = 0, treadDepth = 8, skipNoise = false, keep = null) {
   const k = H / (2 * d.acrossHalf);                   // px per mm (uniform)
   const W = Math.max(64, Math.min(4096, Math.round(d.circ * k)));
   const kx = W / d.circ, ky = k;                       // tiny anisotropy fix so it wraps exactly
@@ -330,7 +330,7 @@ function renderPattern(pattern, d, H, wear = 0, wearBias = 0, treadDepth = 8, sk
     ctx.setTransform(kx, 0, 0, ky, off * kx, H / 2);
     ctx.globalCompositeOperation = 'darken';
     for (const ly of pattern.layers) {
-      if (ly.type === 'noise') continue;
+      if (ly.type === 'noise' || (keep && !keep(ly))) continue;
       ctx.strokeStyle = ctx.fillStyle = g(ly.depth);
       if (ly.type === 'circ') {
         const y = ly.pos * th;
@@ -577,7 +577,7 @@ function treadProfileAt(y, d) {
   const ay = Math.abs(y), sgn = Math.sign(y) || 1;
   if (ay <= d.treadHalf) return { x: y, r: d.Rout - T.crown * (y / d.treadHalf) ** 2, nx: 0, nr: 1, w: 1 };
   const phi = Math.min(80 * Math.PI / 180, Math.asin(Math.min(1, (ay - d.treadHalf) / d.sr))); const c80 = Math.cos(80 * Math.PI / 180);
-  return { x: sgn * (d.treadHalf + d.sr * Math.sin(phi)), r: d.Rout - T.crown - d.sr + d.sr * Math.cos(phi), nx: sgn * Math.sin(phi), nr: Math.cos(phi), w: Math.max(0, (Math.cos(phi) - c80) / (1 - c80)) };
+  return { x: sgn * (d.treadHalf + d.sr * Math.sin(phi)), r: d.Rout - T.crown - d.sr + d.sr * Math.cos(phi), nx: sgn * Math.sin(phi), nr: Math.cos(phi), w: 0.25 + 0.75 * Math.max(0, (Math.cos(phi) - c80) / (1 - c80)) };
 }
 function buildPolyTread(d, pmGeo) {
   const { pieces, levels } = treadRegions(P, d, T.treadDepth, T.wear);
@@ -652,6 +652,117 @@ function buildSidewallGeometry(d, prof) {
     for (let i = 0; i < N - 1; i++) for (let j = 0; j < M; j++) { const a = base + i * (M + 1) + j, b = a + 1, c = a + M + 1, e = c + 1; idx.push(a, b, c, b, e, c); }
     base += N * (M + 1); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+
+
+// =====================================================================================================================
+//  QUAD TREAD — structured (around × across) grid whose nodes snap onto groove boundaries; every face is a quad.
+//  Tops + floors + walls + sidewalls + inner liner form one closed, watertight all-quad shell.
+// =====================================================================================================================
+function levelsOf(pattern, treadDepth, keep) {
+  const set = new Set([0]); for (const ly of pattern.layers) if (ly.type !== 'noise' && (!keep || keep(ly))) set.add(Math.round(ly.depth * 100) / 100);
+  if (pattern.layers.some(l => l.type === 'circ' && l.width >= 4 && l.depth >= 0.9 && !l.zig && (!keep || keep(l)))) set.add(Math.round((1 - 1.6 / treadDepth) * 100) / 100);
+  return [...set].sort((a, b) => a - b);
+}
+function buildQuadTyre(d, pm, levels, prof) {
+  const D = T.treadDepth, A = d.acrossHalf, circ = d.circ, pitch = T.quadPitch;
+  const N = Math.max(60, Math.round(circ / pitch)); const px = circ / N;
+  // across rows: uniform on the crown, ~10° steps on the shoulder arc
+  const ys = []; const nFlat = Math.max(2, Math.round(d.treadHalf / pitch)); for (let i = -nFlat; i <= nFlat; i++) ys.push(i / nFlat * d.treadHalf);
+  const shoulder = []; for (let ph = 10; ph <= 80; ph += 10) shoulder.push(d.treadHalf + d.sr * Math.sin(ph * Math.PI / 180)); shoulder[shoulder.length - 1] = A;
+  const rows = [...shoulder.map(y => -y).reverse(), ...ys, ...shoulder]; const M = rows.length - 1;
+  const wl = y => pm.wearRow((y + A) / (2 * A) * pm.H);
+  const snap = h => levels.reduce((b, l) => Math.abs(l - h) < Math.abs(b - h) ? l : b, 0);
+  const lvlAt = (x, y) => { const raw = sampleDepth(pm, x / circ, (y + A) / (2 * A)); const w = wl(y); return raw > 0.02 ? snap(raw + w) : 0; };
+  const effective = (L, y) => Math.max(L, wl(y));
+  const keyL = L => Math.round(Math.max(L, T.wear) * 1000) / 1000; const effLevels = [...new Set(levels.map(keyL))].sort((a, b) => a - b);
+  // cell levels (sampled at cell centres)
+  const lvl = new Float32Array(N * M);
+  for (let j = 0; j < M; j++) { const yc = (rows[j] + rows[j + 1]) / 2; for (let i = 0; i < N; i++) lvl[j * N + i] = lvlAt((i + 0.5) * px, yc); }
+  const cell = (i, j) => lvl[j * N + ((i % N) + N) % N];
+  for (let pass = 0; pass < 6; pass++) for (let j = 1; j < M; j++) for (let i = 0; i < N; i++) { const a = cell(i - 1, j - 1), b = cell(i, j - 1), c = cell(i - 1, j), e = cell(i, j); if (a === e && a !== b && a !== c) lvl[(j - 1) * N + ((i % N) + N) % N] = a; else if (b === c && b !== a && b !== e) lvl[(j - 1) * N + ((i - 1 + N) % N)] = b; }   // break diagonal pinches (non-manifold corners)
+  // node positions with boundary snapping
+  const nx = new Float32Array((M + 1) * N), ny = new Float32Array((M + 1) * N);
+  for (let j = 0; j <= M; j++) for (let i = 0; i < N; i++) {
+    let x = i * px, y = rows[j]; const k = j * N + i; nx[k] = x; ny[k] = y;
+    if (j === 0 || j === M) continue;
+    const a = cell(i - 1, j - 1), b = cell(i, j - 1), c = cell(i - 1, j), e = cell(i, j); if (a === b && b === c && c === e) continue;
+    const L0 = lvlAt(x, y); const rx = px * 0.5, ry = Math.min(rows[j] - rows[j - 1], rows[j + 1] - rows[j]) * 0.5; let best = null, bd = 1e9;
+    for (let sy = -3; sy <= 3; sy++) for (let sx = -3; sx <= 3; sx++) { if (!sx && !sy) continue; const qx = x + sx / 3 * rx, qy = y + sy / 3 * ry; if (lvlAt(qx, qy) !== L0) { const dd = (sx / 3) ** 2 + (sy / 3) ** 2; if (dd < bd) { bd = dd; best = [qx, qy]; } } }
+    if (!best) continue;
+    let lo = [x, y], hi = best; for (let it = 0; it < 7; it++) { const m = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2]; if (lvlAt(m[0], m[1]) === L0) lo = m; else hi = m; }
+    nx[k] = x + THREE.MathUtils.clamp((lo[0] + hi[0]) / 2 - x, -rx * 0.9, rx * 0.9); ny[k] = y + THREE.MathUtils.clamp((lo[1] + hi[1]) / 2 - y, -ry * 0.9, ry * 0.9);
+  }
+  // vertex store
+  const V = [], VU = [], VK = []; const vmap = new Map();
+  const place3 = (x, y, hFrac) => { const pr = treadProfileAt(y, d); const off = D * hFrac * pr.w; const ax = pr.x - pr.nx * off, r = pr.r - pr.nr * off; const th = x / circ * TAU; return [ax, r * Math.cos(th), r * Math.sin(th)]; };
+  const node = (i, j, L) => { const ii = ((i % N) + N) % N; L = keyL(L); const key = ii + ',' + j + ',' + L; let id = vmap.get(key); if (id !== undefined) return id;
+    const k = j * N + ii; const x = nx[k], y = ny[k]; id = V.length; V.push(place3(x, y, effective(L, y))); VU.push([x / circ + (i >= N ? 1 : i < 0 ? -1 : 0), (y + A) / (2 * A)]); VK.push('tread'); vmap.set(key, id); return id; };
+  const F = [];   // faces: {q:[a,b,c,d], kind:'top'|'wall'|'side'|'liner', n?:desired normal}
+  const wallSegs = (La, Lb) => { const lo = Math.min(keyL(La), keyL(Lb)), hi = Math.max(keyL(La), keyL(Lb)); const segs = []; const ls = effLevels.filter(v => v >= lo && v <= hi); for (let k = 0; k + 1 < ls.length; k++) segs.push([ls[k], ls[k + 1]]); return segs; };
+  const wall = (nA, nB, La, Lb, toward, axis) => { for (const [hi, lo] of wallSegs(La, Lb)) F.push({ q: [node(...nA, hi), node(...nB, hi), node(...nB, lo), node(...nA, lo)], kind: 'wall', toward, axis }); };   // hi = shallower (closer to surface)
+  for (let j = 0; j < M; j++) for (let i = 0; i < N; i++) {
+    const L = cell(i, j); F.push({ q: [node(i, j, L), node(i + 1, j, L), node(i + 1, j + 1, L), node(i, j + 1, L)], kind: 'top' });
+    const Lr = cell(i + 1, j); if (keyL(Lr) !== keyL(L)) wall([i + 1, j], [i + 1, j + 1], L, Lr, L > Lr ? -1 : 1, 'x');
+    if (j < M - 1) { const Lu = cell(i, j + 1); if (keyL(Lu) !== keyL(L)) wall([i, j + 1], [i + 1, j + 1], L, Lu, L > Lu ? -1 : 1, 'y'); }
+    if (j === 0 && keyL(L) !== keyL(0)) wall([i, 0], [i + 1, 0], L, 0, 1, 'y');                 // step up to the sidewall ring (faces into the cell)
+    if (j === M - 1 && keyL(L) !== keyL(0)) wall([i, M], [i + 1, M], L, 0, -1, 'y');
+  }
+  // sidewalls: lathe rows with the same N, starting from the tread edge rows (level 0 at the shoulder end)
+  const sideRows = sgn => prof.filter(p => p.zone === 'side' && Math.sign(p.x) === sgn).sort((a, b) => sgn > 0 ? a.r - b.r : a.r - b.r).reverse();   // from shoulder down to bead
+  const VN = []; const ring = (x, r, s, kind, uvFlip, pn) => { const base = V.length; for (let i = 0; i < N; i++) { const th = i / N * TAU; V.push([x, r * Math.cos(th), r * Math.sin(th)]); VU.push([uvFlip ? 1 - i / N : i / N, s]); VK.push(kind); VN[base + i] = pn; } return base; };
+  const connect = (ringA, ringB, kind, flipWinding) => { for (let i = 0; i < N; i++) { const a0 = ringA(i), a1 = ringA((i + 1) % N), b0 = ringB(i), b1 = ringB((i + 1) % N); F.push({ q: flipWinding ? [a0, b0, b1, a1] : [a0, a1, b1, b0], kind }); } };
+  const liners = {};
+  for (const sgn of [1, -1]) {
+    const edgeJ = sgn > 0 ? M : 0; let prev = i => node(i, edgeJ, 0); const srows = sideRows(sgn); let lastBase = null;
+    for (const p of srows) { const base = ring(p.x, p.r, Math.max(-0.05, p.s ?? 0), 'side', sgn < 0, [p.nx, p.nr]); const cur = i => base + i; connect(prev, cur, 'side', sgn < 0); prev = cur; lastBase = base; }
+    liners[sgn] = { bead: prev, rows: srows };
+  }
+  if (T.liner) {   // inner liner: offset profile inward, closes the shell between the two beads
+    const th = 5; const innerPts = prof.slice(1, -1).map(p => ({ x: p.x - p.nx * (p.zone === 'tread' ? D + th : th), r: p.r - p.nr * (p.zone === 'tread' ? D + th : th), pn: [-p.nx, -p.nr] }));
+    let prev = liners[-1].bead; const rings = [];
+    for (const p of innerPts) { const base = ring(p.x, p.r, 0, 'liner', false, p.pn); rings.push(base); const cur = i => base + i; connect(prev, cur, 'liner', true); prev = cur; }
+    connect(prev, liners[1].bead, 'liner', true);
+  }
+  // ---- normals / winding ----
+  const pos = V; const fn = f => { const [a, b, c, dd] = f.q.map(i => pos[i]); const e1 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]], e2 = [dd[0] - b[0], dd[1] - b[1], dd[2] - b[2]]; const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]; const l = Math.hypot(...n) || 1; return [n[0] / l, n[1] / l, n[2] / l]; };
+  const radial = pt => { const r = Math.hypot(pt[1], pt[2]) || 1; return [0, pt[1] / r, pt[2] / r]; };
+  for (const f of F) {
+    const n = fn(f); let want;
+    if (f.kind === 'top') { const c = f.q.map(i => pos[i]); const cx = c.reduce((s, p) => s + p[0], 0) / 4; const pr = treadProfileAt(THREE.MathUtils.clamp(cx, -A, A), d); const r = radial(c[0]); want = [pr.nx, pr.nr * r[1], pr.nr * r[2]]; }
+    else if (f.kind === 'wall') { const c = f.q.map(i => pos[i]); const cen = c.reduce((s, p) => [s[0] + p[0] / 4, s[1] + p[1] / 4, s[2] + p[2] / 4], [0, 0, 0]); if (f.axis === 'y') want = [f.toward, 0, 0]; else { const r = radial(cen); want = [0, -r[2] * f.toward, r[1] * f.toward]; } }
+    else { let pn = null, vi = -1; for (const i of f.q) if (VN[i]) { pn = VN[i]; vi = i; break; } const c = pos[vi >= 0 ? vi : f.q[0]]; const r = radial(c); want = pn ? [pn[0], pn[1] * r[1], pn[1] * r[2]] : [0, -r[1], -r[2]]; }
+    if (f.kind === 'wall' && n[0] * want[0] + n[1] * want[1] + n[2] * want[2] < 0) f.q.reverse();
+    f.n = fn(f); f.want = want;
+  }
+  // smooth normals for side/liner, analytic for tops, flat for walls
+  const acc = new Float32Array(V.length * 3);
+  for (const f of F) if (f.kind === 'side' || f.kind === 'liner') for (const i of f.q) { acc[i * 3] += f.n[0]; acc[i * 3 + 1] += f.n[1]; acc[i * 3 + 2] += f.n[2]; }
+  const P3 = [], N3 = [], U2 = [], T4 = [];
+  const emit = (i, n, t) => { const p = pos[i]; P3.push(p[0], p[1], p[2]); N3.push(n[0], n[1], n[2]); U2.push(VU[i][0], VU[i][1]); T4.push(t[0], t[1], t[2], 1); };
+  const tanAt = p => { const r = Math.hypot(p[1], p[2]) || 1; return [0, -p[2] / r, p[1] / r]; };
+  for (const f of F) {
+    const nrmOf = i => { if (f.kind === 'top') { const pr = treadProfileAt(THREE.MathUtils.clamp(pos[i][0], -A, A), d); const r = radial(pos[i]); return [pr.nx, pr.nr * r[1], pr.nr * r[2]]; } if (f.kind === 'wall') return f.n; const l = Math.hypot(acc[i * 3], acc[i * 3 + 1], acc[i * 3 + 2]) || 1; return [acc[i * 3] / l, acc[i * 3 + 1] / l, acc[i * 3 + 2] / l]; };
+    const tanOf = i => { if (f.kind === 'wall') { const a = pos[f.q[0]], b = pos[f.q[1]]; const e = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]; const l = Math.hypot(...e) || 1; return [e[0] / l, e[1] / l, e[2] / l]; } return tanAt(pos[i]); };
+    const [a, b, c, dd] = f.q; for (const i of [a, b, c, a, c, dd]) emit(i, nrmOf(i), tanOf(i));
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P3, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N3, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U2, 2)); g.setAttribute('tangent', new THREE.Float32BufferAttribute(T4, 4)); g.computeBoundingSphere();
+  // material groups: tread (top+wall) first, then side/liner
+  const order = F.map((f, i) => i).sort((x, y) => (F[x].kind === 'top' || F[x].kind === 'wall' ? 0 : 1) - (F[y].kind === 'top' || F[y].kind === 'wall' ? 0 : 1));
+  // (faces were emitted in F order; rebuild in sorted order for groups)
+  const P3s = [], N3s = [], U2s = [], T4s = []; let treadFaces = 0;
+  for (const fi of order) { for (let k = 0; k < 6; k++) { const v = fi * 6 + k; P3s.push(P3[v * 3], P3[v * 3 + 1], P3[v * 3 + 2]); N3s.push(N3[v * 3], N3[v * 3 + 1], N3[v * 3 + 2]); U2s.push(U2[v * 2], U2[v * 2 + 1]); T4s.push(T4[v * 4], T4[v * 4 + 1], T4[v * 4 + 2], 1); } if (F[fi].kind === 'top' || F[fi].kind === 'wall') treadFaces++; }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P3s, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N3s, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U2s, 2)); g.setAttribute('tangent', new THREE.Float32BufferAttribute(T4s, 4));
+  g.addGroup(0, treadFaces * 6, 0); g.addGroup(treadFaces * 6, (F.length - treadFaces) * 6, 1);
+  g.userData.tris = F.length * 2; g.userData.quads = F.length; g.userData.quadMesh = { V, VU, F: F.map(f => ({ q: f.q, kind: f.kind })) };
+  return g;
+}
+function exportOBJ(qm, name) {
+  const L = [`# ${name} — Slate Tyre Generator, all-quad mesh, metres`, `o ${name.replace(/\s+/g, '_')}`];
+  for (const v of qm.V) L.push(`v ${(v[0] / 1000).toFixed(6)} ${(v[1] / 1000).toFixed(6)} ${(v[2] / 1000).toFixed(6)}`);
+  for (const u of qm.VU) L.push(`vt ${u[0].toFixed(5)} ${u[1].toFixed(5)}`);
+  let last = ''; for (const f of qm.F) { if (f.kind !== last) { L.push(`g ${f.kind}`); last = f.kind; } L.push('f ' + f.q.map(i => `${i + 1}/${i + 1}`).join(' ')); }
+  return L.join('\n');
 }
 
 // =====================================================================================================================
@@ -782,7 +893,7 @@ const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.Mes
 const grid = new THREE.GridHelper(4000, 80, '#232529', '#1a1c1f'); grid.position.y = 0.5; scene.add(grid);
 const tyreGroup = new THREE.Group(); scene.add(tyreGroup);
 
-let tyreMesh, rimGroup, threadLines, maps, patternMap, profileCache, treadMat, sideMatL, sideMatR;
+let tyreMesh, rimGroup, threadLines, maps, patternMap, profileCache, treadMat, quadMeshData;
 function disposeGroup() { tyreGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); }); tyreGroup.clear(); }
 
 function rebuild(full = true) {
@@ -792,12 +903,17 @@ function rebuild(full = true) {
   disposeGroup();
   const tex = c => { const t = new THREE.CanvasTexture(c); t.flipY = false; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.NoColorSpace; return t; };
   const colTex = tex(maps.color); colTex.colorSpace = THREE.SRGBColorSpace;
-  const usePoly = T.meshMode === 'poly' && !!window.ClipperLib;
+  const usePoly = T.meshMode === 'poly' && !!window.ClipperLib; const useQuad = T.meshMode === 'quad';
   treadMat = new THREE.MeshStandardMaterial({ map: colTex, normalMap: tex(maps.normal), normalScale: new THREE.Vector2(usePoly ? 0.35 : 0.7, usePoly ? 0.35 : 0.7), roughnessMap: tex(maps.rough), roughness: 1, metalness: 0.0 });
   const sw = buildSidewall(true); const sideTex = tex(sw.color); sideTex.colorSpace = THREE.SRGBColorSpace;
   const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, normalMap: tex(sw.normal), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.8, metalness: 0 });
-  tyreMesh = new THREE.Group(); let triCount = 0;
-  if (usePoly) {
+  tyreMesh = new THREE.Group(); let triCount = 0; quadMeshData = null;
+  if (useQuad) {
+    const keep = ly => !(ly.type === 'sipe' || (ly.width !== undefined && ly.width < T.quadPitch * 0.9 && ly.type !== 'circ' && ly.type !== 'dimple' && ly.type !== 'hex'));   // features thinner than a cell stay in the normal map
+    const pmGeo = renderPattern(P, d, 512, T.wear, T.wearBias, T.treadDepth, true, keep); const prof = buildProfile(d); profileCache = prof;
+    const geo = buildQuadTyre(d, pmGeo, levelsOf(P, T.treadDepth, keep), prof); quadMeshData = geo.userData.quadMesh;
+    tyreMesh.add(new THREE.Mesh(geo, [treadMat, sideMat])); triCount = geo.userData.tris;
+  } else if (usePoly) {
     const pmGeo = renderPattern(P, d, 384, T.wear, T.wearBias, T.treadDepth, true);
     let treadGeo; try { treadGeo = buildPolyTread(d, pmGeo); } catch (e) { console.warn('polygon tread failed, falling back', e); }
     if (treadGeo) { const prof = buildProfile(d); profileCache = prof; tyreMesh.add(new THREE.Mesh(treadGeo, treadMat)); tyreMesh.add(new THREE.Mesh(buildSidewallGeometry(d, prof), sideMat)); triCount = treadGeo.userData.tris; }
@@ -821,7 +937,7 @@ function updateHud(d) {
   const tile = (l, v, u, dot) => `<div class="tile"><div class="l"><i style="background:${dot || 'var(--green)'}"></i>${l}</div><div class="v">${v}<small>${u}</small></div></div>`;
   document.getElementById('tiles').innerHTML =
     tile('Overall Ø', od.toFixed(0), 'mm', 'var(--yellow)') + tile('Tread left', remaining.toFixed(1), '/ ' + T.treadDepth + ' mm', col) +
-    tile('Circumference', (circ / 1000).toFixed(2), 'm', 'var(--yellow)') + tile('Tread mesh', (tyreMesh?.userData.tris / 1000 || 0).toFixed(1), 'k tris · ' + (T.meshMode === 'poly' ? 'polygons' : 'heightmap'), 'var(--green)');
+    tile('Circumference', (circ / 1000).toFixed(2), 'm', 'var(--yellow)') + (T.meshMode === 'quad' ? tile('Mesh', ((quadMeshData?.F.length || 0) / 1000).toFixed(1), 'k quads · watertight', 'var(--green)') : tile('Tread mesh', (tyreMesh?.userData.tris / 1000 || 0).toFixed(1), 'k tris · ' + (T.meshMode === 'poly' ? 'polygons' : 'heightmap'), 'var(--green)'));
   const bigNum = v => { const [a, b] = String(v).split('.'); return a + (b ? '<span class="frac">.' + b + '</span>' : ''); };
   document.getElementById('bigSize').innerHTML = `${T.width}<span class="frac">/${T.aspect}</span><small>R${T.rim}</small>`;
   document.getElementById('sizeR').textContent = `${(d.Rrim * 2).toFixed(0)} mm rim`;
@@ -900,7 +1016,7 @@ renderer.setAnimationLoop(now => { const dt = (now - last) / 1000; last = now; i
 // =====================================================================================================================
 //  UI
 // =====================================================================================================================
-let timer; const schedule = () => { clearTimeout(timer); timer = setTimeout(() => rebuild(), 40); };
+let timer; const schedule = () => { clearTimeout(timer); timer = setTimeout(() => rebuild(), T.meshMode === 'quad' ? 220 : 40); };
 function slider(parent, label, obj, key, min, max, step, fmt = v => v, after = schedule) {
   const row = document.createElement('div'); row.className = 'row'; row.innerHTML = `<label title="${label}">${label}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${obj[key]}"><span class="val">${fmt(obj[key])}</span>`;
   const inp = row.querySelector('input'), val = row.querySelector('.val');
@@ -927,7 +1043,7 @@ function buildTyreUI() {
   slider(p, 'Wear (new → bald)', T, 'wear', 0, 1, 0.01, v => v === 0 ? 'New' : v >= 1 ? 'Bald' : Math.round(v * 100) + '%');
   slider(p, 'Wear bias (edge↔centre)', T, 'wearBias', -1, 1, 0.01, v => v.toFixed(2));
   h('Tread mesh');
-  select(p, 'Mesh mode', T, 'meshMode', ['poly', 'heightmap']); slider(p, 'Polygon detail (mm)', T, 'polyDetail', 3, 16, 0.5, v => v.toFixed(1));
+  select(p, 'Mesh mode', T, 'meshMode', ['quad', 'poly', 'heightmap']); slider(p, 'Quad pitch (mm)', T, 'quadPitch', 1.5, 10, 0.5, v => v.toFixed(1)); check(p, 'Inner liner (closed shell)', T, 'liner'); slider(p, 'Polygon detail (mm)', T, 'polyDetail', 3, 16, 0.5, v => v.toFixed(1));
   slider(p, 'Segments around', T, 'radial', 180, 1440, 20); slider(p, 'Segments across (heightmap)', T, 'across', 32, 192, 8);
   const pp = document.getElementById('profileParams'); pp.innerHTML = '';
   slider(pp, 'Tread depth (mm)', T, 'treadDepth', 2, 20, 0.5); slider(pp, 'Tread width fraction', T, 'treadFrac', 0.7, 0.98, 0.01, v => v.toFixed(2));
@@ -1021,6 +1137,7 @@ document.getElementById('exportGlb').onclick = () => {
   const ex = new GLTFExporter(); const g = tyreGroup.clone(); g.remove(...g.children.filter(c => c.isLineSegments)); g.position.set(0, 0, 0); g.scale.setScalar(0.001);
   ex.parse(g, r => { dl(P.name.replace(/\s+/g, '_') + '.glb', URL.createObjectURL(new Blob([r], { type: 'model/gltf-binary' }))); toast('GLB exported (metres)'); }, e => toast('Export failed: ' + e), { binary: true });
 };
+document.getElementById('exportObj').onclick = () => { if (!quadMeshData) return toast('Switch Mesh mode to quad first'); dl(P.name.replace(/\s+/g, '_') + '.obj', URL.createObjectURL(new Blob([exportOBJ(quadMeshData, P.name)], { type: 'text/plain' }))); toast(quadMeshData.F.length + ' quads exported'); };
 document.getElementById('importJson').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); if (j.tyre) Object.assign(T, j.tyre); if (j.pattern) { P.name = j.pattern.name; P.type = j.pattern.type; P.layers = j.pattern.layers; } UI.sel = -1; refreshAll(); toast('Imported ' + P.name); }); };
 window.addEventListener('keydown', e => { if (e.key === 'r' && !e.target.matches('input,select')) { randomTyre(); refreshAll(); } });
 
