@@ -1,0 +1,7 @@
+# Generated Node dependencies and build output
+**/node_modules/
+**/dist/
+**/coverage/
+
+# Local validation captures
+Experimental/IlluminationHost/Tools/*.png
