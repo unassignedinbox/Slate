@@ -1,0 +1,10 @@
+{
+  "name": "slate-vehicle-illumination-exhibit",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node ExhibitExchange.mjs --port 8080 --address 0.0.0.0",
+    "test": "node --test Tests/*.test.mjs",
+    "benchmark": "node Tests/BenchmarkTyres.mjs"
+  }
+}
