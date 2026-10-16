@@ -8,6 +8,7 @@ import { CourseMaterial } from "./MaterialSpecification.js";
 import * as Course from "./CourseStructure.js";
 import { ConstructYard, EmitYardGroundFacets } from "./YardStructure.js";
 import { VehicleGeometry, ResolveCoMAuthoredZ } from "./VehicleSpecification.js";
+import { EmitCabinFixtureFacets, EmitSteeringWheelFacets } from "./CabinStructure.js";
 import { ConstructIdentityTransform, TransformBounds, InvertTransform,
          SubtractVector, CrossVector, NormalizeVector } from "./TransformProjection.js";
 
@@ -54,7 +55,8 @@ export class SceneStructure
     {
         this.FacetSets        = [];
         this.Occupants        = [];
-        this.VehicleOccupants = { Body: -1, Wheels: [-1, -1, -1, -1] };
+        this.VehicleOccupants = { Body: -1, Wheels: [-1, -1, -1, -1], Cabin: -1, Steering: -1 };
+        this.CabinGlassSet    = -1;
         this.GroundTiles      = { First: -1, Strips: [-1, -1, -1, -1] };
         this.GroundOccupant   = -1;
         this.DistanceCount    = 0;
@@ -71,8 +73,11 @@ export class SceneStructure
             RetrieveFacetStream(`${ArchiveFolder}/ControlVehicleRim.facet`)
         ]);
 
-        // ① vehicle facet sets — and the bare rims a burst tyre leaves, transferred at bring-up so a burst swaps sets
-        const BodySet       = this.ConstructFacetSet("ControlVehicle body", ProjectBodyFacets(Body), 0.05, 40.0);
+        // ① vehicle facet sets — and the bare rims a shredded tyre leaves, transferred at bring-up so a shred swaps
+        //    sets. The shell's glazing leaves the body set for the cabin glass pass (blended after the resolve), so
+        //    the sun streams through the openings and the cabin reads through the windscreen.
+        const ProjectedBody = ProjectBodyFacets(Body);
+        const BodySet       = this.ConstructFacetSet("ControlVehicle body", ProjectedBody.Opaque, 0.05, 40.0);
         const WheelLeftSet  = this.ConstructFacetSet("ControlVehicle wheel (left)", ProjectWheelFacets(Tyre, Rim, false, true), 0.025, 40.0);
         const WheelRightSet = this.ConstructFacetSet("ControlVehicle wheel (right)", ProjectWheelFacets(Tyre, Rim, true, true), 0.025, 40.0);
         const RimLeftSet    = this.ConstructFacetSet("ControlVehicle rim (left)", ProjectWheelFacets(Tyre, Rim, false, false), 0.025, 40.0);
@@ -80,11 +85,15 @@ export class SceneStructure
         this.FacetSets[RimLeftSet].DistanceRequired = true;
         this.FacetSets[RimRightSet].DistanceRequired = true;
         this.WheelSets = { Tyred: [WheelLeftSet, WheelRightSet], Rim: [RimLeftSet, RimRightSet] };
+        this.CabinGlassSet = this.ConstructFacetSet("ControlVehicle glass", ProjectedBody.Glass, 0.0, 0.0);
+        const CabinSet    = this.ConstructFacetSet("Cabin fixtures", EmitCabinFixtureFacets(), 0.0, 0.0);
+        const SteeringSet = this.ConstructFacetSet("Steering wheel", EmitSteeringWheelFacets().Facets, 0.0, 0.0);
         const GroundSet = this.ConstructFacetSet("Course ground", EmitYardGroundFacets(), 0.0, 0.0);
 
         // ② distance occupants first, so the union pass walks one compact span ------------------------------------
         const VehicleRoles = OccupantRole.Raster | OccupantRole.Distance | OccupantRole.Cards | OccupantRole.Dynamic;
         const StaticRoles  = OccupantRole.Raster | OccupantRole.Distance | OccupantRole.Cards;
+        const CabinRoles   = OccupantRole.Raster | OccupantRole.Dynamic;
         this.VehicleOccupants.Body = this.ConstructOccupant("ControlVehicle", BodySet, ConstructIdentityTransform(), VehicleRoles);
         const WheelNames = ["Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR"];
         for (let Wheel = 0; Wheel < 4; ++Wheel)
@@ -92,6 +101,10 @@ export class SceneStructure
             const Set = (Wheel & 1) ? WheelRightSet : WheelLeftSet;
             this.VehicleOccupants.Wheels[Wheel] = this.ConstructOccupant(WheelNames[Wheel], Set, ConstructIdentityTransform(), VehicleRoles);
         }
+        // 📝 The cabin rides the body transform (the fixtures verbatim, the wheel spun about its column); rastered
+        //    and shadowed with the car, but outside the distance span and the card depot.
+        this.VehicleOccupants.Cabin = this.ConstructOccupant("Cabin", CabinSet, ConstructIdentityTransform(), CabinRoles);
+        this.VehicleOccupants.Steering = this.ConstructOccupant("Steering wheel", SteeringSet, ConstructIdentityTransform(), CabinRoles);
         this.DynamicCount = this.Occupants.length;
         const Yard = ConstructYard(this, { Static: StaticRoles });
         this.Breakables = Yard.Breakables;
@@ -452,11 +465,12 @@ export const OccupantStride = 336;   // [B] - OccupantRecord
 //------------------------------------------------------------------------------------------------------------------------
 
 // 📝 DriveSceneAuthor::AppendVehicleBody(): rebase the authored model onto the centre of mass (z − 0.11285 m) and keep
-//    the per-facet family; facet normals are flat, exactly as AppendFace derives them.
+//    the per-facet family; facet normals are flat, exactly as AppendFace derives them. The glazing (VehicleGlass)
+//    splits into its own span for the cabin glass pass; everything else stays in the deferred body set.
 function ProjectBodyFacets(Stream)
 {
     const Rebase = ResolveCoMAuthoredZ();
-    const Facets = [];
+    const Opaque = [], Glass = [];
     for (let Facet = 0; Facet < Stream.FacetCount; ++Facet)
     {
         const Corners = [];
@@ -465,9 +479,9 @@ function ProjectBodyFacets(Stream)
             const Vertex = Stream.Facets[Facet * 3 + Corner];
             Corners.push([Stream.Positions[Vertex * 3], Stream.Positions[Vertex * 3 + 1], Stream.Positions[Vertex * 3 + 2] - Rebase]);
         }
-        Facets.push({ Corners, Family: Stream.Families[Facet] });
+        (Stream.Families[Facet] === CourseMaterial.VehicleGlass ? Glass : Opaque).push({ Corners, Family: Stream.Families[Facet] });
     }
-    return Facets;
+    return { Opaque, Glass };
 }
 
 // 📝 The authored tyre plus the authored rim (mags and all), hub-local with the axle along +Y. The rim is scaled to the

@@ -161,6 +161,7 @@ export class VehicleSolver
         this.ShiftTimer   = 0.0;
         this.ReverseTimer = 0.0;
         this.Throttle     = 0.0;
+        this.Brake        = 0.0;
         this.Accumulator  = 0.0;
     }
 
@@ -364,6 +365,7 @@ export class VehicleSolver
             Brake = Command.Throttle;
         }
         this.Throttle = Throttle;
+        this.Brake = Brake;
         this.LineLock = !!Command.LineLock && this.GearIndex !== TransmissionSheet.ReverseIndex;
 
         // ② steering: first-order toward the command, the lock eased with speed for keyboard driving, Ackermann split
@@ -848,6 +850,8 @@ export class VehicleSolver
             EngineRPM: Math.min(this.EngineRPM, EngineSheet.RedlineRPM + 400.0),
             Boost: this.Boost,
             Throttle: this.Throttle,
+            Brake: this.Brake || 0.0,
+            SteerAngle: this.SteerAngle,
             Contacts: this.Wheels.filter((Wheel) => Wheel.Contact).length,
             Skid: Math.max(...this.Wheels.map((Wheel) => Wheel.Skid)),
             TyreTemperatures: this.Thermals.map((Thermal) => Thermal.SurfaceTemperature - 273.15),
