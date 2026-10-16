@@ -184,6 +184,7 @@ class IlluminationHost
         // 📝 The cabin is built as part of the scene, in the vehicle's own span: the shell rides the body, the wheel and
         //    the cluster ride the rack, and the tablet rides the console.
         await this.Scene.ConstructScene("Archive", (Scene, Roles) => ({ Shell: ConstructCabin(Scene, Roles), Panel: ConstructCabinPanel(Scene, Roles) }));
+        this.Cabin = this.Scene.Cabin;
         this.Vehicle = new VehicleSolver(this.Scene.QueryObstacleBounds());
         this.PositionVehicle();
         this.Scene.RetainOccupantTransform(this.Scene.VehicleOccupants.Body);
@@ -195,7 +196,6 @@ class IlluminationHost
         this.VertexRecords   = this.Exchange.ConstructRecordsFrom(this.Scene.EncodeVertexRecords(), GPUBufferUsage.VERTEX, "Facet vertices");
         // 📝 The cabin's displays own their vertex ranges: they re-encode a segment's families and write those bytes back.
         this.Scene.Cabin.Panel.Attach(this.Exchange, this.VertexRecords, this.Scene);
-        this.Cabin = this.Scene.Cabin;
         this.MaterialRecords = this.Exchange.ConstructRecordsFrom(EncodeMaterialRecords(Materials), GPUBufferUsage.STORAGE, "Materials");
         this.FrameRecords    = this.Exchange.ConstructRecords(480, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, "Frame record");
         // 💾 Sized for the stress test's full scatter capacity and the fragment span's, so adding occupants never rebuilds
