@@ -212,9 +212,14 @@ export class VehicleSolver
                 }
             }
             // 📝 A rim on the road — pinched through a flat, or bare once shredded — throws sparks while it moves.
+            //    The flange's surface outruns the hub by the spin, so a rim grinding through a burnout sprays its
+            //    sparks rearward even when the car itself is standing still.
             const Grinding = Math.max(RollingSpeed, LengthVector(Wheel.ContactVelocity));
             if (Wheel.Contact && (Wheel.Pinched || Wheel.Shredded) && Grinding > 1.5)
-                this.RecordScrape(`rim${Index}`, Wheel.ContactPoint, Wheel.ContactVelocity, Math.min(1.6, (Wheel.Shredded ? 0.05 : 0.03) * Grinding), Index);
+            {
+                const Surface = MultiplyAddVector(Wheel.ContactVelocity, Wheel.Longitudinal, -Wheel.Spin * Wheel.Radius);
+                this.RecordScrape(`rim${Index}`, Wheel.ContactPoint, Surface, Math.min(1.6, (Wheel.Shredded ? 0.05 : 0.03) * Grinding), Index);
+            }
         });
         this.AfterfireSeconds = Math.max(0.0, this.AfterfireSeconds - Seconds);
         if (this.PriorThrottle > 0.55 && this.Throttle < 0.15 && this.EngineRPM > AfterfireRpm)

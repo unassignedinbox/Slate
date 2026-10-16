@@ -72,18 +72,21 @@ const PassNames = ["Distance union", "Card lighting", "Shadow", "Surface", "Dire
 
 const FeaturePlumeBit = 4096;   // [-] FeaturePlume in SceneRecords.wgsl
 
-// 📝 Sparks from a scrape: metal ground off at the contact leaves with a third of the contact point's velocity and is
+// 📝 Sparks from a scrape: metal ground off at the contact keeps a third of the surface velocity it left and is
 //    thrown back against the direction of travel — so in the car's frame it sprays rearward — low over the road and
-//    fanned sideways, white-hot. The ember solver bounces them off the asphalt.
+//    fanned sideways. A grinding rim throws a tighter orange spray; a scraping sill or bumper a brighter,
+//    longer-lived white fan. The ember solver bounces them off the asphalt.
 function ProjectSparkEmitter(Spark)
 {
     const Velocity = Spark.Velocity;
     const Speed = Math.hypot(Velocity[0], Velocity[1], Velocity[2]);
     const Back = Speed > 0.3 ? [-Velocity[0] / Speed, -Velocity[1] / Speed, 0.0] : [0.0, 0.0, 0.0];
     const Throw = Math.min(14.0, 0.45 * Speed);
+    const Rim = Spark.Wheel >= 0;
     return { Position: [Spark.Point[0], Spark.Point[1], Spark.Point[2] + 0.03],
              Velocity: [0.3 * Velocity[0] + Back[0] * Throw, 0.3 * Velocity[1] + Back[1] * Throw, 0.6 + 0.05 * Speed],
-             Rate: 300.0 * Spark.Strength, Temperature: 2150.0, Spread: 0.9 + 0.08 * Speed, Lift: 0.0, Gravity: 1.0, Life: 0.6 };
+             Rate: (Rim ? 260.0 : 340.0) * Spark.Strength, Temperature: Rim ? 2050.0 : 2350.0,
+             Spread: (Rim ? 0.7 : 1.1) + (Rim ? 0.06 : 0.10) * Speed, Lift: 0.0, Gravity: 1.0, Life: Rim ? 0.5 : 0.8 };
 }
 
 //------------------------------------------------------------------------------------------------------------------------

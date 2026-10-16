@@ -229,7 +229,7 @@ export class SceneStructure
         return this.QueryWorldBounds(Index);
     }
 
-    // 📝 A burst tyre runs on its rim: the wheel occupant takes the bare-rim facet set, and back on a fresh tyre.
+    // 📝 A shredded tyre runs on its rim: the wheel occupant takes the bare-rim facet set, and back on a fresh tyre.
     AssignWheelSet(Wheel, Tyred)
     {
         const Occupant = this.VehicleOccupants.Wheels[Wheel];

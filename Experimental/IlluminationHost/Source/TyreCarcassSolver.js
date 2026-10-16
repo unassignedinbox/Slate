@@ -172,12 +172,17 @@ export class TyreCarcassSolver
         return this.Bytes;
     }
 
+    // 📝 Flat records: the ring, the cornering shift, the bulge and the folds all go, so a mesh drawn from them is
+    //    round whatever the pressure — the host calls this when deformation is toggled off.
     Reset()
     {
         for (const Wheel of this.Wheels)
         {
             Wheel.Deflection.fill(0.0);
             Wheel.Velocity.fill(0.0);
+            Wheel.LateralShift = 0.0;
+            Wheel.Bulge = 0.0;
+            Wheel.Wrinkle = 0.0;
         }
     }
 }
