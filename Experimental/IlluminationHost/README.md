@@ -17,8 +17,9 @@ smoke and fire on a cell lattice, line-lock burnouts, tyre wear, rubber on the a
 | Gas reference   | `Experimental/Fluid` (burnout sample) and `Engine/VolumetricDynamics/`, same branch         |
 
 The vehicle archives in `Archive/` were encoded by `Archive/FacetArchiveCodec.py` from Frontier's
-`Projects/Project-Drive` sources, which live on the Project-Drive branches of `SultanAladin/Frontier-` rather than
-on this one.
+`Projects/Project-Drive` and `EngineContent/GeometryArchives` sources. Those sources are on
+`SultanAladin/Frontier-` branch `arena/4f07c82a-frontier`, not on this one. Regenerate with
+`python3 Archive/FacetArchiveCodec.py <FrontierCheckout>`, where the checkout holds those four `.inl` files.
 
 ## Running
 

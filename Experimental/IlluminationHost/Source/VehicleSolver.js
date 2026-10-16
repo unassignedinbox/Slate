@@ -214,7 +214,8 @@ export class VehicleSolver
             // 📝 A rim on the road — pinched through a flat, or bare once shredded — throws sparks while it moves.
             const Grinding = Math.max(RollingSpeed, LengthVector(Wheel.ContactVelocity));
             if (Wheel.Contact && (Wheel.Pinched || Wheel.Shredded) && Grinding > 1.5)
-                this.RecordScrape(`rim${Index}`, Wheel.ContactPoint, Wheel.ContactVelocity, Math.min(1.6, (Wheel.Shredded ? 0.05 : 0.03) * Grinding), Index);
+                this.RecordScrape(`rim${Index}`, Wheel.ContactPoint, [Wheel.ContactVelocity[0], Wheel.ContactVelocity[1], 0.0],
+                                  Math.min(1.6, (Wheel.Shredded ? 0.05 : 0.03) * Grinding), Index, [0.0, 0.0, 1.0]);
         });
         this.AfterfireSeconds = Math.max(0.0, this.AfterfireSeconds - Seconds);
         if (this.PriorThrottle > 0.55 && this.Throttle < 0.15 && this.EngineRPM > AfterfireRpm)
@@ -265,12 +266,14 @@ export class VehicleSolver
         });
     }
 
-    // 📝 Keeps the strongest scrape per contact per frame: Key names the contact (a hull sphere, a rim).
-    RecordScrape(Key, Point, Velocity, Strength, Wheel = -1)
+    // 📝 Keeps the strongest scrape per contact per frame: Key names the contact (a hull sphere, a rim). Velocity is
+    //    the sliding velocity over the surface (tangential, so the approach into it is already removed) and Normal the
+    //    surface normal pointing out into the air, which is where the sparks must leave from.
+    RecordScrape(Key, Point, Velocity, Strength, Wheel = -1, Normal = [0.0, 0.0, 1.0])
     {
         const Prior = this.Scrapes.get(Key);
         if (!Prior || Prior.Strength < Strength)
-            this.Scrapes.set(Key, { Point: Point.slice(), Velocity: Velocity.slice(), Strength, Wheel });
+            this.Scrapes.set(Key, { Point: Point.slice(), Velocity: Velocity.slice(), Normal: Normal.slice(), Strength, Wheel });
     }
 
     //--------------------------------------------------------------------------------------------------------------------
@@ -703,7 +706,8 @@ export class VehicleSolver
             // 📝 Metal sliding on asphalt or concrete: the sill or the bumper scraping sparks off the contact.
             const Sliding = LengthVector(SubtractVector(Velocity, ScaleVector(Normal, Approach)));
             if (Sliding > ScrapeSpeed)
-                this.RecordScrape(`hull${Sphere}`, MultiplyAddVector(Centre, Normal, -Radius), Velocity, Math.min(1.5, 0.06 * Sliding));
+                this.RecordScrape(`hull${Sphere}`, MultiplyAddVector(Centre, Normal, -Radius),
+                                  SubtractVector(Velocity, ScaleVector(Normal, Approach)), Math.min(1.5, 0.06 * Sliding), -1, Normal);
             if (Approach >= 0.0)
                 continue;
             const Angular = CrossVector(InverseInertiaWorld(CrossVector(Lever, Normal)), Lever);

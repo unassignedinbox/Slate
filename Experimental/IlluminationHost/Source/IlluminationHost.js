@@ -72,17 +72,22 @@ const PassNames = ["Distance union", "Card lighting", "Shadow", "Surface", "Dire
 
 const FeaturePlumeBit = 4096;   // [-] FeaturePlume in SceneRecords.wgsl
 
-// 📝 Sparks from a scrape: metal ground off at the contact leaves with a third of the contact point's velocity and is
-//    thrown back against the direction of travel — so in the car's frame it sprays rearward — low over the road and
-//    fanned sideways, white-hot. The ember solver bounces them off the asphalt.
+// 📝 Sparks from a scrape. Metal ground off at the contact leaves the surface, so the spark is launched along the surface
+//    normal (away from the wall, the road or the rim's face) and thrown back against the sliding velocity: sideswipes spray
+//    along the wall and away from it, a rim on the road sprays rearward and low. Spark.Velocity is the tangential slide,
+//    Spark.Normal the surface normal pointing into the air; the ember solver bounces them off the asphalt.
 function ProjectSparkEmitter(Spark)
 {
-    const Velocity = Spark.Velocity;
-    const Speed = Math.hypot(Velocity[0], Velocity[1], Velocity[2]);
-    const Back = Speed > 0.3 ? [-Velocity[0] / Speed, -Velocity[1] / Speed, 0.0] : [0.0, 0.0, 0.0];
+    const Slide = Spark.Velocity, Normal = Spark.Normal || [0.0, 0.0, 1.0];
+    const Speed = Math.hypot(Slide[0], Slide[1], Slide[2]);
+    const Back = Speed > 0.3 ? [-Slide[0] / Speed, -Slide[1] / Speed, -Slide[2] / Speed] : [0.0, 0.0, 0.0];
     const Throw = Math.min(14.0, 0.45 * Speed);
-    return { Position: [Spark.Point[0], Spark.Point[1], Spark.Point[2] + 0.03],
-             Velocity: [0.3 * Velocity[0] + Back[0] * Throw, 0.3 * Velocity[1] + Back[1] * Throw, 0.6 + 0.05 * Speed],
+    const Away = 0.6 + 0.08 * Math.min(Speed, 30.0);                 // [m/s] off the surface, growing with the slide
+    const Offset = 0.03;                                              // [m] clear of the metal it leaves
+    return { Position: [Spark.Point[0] + Normal[0] * Offset, Spark.Point[1] + Normal[1] * Offset, Spark.Point[2] + Normal[2] * Offset],
+             Velocity: [0.3 * Slide[0] + Back[0] * Throw + Normal[0] * Away,
+                        0.3 * Slide[1] + Back[1] * Throw + Normal[1] * Away,
+                        0.3 * Slide[2] + Back[2] * Throw + Normal[2] * Away],
              Rate: 300.0 * Spark.Strength, Temperature: 2150.0, Spread: 0.9 + 0.08 * Speed, Lift: 0.0, Gravity: 1.0, Life: 0.6 };
 }
 
