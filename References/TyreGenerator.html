@@ -113,7 +113,6 @@
     <div class="tabs" id="tabs">
       <div class="tab on" data-tab="size">Tyre</div><div class="tab" data-tab="look">Look</div><div class="tab" data-tab="export">Export</div>
     </div>
-    <div class="chips" id="typeChips"></div>
   </header>
 
   <aside id="left">
@@ -154,13 +153,12 @@
     <div class="float" id="viewbtns">
       <button class="small" data-view="iso">Iso</button><button class="small" data-view="side">Side</button><button class="small" data-view="tread">Tread</button><button class="small" data-view="front">Front</button><button class="small" id="spinBtn">Spin</button><button class="small" id="threadsBtn">X-ray cords</button>
     </div>
-    <div class="float" id="wearbar"><div class="l"><span>Wear</span><b id="wearVal">New</b></div><div class="row" style="margin:0"><input id="wearSlider" type="range" min="0" max="1" step="0.01" value="0"></div></div>
     <div id="toast"></div>
   </main>
 
   <aside id="right">
     <div class="card" style="--bar:var(--green)">
-      <h2>Tread presets <span class="r" id="presetCount"></span></h2>
+      <h2>Tread presets <select id="typeFilter" class="r" style="background:var(--card2);color:var(--mut);border:0;border-radius:999px;padding:4px 10px;font:inherit;font-size:12px"></select></h2>
       <div id="presets"></div>
       <div class="btns"><button id="randomBtn" class="primary">Random tyre</button><button id="randomName">New name</button></div>
     </div>
@@ -828,8 +826,6 @@ function updateHud(d) {
   document.getElementById('bigSize').innerHTML = `${T.width}<span class="frac">/${T.aspect}</span><small>R${T.rim}</small>`;
   document.getElementById('sizeR').textContent = `${(d.Rrim * 2).toFixed(0)} mm rim`;
   document.getElementById('sizePills').innerHTML = `<span class="pill n">sidewall ${d.H.toFixed(0)} mm</span><span class="pill n">tread ${(d.treadHalf * 2).toFixed(0)} mm</span><span class="pill ${remaining < 1.6 ? 'r' : 'g'}">${T.wear ? '-' + worn.toFixed(1) + ' mm worn' : 'new'}</span>`;
-  document.getElementById('presetCount').textContent = PRESETS.length + ' designs';
-  document.getElementById('wearVal').textContent = T.wear === 0 ? 'New' : T.wear >= 1 ? 'Bald' : Math.round(T.wear * 100) + '%';
 }
 
 const profView = { X: null, Y: null, sc: 1, handles: [] };
@@ -928,6 +924,7 @@ function buildTyreUI() {
   h('Size');
   slider(p, 'Section width (mm)', T, 'width', 135, 405, 5); slider(p, 'Aspect ratio (%)', T, 'aspect', 20, 85, 5); slider(p, 'Rim diameter (in)', T, 'rim', 12, 24, 1);
   h('Wear');
+  slider(p, 'Wear (new → bald)', T, 'wear', 0, 1, 0.01, v => v === 0 ? 'New' : v >= 1 ? 'Bald' : Math.round(v * 100) + '%');
   slider(p, 'Wear bias (edge↔centre)', T, 'wearBias', -1, 1, 0.01, v => v.toFixed(2));
   h('Tread mesh');
   select(p, 'Mesh mode', T, 'meshMode', ['poly', 'heightmap']); slider(p, 'Polygon detail (mm)', T, 'polyDetail', 3, 16, 0.5, v => v.toFixed(1));
@@ -954,7 +951,7 @@ function buildPresetUI() {
   });
 }
 function applyPreset(i) {
-  const pr = PRESETS[i]; Object.assign(T, pr.tyre); P.name = pr.name; P.type = pr.type; P.layers = pr.layers.map(l => Object.assign({}, l)); UI.sel = -1; T.wear = 0; document.getElementById('wearSlider').value = 0;
+  const pr = PRESETS[i]; Object.assign(T, pr.tyre); P.name = pr.name; P.type = pr.type; P.layers = pr.layers.map(l => Object.assign({}, l)); UI.sel = -1; T.wear = 0;
   refreshAll();
 }
 function refreshAll() { buildTyreUI(); buildPresetUI(); buildLayerUI(); document.getElementById('pName').value = P.name; document.getElementById('pType').value = P.type; rebuild(); }
@@ -999,13 +996,13 @@ document.getElementById('addLayer').innerHTML = Object.keys(LAYER_DEFS).map(k =>
 document.getElementById('addLayerBtn').onclick = () => { P.layers.push(L(document.getElementById('addLayer').value)); UI.sel = P.layers.length - 1; buildLayerUI(); schedule(); };
 document.getElementById('randomBtn').onclick = () => { randomTyre(); refreshAll(); };
 document.getElementById('randomName').onclick = () => { P.name = randomName(); document.getElementById('pName').value = P.name; schedule(); };
-document.getElementById('wearSlider').oninput = e => { T.wear = +e.target.value; document.getElementById('wearVal').textContent = T.wear === 0 ? 'New' : Math.round(T.wear * 100) + '%'; schedule(); };
 document.querySelectorAll('#treadMode span').forEach(el => el.onclick = () => { document.querySelectorAll('#treadMode span').forEach(x => x.classList.remove('on')); el.classList.add('on'); UI.treadMode = el.dataset.m; drawTreadView(); });
 document.querySelectorAll('.tab').forEach(el => el.onclick = () => { document.querySelectorAll('.tab').forEach(x => x.classList.remove('on')); el.classList.add('on'); document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.dataset.panel === el.dataset.tab)); });
 UI.typeFilter = null;
-function buildChips() { const box = document.getElementById('typeChips'); const counts = {}; PRESETS.forEach(p => counts[p.type] = (counts[p.type] || 0) + 1);
-  box.innerHTML = `<div class="chip ${UI.typeFilter ? '' : 'on'}" data-t=""><b>${PRESETS.length}</b>All</div>` + Object.keys(counts).map(t => `<div class="chip ${UI.typeFilter === t ? 'on' : ''}" data-t="${t}"><b>${counts[t]}</b>${t}</div>`).join('');
-  box.querySelectorAll('.chip').forEach(c => c.onclick = () => { UI.typeFilter = c.dataset.t || null; buildChips(); buildPresetUI(); }); }
+function buildChips() { const sel = document.getElementById('typeFilter'); const counts = {}; PRESETS.forEach(p => counts[p.type] = (counts[p.type] || 0) + 1);
+  sel.innerHTML = `<option value="">All types (${PRESETS.length})</option>` + Object.keys(counts).map(t => `<option value="${t}" ${UI.typeFilter === t ? 'selected' : ''}>${t} (${counts[t]})</option>`).join('');
+  sel.onchange = () => { UI.typeFilter = sel.value || null; buildPresetUI(); }; }
+buildChips();
 buildChips();
 document.getElementById('spinBtn').onclick = e => { UI.spin = !UI.spin; e.target.classList.toggle('primary', UI.spin); };
 document.getElementById('threadsBtn').onclick = e => { UI.threads = !UI.threads; e.target.classList.toggle('primary', UI.threads); if (threadLines) threadLines.visible = UI.threads; if (tyreMesh) tyreMesh.traverse(o => { if (o.isMesh) [].concat(o.material).forEach(m => { m.transparent = UI.threads; m.opacity = UI.threads ? 0.35 : 1; m.needsUpdate = true; }); }); };
