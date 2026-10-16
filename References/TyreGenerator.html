@@ -680,7 +680,12 @@ function buildQuadTyre(d, pm, levels, prof) {
   const lvl = new Float32Array(N * M);
   for (let j = 0; j < M; j++) { const yc = (rows[j] + rows[j + 1]) / 2; for (let i = 0; i < N; i++) lvl[j * N + i] = lvlAt((i + 0.5) * px, yc); }
   const cell = (i, j) => lvl[j * N + ((i % N) + N) % N];
-  for (let pass = 0; pass < 6; pass++) for (let j = 1; j < M; j++) for (let i = 0; i < N; i++) { const a = cell(i - 1, j - 1), b = cell(i, j - 1), c = cell(i - 1, j), e = cell(i, j); if (a === e && a !== b && a !== c) lvl[(j - 1) * N + ((i % N) + N) % N] = a; else if (b === c && b !== a && b !== e) lvl[(j - 1) * N + ((i - 1 + N) % N)] = b; }   // break diagonal pinches (non-manifold corners)
+  { // break diagonal pinches per height interval (they would create non-manifold vertical edges)
+    const kl = L => Math.max(L, T.wear); const lv = [...new Set(levels.map(kl))].sort((a, b) => a - b);
+    for (let pass = 0, changed = true; pass < 40 && changed; pass++) { changed = false;
+      for (let j = 1; j < M; j++) for (let i = 0; i < N; i++) { const ia = (j - 1) * N + (i - 1 + N) % N, ib = (j - 1) * N + i % N, ic = j * N + (i - 1 + N) % N, ie = j * N + i % N;
+        for (let k = 0; k + 1 < lv.length; k++) { const lo = lv[k] + 1e-6; const sa = kl(lvl[ia]) <= lo, sb = kl(lvl[ib]) <= lo, sc = kl(lvl[ic]) <= lo, se = kl(lvl[ie]) <= lo;
+          if (sa === se && sb === sc && sa !== sb) { lvl[ib] = lvl[ia]; changed = true; break; } } } } }
   // node positions with boundary snapping
   const nx = new Float32Array((M + 1) * N), ny = new Float32Array((M + 1) * N);
   for (let j = 0; j <= M; j++) for (let i = 0; i < N; i++) {
