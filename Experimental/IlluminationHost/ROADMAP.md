@@ -10,10 +10,12 @@
 
 ## 2. Improve sparks: light, colour and world collision
 
-- Give sparks HDR emissive output and a small, short-lived local light contribution so nearby surfaces respond to them.
-- Drive colour and brightness from a cooling/age curve: a hot white-yellow core, then orange, then a dim red/black fade. Keep the per-particle variation subtle and avoid the current abrupt yellow-to-orange change.
-- Add bounded collision against the scene distance field and world geometry. Reflect/slow particles at contact, then let them die or slide; cap collision work and test against both static course surfaces and moving/breakable geometry.
-- Verify collision and light behavior at both normal frame rates and low-quality render settings.
+- Give sparks HDR emissive output and a small, short-lived local light contribution so nearby surfaces respond to them; keep their timing coherent with the existing Derez/rez effect.
+- Drive spark colour and brightness from a cooling/age curve: a hot white-yellow core, then orange, then a dim red/black fade. Keep per-particle variation subtle and avoid the current abrupt yellow-to-orange change.
+- Audit debris shading separately: ordinary cold fragments stay physically shaded, while any hot fragments inherit a short-lived ember tint/emission that fades with age.
+- Add bounded collision for sparks against the scene distance field and world geometry. Reflect/slow particles at contact, then let them die or slide; cap collision work and test both static course surfaces and moving/breakable geometry.
+- Review thrown-debris contact response in `RigidBodyWorld.js` against ground, static props and other fragments; add non-penetration/restitution/friction checks and collision-colour response rather than making fragments glow indiscriminately.
+- Verify collision and light behaviour at both normal frame rates and low-quality render settings.
 
 ## 3. Use rim marks when a tyre is shredded
 
