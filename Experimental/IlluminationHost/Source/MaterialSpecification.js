@@ -56,7 +56,9 @@ export const CourseMaterial = Object.freeze({
     BlockConcrete:   45,
     BlockCore:       46,
     Gravel:          47,
-    DockConcrete:    48
+    DockConcrete:    48,
+    DisplayTablet:   49,
+    DisplayCluster:  50
 });
 
 // 📝 The flake headroom and sweep follow DriveSceneAuthor: MetalicCoat (0.680005, 0.800458, 0) × 0.78, coat roughness
@@ -155,6 +157,12 @@ export function ConstructMaterialSpecification()
     const Pane = Dielectric(0.07, 0.1, 0.1, 0.04);
     Pane.Transmission = 1.0;
     Materials[CourseMaterial.GlassPane]       = Pane;
+    const Tablet = Dielectric(0.02, 0.02, 0.025, 0.45);
+    Tablet.Emission = [2.2, 2.4, 2.8];
+    Materials[CourseMaterial.DisplayTablet]   = Tablet;
+    const Cluster = Dielectric(0.015, 0.018, 0.022, 0.42);
+    Cluster.Emission = [2.0, 2.2, 2.6];
+    Materials[CourseMaterial.DisplayCluster]  = Cluster;
     Materials[CourseMaterial.BlockConcrete]   = Dielectric(0.47, 0.46, 0.43, 0.9);
     Materials[CourseMaterial.BlockCore]       = Dielectric(0.41, 0.40, 0.37, 0.95);
     Materials[CourseMaterial.Gravel]          = Dielectric(0.21, 0.19, 0.16, 0.95);

@@ -10,6 +10,7 @@ import { ConstructYard, EmitYardGroundFacets } from "./YardStructure.js";
 import { VehicleGeometry, ResolveCoMAuthoredZ } from "./VehicleSpecification.js";
 import { ConstructIdentityTransform, TransformBounds, InvertTransform,
          SubtractVector, CrossVector, NormalizeVector } from "./TransformProjection.js";
+import { ConstructCabinSets, CabinFixtures, ConstructDisplayTransform } from "./CabinStructure.js";
 
 // 📝 What an occupant takes part in. A ground tile only owns a surface card; the ground occupant is only rastered,
 //    because the scene distance field carries the ground as its analytic plane rather than as a sampled volume.
@@ -54,7 +55,10 @@ export class SceneStructure
     {
         this.FacetSets        = [];
         this.Occupants        = [];
-        this.VehicleOccupants = { Body: -1, Wheels: [-1, -1, -1, -1] };
+        this.VehicleOccupants = { Body: -1, Glass: -1, Wheels: [-1, -1, -1, -1] };
+        this.CabinOccupants   = {};
+        this.GlassSet         = -1;
+        this.CabinSets        = null;
         this.GroundTiles      = { First: -1, Strips: [-1, -1, -1, -1] };
         this.GroundOccupant   = -1;
         this.DistanceCount    = 0;
@@ -72,7 +76,12 @@ export class SceneStructure
         ]);
 
         // ① vehicle facet sets — and the bare rims a burst tyre leaves, transferred at bring-up so a burst swaps sets
-        const BodySet       = this.ConstructFacetSet("ControlVehicle body", ProjectBodyFacets(Body), 0.05, 40.0);
+        //    The body glass is split so the windshield does not block the distance field — it renders as a transparent shell.
+        const BodyFacetsAll = ProjectBodyFacets(Body);
+        const OpaqueFacets = BodyFacetsAll.filter((Facet) => Facet.Family !== CourseMaterial.VehicleGlass);
+        const GlassFacets  = BodyFacetsAll.filter((Facet) => Facet.Family === CourseMaterial.VehicleGlass);
+        const BodySet       = this.ConstructFacetSet("ControlVehicle body", OpaqueFacets, 0.05, 40.0);
+        const GlassSet      = this.ConstructFacetSet("ControlVehicle glass", GlassFacets, 0.0, 0.0);
         const WheelLeftSet  = this.ConstructFacetSet("ControlVehicle wheel (left)", ProjectWheelFacets(Tyre, Rim, false, true), 0.025, 40.0);
         const WheelRightSet = this.ConstructFacetSet("ControlVehicle wheel (right)", ProjectWheelFacets(Tyre, Rim, true, true), 0.025, 40.0);
         const RimLeftSet    = this.ConstructFacetSet("ControlVehicle rim (left)", ProjectWheelFacets(Tyre, Rim, false, false), 0.025, 40.0);
@@ -81,6 +90,10 @@ export class SceneStructure
         this.FacetSets[RimRightSet].DistanceRequired = true;
         this.WheelSets = { Tyred: [WheelLeftSet, WheelRightSet], Rim: [RimLeftSet, RimRightSet] };
         const GroundSet = this.ConstructFacetSet("Course ground", EmitYardGroundFacets(), 0.0, 0.0);
+        // Cabin sets (wheel, dashboard, displays, shell) — built now, occupants after distance span so they do not block GI.
+        const CabinSets = ConstructCabinSets(this);
+        this.GlassSet = GlassSet;
+        this.CabinSets = CabinSets;
 
         // ② distance occupants first, so the union pass walks one compact span ------------------------------------
         const VehicleRoles = OccupantRole.Raster | OccupantRole.Distance | OccupantRole.Cards | OccupantRole.Dynamic;
@@ -131,6 +144,34 @@ export class SceneStructure
             this.GroundTiles.Strips[Strip] = Occupant;
         }
 
+        // ③½ cabin and glass: rastered with the vehicle but not in the distance field — the windshield is a
+        //    transparent shell and the cabin interior is open to GI, so they sit after the distance span (scatter)
+        //    and the ground tiles. They are Dynamic so the vehicle motion retires them each frame.
+        {
+            const CabinRoles = OccupantRole.Raster | OccupantRole.Dynamic;
+            const GlassRoles = OccupantRole.Raster | OccupantRole.Dynamic;
+            // Glass shell (transparent)
+            this.VehicleOccupants.Glass = this.ConstructOccupant("ControlVehicle glass", GlassSet, ConstructIdentityTransform(), GlassRoles);
+            // Cabin occupants: wheel, dashboard, shell, displays and their glass/bezel. Display quads are local
+            // XY planes at the origin; their world transforms are the vehicle's body transform × display basis.
+            this.CabinOccupants = {};
+            // Steering wheel torus is at origin in local space (axis X, tilted); place it at Wheel centre.
+            const WheelLocal = ConstructDisplayTransform(CabinFixtures.Wheel.Centre, 0.0); // placeholder tilt 0, but torus already tilted; use translation only
+            // Instead use rigid translation to wheel centre (wheel facets already tilted in generation).
+            const WheelTranslate = (() => { const T=new Float32Array(16); T[0]=1;T[5]=1;T[10]=1;T[15]=1; T[12]=CabinFixtures.Wheel.Centre[0];T[13]=CabinFixtures.Wheel.Centre[1];T[14]=CabinFixtures.Wheel.Centre[2]; return T; })();
+            this.CabinOccupants.Wheel       = this.ConstructOccupant("Cabin steering wheel", CabinSets.WheelSet, WheelTranslate, CabinRoles);
+            this.CabinOccupants.Dashboard   = this.ConstructOccupant("Cabin dashboard", CabinSets.DashSet, ConstructIdentityTransform(), CabinRoles);
+            this.CabinOccupants.Shell       = this.ConstructOccupant("Cabin shell", CabinSets.ShellSet, ConstructIdentityTransform(), CabinRoles);
+            // Tablet
+            this.CabinOccupants.Tablet       = this.ConstructOccupant("Cabin tablet display", CabinSets.TabletSet, ConstructDisplayTransform(CabinFixtures.Tablet.Centre, CabinFixtures.Tablet.Tilt), CabinRoles);
+            this.CabinOccupants.TabletBezel  = this.ConstructOccupant("Cabin tablet bezel", CabinSets.TabletBezelSet, ConstructDisplayTransform(CabinFixtures.Tablet.Centre, CabinFixtures.Tablet.Tilt), CabinRoles);
+            this.CabinOccupants.TabletGlass  = this.ConstructOccupant("Cabin tablet glass", CabinSets.TabletGlassSet, ConstructDisplayTransform(CabinFixtures.Tablet.Centre, CabinFixtures.Tablet.Tilt), GlassRoles);
+            // Cluster
+            this.CabinOccupants.Cluster      = this.ConstructOccupant("Cabin cluster display", CabinSets.ClusterSet, ConstructDisplayTransform(CabinFixtures.Cluster.Centre, CabinFixtures.Cluster.Tilt), CabinRoles);
+            this.CabinOccupants.ClusterBezel = this.ConstructOccupant("Cabin cluster bezel", CabinSets.ClusterBezelSet, ConstructDisplayTransform(CabinFixtures.Cluster.Centre, CabinFixtures.Cluster.Tilt), CabinRoles);
+            this.CabinOccupants.ClusterGlass = this.ConstructOccupant("Cabin cluster glass", CabinSets.ClusterGlassSet, ConstructDisplayTransform(CabinFixtures.Cluster.Centre, CabinFixtures.Cluster.Tilt), GlassRoles);
+        }
+
         // ④ the fragment span starts empty; the fragment depot fills it
         this.FragmentSet   = this.ConstructFacetSet("Fracture fragments", [], 0.0, 0.0);
         this.FragmentFirst = this.Occupants.length;
@@ -164,6 +205,7 @@ export class SceneStructure
             return Record;
         });
         const Delta = Inserted.length - this.ScatterCount;
+        const OldScatterFirst = this.ScatterFirst;
         this.Occupants.splice(this.ScatterFirst, this.ScatterCount, ...Inserted);
         Order.forEach((BodyIndex, Offset) => { Bodies[BodyIndex].Occupant = this.ScatterFirst + Offset; });
         this.ScatterCount   = Inserted.length;
@@ -172,6 +214,12 @@ export class SceneStructure
         this.GroundTiles.First += Delta;
         this.GroundTiles.Strips = this.GroundTiles.Strips.map((Index) => Index + Delta);
         this.FragmentFirst += Delta;
+        // Cabin and glass live after the scatter span — shift them the same way the ground/fragment spans move.
+        if (this.VehicleOccupants.Glass !== undefined && this.VehicleOccupants.Glass >= OldScatterFirst)
+            this.VehicleOccupants.Glass += Delta;
+        if (this.CabinOccupants)
+            for (const Key of Object.keys(this.CabinOccupants))
+                if (this.CabinOccupants[Key] >= OldScatterFirst) this.CabinOccupants[Key] += Delta;
         for (let Index = this.ScatterFirst; Index < this.ScatterFirst + this.ScatterCount; ++Index)
             Invalidated.push(this.QueryWorldBounds(Index));
         this.ResolveRasterRuns();

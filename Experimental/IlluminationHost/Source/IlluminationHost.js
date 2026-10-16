@@ -32,7 +32,9 @@ import { VehicleSolver } from "./VehicleSolver.js";
 import { DriverInputIntegrator } from "./DriverInputIntegrator.js";
 import { ChaseCameraSolver, FreeCameraSolver } from "./ChaseCameraSolver.js";
 import { ConstructViewTransform, ConstructPerspectiveTransform, MultiplyTransform, InvertTransform, NormalizeVector,
-         SubtractVector, MultiplyAddVector, ProjectRadicalInverse } from "./TransformProjection.js";
+         SubtractVector, MultiplyAddVector, ProjectRadicalInverse, RotateVector, ConstructRigidTransform } from "./TransformProjection.js";
+import { CabinFixtures, CabinCameras, ConstructDisplayTransform } from "./CabinStructure.js";
+import { CabinHMI } from "./CabinHMI.js";
 
 const ShaderSources = [
     "SceneRecords.wgsl", "FrameDescriptor.wgsl", "PackingCodec.wgsl", "DiscrepancySequence.wgsl", "SkyProjection.wgsl",
@@ -72,18 +74,57 @@ const PassNames = ["Distance union", "Card lighting", "Shadow", "Surface", "Dire
 
 const FeaturePlumeBit = 4096;   // [-] FeaturePlume in SceneRecords.wgsl
 
-// 📝 Sparks from a scrape: metal ground off at the contact leaves with a third of the contact point's velocity and is
-//    thrown back against the direction of travel — so in the car's frame it sprays rearward — low over the road and
-//    fanned sideways, white-hot. The ember solver bounces them off the asphalt.
+// 📝 Sparks from a scrape: rim sparks spray rearward with the wheel's spin tangential, fanned outward from the wheel's side;
+//    chassis scrapes throw along the sliding direction mirrored by the contact normal, hugging the surface and lifting only slightly.
+//    Both are white-hot steel (≈ 2150 K) that the ember solver carries and bounces off the asphalt.
 function ProjectSparkEmitter(Spark)
 {
-    const Velocity = Spark.Velocity;
+    const Velocity = Spark.Velocity || [0, 0, 0];
+    const Normal = Spark.Normal || [0, 0, 1];
     const Speed = Math.hypot(Velocity[0], Velocity[1], Velocity[2]);
-    const Back = Speed > 0.3 ? [-Velocity[0] / Speed, -Velocity[1] / Speed, 0.0] : [0.0, 0.0, 0.0];
-    const Throw = Math.min(14.0, 0.45 * Speed);
-    return { Position: [Spark.Point[0], Spark.Point[1], Spark.Point[2] + 0.03],
-             Velocity: [0.3 * Velocity[0] + Back[0] * Throw, 0.3 * Velocity[1] + Back[1] * Throw, 0.6 + 0.05 * Speed],
-             Rate: 300.0 * Spark.Strength, Temperature: 2150.0, Spread: 0.9 + 0.08 * Speed, Lift: 0.0, Gravity: 1.0, Life: 0.6 };
+    const Point = Spark.Point;
+    // ── Rim / tyre sparks ────────────────────────────────────────────────────────────────
+    if (Spark.Wheel !== undefined && Spark.Wheel >= 0)
+    {
+        const Side = (Spark.Wheel & 1) ? -1 : 1; // +Y left, -Y right
+        const Spin = Spark.Spin || 0;
+        const Radius = Spark.Radius || 0.34;
+        // tangential at the bottom is -spin·radius along the wheel's forward (−X when viewing left side, but we use global velocity's horizontal)
+        const HorizSpeed = Math.hypot(Velocity[0], Velocity[1]);
+        const Back = HorizSpeed > 0.3 ? [-Velocity[0] / HorizSpeed, -Velocity[1] / HorizSpeed, 0] : [0, 0, 0];
+        // spin adds rearward throw: a spinning wheel grinds backward at the contact
+        const SpinThrow = Math.min(9.0, Math.abs(Spin) * Radius * 0.55);
+        const Throw = Math.min(15.0, 0.42 * Speed + 0.35 * SpinThrow);
+        // fan outward from the wheel face and a little along the axle
+        const Outward = Side * 0.28 * Throw;
+        // slight random fan is added per-particle by EmberIntegrator's Spread; here is the mean cone
+        return {
+            Position: [Point[0], Point[1] + Outward * 0.08, Point[2] + 0.04],
+            Velocity: [0.28 * Velocity[0] + Back[0] * Throw,
+                       0.28 * Velocity[1] + Back[1] * Throw + Outward,
+                       0.45 + 0.06 * Speed + 0.18 * SpinThrow + 0.12 * Spark.Strength],
+            Rate: 340.0 * Spark.Strength, Temperature: 2250.0, Spread: 0.75 + 0.06 * Speed + 0.04 * SpinThrow, Lift: 0.0, Gravity: 1.0, Life: 0.52 + 0.04 * Speed
+        };
+    }
+    // ── Chassis / sill scrapes ─────────────────────────────────────────────────────────
+    // sliding direction = velocity minus its normal component, spark thrown opposite sliding and lifted off the surface
+    const Approach = Velocity[0] * Normal[0] + Velocity[1] * Normal[1] + Velocity[2] * Normal[2];
+    const Sliding = [Velocity[0] - Normal[0] * Approach, Velocity[1] - Normal[1] * Approach, Velocity[2] - Normal[2] * Approach];
+    const SlideSpeed = Math.hypot(Sliding[0], Sliding[1], Sliding[2]);
+    const SlideDir = SlideSpeed > 0.4 ? [-Sliding[0] / SlideSpeed, -Sliding[1] / SlideSpeed, -Sliding[2] / SlideSpeed] : [-Normal[0], -Normal[1], 0.5];
+    // throw is proportional to sliding speed, stronger for high-speed wall grazes
+    const Throw = Math.min(12.0, 0.55 * SlideSpeed + 0.12 * Speed);
+    // lift the cone off the surface along the normal so it doesn't immediately re-intersect
+    const Lift = 0.35 + 0.05 * SlideSpeed + 0.2 * Spark.Strength;
+    // for a ground (up normal) scrape the fan is horizontal; for a vertical wall the cone rises along wall tangent
+    const TangentLift = Normal[2] > 0.7 ? 0 : Throw * 0.18;
+    return {
+        Position: [Point[0] + Normal[0] * 0.04, Point[1] + Normal[1] * 0.04, Point[2] + 0.03 + Math.abs(Normal[2]) * 0.02],
+        Velocity: [Sliding[0] * 0.22 + SlideDir[0] * Throw + Normal[0] * TangentLift,
+                   Sliding[1] * 0.22 + SlideDir[1] * Throw + Normal[1] * TangentLift,
+                   Sliding[2] * 0.22 + SlideDir[2] * Throw * 0.25 + Lift],
+        Rate: 280.0 * Spark.Strength, Temperature: 2100.0, Spread: 1.05 + 0.05 * SlideSpeed, Lift: 0.0, Gravity: 1.0, Life: 0.5 + 0.02 * SlideSpeed
+    };
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -123,6 +164,7 @@ class IlluminationHost
         this.Keys = new Set();
         this.FrameIndex = 0;
         this.FreeCamera = false;
+        this.CockpitCamera = -1; // -1 exterior chase, 0..N-1 interior
         this.Ready = false;
         this.ScriptedInput = null;
         // 🔍 Diagnostic only: ?omit=Union,Cards,Shadow,... leaves the named stages out of the frame.
@@ -188,6 +230,14 @@ class IlluminationHost
         this.CarcassRecords = this.Exchange.ConstructRecords(4 * CarcassRecordBytes, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, "Tyre carcass");
         Device.queue.writeBuffer(this.CarcassRecords, 0, this.Carcass.EncodeRecords());
         this.Fragments = new FragmentDepot(this.Exchange, this.Scene);
+        // Cabin HMI — 2D canvases driving the 3D tablet/cluster emitters; also composited as a cockpit HTML overlay so the
+        // interior UI is legible without sampling the textures in the surface shader (the shader still lights the quads
+        // via their emissive materials, the overlay adds the readable UI on top of the 3D view).
+        try { this.CabinHMI = new CabinHMI(Device); } catch { this.CabinHMI = null; }
+        this.CockpitTabletCanvas = document.getElementById("tablet-hmi");
+        this.CockpitClusterCanvas = document.getElementById("cluster-hmi");
+        this.CockpitTabletCtx = this.CockpitTabletCanvas ? this.CockpitTabletCanvas.getContext("2d") : null;
+        this.CockpitClusterCtx = this.CockpitClusterCanvas ? this.CockpitClusterCanvas.getContext("2d") : null;
 
         // ② per-occupant distance volumes (the analogue of mesh distance fields), transferred on the device
         this.Volumes = new OccupantDistanceSpace(this.Exchange, this.Shaders);
@@ -316,11 +366,21 @@ class IlluminationHost
                 this.RestoreWheelSets();
             }
             else if (Key === "TyrePressureFront" || Key === "TyrePressureRear")
+            {
                 this.Vehicle.InflateTyres(this.Settings.TyrePressureFront * 1000.0, this.Settings.TyrePressureRear * 1000.0);
+                // Soft-carcass shape follows pressure — reset the ring so it re-inflates to the new radius rather than snapping.
+                this.Carcass.Reset();
+            }
             else if (Key.startsWith("Puncture:"))
+            {
                 this.Vehicle.PunctureTyre(Number(Key.slice("Puncture:".length)), false);
+                this.Carcass.Reset();
+            }
             else if (Key.startsWith("Blowout:"))
+            {
                 this.Vehicle.PunctureTyre(Number(Key.slice("Blowout:".length)), true);
+                this.Carcass.Reset();
+            }
             else if (Key === "MarksClear")
                 this.Marks.Clear();
             else if (Key === "FractureEnabled" || Key === "FractureDust" || Key.startsWith("FractureRecipe:"))
@@ -355,6 +415,18 @@ class IlluminationHost
                 this.RespawnVehicle();
             if (Event.code === "KeyH" && !Event.repeat)
                 this.Panel.ToggleOverlays();
+            // Cockpit debug cameras: 1-5 select, C cycles, 0/exterior returns to chase.
+            if (!Event.repeat)
+            {
+                if (Event.code === "Digit0" || Event.code === "Numpad0")
+                    this.AssignCockpitCamera(-1);
+                else if (Event.code >= "Digit1" && Event.code <= "Digit5")
+                    this.AssignCockpitCamera(Number(Event.code.slice(5))-1);
+                else if (Event.code === "KeyC")
+                    this.CycleCockpitCamera(1);
+                else if (Event.code === "KeyV")
+                    this.CycleCockpitCamera(-1);
+            }
             this.Keys.add(Event.code);
         });
         window.addEventListener("keyup", (Event) => this.Keys.delete(Event.code));
@@ -398,10 +470,48 @@ class IlluminationHost
 
     ToggleCamera()
     {
+        // Cycling to free camera clears cockpit.
+        if (this.CockpitCamera >= 0)
+        {
+            this.AssignCockpitCamera(-1);
+            return;
+        }
         this.FreeCamera = !this.FreeCamera;
         if (this.FreeCamera)
             this.Flight.AssignFromChase(this.Chase.Eye, this.Chase.Target);
         this.Panel.AssignCameraMode(this.FreeCamera);
+    }
+
+    AssignCockpitCamera(Index)
+    {
+        this.CockpitCamera = Index;
+        this.FreeCamera = false;
+        this.Panel.AssignCameraMode(false);
+        this.PriorValid = false;
+        // Keep chase seeded so returning is smooth.
+        if (Index >= 0)
+        {
+            const Entry = CabinCameras[Index % CabinCameras.length];
+            const Note = document.getElementById("cockpit-note");
+            if (Note) { Note.textContent = `Cockpit: ${Entry.Label} — ${Entry.Description}  (0 exterior, 1-5 cockpit, C/V cycle, F8 free)`; Note.classList.remove("hidden"); }
+        }
+        else
+        {
+            const Note = document.getElementById("cockpit-note");
+            if (Note) Note.classList.add("hidden");
+        }
+    }
+
+    CycleCockpitCamera(Step)
+    {
+        if (this.CockpitCamera < 0) this.AssignCockpitCamera(0);
+        else
+        {
+            let Next = this.CockpitCamera + Step;
+            if (Next >= CabinCameras.length) Next = -1;
+            if (Next < -1) Next = CabinCameras.length - 1;
+            this.AssignCockpitCamera(Next);
+        }
     }
 
     RespawnVehicle()
@@ -470,12 +580,74 @@ class IlluminationHost
         if (!Body)
             return;
         this.Scene.AssignOccupantTransform(this.Scene.VehicleOccupants.Body, Body);
+        if (this.Scene.VehicleOccupants.Glass >= 0)
+            this.Scene.AssignOccupantTransform(this.Scene.VehicleOccupants.Glass, Body);
         for (let Wheel = 0; Wheel < 4; ++Wheel)
             this.Scene.AssignOccupantTransform(this.Scene.VehicleOccupants.Wheels[Wheel], this.Vehicle.QueryWheelTransform(Wheel));
+        // Cabin: every occupant that was placed in CoM-local space rides with the body.
+        // Displays keep their display-basis local; wheel/dashboard/shell keep their local (identity or wheel translation).
+        if (this.Scene.CabinOccupants)
+        {
+            const Cabin = this.Scene.CabinOccupants;
+            // Wheel needs steering: rotate about its X normal by -steer radians (mirrors driver input).
+            const SteerAngle = this.Vehicle ? (this.Vehicle.SteerAngle || 0) : 0;
+            const WheelLocal = this.Scene.CabinSets ? this.Scene.CabinSets.WheelSet : null;
+            for (const Key of Object.keys(Cabin))
+            {
+                const Occupant = Cabin[Key];
+                const Record = this.Scene.Occupants[Occupant];
+                // Local transform is the CoM-local placement stored at construction (display basis etc.).
+                // For the steering wheel we compose a spin about its axle (local X) so the wheel turns with input.
+                let Local = Record.Transform; // already CoM-local, but after first frame it is world — keep original
+                // Keep original CoM-local in a side table so we don't double-multiply.
+                if (!this.CabinLocalTransforms)
+                    this.CabinLocalTransforms = {};
+                if (!this.CabinLocalTransforms[Key])
+                {
+                    // Capture at bring-up: the transform we constructed in FacetStructure
+                    this.CabinLocalTransforms[Key] = Record.Transform.slice();
+                }
+                let BaseLocal = this.CabinLocalTransforms[Key];
+                if (Key === "Wheel")
+                {
+                    // Steering wheel: spin about local X (axle) by steer*0.9, plus keep translation to wheel centre.
+                    const Axis = [1, 0, 0];
+                    const Spin = ConstructRigidTransform([0,0,0], (()=>{ const half=Math.sin(SteerAngle*0.45), c=Math.cos(SteerAngle*0.45); return [Axis[0]*half,Axis[1]*half,Axis[2]*half,c]; })());
+                    // BaseLocal is translation to wheel centre; compose Spin *after* translation? The wheel torus axis is X,
+                    // so rotation about X at the wheel centre is correct: T * R.
+                    const T = BaseLocal;
+                    // Spin's origin is at (0,0,0), need to apply at wheel centre: T * Spin
+                    const WheelWorldLocal = MultiplyTransform(T, Spin);
+                    this.Scene.AssignOccupantTransform(Occupant, MultiplyTransform(Body, WheelWorldLocal));
+                }
+                else
+                {
+                    this.Scene.AssignOccupantTransform(Occupant, MultiplyTransform(Body, BaseLocal));
+                }
+            }
+        }
     }
 
     ResolveCamera(Δτ)
     {
+        // ── Cockpit / debug interior cameras — rigidly attached to the chassis so the wheel, cluster and tablet stay framed.
+        if (this.CockpitCamera >= 0)
+        {
+            const Entry = CabinCameras[this.CockpitCamera % CabinCameras.length];
+            const Body = this.Vehicle.QueryBodyTransform();
+            // Body orientation quaternion for rotating local offset/forward vectors into world.
+            const Quat = this.Vehicle.Orientation;
+            const EyeLocal = Entry.Eye.Position;
+            const Eye = MultiplyAddVector(this.Vehicle.Position, RotateVector(Quat, EyeLocal), 1.0);
+            // Forward is body forward (−tilt pitch down about local Y) : rotate [cos pitch, 0, −sin pitch] about Y then by body quat.
+            const Pitch = Entry.Eye.PitchDown;
+            const LocalForward = [Math.cos(Pitch), 0.0, -Math.sin(Pitch)];
+            const ForwardLocal = RotateVector(Quat, LocalForward);
+            const EyeNext = MultiplyAddVector(Eye, ForwardLocal, 12.0);
+            this.Chase.Eye = Eye; // keep chase seeded for smooth return
+            return { Position: Eye, Target: EyeNext, Forward: NormalizeVector(ForwardLocal),
+                     VerticalFieldOfView: Entry.Eye.Vfov, Aspect: this.ScreenExtent[0]/this.ScreenExtent[1], Near: 0.03 };
+        }
         const Telemetry = this.Vehicle.QueryTelemetry();
         this.Chase.AdvanceChase(this.Vehicle.Position, this.Vehicle.QueryForward(), Telemetry.Speed, Δτ);
         let Eye, Target, FieldOfView;
@@ -610,6 +782,28 @@ class IlluminationHost
             this.RefreshObstacles();
         this.PositionVehicle();
         this.AdvanceCarcass(Step);
+        // Cabin HMI textures + cockpit HTML overlay (tablet & cluster canvases).
+        if (this.CabinHMI)
+        {
+            try { this.CabinHMI.Update(Δτ, this.Vehicle); } catch {}
+            // Composite into viewport overlay canvases when a cockpit camera is active — otherwise keep them hidden.
+            const HmiOverlay = document.getElementById("cockpit-hmi");
+            if (HmiOverlay)
+            {
+                const CockpitActive = this.CockpitCamera >= 0;
+                HmiOverlay.classList.toggle("hidden", !CockpitActive);
+                if (CockpitActive && this.CockpitTabletCtx && this.CockpitClusterCtx)
+                {
+                    try {
+                        // Downscale the 1024 canvases into the overlay canvases.
+                        this.CockpitTabletCtx.clearRect(0,0,512,320);
+                        this.CockpitTabletCtx.drawImage(this.CabinHMI.TabletCanvas, 0,0,512,320);
+                        this.CockpitClusterCtx.clearRect(0,0,512,256);
+                        this.CockpitClusterCtx.drawImage(this.CabinHMI.ClusterCanvas, 0,0,512,256);
+                    } catch {}
+                }
+            }
+        }
         const MovingOccupants = this.ResolveVehicleMotion();
 
         // ①½ smoke, soot and fire sources from the tyres and the exhaust, their lights and embers; the stress test's bodies

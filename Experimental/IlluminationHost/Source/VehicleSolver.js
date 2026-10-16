@@ -212,9 +212,14 @@ export class VehicleSolver
                 }
             }
             // 📝 A rim on the road — pinched through a flat, or bare once shredded — throws sparks while it moves.
+            //    The surface velocity includes wheel spin, so the spark's mean direction carries the grinding tangential.
             const Grinding = Math.max(RollingSpeed, LengthVector(Wheel.ContactVelocity));
             if (Wheel.Contact && (Wheel.Pinched || Wheel.Shredded) && Grinding > 1.5)
-                this.RecordScrape(`rim${Index}`, Wheel.ContactPoint, Wheel.ContactVelocity, Math.min(1.6, (Wheel.Shredded ? 0.05 : 0.03) * Grinding), Index);
+            {
+                const Longitudinal = Wheel.Longitudinal || [1, 0, 0];
+                const SurfaceVelocity = AddVector(Wheel.ContactVelocity, ScaleVector(Longitudinal, -Wheel.Spin * Wheel.Radius * 0.85));
+                this.RecordScrape(`rim${Index}`, Wheel.ContactPoint, SurfaceVelocity, Math.min(1.6, (Wheel.Shredded ? 0.055 : 0.032) * Grinding), Index, Wheel.GroundNormal, Wheel.Spin, Wheel.Radius);
+            }
         });
         this.AfterfireSeconds = Math.max(0.0, this.AfterfireSeconds - Seconds);
         if (this.PriorThrottle > 0.55 && this.Throttle < 0.15 && this.EngineRPM > AfterfireRpm)
@@ -266,11 +271,12 @@ export class VehicleSolver
     }
 
     // 📝 Keeps the strongest scrape per contact per frame: Key names the contact (a hull sphere, a rim).
-    RecordScrape(Key, Point, Velocity, Strength, Wheel = -1)
+    //    Normal and Spin/Radthus let the emitter throw sparks opposite the grinding direction with the wheel's tangential.
+    RecordScrape(Key, Point, Velocity, Strength, Wheel = -1, Normal = null, Spin = 0, Radius = 0)
     {
         const Prior = this.Scrapes.get(Key);
         if (!Prior || Prior.Strength < Strength)
-            this.Scrapes.set(Key, { Point: Point.slice(), Velocity: Velocity.slice(), Strength, Wheel });
+            this.Scrapes.set(Key, { Point: Point.slice(), Velocity: Velocity.slice(), Strength, Wheel, Normal: Normal ? Normal.slice() : [0,0,1], Spin, Radius });
     }
 
     //--------------------------------------------------------------------------------------------------------------------
@@ -701,9 +707,11 @@ export class VehicleSolver
             const Velocity = AddVector(this.LinearVelocity, CrossVector(this.AngularVelocity, Lever));
             const Approach = DotVector(Velocity, Normal);
             // 📝 Metal sliding on asphalt or concrete: the sill or the bumper scraping sparks off the contact.
-            const Sliding = LengthVector(SubtractVector(Velocity, ScaleVector(Normal, Approach)));
+            //    The scrape velocity is the sliding (tangential) part, the spark is thrown opposite to sliding along the surface.
+            const SlidingVector = SubtractVector(Velocity, ScaleVector(Normal, Approach));
+            const Sliding = LengthVector(SlidingVector);
             if (Sliding > ScrapeSpeed)
-                this.RecordScrape(`hull${Sphere}`, MultiplyAddVector(Centre, Normal, -Radius), Velocity, Math.min(1.5, 0.06 * Sliding));
+                this.RecordScrape(`hull${Sphere}`, MultiplyAddVector(Centre, Normal, -Radius), SlidingVector, Math.min(1.5, 0.06 * Sliding), -1, Normal);
             if (Approach >= 0.0)
                 continue;
             const Angular = CrossVector(InverseInertiaWorld(CrossVector(Lever, Normal)), Lever);

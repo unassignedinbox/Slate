@@ -105,6 +105,19 @@ fn ProjectScreenPixel(Clip: vec4f) -> vec2f
 @fragment
 fn SurfaceFragment(Varying: SurfaceVarying) -> SurfaceTargets
 {
+    // 🧩 Glass — near-black gloss with transmission, rendered as a screen-door transparent shell so the cabin
+    //    shows through from outside and the yard shows through from the driver eye. 30 % coverage, interleaved
+    //    by a 2×2 Bayer / hash — holes let whatever is behind project, opaque fragments keep a specular highlight.
+    if (Varying.Family == 7u)
+    {
+        // Interleaved hash: stable per-pixel, no motion flicker beyond the jittered position which averages.
+        let Seed = dot(floor(Varying.Position.xy), vec2f(12.9898, 78.233));
+        let Dice = fract(sin(Seed) * 43758.5453);
+        if (Dice > 0.32)
+        {
+            discard;
+        }
+    }
     var Normal = normalize(Varying.Normal);
     let View = normalize(Frame.CameraPosition - Varying.WorldPosition);
     // 📝 Every surface shades two-sided: an open facet seen from behind turns its normal toward the viewer.

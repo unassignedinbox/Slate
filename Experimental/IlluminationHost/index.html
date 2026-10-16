@@ -49,6 +49,11 @@
                     <div class="bring-up-caption">Starting</div>
                     <div class="bring-up-bar"><div></div></div>
                 </div>
+                <div id="cockpit-note" class="hidden" style="position:absolute; left:12px; right:12px; top:10px; z-index:6; background:rgba(10,16,24,0.78); color:#cfe0f2; border:1px solid rgba(120,160,200,0.2); border-radius:10px; padding:8px 12px; font:600 12px/1.4 Inter,system-ui,sans-serif; backdrop-filter: blur(8px); pointer-events:none"></div>
+                <div id="cockpit-hmi" class="hidden" style="position:absolute; bottom:14px; left:50%; transform:translateX(-50%); z-index:6; display:flex; gap:12px; align-items:flex-end; pointer-events:none">
+                    <canvas id="cluster-hmi" width="512" height="256" style="width:260px; height:130px; border-radius:14px; border:1px solid rgba(120,160,200,0.28); box-shadow:0 10px 28px rgba(0,0,0,0.45); background:#0a1018"></canvas>
+                    <canvas id="tablet-hmi" width="512" height="320" style="width:320px; height:200px; border-radius:14px; border:1px solid rgba(120,160,200,0.28); box-shadow:0 10px 28px rgba(0,0,0,0.45); background:#0a1018"></canvas>
+                </div>
                 <div id="failure" class="hidden"></div>
                 <button id="overlay-restore" class="hidden" title="Show the editor and the debug windows again (H)">Show the editor (H)</button>
             </div>
