@@ -1,0 +1,21 @@
+{
+  "name": "slate-level01-greybox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Level 01 greybox - Section 1: Fractured Town. A point-to-point racing level blockout (Three.js).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node tools/headless-run.mjs && node tools/audit-route.mjs"
+  },
+  "dependencies": {
+    "puppeteer-core": "^25.14.0",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "puppeteer": "^25.14.0",
+    "vite": "8.3.4"
+  }
+}
