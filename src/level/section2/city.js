@@ -229,6 +229,28 @@ export function cityBuilding(ctx, plate, x, z, hx, hz, o = {}) {
     } else {
       mb.box(sw * 0.5, 4, sd * 0.5, T(0, H + 2, 0), { side: K.PLAIN, top: K.FLATROOF }, { side: lin(PAL.concrete2), top: roofC });
     }
+    // Rooftop equipment: satellite dishes, HVAC units, antenna arrays
+    if (rng.chance(0.6)) {
+      const metalC = lin(PAL.steel), concC = lin(PAL.concrete2);
+      // Satellite dish
+      if (rng.chance(0.5)) {
+        const dishX = rng.range(-sw / 3, sw / 3), dishZ = rng.range(-sd / 3, sd / 3);
+        mb.cylinder(0.08, 0.08, 1.8, 6, T(dishX, H + 0.9, dishZ), K.METAL, metalC);
+        mb.cylinder(0.8, 0.6, 0.15, 8, RT(dishX, H + 1.8, dishZ, rng.range(-0.3, 0.3), rng.range(0, 6), 0), K.METAL, metalC);
+      }
+      // HVAC unit
+      if (rng.chance(0.5)) {
+        const ux = rng.range(-sw / 3, sw / 3), uz = rng.range(-sd / 3, sd / 3);
+        mb.box(rng.range(1.5, 3), rng.range(1, 2), rng.range(1.5, 3), T(ux, H + 1, uz), K.METAL, metalC);
+      }
+      // Antenna array
+      if (rng.chance(0.35)) {
+        const ax = rng.range(-sw / 4, sw / 4), az = rng.range(-sd / 4, sd / 4);
+        mb.cylinder(0.12, 0.08, rng.range(5, 12), 6, T(ax, H + 5, az), K.METAL, metalC);
+        // Cross arms on antenna
+        for (let ai = 0; ai < 3; ai++) mb.box(rng.range(0.8, 1.5), 0.06, 0.06, T(ax, H + 3 + ai * 2, az), K.METAL, metalC);
+      }
+    }
     colliders.push({ poly: boxP(W, hp, D, T(0, hp / 2, 0), K.PLAIN, col) }, { poly: boxP(sw, shaftH, sd, T(0, hp + shaftH / 2, 0), K.PLAIN, col) });
     if (shaftH < hs) {
       // the snapped-off top: a separate block resting askew on the stump
