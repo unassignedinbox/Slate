@@ -172,6 +172,25 @@ export function fallenPoles(ctx, plate, route, s0, s1, rng) {
   }
 }
 
+/** Damaged utility boxes: transformer boxes and junction boxes along streets. */
+export function utilityBoxes(ctx, plate, route, s0, s1, rng) {
+  const metal = lin(PAL.steel), conc = lin(PAL.concrete);
+  for (let s = s0; s < s1; s += rng.range(20, 45)) {
+    const f = route.at(s);
+    const side = rng.sign();
+    const lat = side * rng.range(11, 15);
+    const p = routeLocal(plate, route, s, lat);
+    if (!plate.onGround(p.x, p.z, 2)) continue;
+    const mb = new MeshBuilder();
+    const damaged = rng.chance(0.4);
+    const w = rng.range(0.8, 1.4), h = rng.range(0.8, 1.5), d = rng.range(0.4, 0.8);
+    mb.box(w, h, d, T(0, h / 2, 0), K.METAL, damaged ? lin(PAL.cut) : metal);
+    // Door flap open on damaged ones
+    if (damaged) mb.box(w * 0.6, h * 0.5, 0.05, T(w / 2, h * 0.3, d / 2 + 0.03), K.METAL, metal);
+    plateBody(ctx, plate, mb, p.x, 0, p.z, rng.range(0, 6), { name: 'utility-box' });
+  }
+}
+
 /** Broken barriers: concrete traffic barriers and bollards knocked over or cracked. */
 export function brokenBarriers(ctx, plate, route, s0, s1, rng) {
   const conc = lin(PAL.concrete), cut = lin(PAL.cut);

@@ -7,7 +7,7 @@ import { groundProp } from '../kit/props.js';
 import { planSection2, markS, S2 } from './layout.js';
 import { cityGate, kickerRidge, towerBridge, routeQuat, leaningArch, faultDetails, plateBody, driveThroughBuilding, roadCollapse } from './structures.js';
 import { StreetNet, fillBlocks } from './city.js';
-import { streetEdge, abandonedCars, routeLocal, routeYaw, signalMast, spanWire, roadCracks, roadBuckles, tornAwnings, tramTracks, roadMarkings, fallenPoles, wallRubble, brokenBarriers } from './dressing.js';
+import { streetEdge, abandonedCars, routeLocal, routeYaw, signalMast, spanWire, roadCracks, roadBuckles, tornAwnings, tramTracks, roadMarkings, fallenPoles, wallRubble, brokenBarriers, utilityBoxes } from './dressing.js';
 
 export function buildSection2(world, opts = {}) {
   const pre = new LevelCtx({ world, seed: 2202 });
@@ -221,6 +221,10 @@ export function buildSection2(world, opts = {}) {
   brokenBarriers(ctx, P2, route, sBX + 8, sGE - 8, r.fork(73));
   brokenBarriers(ctx, P2, route, sGX + 8, sBS - 8, r.fork(74));
   brokenBarriers(ctx, P3, route, sCR + 30, sED - 10, r.fork(75));
+  // Damaged utility boxes along streets
+  utilityBoxes(ctx, P2, route, sL + 25, sBE - 8, r.fork(76));
+  utilityBoxes(ctx, P2, route, sBX + 8, sGE - 8, r.fork(77));
+  utilityBoxes(ctx, P2, route, sGX + 8, sBS - 8, r.fork(78));
   // Tram tracks along the boulevard
   tramTracks(ctx, P2, route, sL + 20, sBE - 8);
   // Faded road markings (lane lines, center stripes)
