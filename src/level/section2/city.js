@@ -298,6 +298,21 @@ export function cityBuilding(ctx, plate, x, z, hx, hz, o = {}) {
     H = h + 0.6;
     if (rng.chance(0.35)) waterTank(mb, rng.range(-hx * 0.4, hx * 0.4), H, rng.range(-hz * 0.4, hz * 0.4), rng, 0.8);
     colliders.push({ poly: boxP(W, h, D, T(0, h / 2, 0), K.PLAIN, col) });
+    // Fire escape ladders: zig-zag external staircases on the side of buildings
+    if (rng.chance(0.4) && h > 10) {
+      const ladderSide = rng.sign();
+      const metalC = lin(PAL.steel);
+      const nLandings = Math.floor(h / 4) - 1;
+      for (let li = 0; li < nLandings; li++) {
+        const ly = 4 + li * 4;
+        // Landing platform
+        mb.box(1.2, 0.08, 1.6, T(ladderSide * (hx + 0.6), ly, 0), K.METAL, metalC);
+        // Railing
+        mb.box(0.04, 1.0, 1.6, T(ladderSide * (hx + 1.15), ly + 0.5, 0), K.METAL, metalC);
+        mb.box(0.04, 1.0, 0.04, T(ladderSide * (hx + 0.05), ly + 0.5, 0.8), K.METAL, metalC);
+        mb.box(0.04, 1.0, 0.04, T(ladderSide * (hx + 0.05), ly + 0.5, -0.8), K.METAL, metalC);
+      }
+    }
     // Broken windows on low buildings
     if (dmg > 0.25) {
       const interior = lin(PAL.interior);
