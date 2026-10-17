@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slate · Fragmented Town (greybox)</title>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="hud">
+      <div class="top-left">
+        <div class="eyebrow">Slate · Section 1 · Fragmented Town · greybox</div>
+        <div id="zone" class="panel-title">—</div>
+        <div id="zoneSub"></div>
+      </div>
+
+      <div class="top-right panel">
+        <div class="eyebrow">Race time</div>
+        <div id="timer">00:00.00</div>
+        <ol id="splits"></ol>
+      </div>
+
+      <div class="bottom-left panel">
+        <div class="eyebrow">Speed</div>
+        <div><span id="speed">0</span><span class="speed-unit">km/h</span></div>
+        <div id="next"></div>
+      </div>
+
+      <div class="bottom-right panel" id="controls">
+        W / S — throttle / brake &nbsp;·&nbsp; A / D — steer &nbsp;·&nbsp; Space — handbrake<br />
+        <kbd>R</kbd> back to checkpoint &nbsp;·&nbsp; <kbd>C</kbd> camera &nbsp;·&nbsp; <kbd>M</kbd> route map &nbsp;·&nbsp; <kbd>G</kbd> debug &nbsp;·&nbsp; <kbd>O</kbd> overview
+      </div>
+
+      <div id="message"></div>
+
+      <div id="result" class="panel">
+        <div class="eyebrow">Finished</div>
+        <div id="resultTime">00:00.00</div>
+        <ol id="resultSplits"></ol>
+        <div class="hint">Press <kbd>R</kbd> or <kbd>Enter</kbd> to run it again</div>
+      </div>
+
+      <div id="mapWrap" class="panel">
+        <canvas id="map" width="980" height="560"></canvas>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

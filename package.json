@@ -1,0 +1,19 @@
+{
+  "name": "slate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Slate — game levels built in greybox first (Three.js + Vite).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
+    "build": "vite build",
+    "test": "node --test tests/level.test.mjs",
+    "report": "node tools/level-report.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.4"
+  }
+}
