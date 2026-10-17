@@ -172,6 +172,30 @@ export function fallenPoles(ctx, plate, route, s0, s1, rng) {
   }
 }
 
+/** Broken barriers: concrete traffic barriers and bollards knocked over or cracked. */
+export function brokenBarriers(ctx, plate, route, s0, s1, rng) {
+  const conc = lin(PAL.concrete), cut = lin(PAL.cut);
+  for (let s = s0; s < s1; s += rng.range(15, 35)) {
+    const f = route.at(s);
+    const side = rng.sign();
+    const lat = side * rng.range(9, 11);
+    const p = routeLocal(plate, route, s, lat);
+    if (!plate.onGround(p.x, p.z, 2)) continue;
+    const fallen = rng.chance(0.4);
+    const mb = new MeshBuilder();
+    if (fallen) {
+      // Knocked-over barrier slab
+      const bw = rng.range(2, 4), bh = rng.range(0.6, 1), bd = rng.range(0.3, 0.5);
+      mb.box(bw, bh, bd, undefined, K.CUT, cut);
+      plateBody(ctx, plate, mb, p.x, bh / 2, p.z, routeYaw(plate, route, s), { rx: rng.range(0.3, 0.8) * rng.sign(), rz: rng.range(-0.2, 0.2), name: 'fallen-barrier' });
+    } else {
+      // Standing bollard
+      mb.cylinder(0.2, 0.2, rng.range(0.6, 1.0), 6, T(0, 0.4, 0), K.PLAIN, conc);
+      plateBody(ctx, plate, mb, p.x, 0, p.z, 0, { name: 'bollard' });
+    }
+  }
+}
+
 /** Accumulated rubble against building walls — shows time since destruction. */
 export function wallRubble(ctx, plate, route, s0, s1, rng) {
   const cut = lin(PAL.cut), stone = lin(PAL.stoneCity);
