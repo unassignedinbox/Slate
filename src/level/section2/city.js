@@ -269,6 +269,20 @@ export function cityBuilding(ctx, plate, x, z, hx, hz, o = {}) {
     if (rng.chance(0.55)) waterTank(mb, rng.range(-hx * 0.5, hx * 0.5), H, rng.range(-hz * 0.5, hz * 0.5), rng);
     if (rng.chance(0.5)) { const pw = W * rng.range(0.25, 0.45), pd = D * rng.range(0.25, 0.45), ph = rng.range(3, 5); mb.box(pw, ph, pd, T(rng.range(-hx + pw / 2 + 1, hx - pw / 2 - 1), H + ph / 2, rng.range(-hz + pd / 2 + 1, hz - pd / 2 - 1)), { side: K.PLAIN, top: K.FLATROOF }, { side: lin(PAL.concrete2), top: roofC }); }
     colliders.push({ poly: boxP(W, h, D, T(0, h / 2, 0), K.PLAIN, col) });
+    // External balconies: some mid-rise buildings have balcony slabs on one face
+    if (rng.chance(0.45) && h > 14) {
+      const balcFace = rng.sign();
+      const nBalcs = rng.int(2, 6);
+      for (let bi = 0; bi < nBalcs; bi++) {
+        const by = 5 + bi * rng.range(3.5, 5);
+        if (by > h - 2) break;
+        const bw = rng.range(2, 4), bd = rng.range(1, 1.8);
+        // Balcony slab
+        mb.box(bw, 0.15, bd, T(rng.range(-hx + 2, hx - 2), by, balcFace * (hz + bd / 2)), K.FACADE + 0.25, lin(PAL.concrete2));
+        // Railing
+        mb.box(bw, 0.8, 0.05, T(rng.range(-hx + 2, hx - 2), by + 0.5, balcFace * (hz + bd)), K.METAL, lin(PAL.steel));
+      }
+    }
     // Broken windows: for damaged buildings, add dark recessed rectangles on facades
     // showing the interior — these read as shattered glass from a distance
     if (dmg > 0.25) {
