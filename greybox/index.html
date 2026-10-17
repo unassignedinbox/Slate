@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slate Greybox · Section 1 · Tallow Hill</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="hud">
+      <div class="panel top-left">
+        <div class="kicker">Section 1 · Tallow Hill</div>
+        <div id="leg" class="leg">Leg 1 of 3</div>
+        <div id="legname" class="legname"></div>
+        <div class="timers">
+          <div><span class="label">leg</span> <span id="legtimer">00:00.0</span></div>
+          <div><span class="label">total</span> <span id="total">00:00.0</span></div>
+        </div>
+        <ul id="splits" class="splits"></ul>
+      </div>
+
+      <div class="panel top-right">
+        <div id="speed" class="speed">0 km/h</div>
+        <div id="state" class="state">on road</div>
+      </div>
+
+      <div id="msg" class="toast"></div>
+
+      <div class="panel bottom-left help">
+        <div><kbd>W</kbd> throttle &nbsp; <kbd>S</kbd> brake / reverse</div>
+        <div><kbd>A</kbd> <kbd>D</kbd> steer &nbsp; <kbd>Space</kbd> handbrake</div>
+        <div><kbd>R</kbd> back to road &nbsp; <kbd>Shift</kbd>+<kbd>R</kbd> restart</div>
+        <div><kbd>O</kbd> map &nbsp; <kbd>P</kbd> pause</div>
+      </div>
+
+      <div id="mode" class="panel bottom-right mode">DRIVE</div>
+    </div>
+
+    <div id="flash"></div>
+
+    <div id="finish" class="overlay">
+      <div id="finishbody" class="card"></div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
