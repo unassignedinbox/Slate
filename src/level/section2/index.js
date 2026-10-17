@@ -173,6 +173,16 @@ export function buildSection2(world, opts = {}) {
   streetEdge(ctx, P1b, nets.P1b, route, sF + 8, sK - 6, { hw: 12 });
   abandonedCars(ctx, P1a, route, 30, sF - 6, { lanes: [-9.5, -6, 6.5, 10], cluster: 0.45, every: [14, 34] });
   abandonedCars(ctx, P1b, route, sF + 10, sK - 14, { lanes: [-9.5, -6, 6.5, 10], cluster: 0.35, every: [16, 36] });
+  // P1 road cracks and markings
+  roadCracks(ctx, P1a, route, 20, sF - 4, r.fork(80));
+  roadCracks(ctx, P1b, route, sF + 8, sK - 6, r.fork(81));
+  roadMarkings(ctx, P1a, route, 20, sF - 4, r.fork(82), { hw: 12 });
+  roadMarkings(ctx, P1b, route, sF + 8, sK - 6, r.fork(83), { hw: 12 });
+  // Signal masts on P1 approach
+  for (let s = 40; s < sF - 10; s += rng.range(30, 50)) {
+    const lp = routeLocal(P1a, route, s, rng.range(-13, -11));
+    signalMast(ctx, P1a, lp.x, lp.z, routeYaw(P1a, route, s), rng.range(4, 6), r);
+  }
 
   ctx.beat = '2E';
   streetEdge(ctx, P2, nets.P2, route, sL + 20, sBE - 6, { hw: 14, trees: false });
