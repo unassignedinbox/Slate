@@ -1,0 +1,30 @@
+Probing chamfer + fillet on every 2-coedge edge (size = 0.004 m)
+  Box                     edges=12  (5744.3 ms)
+  Cylinder                edges=3  (18.8 ms)
+  Cone                    edges=3  (24.8 ms)
+  Sphere                  edges=1  (53.2 ms)
+  Torus                   edges=2  (228.3 ms)
+  Extrude(circle)         (not a valid solid — skipped)
+  Box-Cylinder(bore)      edges=15  (99103.2 ms)
+
+=== CHAMFER by adjacent surface pair ===
+adjacent surface pair       accept  refuse  dominant refusal
+Cone                             0       1  edge has invalid adjacent faces
+Cone+Plane                       2       0  
+Cylinder                         0       2  edge has invalid adjacent faces
+Cylinder+Plane                   2       2  edge is degenerate (zero length)
+Plane                           21       3  no cutter placement reached the exact chamfer tolerance
+Sphere                           0       1  edge is not straight (blend of a curved edge is not supported)
+Torus                            0       2  edge is degenerate (zero length)
+TOTAL                           25      11  (69.4% accepted)
+
+=== FILLET by adjacent surface pair ===
+adjacent surface pair       accept  refuse  dominant refusal
+Cone                             0       1  edge has invalid adjacent faces
+Cone+Plane                       0       2  edge is degenerate (zero length)
+Cylinder                         0       2  edge has invalid adjacent faces
+Cylinder+Plane                   2       2  edge is degenerate (zero length)
+Plane                           21       3  no cutter placement reached the exact chamfer tolerance
+Sphere                           0       1  edge is not straight (blend of a curved edge is not supported)
+Torus                            0       2  edge is degenerate (zero length)
+TOTAL                           23      13  (63.9% accepted)

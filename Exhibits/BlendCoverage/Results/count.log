@@ -1,0 +1,11 @@
+case                         cutter-tries         ms   result  detail
+box edge chamfer                      161      217.5   accept  
+box edge fillet                       161      222.4   accept  
+box edge chamfer                      161      210.8   accept  
+box edge fillet                       161      229.9   accept  
+box edge chamfer                      161      240.9   accept  
+box edge fillet                       161      238.7   accept  
+box chamfer s=0.020000                161      553.1   accept  
+box chamfer s=0.029000                161      172.2   accept  
+
+ladder worst case = 7 half-widths x 23 margins = 161 full NURBS booleans per edge

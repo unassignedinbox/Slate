@@ -1,0 +1,14 @@
+Box: 12 edges, volume 0.000480000 m^3, solid=1
+edge  0  chamfer     249.2 ms  accept   | fillet     255.5 ms  accept  
+edge  1  chamfer     265.0 ms  accept   | fillet     216.8 ms  accept  
+edge  2  chamfer     208.5 ms  accept   | fillet     217.0 ms  accept  
+edge  3  chamfer     214.6 ms  accept   | fillet     208.6 ms  accept  
+edge  4  chamfer     197.0 ms  accept   | fillet     201.7 ms  accept  
+edge  5  chamfer     195.7 ms  accept   | fillet     201.6 ms  accept  
+
+Cylinder: 3 edges
+edge  0  chamfer       1.7 ms  accept   
+edge  1  chamfer       5.0 ms  refuse   edge has invalid adjacent faces
+edge  2  chamfer       1.8 ms  accept   
+
+one boolean subtract (box - cylinder): 8.1 ms, accept
