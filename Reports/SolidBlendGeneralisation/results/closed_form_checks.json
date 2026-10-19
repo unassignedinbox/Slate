@@ -1,0 +1,202 @@
+{
+  "all_edges_fillet": [
+    {
+      "radius": 0.1,
+      "accepted": true,
+      "expected": 63.89833035271402,
+      "measured": 63.898181,
+      "valid": true,
+      "error": 0.00014935271401839145
+    },
+    {
+      "radius": 0.3,
+      "accepted": true,
+      "expected": 63.10907939152466,
+      "measured": 63.107799,
+      "valid": true,
+      "error": 0.0012803915246593078
+    },
+    {
+      "radius": 0.5,
+      "accepted": true,
+      "expected": 61.592182246175334,
+      "measured": 61.588794,
+      "valid": true,
+      "error": 0.00338824617533362
+    },
+    {
+      "radius": 1.0,
+      "accepted": true,
+      "expected": 55.03834612632515,
+      "measured": 55.026474,
+      "valid": true,
+      "error": 0.011872126325151555
+    }
+  ],
+  "all_edges_chamfer": [
+    {
+      "setback": 0.1,
+      "accepted": false,
+      "expected": 63.77066666666666,
+      "measured": null,
+      "valid": null,
+      "error": null
+    },
+    {
+      "setback": 0.3,
+      "accepted": false,
+      "expected": 62.128,
+      "measured": null,
+      "valid": null,
+      "error": null
+    },
+    {
+      "setback": 0.5,
+      "accepted": false,
+      "expected": 59.333333333333336,
+      "measured": null,
+      "valid": null,
+      "error": null
+    },
+    {
+      "setback": 1.0,
+      "accepted": false,
+      "expected": 50.666666666666664,
+      "measured": null,
+      "valid": null,
+      "error": null
+    }
+  ],
+  "single_edge_fillet": [
+    {
+      "radius": 0.1,
+      "accepted": true,
+      "expected": 63.9914159265359,
+      "measured": 63.991398,
+      "valid": true,
+      "error": 1.7926535903711738e-05
+    },
+    {
+      "radius": 0.5,
+      "accepted": true,
+      "expected": 63.785398163397446,
+      "measured": 63.785081,
+      "valid": true,
+      "error": 0.000317163397447473
+    },
+    {
+      "radius": 1.0,
+      "accepted": true,
+      "expected": 63.1415926535898,
+      "measured": 63.140323,
+      "valid": true,
+      "error": 0.0012696535897944727
+    },
+    {
+      "radius": 1.5,
+      "accepted": true,
+      "expected": 62.06858347057703,
+      "measured": 62.066336,
+      "valid": true,
+      "error": 0.002247470577032118
+    },
+    {
+      "radius": 1.9,
+      "accepted": true,
+      "expected": 60.90114947945915,
+      "measured": 60.897712,
+      "valid": true,
+      "error": 0.0034374794591514046
+    },
+    {
+      "radius": 2.5,
+      "accepted": true,
+      "expected": 58.634954084936204,
+      "measured": 58.629002,
+      "valid": true,
+      "error": 0.005952084936204471
+    },
+    {
+      "radius": 3.5,
+      "accepted": true,
+      "expected": 53.48451000647496,
+      "measured": 53.472844,
+      "valid": true,
+      "error": 0.011666006474960966
+    },
+    {
+      "radius": 3.9,
+      "accepted": true,
+      "expected": 50.94362426110075,
+      "measured": 50.929139,
+      "valid": true,
+      "error": 0.014485261100752211
+    }
+  ],
+  "single_edge_chamfer": [
+    {
+      "setback": 0.1,
+      "accepted": true,
+      "expected": 63.98,
+      "measured": 63.98,
+      "valid": true,
+      "error": 0.0
+    },
+    {
+      "setback": 0.5,
+      "accepted": true,
+      "expected": 63.5,
+      "measured": 63.5,
+      "valid": true,
+      "error": 0.0
+    },
+    {
+      "setback": 1.0,
+      "accepted": true,
+      "expected": 62.0,
+      "measured": 62.0,
+      "valid": true,
+      "error": 0.0
+    },
+    {
+      "setback": 1.5,
+      "accepted": true,
+      "expected": 59.5,
+      "measured": 59.5,
+      "valid": true,
+      "error": 0.0
+    },
+    {
+      "setback": 1.9,
+      "accepted": true,
+      "expected": 56.78,
+      "measured": 56.78,
+      "valid": true,
+      "error": 0.0
+    },
+    {
+      "setback": 2.5,
+      "accepted": true,
+      "expected": 51.5,
+      "measured": 51.5,
+      "valid": true,
+      "error": 0.0
+    },
+    {
+      "setback": 3.5,
+      "accepted": true,
+      "expected": 39.5,
+      "measured": 39.5,
+      "valid": true,
+      "error": 0.0
+    },
+    {
+      "setback": 3.9,
+      "accepted": true,
+      "expected": 33.58,
+      "measured": 33.58,
+      "valid": true,
+      "error": 0.0
+    }
+  ]
+}

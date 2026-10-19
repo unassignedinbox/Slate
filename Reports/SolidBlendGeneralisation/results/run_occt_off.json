@@ -1,0 +1,2897 @@
+{
+  "radius": 0.3,
+  "setback": 0.3,
+  "watchdog_seconds": 60.0,
+  "occt_worker": "not set",
+  "bodies": {
+    "box": {
+      "edges": 12,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.82,
+            "volume_delta": -0.17999999999999972
+          }
+        },
+        {
+          "edge": 1,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.82,
+            "volume_delta": -0.17999999999999972
+          }
+        },
+        {
+          "edge": 2,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.82,
+            "volume_delta": -0.17999999999999972
+          }
+        },
+        {
+          "edge": 3,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.82,
+            "volume_delta": -0.17999999999999972
+          }
+        },
+        {
+          "edge": 4,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.82,
+            "volume_delta": -0.17999999999999972
+          }
+        },
+        {
+          "edge": 5,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.82,
+            "volume_delta": -0.17999999999999972
+          }
+        },
+        {
+          "edge": 6,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.82,
+            "volume_delta": -0.17999999999999972
+          }
+        },
+        {
+          "edge": 7,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.82,
+            "volume_delta": -0.17999999999999972
+          }
+        },
+        {
+          "edge": 8,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.82,
+            "volume_delta": -0.17999999999999972
+          }
+        },
+        {
+          "edge": 9,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.82,
+            "volume_delta": -0.17999999999999972
+          }
+        },
+        {
+          "edge": 10,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.82,
+            "volume_delta": -0.17999999999999972
+          }
+        },
+        {
+          "edge": 11,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 64.0,
+            "volume_after": 63.82,
+            "volume_delta": -0.17999999999999972
+          }
+        }
+      ],
+      "seconds": 3.76,
+      "source_chi": 2,
+      "source_genus": 0
+    },
+    "cylinder": {
+      "edges": 3,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 50.250245,
+            "volume_after": 50.015423,
+            "volume_delta": -0.2348220000000012
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 50.250245,
+            "volume_after": 49.71325,
+            "volume_delta": -0.5369949999999974
+          }
+        },
+        {
+          "edge": 1,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge has invalid adjacent faces"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 2,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 50.250245,
+            "volume_after": 50.014014,
+            "volume_delta": -0.23623099999999653
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 50.250245,
+            "volume_after": 49.71184,
+            "volume_delta": -0.5384049999999974
+          }
+        }
+      ],
+      "seconds": 0.5,
+      "source_chi": 2,
+      "source_genus": 0
+    },
+    "cone_frustum": {
+      "edges": 3,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is degenerate (zero length)"
+            ]
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 29.30968,
+            "volume_after": 28.795369,
+            "volume_delta": -0.5143109999999993
+          }
+        },
+        {
+          "edge": 1,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge has invalid adjacent faces"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 2,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is degenerate (zero length)"
+            ]
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 29.30968,
+            "volume_after": 11.508694,
+            "volume_delta": -17.800986
+          }
+        }
+      ],
+      "seconds": 0.28,
+      "source_chi": 2,
+      "source_genus": 0
+    },
+    "sphere": {
+      "edges": 1,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        }
+      ],
+      "seconds": 0.63,
+      "source_chi": null,
+      "source_genus": null
+    },
+    "torus": {
+      "edges": 2,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is degenerate (zero length)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 1,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is degenerate (zero length)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        }
+      ],
+      "seconds": 2.22,
+      "source_chi": null,
+      "source_genus": null
+    },
+    "box_minus_cyl_hole": {
+      "edges": 15,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 1,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 2,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 3,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 4,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is degenerate (zero length)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 5,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 6,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 7,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 8,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 9,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is degenerate (zero length)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 10,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 11,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 12,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 13,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 14,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge has invalid adjacent faces"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        }
+      ],
+      "seconds": 70.98,
+      "source_chi": null,
+      "source_genus": null
+    },
+    "box_plus_cyl_boss": {
+      "edges": 15,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 1,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 2,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 3,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 4,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 5,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 6,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 7,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 8,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is degenerate (zero length)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 9,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 10,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 11,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 12,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 13,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge has invalid adjacent faces"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 14,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is degenerate (zero length)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        }
+      ],
+      "seconds": 79.08,
+      "source_chi": null,
+      "source_genus": null
+    },
+    "L_union_boxes": {
+      "edges": 52,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 1,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 2,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 3,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.82,
+            "volume_delta": -0.18000000000000682
+          }
+        },
+        {
+          "edge": 4,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 5,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 6,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 7,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 8,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 9,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 10,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 11,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 12,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.82,
+            "volume_delta": -0.18000000000000682
+          }
+        },
+        {
+          "edge": 13,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 14,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 15,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 112.077421,
+            "volume_delta": 0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 112.18,
+            "volume_delta": 0.18000000000000682
+          }
+        },
+        {
+          "edge": 16,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 17,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 18,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 19,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 20,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 112.077421,
+            "volume_delta": 0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 112.18,
+            "volume_delta": 0.18000000000000682
+          }
+        },
+        {
+          "edge": 21,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 22,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.82,
+            "volume_delta": -0.18000000000000682
+          }
+        },
+        {
+          "edge": 23,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 24,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 25,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 26,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 27,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 28,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 29,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 30,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 31,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 32,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.82,
+            "volume_delta": -0.18000000000000682
+          }
+        },
+        {
+          "edge": 33,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 34,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 35,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 36,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 37,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 38,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 39,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 40,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 41,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 42,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.82,
+            "volume_delta": -0.18000000000000682
+          }
+        },
+        {
+          "edge": 43,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 44,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 45,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 46,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: faces are tangent or folded at this edge (no corner to blend)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 47,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 48,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.922579,
+            "volume_delta": -0.07742100000000107
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.82,
+            "volume_delta": -0.18000000000000682
+          }
+        },
+        {
+          "edge": 49,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 50,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        },
+        {
+          "edge": 51,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 112.0,
+            "volume_after": 111.961289,
+            "volume_delta": -0.03871100000000638
+          },
+          "chamfer": {
+            "status": "accepted-but-invalid",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 0,
+            "genus": 1,
+            "volume_before": 112.0,
+            "volume_after": 111.91,
+            "volume_delta": -0.09000000000000341
+          }
+        }
+      ],
+      "seconds": 128.65,
+      "source_chi": 2,
+      "source_genus": 0
+    },
+    "sphere_minus_box_corner": {
+      "edges": 7,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 1,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 2,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 3,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 4,
+          "fillet": {
+            "status": "timeout",
+            "detail": "no reply within 60.0s or host exited (returncode -9)"
+          },
+          "chamfer": {
+            "status": "timeout",
+            "detail": "no reply within 60.0s or host exited (returncode -9)"
+          }
+        },
+        {
+          "edge": 5,
+          "fillet": {
+            "status": "timeout",
+            "detail": "no reply within 60.0s or host exited (returncode -9)"
+          },
+          "chamfer": {
+            "status": "timeout",
+            "detail": "no reply within 60.0s or host exited (returncode -9)"
+          }
+        },
+        {
+          "edge": 6,
+          "fillet": {
+            "status": "timeout",
+            "detail": "no reply within 60.0s or host exited (returncode -9)"
+          },
+          "chamfer": {
+            "status": "timeout",
+            "detail": "no reply within 60.0s or host exited (returncode -9)"
+          }
+        }
+      ],
+      "seconds": 386.09,
+      "source_chi": null,
+      "source_genus": null
+    },
+    "box_minus_sphere_pocket": {
+      "edges": 14,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 1,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 2,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 3,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 4,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 5,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 6,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 7,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 8,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is degenerate (zero length)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 9,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 10,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 11,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 12,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 13,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        }
+      ],
+      "seconds": 1145.98,
+      "source_chi": null,
+      "source_genus": null
+    },
+    "cylinder_cross_bore_equal_radii": {
+      "edges": 0,
+      "rows": [],
+      "note": "source not built: no error line reported"
+    },
+    "cylinder_cross_bore_r07": {
+      "edges": 9,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is degenerate (zero length)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 1,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge has invalid adjacent faces"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 2,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 3,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge has invalid adjacent faces"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 4,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is degenerate (zero length)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 5,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 6,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 7,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is degenerate (zero length)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 8,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge has invalid adjacent faces"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        }
+      ],
+      "seconds": 4.92,
+      "source_chi": null,
+      "source_genus": null
+    },
+    "box_intersect_cylinder": {
+      "edges": 24,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 1,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 2,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 3,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 4,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 5,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 6,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 7,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 8,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 9,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 10,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 11,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 12,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 13,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 14,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: no cutter placement reached the exact chamfer tolerance"
+            ]
+          }
+        },
+        {
+          "edge": 15,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge is not straight (blend of a curved edge is not supported)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 16,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: blend requires both adjacent faces to be planar (curvature detected)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 17,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: blend requires both adjacent faces to be planar (curvature detected)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 18,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: blend requires both adjacent faces to be planar (curvature detected)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 19,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: blend requires both adjacent faces to be planar (curvature detected)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 20,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: blend requires both adjacent faces to be planar (curvature detected)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 21,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: blend requires both adjacent faces to be planar (curvature detected)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 22,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: blend requires both adjacent faces to be planar (curvature detected)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 23,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: blend requires both adjacent faces to be planar (curvature detected)"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        }
+      ],
+      "seconds": 71.56,
+      "source_chi": null,
+      "source_genus": null
+    },
+    "tilted_cylinder": {
+      "edges": 3,
+      "rows": [
+        {
+          "edge": 0,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 28.265342,
+            "volume_after": 28.091263,
+            "volume_delta": -0.17407899999999898
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 28.265342,
+            "volume_after": 27.869662,
+            "volume_delta": -0.3956799999999987
+          }
+        },
+        {
+          "edge": 1,
+          "fillet": {
+            "status": "refused",
+            "refusal": [
+              "fillet B: edge has invalid adjacent faces"
+            ]
+          },
+          "chamfer": {
+            "status": "refused",
+            "refusal": [
+              "chamfer B: selected edge requires two adjacent planar faces"
+            ]
+          }
+        },
+        {
+          "edge": 2,
+          "fillet": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 28.265342,
+            "volume_after": 28.089092,
+            "volume_delta": -0.17624999999999957
+          },
+          "chamfer": {
+            "status": "accepted",
+            "source_chi": 2,
+            "source_genus": 0,
+            "chi": 2,
+            "genus": 0,
+            "volume_before": 28.265342,
+            "volume_after": 27.867491,
+            "volume_delta": -0.3978509999999993
+          }
+        }
+      ],
+      "seconds": 0.45,
+      "source_chi": 2,
+      "source_genus": 0
+    }
+  }
+}
