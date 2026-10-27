@@ -23,3 +23,8 @@ Projects/*/Content/Slate.config.toml
 # Fetched test levels (Projects/Project-Zero/Build/FetchSponza.ps1) - never committed
 Projects/*/Content/Scenes/Sponza/
 Projects/*/Content/Scenes/ShaderBall.gltf
+
+# Foliage Sketcher baked output — regenerated deterministically from Content/PlateArchives/ by
+#    `node Tools/FoliageSketcher/Build/SheetSequence.mjs` (≈9 s). The 25 MB of PNG sheets are build
+#    artifacts, not sources; the plates they are cut from ARE committed.
+Tools/FoliageSketcher/Content/SheetArchives/
