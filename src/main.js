@@ -8,6 +8,32 @@ import { buildMosquito } from './mosquito/mosquito.js';
 import { MosquitoAgent, STATE } from './mosquito/agent.js';
 import { Vehicle } from './scene/vehicle.js';
 
+/* -------------------------------------------------- failure-only notice */
+// Nothing is drawn unless something actually breaks. The scene is almost
+// black and opens with the drone far away, so a WebGL failure and a
+// normal first frame look identical from the outside -- this is the only
+// way to tell them apart from a preview pane.
+function fatal(msg) {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;'
+    + 'justify-content:center;padding:8vw;background:#0a0c0f;color:#c8d0d8;'
+    + 'font:14px/1.6 ui-monospace,monospace;white-space:pre-wrap;z-index:9999';
+  d.textContent = msg;
+  document.body.appendChild(d);
+}
+addEventListener('error', (e) => fatal('Failed to start.\n\n' + (e.message || e)));
+addEventListener('unhandledrejection', (e) => fatal('Failed to start.\n\n' + e.reason));
+{
+  const probe = document.createElement('canvas');
+  const gl = probe.getContext('webgl2') || probe.getContext('webgl');
+  if (!gl) {
+    fatal('This browser or preview frame has no WebGL context, so the 3D '
+      + 'scene cannot be created.\n\nTry opening the preview in its own '
+      + 'browser tab, or enable hardware acceleration.');
+    throw new Error('no webgl');
+  }
+}
+
 /* ---------------------------------------------------------------- setup */
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
