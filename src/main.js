@@ -7,7 +7,6 @@ import { params, SHAPE, MECHANICS } from './core/params.js';
 import { buildMosquito } from './mosquito/mosquito.js';
 import { MosquitoAgent, STATE } from './mosquito/agent.js';
 import { Vehicle } from './scene/vehicle.js';
-import { Effects } from './scene/effects.js';
 
 /* ---------------------------------------------------------------- setup */
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -63,7 +62,6 @@ scene.add(ground);
 
 /* ---------------------------------------------------------------- world */
 const vehicle = new Vehicle(scene);
-const effects = new Effects(scene);
 
 let rig = null, agent = null;
 
@@ -227,7 +225,6 @@ mProbe.add(M, 'maxillaAlternation', 0, 1, 0.01);
 mProbe.add(M, 'drillRPM', 0, 8000, 10);
 mProbe.add(M, 'drillPlungeRate', 0.005, 0.6, 0.005);
 mProbe.add(M, 'drillWobbleDeg', 0, 8, 0.1);
-mProbe.add(M, 'sparkRate', 0, 400, 5);
 
 const mFeed = fMech.addFolder('Feeding');
 mFeed.add(M, 'pumpHz', 0.2, 12, 0.1);
@@ -259,7 +256,6 @@ addEventListener('keydown', (e) => {
 /* ----------------------------------------------------------------- loop */
 const clock = new THREE.Clock();
 const _p = new THREE.Vector3();
-let sparkAccum = 0, mistAccum = 0;
 
 function tick() {
   requestAnimationFrame(tick);
@@ -271,32 +267,11 @@ function tick() {
   vehicle.capacity = params.mech.tankCapacity;
   agent.update(dt);
 
-  // ---- drive the effects off the agent's real state ----
-  if (agent.b.drill > 0.05 && agent.state === STATE.DRILL) {
-    sparkAccum += params.mech.sparkRate * agent.b.drill * dt;
-    while (sparkAccum >= 1) {
-      sparkAccum -= 1;
-      rig.drill.getWorldPosition(_p);
-      effects.burstSparks(_p, agent.site.n, 1, 2.6);
-    }
-  }
-  if (agent.b.pump > 0.1 && agent.site) {
-    mistAccum += 26 * agent.b.pump * dt;
-    while (mistAccum >= 1) {
-      mistAccum -= 1;
-      rig.labella.getWorldPosition(_p);
-      effects.mist(_p, agent.site.n, 1);
-    }
-  }
   for (const e of agent.events) {
-    if (e.type === 'breach') {
-      vehicle.markBreach(e.point);
-      effects.burstSparks(e.point, agent.site.n, 40, 4.2);
-    }
+    if (e.type === 'breach') vehicle.markBreach(e.point);
   }
   agent.events.length = 0;
 
-  effects.update(raw);
   vehicle.update();
 
   if (follow) {

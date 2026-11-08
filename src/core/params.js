@@ -189,7 +189,6 @@ export const MECHANICS = {
   drillRPM: 2400.0,
   drillPlungeRate: 0.022, // m/s through the tank wall
   drillWobbleDeg: 1.1,
-  sparkRate: 90.0,
 
   // ---- feeding ----------------------------------------------------------
   // Cibarial + pharyngeal pumps run alternately at ~3-4 Hz.

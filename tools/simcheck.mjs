@@ -486,6 +486,83 @@ console.log('\n== it actually fits on the tank ==');
   ok(onDrum(lab, 0.08), 'and the mouthparts are on the drum wall');
 }
 
+console.log('\n== stance is valid at EVERY site on the tank ==');
+{
+  // "They must be perfect regardless of the surface/position." So test
+  // the stance at many randomly chosen bore sites, not just one.
+  const scene = new THREE.Group();
+  const veh = new Vehicle(scene);
+  const agent = new MosquitoAgent(rig, params.shape, params.mech, veh);
+  const L = params.shape.bodyLength;
+  const N = 200;
+
+  let crossedSide = 0, crossedOrder = 0, offDrum = 0, tooClose = 0, unreachable = 0;
+  let worstOverlap = Infinity;
+
+  for (let trial = 0; trial < N; trial++) {
+    agent.chooseSite();
+    agent.planLanding();
+    const { n } = agent.site;
+    const q = agent.restQuat;
+    const anchor = agent.drillAnchor;
+
+    // same surface-aligned body frame the solver uses
+    const fwdS = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    fwdS.addScaledVector(n, -fwdS.dot(n)).normalize();
+    const rightS = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+    rightS.addScaledVector(n, -rightS.dot(n)).normalize();
+
+    // Pose the rig where it will actually stand. footTargets restores
+    // the rig to its previous transform on the way out, so reading hip
+    // positions straight afterwards measures the wrong pose.
+    rig.root.position.copy(agent.stanceRoot);
+    rig.orient.quaternion.copy(q);
+    rig.root.updateMatrixWorld(true);
+
+    const byPair = { 0: [], 1: [], 2: [] };
+    for (const pl of agent.legStance) {
+      const rel = pl.point.clone().sub(anchor);
+      const x = rel.dot(rightS), z = rel.dot(fwdS);
+      byPair[pl.leg.pair].push(z);
+      // 1. every foot on its own side of the midline
+      if (Math.sign(x) !== Math.sign(pl.leg.side)) crossedSide++;
+      // 2. inside the limb's reach
+      const hip = pl.leg.root.getWorldPosition(new THREE.Vector3());
+      const reach = pl.leg.lens.coxa + pl.leg.lens.troch
+        + pl.leg.lens.femur + pl.leg.lens.tibia;
+      if (hip.distanceTo(pl.point) > reach * 0.995) unreachable++;
+      // 3. actually on the drum
+      const inv = new THREE.Matrix4().copy(veh.tankGroup.matrixWorld).invert();
+      const l = pl.point.clone().applyMatrix4(inv);
+      if (Math.abs(l.y) > veh.tankLength * 0.5 + 0.12 ||
+        Math.abs(Math.hypot(l.x, l.z) - veh.tankRadius) > 0.12) offDrum++;
+    }
+    // 4. fore ahead of mid ahead of hind, on both sides
+    for (let k = 0; k < 2; k++) {
+      if (!(byPair[0][k] > byPair[1][k] && byPair[1][k] > byPair[2][k])) crossedOrder++;
+    }
+    // 5. no two feet sitting on top of each other
+    for (let i = 0; i < agent.legStance.length; i++) {
+      for (let j = i + 1; j < agent.legStance.length; j++) {
+        const d = agent.legStance[i].point.distanceTo(agent.legStance[j].point);
+        worstOverlap = Math.min(worstOverlap, d);
+        if (d < 0.12 * L) tooClose++;
+      }
+    }
+  }
+
+  ok(crossedSide === 0, `no foot ever crosses the midline (${N} random sites)`,
+    `${crossedSide} violations of ${N * 6} feet`);
+  ok(crossedOrder === 0, 'fore / mid / hind never swap order',
+    `${crossedOrder} violations of ${N * 2}`);
+  ok(unreachable === 0, 'every stance is inside the limb that has to hold it',
+    `${unreachable} over-extended`);
+  ok(offDrum === 0, 'every foot lands on the drum',
+    `${offDrum} off-surface of ${N * 6}`);
+  ok(tooClose === 0, 'no two feet collide',
+    `closest pair ${(worstOverlap * 1000).toFixed(0)} mm`);
+}
+
 console.log('\n== take-off ==');
 {
   const run = (fillFraction) => {

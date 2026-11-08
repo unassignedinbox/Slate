@@ -248,8 +248,9 @@ export class MosquitoAgent {
     this.restRoot = rootLand;
 
     this.legPlan = this.footTargets(this.landAnchor, rootLand, restQuat, n);
+    this.stanceRoot = rootDry.clone().lerp(rootFed, 0.55);
     this.legStance = this.footTargets(
-      this.drillAnchor, rootDry.clone().lerp(rootFed, 0.55), restQuat, n);
+      this.drillAnchor, this.drillAnchor && this.stanceRoot, restQuat, n);
   }
 
   /**
@@ -262,7 +263,6 @@ export class MosquitoAgent {
    */
   footTargets(anchor, rootPos, quat, fallbackNormal) {
     const rig = this.rig, S = this.S, L = S.bodyLength;
-    const { f, r } = this.site;
     const sp = rig.root.position.clone(), sq = rig.orient.quaternion.clone();
     rig.root.position.copy(rootPos);
     rig.orient.quaternion.copy(quat);
@@ -272,30 +272,100 @@ export class MosquitoAgent {
       ? this.tank.projectToSurface(p)
       : { point: p.clone(), normal: fallbackNormal.clone() });
 
+    // ---- surface-aligned body frame ----------------------------------
+    // Derive right/forward from the BODY's own quaternion and flatten them
+    // onto the surface. Taking them from the site's tangent basis instead
+    // is how the left and right stances ended up swapped: the site frame's
+    // lateral axis is the negative of the body's right axis.
+    const nrm = snapTo(anchor).normal.clone();
+    const fwdS = new THREE.Vector3(0, 0, 1).applyQuaternion(quat);
+    fwdS.addScaledVector(nrm, -fwdS.dot(nrm));
+    if (fwdS.lengthSq() < 1e-8) fwdS.set(1, 0, 0);
+    fwdS.normalize();
+    const rightS = new THREE.Vector3(1, 0, 0).applyQuaternion(quat);
+    rightS.addScaledVector(nrm, -rightS.dot(nrm));
+    if (rightS.lengthSq() < 1e-8) rightS.crossVectors(nrm, fwdS);
+    rightS.normalize();
+
     const spread = this.m.stanceSpread;
-    const out = [];
-    for (const leg of rig.legs) {
-      const pairFwd = [0.62, 0.12, -0.52][leg.pair];
-      const pairOut = [0.62, 0.84, 0.92][leg.pair] * spread;
-      const hip = leg.root.getWorldPosition(new THREE.Vector3());
-      const reach = leg.lens.coxa + leg.lens.troch + leg.lens.femur + leg.lens.tibia;
+    const FWD = [0.62, 0.12, -0.52];
+    const OUT = [0.62, 0.84, 0.92];
 
+    // Non-crossing is enforced as two *relative* rules rather than fixed
+    // boxes: a foot may not reach past the midline, and the three pairs
+    // on a side may not swap fore/aft order. Both are cheap to satisfy,
+    // so they never fight the reach limit -- which matters because the
+    // hind pair can only work between 0.68 and 0.87 body lengths out.
+    const minLat = 0.20 * L;
+    const gap = 0.10 * L;
+
+    const legs = rig.legs;
+    const hips = legs.map((lg) => lg.root.getWorldPosition(new THREE.Vector3()));
+    const reaches = legs.map((lg) =>
+      lg.lens.coxa + lg.lens.troch + lg.lens.femur + lg.lens.tibia);
+    const bySide = [
+      legs.map((lg, i) => [lg, i]).filter(([lg]) => lg.side > 0),
+      legs.map((lg, i) => [lg, i]).filter(([lg]) => lg.side < 0),
+    ];
+
+    // seed from the nominal stance, expressed in that surface frame
+    let snaps = legs.map((lg) => {
       const p = anchor.clone()
-        .addScaledVector(f, pairFwd * L * 0.95)
-        .addScaledVector(r, leg.side * pairOut * L * 0.72);
+        .addScaledVector(rightS, lg.side * OUT[lg.pair] * spread * L * 0.72)
+        .addScaledVector(fwdS, FWD[lg.pair] * L * 0.95);
+      return snapTo(p);
+    });
 
-      let snap = snapTo(p);
-      for (let it = 0; it < 6; it++) {
-        p.copy(snap.point);
-        const d = _v.subVectors(p, hip);
-        const len = d.length();
-        // keep the limb comfortably bent: never locked straight, never folded
-        const want = clamp(len, reach * 0.62, reach * 0.80);
-        if (Math.abs(want - len) > 1e-4) p.copy(hip).addScaledVector(d, want / len);
-        snap = snapTo(p);
+    // working coordinates in the surface frame, relative to the anchor
+    const X = new Array(legs.length), Z = new Array(legs.length);
+    const H = new Array(legs.length);
+    const read = (i) => {
+      const rel = _v2.subVectors(snaps[i].point, anchor);
+      X[i] = rel.dot(rightS); Z[i] = rel.dot(fwdS); H[i] = rel.dot(nrm);
+    };
+    const write = (i) => anchor.clone()
+      .addScaledVector(rightS, X[i])
+      .addScaledVector(fwdS, Z[i])
+      .addScaledVector(nrm, H[i]);
+
+    // ---- relax: on the surface / inside reach / not crossing ---------
+    for (let it = 0; it < 16; it++) {
+      for (let i = 0; i < legs.length; i++) read(i);
+
+      // 1. stay on your own side of the body
+      for (let i = 0; i < legs.length; i++) {
+        X[i] = legs[i].side > 0 ? Math.max(X[i], minLat) : Math.min(X[i], -minLat);
       }
-      out.push({ leg, point: snap.point, normal: snap.normal, touched: false });
+
+      // 2. fore stays ahead of mid stays ahead of hind, per side,
+      //    corrected symmetrically so no single foot takes the whole hit
+      for (const side of bySide) {
+        const order = side.slice().sort((a, b) => a[0].pair - b[0].pair);
+        for (let k = 0; k < order.length - 1; k++) {
+          const a = order[k][1], b = order[k + 1][1];
+          const d = (Z[b] + gap) - Z[a];
+          if (d > 0) { Z[a] += d * 0.5; Z[b] -= d * 0.5; }
+        }
+      }
+
+      // 3. inside the limb that has to hold it -- last word, and applied
+      //    as a pull toward the hip, which cannot undo rules 1 and 2
+      //    (the hips are themselves ordered and on their own sides)
+      for (let i = 0; i < legs.length; i++) {
+        const p = write(i);
+        const d = _v.subVectors(p, hips[i]);
+        const len = d.length();
+        if (len > 1e-6) {
+          const want = clamp(len, reaches[i] * 0.62, reaches[i] * 0.80);
+          if (Math.abs(want - len) > 1e-5) p.copy(hips[i]).addScaledVector(d, want / len);
+        }
+        snaps[i] = snapTo(p);
+      }
     }
+
+    const out = legs.map((lg, i) => ({
+      leg: lg, point: snaps[i].point, normal: snaps[i].normal, touched: false,
+    }));
 
     rig.root.position.copy(sp);
     rig.orient.quaternion.copy(sq);
